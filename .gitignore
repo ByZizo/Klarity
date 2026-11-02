@@ -15,3 +15,6 @@ server/data.json
 data.json
 *.enc
 klarity_session.json
+
+review-files/
+tree.txt
