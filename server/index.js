@@ -483,6 +483,60 @@ function sanitizeUser(u) {
   const { passwordHash, ...safeUser } = u;
   return safeUser;
 }
+// ============================================================================
+// 1-WEEK PERSISTENT AUTHENTICATION SESSION SYSTEM (Expires after 7 days)
+// ============================================================================
+const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days (1 week)
+
+function createSession(user) {
+  return {
+    user: sanitizeUser(user),
+    authenticatedAt: Date.now(),
+    expiresAt: Date.now() + SESSION_DURATION_MS
+  };
+}
+
+function getValidSession(data) {
+  if (!data.activeSession || !data.activeSession.user || !data.activeSession.expiresAt) {
+    return null;
+  }
+  if (Date.now() > data.activeSession.expiresAt) {
+    delete data.activeSession;
+    writeData(data);
+    return null;
+  }
+  return data.activeSession;
+}
+
+
+
+app.get('/api/auth/session', (req, res) => {
+  const data = readData();
+  const session = getValidSession(data);
+  if (!session) {
+    return res.json({ authenticated: false, session: null });
+  }
+  res.json({ authenticated: true, session });
+});
+
+app.post('/api/auth/session', (req, res) => {
+  const { user } = req.body;
+  if (!user || !user.email) {
+    return res.status(400).json({ error: 'Valid user required' });
+  }
+  const data = readData();
+  const session = createSession(user);
+  data.activeSession = session;
+  writeData(data);
+  res.json({ ok: true, session });
+});
+
+app.delete('/api/auth/session', (req, res) => {
+  const data = readData();
+  delete data.activeSession;
+  writeData(data);
+  res.json({ ok: true });
+});
 
 // 1. Authentication Routes
 app.post('/api/auth/register', (req, res) => {
@@ -523,9 +577,12 @@ app.post('/api/auth/register', (req, res) => {
 
   data.users = data.users || [];
   data.users.push(newUser);
+  const safeUser = sanitizeUser(newUser);
+  const session = createSession(safeUser);
+  data.activeSession = session;
   writeData(data);
 
-  res.json({ user: sanitizeUser(newUser) });
+  res.json({ user: safeUser, session });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -563,86 +620,10 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   authRateMap.delete(clientIp);
-  res.json({ user: sanitizeUser(user) });
-});
-
-
-// Memory maps for Desktop Browser Loopback OAuth
-if (!global.completedDesktopAuths) {
-  global.completedDesktopAuths = new Map();
-}
-
-app.get('/api/auth/google/callback', async (req, res) => {
-  const { code, state, error } = req.query;
-  if (error || !code) {
-    return res.send(`
-      <!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:50px;">
-        <h3>Sign-in cancelled or failed</h3>
-        <p>${error || 'No authorization code received'}</p>
-        <button onclick="window.close()">Close this window</button>
-      </body></html>
-    `);
-  }
-
-  try {
-    const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const hostPort = (req.headers.host && req.headers.host.includes(':')) ? req.headers.host.split(':')[1] : (req.socket.localPort || 5173);
-    const redirectUri = `http://localhost:${hostPort}/api/auth/google/callback`;
-
-    // 1. Exchange authorization code for access_token with Google
-    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code'
-      })
-    });
-
-    const tokenData = await tokenRes.json();
-    if (!tokenRes.ok || !tokenData.access_token) {
-      console.error('Google token exchange error:', tokenData);
-      return res.status(400).send(`Authentication error: ${tokenData.error_description || 'Token exchange failed'}`);
-    }
-
-    // 2. Fetch authenticated user profile from Google
-    const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` }
-    });
-    const profile = await userinfoRes.json();
-    const cleanEmail = (profile.email || '').trim().toLowerCase();
-
-    if (!cleanEmail) {
-      return res.status(400).send('No verified email found from Google profile');
-    }
-
-    // 3. Register or load user into Klarity
-    const data = readData();
-    const isOwner = ['byzizo@protonmail.com', 'zeoe13@gmail.com'].includes(cleanEmail);
-    let user = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
-
-    if (!user) {
-      user = {
-        id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
-        email: cleanEmail,
-        name: profile.name || (isOwner ? 'Ziyad Elmahi' : cleanEmail.split('@')[0]),
-        avatar: profile.picture || '',
-        role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member'
-      };
-      data.users = data.users || [];
-      data.users.push(user);
-      writeData(data);
-    } else if (profile.name || profile.picture) {
-      if (profile.name) user.name = profile.name;
-      if (profile.picture) user.avatar = profile.picture;
-      writeData(data);
-    }
-
-    const safeUser = sanitizeUser(user);
+  const safeUser = sanitizeUser(user);
+    const session = createSession(safeUser);
+    data.activeSession = session;
+    writeData(data);
 
     // Save for desktop app poller
     if (state) {
@@ -657,22 +638,55 @@ app.get('/api/auth/google/callback', async (req, res) => {
         <title>Signed In — Klarity</title>
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-          .card { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 40px 32px; max-width: 420px; text-align: center; box-shadow: 0 10px 30px -5px rgba(0,0,0,0.08); }
-          .icon { width: 56px; height: 56px; background: #18457c; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; font-size: 28px; }
-          h2 { color: #0f172a; margin: 0 0 8px; font-size: 22px; }
-          p { color: #64748b; font-size: 14px; margin: 0 0 24px; line-height: 1.5; }
-          .btn { background: #18457c; color: white; padding: 11px 24px; border-radius: 12px; text-decoration: none; font-size: 13px; font-weight: 600; display: inline-block; }
+          .card { background: white; border: 1px solid #e2e8f0; border-radius: 24px; padding: 44px 36px; max-width: 440px; text-align: center; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.1); }
+          .icon { width: 64px; height: 64px; background: #18457c; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 32px; font-weight: bold; }
+          h2 { color: #0f172a; margin: 0 0 10px; font-size: 24px; font-weight: 700; }
+          p { color: #64748b; font-size: 14px; margin: 0 0 24px; line-height: 1.6; }
+          .btn { background: #18457c; color: white; padding: 13px 28px; border-radius: 14px; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: none; cursor: pointer; transition: all 0.15s ease; box-shadow: 0 4px 12px rgba(24,69,124,0.25); text-decoration: none; }
+          .btn:hover { background: #123561; transform: translateY(-1px); }
+          .btn:active { transform: translateY(0); }
+          .key-badge { background: #e2e8f0; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-size: 12px; color: #1e293b; font-weight: 600; }
+          .status-box { margin-top: 20px; padding: 12px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; color: #166534; font-size: 13px; font-weight: 500; display: none; }
         </style>
       </head>
       <body>
         <div class="card">
           <div class="icon">✓</div>
           <h2>Signed in to Klarity</h2>
-          <p>Welcome back, <strong>${safeUser.name || safeUser.email}</strong>!<br>You can now close this tab and return to Klarity.</p>
-          <a href="#" class="btn" onclick="window.close()">Close Window</a>
+          <p id="desc">Welcome back, <strong>${safeUser.name || safeUser.email}</strong>!<br>Authentication succeeded. Your 1-week session is now active in Klarity.</p>
+          <button id="closeBtn" class="btn" onclick="requestTabClose()">
+            <span>Close Page</span>
+          </button>
+          <div id="statusBox" class="status-box">
+            ✓ Done! Klarity has been brought to the front of your desktop.
+          </div>
+          <p id="shortcutHint" style="margin-top: 18px; font-size: 12px; color: #94a3b8;">
+            You can also press <span class="key-badge">Ctrl + W</span> to close this tab.
+          </p>
         </div>
         <script>
-          setTimeout(() => { try { window.close(); } catch {} }, 1500);
+          function requestTabClose() {
+            try { window.open('', '_self', ''); } catch (e) {}
+            try { window.close(); } catch (e) {}
+            try { self.close(); } catch (e) {}
+            try { if (window.top) window.top.close(); } catch (e) {}
+
+            const btn = document.getElementById('closeBtn');
+            const statusBox = document.getElementById('statusBox');
+            const desc = document.getElementById('desc');
+            if (btn) {
+              btn.innerHTML = '<span>✓ Done — Switch to Klarity</span>';
+              btn.style.background = '#059669';
+            }
+            if (statusBox) {
+              statusBox.style.display = 'block';
+            }
+            if (desc) {
+              desc.innerHTML = 'Klarity has focused the app window on your screen.<br>You are completely signed in for the next week.';
+            }
+          }
+
+          setTimeout(requestTabClose, 600);
         </script>
       </body>
       </html>
@@ -747,7 +761,11 @@ app.post('/api/auth/google', async (req, res) => {
     writeData(data);
   }
 
-  res.json({ user: sanitizeUser(user) });
+  const safeUser = sanitizeUser(user);
+  const session = createSession(safeUser);
+  data.activeSession = session;
+  writeData(data);
+  res.json({ user: safeUser, session });
 });
 
 // 2. Settings Endpoints (Encrypted Server Storage per User)

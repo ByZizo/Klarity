@@ -421,11 +421,25 @@ export default function App() {
 }
 
 function KlarityApp() {
-  // Current user state (Encrypted in localStorage; requires authentication gate when null)
+  // Current user state (Encrypted in localStorage; 7-day session validity)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
+      const sess = secureStorage.getItem('klarity_auth_session', null);
+      if (sess && sess.user && sess.expiresAt && Date.now() < sess.expiresAt) {
+        return sess.user;
+      }
       const saved = secureStorage.getItem('klarity_user', null);
       if (saved && typeof saved === 'object' && saved.email) return saved;
+      return null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [authSession, setAuthSession] = useState(() => {
+    try {
+      const sess = secureStorage.getItem('klarity_auth_session', null);
+      if (sess && sess.expiresAt && Date.now() < sess.expiresAt) return sess;
       return null;
     } catch {
       return null;
@@ -512,6 +526,94 @@ function KlarityApp() {
   useEffect(() => {
     enforceStorageEncryptionAudit();
   }, []);
+  // 1-Week Session Verification across Electron disk store and Backend
+  useEffect(() => {
+    let isMounted = true;
+    async function verifyWeeklySession() {
+      try {
+        if (typeof window !== 'undefined' && window.klarityDesktop?.getSession) {
+          const diskSession = await window.klarityDesktop.getSession();
+          if (diskSession?.user && diskSession?.expiresAt) {
+            if (Date.now() < diskSession.expiresAt) {
+              if (isMounted) {
+                setCurrentUser(diskSession.user);
+                setAuthSession(diskSession);
+                secureStorage.setItem('klarity_auth_session', diskSession);
+                secureStorage.setItem('klarity_user', diskSession.user);
+              }
+              return;
+            } else {
+              if (window.klarityDesktop?.clearSession) {
+                await window.klarityDesktop.clearSession();
+              }
+            }
+          }
+        }
+
+        const res = await fetch('/api/auth/session');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.authenticated && json.session?.user && json.session?.expiresAt) {
+            if (Date.now() < json.session.expiresAt) {
+              if (isMounted) {
+                setCurrentUser(json.session.user);
+                setAuthSession(json.session);
+                secureStorage.setItem('klarity_auth_session', json.session);
+                secureStorage.setItem('klarity_user', json.session.user);
+                if (typeof window !== 'undefined' && window.klarityDesktop?.saveSession) {
+                  window.klarityDesktop.saveSession(json.session);
+                }
+              }
+              return;
+            }
+          }
+        }
+
+        const localSess = secureStorage.getItem('klarity_auth_session', null);
+        if (localSess && localSess.expiresAt && Date.now() >= localSess.expiresAt) {
+          secureStorage.removeItem('klarity_auth_session');
+          secureStorage.removeItem('klarity_user');
+          localStorage.removeItem('klarity_user');
+          if (isMounted) {
+            setCurrentUser(null);
+            setAuthSession(null);
+            setAuthError('Your 1-week session has expired. Please sign in again.');
+          }
+        }
+      } catch (err) {
+        console.warn('Session verification notice:', err);
+      }
+    }
+    verifyWeeklySession();
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleAuthSessionSuccess = async (user, sessionData = null) => {
+    const session = sessionData || {
+      user,
+      authenticatedAt: Date.now(),
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+    };
+    setCurrentUser(user);
+    setAuthSession(session);
+    secureStorage.setItem('klarity_auth_session', session);
+    secureStorage.setItem('klarity_user', user);
+
+    try {
+      await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user })
+      });
+    } catch {}
+
+    if (typeof window !== 'undefined' && window.klarityDesktop?.saveSession) {
+      try {
+        await window.klarityDesktop.saveSession(session);
+      } catch {}
+    }
+  };
+
 
   // Inactivity Auto-Lock Watcher
   useEffect(() => {
@@ -1899,8 +2001,7 @@ function KlarityApp() {
   const handleGoogleProfileSuccess = async (profile) => {
     try {
       if (profile?.id && profile?.email) {
-        setCurrentUser(profile);
-        secureStorage.setItem('klarity_user', profile);
+        await handleAuthSessionSuccess(profile);
         setNotificationToast('Signed in with Google as ' + (profile.name || profile.email));
         setTimeout(() => setNotificationToast(''), 4000);
         return;
@@ -1920,8 +2021,7 @@ function KlarityApp() {
       });
       const json = await res.json();
       if (res.ok && json.user) {
-        setCurrentUser(json.user);
-        secureStorage.setItem('klarity_user', json.user);
+        await handleAuthSessionSuccess(json.user, json.session);
         setNotificationToast(`Signed in with Google as ${json.user.name}`);
         setTimeout(() => setNotificationToast(''), 4000);
       } else {
@@ -1980,8 +2080,7 @@ function KlarityApp() {
         const json = await res.json();
 
         if (res.ok && json.user) {
-          setCurrentUser(json.user);
-          secureStorage.setItem('klarity_user', json.user);
+          await handleAuthSessionSuccess(json.user, json.session);
           setNotificationToast(`Welcome to Klarity, ${json.user.name}!`);
           setTimeout(() => setNotificationToast(''), 4000);
         } else {
@@ -1996,8 +2095,7 @@ function KlarityApp() {
           avatar: '',
           role: 'Primary Member'
         };
-        setCurrentUser(localUser);
-        secureStorage.setItem('klarity_user', localUser);
+        await handleAuthSessionSuccess(localUser);
       } finally {
         setIsAuthenticating(false);
       }
@@ -2012,8 +2110,7 @@ function KlarityApp() {
         const json = await res.json();
 
         if (res.ok && json.user) {
-          setCurrentUser(json.user);
-          secureStorage.setItem('klarity_user', json.user);
+          await handleAuthSessionSuccess(json.user, json.session);
           setNotificationToast(`Welcome back, ${json.user.name}!`);
           setTimeout(() => setNotificationToast(''), 4000);
         } else {
@@ -2029,17 +2126,27 @@ function KlarityApp() {
           avatar: '',
           role: 'Primary Member'
         };
-        setCurrentUser(localUser);
-        secureStorage.setItem('klarity_user', localUser);
+        await handleAuthSessionSuccess(localUser);
       } finally {
         setIsAuthenticating(false);
       }
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setCurrentUser(null);
+    setAuthSession(null);
+    secureStorage.removeItem('klarity_auth_session');
+    secureStorage.removeItem('klarity_user');
     localStorage.removeItem('klarity_user');
+    try {
+      await fetch('/api/auth/session', { method: 'DELETE' });
+    } catch {}
+    if (typeof window !== 'undefined' && window.klarityDesktop?.clearSession) {
+      try {
+        await window.klarityDesktop.clearSession();
+      } catch {}
+    }
     setSettingsPlaidClientId('');
     setSettingsPlaidSecret('');
     setSettingsPlaidMaskedSecret('');
@@ -8249,7 +8356,8 @@ function KlarityApp() {
                             <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email || 'byzizo@protonmail.com'}</p>
                           </div>
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            Active
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            1-Week Session Active
                           </span>
                         </div>
 

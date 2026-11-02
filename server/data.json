@@ -240,5 +240,16 @@
       "type": "investment",
       "balance": 6400
     }
-  ]
+  ],
+  "activeSession": {
+    "user": {
+      "id": "u-ziyad",
+      "email": "byzizo@protonmail.com",
+      "name": "Ziyad Elmahi",
+      "avatar": "",
+      "role": "Primary Member"
+    },
+    "authenticatedAt": 1793660498177,
+    "expiresAt": 1794265298177
+  }
 }

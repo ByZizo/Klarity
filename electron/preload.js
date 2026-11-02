@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('klarityDesktop', {
   checkForUpdates: () => ipcRenderer.invoke('klarity:check-for-updates'),
   installUpdateNow: () => ipcRenderer.invoke('klarity:install-update-now'),
   signInWithGoogle: () => ipcRenderer.invoke('klarity:google-sign-in'),
+  getSession: () => ipcRenderer.invoke('klarity:get-session'),
+  saveSession: (session) => ipcRenderer.invoke('klarity:save-session', session),
+  clearSession: () => ipcRenderer.invoke('klarity:clear-session'),
   onUpdateStatus: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const handler = (_event, status) => callback(status);

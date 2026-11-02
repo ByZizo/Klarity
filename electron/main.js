@@ -1,5 +1,6 @@
 const { app, BrowserWindow, shell, ipcMain, session } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const { exec } = require('child_process');
 
@@ -217,7 +218,11 @@ ipcMain.handle('klarity:google-sign-in', async () => {
             cleanup();
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.show();
+              mainWindow.restore();
+              mainWindow.setAlwaysOnTop(true);
               mainWindow.focus();
+              mainWindow.setAlwaysOnTop(false);
+              mainWindow.flashFrame(true);
             }
             resolve({ ok: true, user: json.user });
           }
@@ -231,6 +236,53 @@ ipcMain.handle('klarity:google-sign-in', async () => {
     }, 120000);
   });
 });
+
+
+// ============================================================================
+// 1-WEEK PERSISTENT DESKTOP AUTHENTICATION SESSION STORE
+// ============================================================================
+function getSessionFilePath() {
+  const dir = app.getPath('userData');
+  return path.join(dir, 'klarity_session.json');
+}
+
+function readPersistentSession() {
+  try {
+    const file = getSessionFilePath();
+    if (fs.existsSync(file)) {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (data && data.expiresAt && Date.now() < data.expiresAt) {
+        return data;
+      }
+      try { fs.unlinkSync(file); } catch {}
+    }
+  } catch {}
+  return null;
+}
+
+function writePersistentSession(sessionData) {
+  try {
+    const file = getSessionFilePath();
+    fs.writeFileSync(file, JSON.stringify(sessionData), 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearPersistentSession() {
+  try {
+    const file = getSessionFilePath();
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+ipcMain.handle('klarity:get-session', () => readPersistentSession());
+ipcMain.handle('klarity:save-session', (_e, s) => writePersistentSession(s));
+ipcMain.handle('klarity:clear-session', () => clearPersistentSession());
 
 ipcMain.handle('klarity:get-app-info', () => ({
   isDesktopApp: true,
