@@ -140,6 +140,26 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
   hasCareDiscount: true, // CARE/FERA low-income or senior discount
   hasSolar: false,
   climateSeason: 'average', // 'average' | 'summer_ac' | 'winter_heat'
+  foodMonthly: 650,
+  health: {
+    provider: 'Kaiser Permanente',
+    planName: 'Senior Advantage / HMO',
+    memberId: '',
+    groupNumber: '',
+    rxBin: '',
+    monthlyPremium: 0,
+    copays: {
+      primaryCare: 15,
+      specialist: 30,
+      urgentCare: 20,
+      er: 100,
+      rxGeneric: 10
+    },
+    doctors: [
+      { id: 'doc-1', name: 'Primary Care Clinic', specialty: 'Family Medicine', office: 'Medical Center', phone: '' }
+    ],
+    cards: []
+  },
   vehicles: [
     {
       id: 'veh-1',

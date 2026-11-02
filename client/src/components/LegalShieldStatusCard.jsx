@@ -156,7 +156,7 @@ export default function LegalShieldStatusCard({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-serif-title text-base sm:text-lg font-bold tracking-tight">
-                Statutory Legal Shield & Judgment-Proof Status
+                Retirement & Income
               </h3>
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
                 <Lock className="w-3 h-3" />
@@ -165,13 +165,10 @@ export default function LegalShieldStatusCard({
               {verificationDocName && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-400/20 text-blue-200 border border-blue-400/30">
                   <FileCheck className="w-3 h-3" />
-                  <span>Verified Document on File</span>
+                  <span>Verified</span>
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-300 mt-0.5">
-              42 U.S.C. § 407 (Social Security) • California CCP § 704.110 (CalPERS) • 31 CFR Part 212
-            </p>
           </div>
         </div>
 

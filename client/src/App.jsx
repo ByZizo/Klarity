@@ -72,6 +72,7 @@ import InteractivePayoffComparison from './components/InteractivePayoffCompariso
 import HardshipPlaybookModal from './components/HardshipPlaybookModal';
 import { DEFAULT_INCOME_STREAMS, calculateJudgmentProofRatio } from './utils/statutoryDebtEngine';
 import HouseholdLifestyleHub from './components/HouseholdLifestyleHub';
+import PasswordVaultPage, { DEFAULT_VAULT_ITEMS } from './components/PasswordVaultPage';
 import { DEFAULT_HOUSEHOLD_PROFILE, calculateHouseholdAndFleetMetrics } from './utils/householdLifestyleEngine';
 
 // Configure marked with GitHub-flavored markdown and automatic line breaks
@@ -730,6 +731,24 @@ function KlarityApp() {
       localStorage.setItem('klarity_household_profile', JSON.stringify(householdProfile));
     } catch (e) {}
   }, [householdProfile]);
+
+  // Password & Account Vault state (persisted to localStorage)
+  const [vaultItems, setVaultItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_password_vault');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_VAULT_ITEMS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_password_vault', JSON.stringify(vaultItems));
+    } catch (e) {}
+  }, [vaultItems]);
 
   const handleSyncUtilitiesToBills = (calcMetrics) => {
     if (!calcMetrics || !calcMetrics.utilities) return;
@@ -2633,6 +2652,20 @@ function KlarityApp() {
               ...prev,
               vehicles: (prev.vehicles || []).filter(v => !(v.name || '').toLowerCase().includes((act.item.name || '').toLowerCase()))
             }));
+          } else if (act.type === 'add_vault_item' && act.item?.service) {
+            setVaultItems(prev => [
+              {
+                id: `v-ai-${Date.now()}`,
+                service: act.item.service,
+                category: act.item.category || 'Household',
+                username: act.item.username || '',
+                password: act.item.password || '',
+                accountNumber: act.item.accountNumber || '',
+                website: act.item.website || '',
+                notes: act.item.notes || ''
+              },
+              ...(prev || [])
+            ]);
           } else if (act.type === 'goal' && act.item?.name && act.item?.targetAmount) {
             setSavingsGoals(prev => [
               ...prev,
@@ -2665,8 +2698,8 @@ function KlarityApp() {
         if (dest === 'settings') {
           setSettingsActiveTab('ai');
           setIsSettingsOpen(true);
-        } else if (['dashboard', 'bills', 'subscriptions', 'cards', 'transactions', 'budgets', 'overview'].includes(dest)) {
-          setActiveTab(dest === 'overview' ? 'dashboard' : dest);
+        } else if (['dashboard', 'bills', 'subscriptions', 'cards', 'transactions', 'budgets', 'overview', 'vault', 'passwords'].includes(dest)) {
+          setActiveTab(dest === 'overview' ? 'dashboard' : dest === 'passwords' ? 'vault' : dest);
         }
         replyText = replyText.replace(/\[NAVIGATE:[a-zA-Z0-9_-]+\]/gi, '').trim();
       }
@@ -3534,7 +3567,8 @@ function KlarityApp() {
               { id: 'budgets', label: 'Budgets', icon: PieChart },
               { id: 'bills', label: 'Bills', icon: Receipt },
               { id: 'subscriptions', label: 'Subscriptions', icon: Zap },
-              { id: 'cards', label: 'Cards', icon: CreditCard }
+              { id: 'cards', label: 'Cards', icon: CreditCard },
+              { id: 'vault', label: 'Passwords', icon: KeyRound }
             ].map(item => {
               const isActive = activeTab === item.id;
               const Icon = item.icon;
@@ -4055,6 +4089,7 @@ function KlarityApp() {
                       { label: 'Bills', onClick: () => setActiveTab('bills') },
                       { label: 'Subscriptions', onClick: () => setActiveTab('subscriptions') },
                       { label: 'Cards', onClick: () => setActiveTab('cards') },
+                      { label: 'Passwords & Accounts', onClick: () => setActiveTab('vault') },
                       { label: 'Settings', onClick: () => setIsSettingsOpen(true) }
                     ].map((item, idx) => (
                       <button
@@ -4203,6 +4238,15 @@ function KlarityApp() {
                   </div>
                 </div>
               )}
+
+              {activeTab === 'vault' && (
+                <div className="p-5 flex flex-col gap-4">
+                  <PasswordVaultPage
+                    vaultItems={vaultItems}
+                    onUpdateVaultItems={setVaultItems}
+                  />
+                </div>
+              )}
             </>
           );
         })()}
@@ -4214,7 +4258,7 @@ function KlarityApp() {
             { id: 'transactions', label: 'Activity', matchIds: ['transactions'] },
             { id: 'budgets', label: 'Budgets', matchIds: ['budgets'] },
             { id: 'advisor', label: 'Advisor', matchIds: ['advisor'] },
-            { id: 'more', label: 'More', matchIds: ['more', 'bills', 'subscriptions', 'cards'] }
+            { id: 'more', label: 'More', matchIds: ['more', 'bills', 'subscriptions', 'cards', 'vault'] }
           ].map(tab => {
             const isActive = tab.matchIds.includes(activeTab);
             return (
@@ -5244,7 +5288,7 @@ function KlarityApp() {
                   <ArrowLeft className="w-4 h-4" />
                   <span>Back to Overview</span>
                 </button>
-                <h2 className="font-serif-title text-2xl font-bold text-slate-900">Connected Cards & Debt Payoff Planner</h2>
+                <h2 className="font-serif-title text-2xl font-bold text-slate-900">Cards & Household</h2>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -5442,350 +5486,16 @@ function KlarityApp() {
               onOpenHardshipPlaybook={() => setIsHardshipModalOpen(true)} 
             />
 
-            {/* Senior & Fixed-Income Debt Relief Hub */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 sm:p-6 flex flex-col gap-5">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                <div>
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200/80 flex items-center justify-center text-amber-700 shrink-0">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    </div>
-                    <h3 className="text-base font-bold text-slate-900 font-serif-title">
-                      Senior & Fixed-Income Relief Hub
-                    </h3>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                      <span>Judgment-Proof Protections</span>
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Specialized legal safeguards, 0% bank hardship relief programs, and interest elimination for Social Security & CalPERS retirees.
-                  </p>
-                </div>
-
-                {/* Sub-Tabs Navigation */}
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold overflow-x-auto shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setSeniorReliefTab('protections')}
-                    className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all whitespace-nowrap ${
-                      seniorReliefTab === 'protections' ? 'bg-white text-[#18457c] shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Legal Shield
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSeniorReliefTab('hardship')}
-                    className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all whitespace-nowrap ${
-                      seniorReliefTab === 'hardship' ? 'bg-white text-[#18457c] shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    0% Bank Hardship
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSeniorReliefTab('dmp')}
-                    className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all whitespace-nowrap ${
-                      seniorReliefTab === 'dmp' ? 'bg-white text-[#18457c] shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    NFCC Non-Profit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSeniorReliefTab('family')}
-                    className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all whitespace-nowrap ${
-                      seniorReliefTab === 'family' ? 'bg-white text-[#18457c] shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Family 0% Plan
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSeniorReliefTab('math')}
-                    className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all whitespace-nowrap ${
-                      seniorReliefTab === 'math' ? 'bg-white text-[#18457c] shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    The Math
-                  </button>
-                </div>
-              </div>
-
-              {/* TAB 1: LEGAL PROTECTIONS */}
-              {seniorReliefTab === 'protections' && (
-                <div className="flex flex-col gap-4 text-xs">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-                    <div className="p-4 rounded-xl border border-emerald-200/90 bg-emerald-50/40 flex flex-col gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                          §207
-                        </div>
-                        <h4 className="font-bold text-slate-900">Social Security Act § 207</h4>
-                      </div>
-                      <p className="text-slate-600 text-[11px] leading-relaxed">
-                        Under 42 U.S.C. § 407, Social Security benefits are <strong>strictly exempt from garnishment, levy, or execution</strong> by private, commercial credit card creditors.
-                      </p>
-                      <div className="mt-auto pt-2 border-t border-emerald-200/60 text-[10px] text-emerald-800 font-semibold">
-                        ✓ 100% Federal Garnishment Immunity
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-xl border border-blue-200/90 bg-blue-50/40 flex flex-col gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-[#18457c] text-white flex items-center justify-center font-bold text-xs shrink-0">
-                          CCP
-                        </div>
-                        <h4 className="font-bold text-slate-900">CalPERS Exemption (§ 704.110)</h4>
-                      </div>
-                      <p className="text-slate-600 text-[11px] leading-relaxed">
-                        Under California Code of Civil Procedure § 704.110, CalPERS and all public employee retirement, disability, and death benefits are <strong>fully exempt from civil court judgments</strong>.
-                      </p>
-                      <div className="mt-auto pt-2 border-t border-blue-200/60 text-[10px] text-blue-800 font-semibold">
-                        ✓ 100% California Public Pension Shield
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-xl border border-purple-200/90 bg-purple-50/40 flex flex-col gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-purple-700 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                          CFR
-                        </div>
-                        <h4 className="font-bold text-slate-900">2-Month Bank Shield (31 CFR 212)</h4>
-                      </div>
-                      <p className="text-slate-600 text-[11px] leading-relaxed">
-                        Banks are federally required to automatically protect the <strong>last 2 months of direct-deposited Social Security and public pensions</strong> from any account freeze or levy.
-                      </p>
-                      <div className="mt-auto pt-2 border-t border-purple-200/60 text-[10px] text-purple-800 font-semibold">
-                        ✓ Automatic Direct-Deposit Account Protection
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-2.5 text-[11px] text-slate-600">
-                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <strong className="text-slate-800">Who CAN garnish retirement income?</strong> Only child support, alimony, the IRS for federal taxes, or federal student loans have legal authority. Private credit card companies (Citi, Amex, Discover, Chase, Capital One) have <strong>zero legal authority</strong> to freeze or seize your retirement funds.
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 2: 0% BANK HARDSHIP PROGRAM */}
-              {seniorReliefTab === 'hardship' && (
-                <div className="flex flex-col gap-4 text-xs">
-                  <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <h4 className="font-bold text-slate-900">Internal Bank Hardship Workout Programs</h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        Both American Express and Citibank run structured hardship programs that slash APR to <strong>0% to 6%</strong> with fixed 36 to 60-month payoff in exchange for closing the card.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleCopySeniorScript}
-                      className="px-3.5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs shrink-0 cursor-pointer"
-                    >
-                      {copiedSeniorScript ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedSeniorScript ? 'Script Copied!' : 'Copy Phone Script'}</span>
-                    </button>
-                  </div>
-
-                  {/* Word-for-Word Script Box */}
-                  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                        <PhoneCall className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Word-for-Word Negotiation Phone Script</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleCopySeniorScript}
-                        className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 cursor-pointer"
-                      >
-                        {copiedSeniorScript ? 'Copied to clipboard' : 'Click to copy script'}
-                      </button>
-                    </div>
-                    <blockquote className="italic font-mono text-[11px] text-slate-800 bg-white p-3.5 rounded-lg border border-slate-200/80 leading-relaxed select-all">
-                      "Hello, I am calling regarding my account ending in [XXXX]. I am an elderly retiree living on a fixed CalPERS public pension and Social Security. The current interest charges are making it impossible to pay down this principal balance. I want to honor my debt and pay back 100% of what I borrowed, but I cannot sustain this APR on my fixed income. I am requesting to enroll this account into an internal Financial Relief / Hardship Program with a 0% interest rate and a fixed monthly payoff plan in exchange for closing the card."
-                    </blockquote>
-                  </div>
-
-                  {/* Direct Contact Numbers */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-                    {[
-                      { bank: 'American Express Relief', phone: '1-866-703-4169', link: 'https://americanexpress.com/financial-relief', linkText: 'americanexpress.com/financial-relief' },
-                      { bank: 'Citibank Hardship', phone: '1-800-950-5114', link: 'https://citi.com', linkText: 'citi.com' },
-                      { bank: 'Discover Card Hardship', phone: '1-800-347-2683', link: 'https://discover.com', linkText: 'discover.com' },
-                      { bank: 'Chase Payment Assistance', phone: '1-800-935-9935', link: 'https://chase.com', linkText: 'chase.com' }
-                    ].map((item, idx) => (
-                      <div key={idx} className="p-3 rounded-xl border border-slate-200/80 bg-white flex flex-col gap-1">
-                        <p className="font-bold text-slate-900 truncate">{item.bank}</p>
-                        <p className="font-mono text-blue-700 font-semibold text-xs">{item.phone}</p>
-                        <a
-                          href={item.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] text-slate-400 hover:text-blue-600 truncate inline-flex items-center gap-1 mt-auto"
-                        >
-                          <span>{item.linkText}</span>
-                          <ExternalLink className="w-2.5 h-2.5 shrink-0" />
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 3: NFCC CERTIFIED NON-PROFIT DMP */}
-              {seniorReliefTab === 'dmp' && (
-                <div className="flex flex-col gap-4 text-xs">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    <div className="p-4 rounded-xl border border-slate-200 bg-white flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-bold text-slate-900 text-sm">National Foundation for Credit Counseling (NFCC)</h4>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Certified Non-Profit</span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 leading-relaxed">
-                        If frontline bank reps refuse a 0% rate directly, certified NFCC non-profit counselors negotiate established concession rates (typically 0% to 8%) with card issuers.
-                      </p>
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between mt-auto">
-                        <span className="font-mono font-bold text-slate-800">1-800-388-2227</span>
-                        <a
-                          href="https://www.nfcc.org"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 font-semibold hover:underline inline-flex items-center gap-1 text-[11px]"
-                        >
-                          <span>nfcc.org</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-xl border border-slate-200 bg-white flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-bold text-slate-900 text-sm">Money Management International (MMI)</h4>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Accredited Agency</span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 leading-relaxed">
-                        The largest nationwide certified non-profit credit counseling agency. All initial consultations are 100% free with established workout concessions across all major banks.
-                      </p>
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between mt-auto">
-                        <span className="font-mono font-bold text-slate-800">1-866-889-9347</span>
-                        <a
-                          href="https://www.moneymanagement.org"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 font-semibold hover:underline inline-flex items-center gap-1 text-[11px]"
-                        >
-                          <span>moneymanagement.org</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-[11px] text-amber-900 flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <strong>Senior Fee Waiver Guarantee:</strong> While non-profit DMPs have standard $25-$50/month administration fees, accredited agencies are <strong>legally required by federal guidelines to reduce or completely waive monthly fees</strong> for elderly seniors and individuals on fixed retirement incomes.
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 4: FAMILY 0% PLAN (QARD HASAN) */}
-              {seniorReliefTab === 'family' && (
-                <div className="flex flex-col gap-4 text-xs">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    <div className="p-4 rounded-xl border border-emerald-200/90 bg-emerald-50/40 flex flex-col gap-2">
-                      <h4 className="font-bold text-slate-900 text-sm">Family Qard Hasan (100% Zero Riba)</h4>
-                      <p className="text-[11px] text-slate-600 leading-relaxed">
-                        Family members pool resources to pay off the toxic high-interest card in one lump sum directly to the bank. The retiree repays the family interest-free at an affordable rate (e.g. $200-$250/mo from their CalPERS or Social Security check).
-                      </p>
-                      <div className="pt-2 border-t border-emerald-200/60 flex items-center gap-2 text-[11px] font-semibold text-emerald-800 mt-auto">
-                        <span>✓ Zero Interest</span>
-                        <span>•</span>
-                        <span>✓ Zero Bank Fees</span>
-                        <span>•</span>
-                        <span>✓ Zero Credit Report Harm</span>
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-xl border border-blue-200/90 bg-blue-50/40 flex flex-col gap-2">
-                      <h4 className="font-bold text-slate-900 text-sm">CalPERS 457(b) Supplemental Loan</h4>
-                      <p className="text-[11px] text-slate-600 leading-relaxed">
-                        If your parent or senior contributed to a CalPERS 457 Plan during their public service career, they can take a participant loan against their vested balance.
-                      </p>
-                      <div className="pt-2 border-t border-blue-200/60 text-[11px] text-blue-800 font-semibold mt-auto">
-                        ✓ All interest paid goes directly back into their own retirement fund!
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 5: THE MINIMUM PAYMENT TRAP (COMPARISON MATH) */}
-              {seniorReliefTab === 'math' && (
-                <div className="flex flex-col gap-3 text-xs">
-                  <p className="text-[11px] text-slate-500">
-                    Real numbers on an <strong>$8,000 credit card balance at a typical 24% APR</strong>:
-                  </p>
-                  <div className="border border-slate-200 rounded-xl overflow-x-auto bg-white">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-[11px]">
-                          <th className="py-2.5 px-4 font-semibold">Strategy Metric</th>
-                          <th className="py-2.5 px-4 font-semibold text-rose-700 bg-rose-50/50">Minimum Payment Only</th>
-                          <th className="py-2.5 px-4 font-semibold text-slate-800">Fixed $400 / Month</th>
-                          <th className="py-2.5 px-4 font-semibold text-emerald-700 bg-emerald-50/50">0% Hardship / DMP Plan</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-[11px]">
-                        <tr>
-                          <td className="py-2.5 px-4 font-medium text-slate-800">Initial Monthly Payment</td>
-                          <td className="py-2.5 px-4 font-mono text-rose-700 bg-rose-50/30">~$240.00 / mo</td>
-                          <td className="py-2.5 px-4 font-mono text-slate-700">$400.00 / mo</td>
-                          <td className="py-2.5 px-4 font-mono text-emerald-700 font-semibold bg-emerald-50/30">~$170 – $220 / mo</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2.5 px-4 font-medium text-slate-800">Portion to Interest (Riba)</td>
-                          <td className="py-2.5 px-4 font-mono text-rose-700 font-bold bg-rose-50/30">~$160.00 (67% pure waste)</td>
-                          <td className="py-2.5 px-4 font-mono text-slate-700">~$160.00 (drops monthly)</td>
-                          <td className="py-2.5 px-4 font-mono text-emerald-700 font-bold bg-emerald-50/30">$0.00 (0% - All Principal!)</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2.5 px-4 font-medium text-slate-800">Portion to Principal</td>
-                          <td className="py-2.5 px-4 font-mono text-rose-700 bg-rose-50/30">~$80.00 (only 33%)</td>
-                          <td className="py-2.5 px-4 font-mono text-slate-700">$240.00 (grows monthly)</td>
-                          <td className="py-2.5 px-4 font-mono text-emerald-700 font-bold bg-emerald-50/30">100% of Every Dollar!</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2.5 px-4 font-medium text-slate-800">Time to Debt Freedom</td>
-                          <td className="py-2.5 px-4 font-mono text-rose-700 font-bold bg-rose-50/30">~22 Long Years!</td>
-                          <td className="py-2.5 px-4 font-mono text-slate-700">~26 Months (2.2 yrs)</td>
-                          <td className="py-2.5 px-4 font-mono text-emerald-700 font-bold bg-emerald-50/30">36 to 48 Months</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2.5 px-4 font-medium text-slate-800">Total Interest (Riba) Paid</td>
-                          <td className="py-2.5 px-4 font-mono text-rose-700 font-bold bg-rose-50/30">~$11,500+</td>
-                          <td className="py-2.5 px-4 font-mono text-slate-700">~$2,300</td>
-                          <td className="py-2.5 px-4 font-mono text-emerald-700 font-bold bg-emerald-50/30">$0.00</td>
-                        </tr>
-                        <tr className="bg-slate-50/70 font-semibold">
-                          <td className="py-2.5 px-4 text-slate-900">Total Cash Out of Pocket</td>
-                          <td className="py-2.5 px-4 font-mono text-rose-700 font-bold bg-rose-50/50">~$19,500+</td>
-                          <td className="py-2.5 px-4 font-mono text-slate-900">~$10,300</td>
-                          <td className="py-2.5 px-4 font-mono text-emerald-700 font-bold bg-emerald-50/50">$8,000 Flat</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Household, Auto & Health Sections */}
+            <HouseholdLifestyleHub
+              householdProfile={householdProfile}
+              onUpdateProfile={setHouseholdProfile}
+              onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
+              onAskAiAdvisor={(promptText) => {
+                setIsAiDrawerOpen(true);
+                handleSendChatMessage(promptText);
+              }}
+            />
 
             {/* Connected Bank Checking, Savings & Manual Accounts */}
             <div className="flex flex-col gap-3 mt-2">
@@ -5832,6 +5542,11 @@ function KlarityApp() {
         )}
 
         {/* --------------------------------------------------------------------- */}
+        {/* TAB: PASSWORDS & ACCOUNTS VAULT */}
+        {activeTab === 'vault' && (
+          <PasswordVaultPage vaultItems={vaultItems} onUpdateVaultItems={setVaultItems} />
+        )}
+
         {/* TAB: TRANSACTIONS (Dedicated Purchases Page with Multi-Card Filter) */}
         {/* --------------------------------------------------------------------- */}
         {activeTab === 'transactions' && (
@@ -6336,6 +6051,7 @@ function KlarityApp() {
                 { label: 'Bills', onClick: () => setActiveTab('bills') },
                 { label: 'Subscriptions', onClick: () => setActiveTab('subscriptions') },
                 { label: 'Cards', onClick: () => setActiveTab('cards') },
+                      { label: 'Passwords & Accounts', onClick: () => setActiveTab('vault') },
                 { label: 'Settings', onClick: () => setIsSettingsOpen(true) }
               ].map((item, idx) => (
                 <button

@@ -47,15 +47,9 @@ export default function InteractivePayoffComparison({
               <Calculator className="w-4 h-4" />
             </span>
             <h3 className="font-serif-title text-base sm:text-lg font-bold text-slate-900">
-              4-Option Debt Elimination Engine
+              Payoff Options
             </h3>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-              Exact Amortization Math
-            </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Simulate your options side-by-side: commercial minimums vs. accelerated payoff vs. 0% statutory relief.
-          </p>
         </div>
 
         {/* Card Selector Dropdown */}

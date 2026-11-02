@@ -1531,6 +1531,7 @@ Rules:
    - For Updating Home / Household Size / City / PG&E CARE: [ACTION:SET_HOUSEHOLD:{"dwellingType":"single_family","householdSize":4,"sqFt":2100,"cityOrZip":"San Jose, CA","hasCareDiscount":true}]
    - For Adding a Household Car (gas, hybrid, phev, ev): [ACTION:ADD_VEHICLE:{"name":"2024 Hyundai Ioniq 5","type":"ev","mpgOrEfficiency":28,"monthlyMiles":1000,"freeChargingSharePercent":40}]
    - For Removing a Household Car: [ACTION:DELETE_VEHICLE:{"name":"Toyota Camry"}]
+   - For Saving Account Login/Password/Account # to Vault: [ACTION:ADD_VAULT_ITEM:{"service":"PG&E","category":"Household","username":"myuser","password":"mypass","accountNumber":"12345"}]
    You can output multiple ACTION tags in a single response to execute batch operations!
    Always summarize the changes you made in clean bullet points with exact dollar figures.
 4. GEMINI-STYLE POLISHED FORMATTING:
@@ -1546,6 +1547,7 @@ Rules:
    - For Transactions / Purchases: [NAVIGATE:transactions]
    - For Overview / Dashboard: [NAVIGATE:dashboard]
    - For Settings: [NAVIGATE:settings]
+   - For Passwords & Accounts Vault: [NAVIGATE:vault]
 6. RETIREMENT, SOCIAL SECURITY, CALPERS & SENIOR DEBT PROTECTION EXPERTISE:
 ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
    * Total Monthly Income: ${statutoryShield.totalMonthlyIncome || 0}/mo
@@ -1960,6 +1962,15 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
         const vData = JSON.parse(dvMatch[1]);
         actionsExecuted.push({ type: 'delete_vehicle', item: vData });
       } catch (e) {}
+
+    const addVaultRegex = /\[ACTION:ADD_VAULT_ITEM:([\s\S]*?)\]/gi;
+    let avtMatch;
+    while ((avtMatch = addVaultRegex.exec(reply)) !== null) {
+      try {
+        const vtData = JSON.parse(avtMatch[1]);
+        actionsExecuted.push({ type: 'add_vault_item', item: vtData });
+      } catch (e) {}
+    }
     }
 
     // 4. Smart Fallback Comprehension for Uploaded Statements & Pasted Natural-Language Sentences
