@@ -483,6 +483,7 @@ function sanitizeUser(u) {
   const { passwordHash, ...safeUser } = u;
   return safeUser;
 }
+
 // ============================================================================
 // 1-WEEK PERSISTENT AUTHENTICATION SESSION SYSTEM (Expires after 7 days)
 // ============================================================================
@@ -507,8 +508,6 @@ function getValidSession(data) {
   }
   return data.activeSession;
 }
-
-
 
 app.get('/api/auth/session', (req, res) => {
   const data = readData();
@@ -621,6 +620,89 @@ app.post('/api/auth/login', (req, res) => {
 
   authRateMap.delete(clientIp);
   const safeUser = sanitizeUser(user);
+  const session = createSession(safeUser);
+  data.activeSession = session;
+  writeData(data);
+  res.json({ user: safeUser, session });
+});
+
+
+// Memory maps for Desktop Browser Loopback OAuth
+if (!global.completedDesktopAuths) {
+  global.completedDesktopAuths = new Map();
+}
+
+app.get('/api/auth/google/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+  if (error || !code) {
+    return res.send(`
+      <!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:50px;">
+        <h3>Sign-in cancelled or failed</h3>
+        <p>${error || 'No authorization code received'}</p>
+        <button onclick="window.close()">Close this window</button>
+      </body></html>
+    `);
+  }
+
+  try {
+    const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const hostPort = (req.headers.host && req.headers.host.includes(':')) ? req.headers.host.split(':')[1] : (req.socket.localPort || 5173);
+    const redirectUri = `http://localhost:${hostPort}/api/auth/google/callback`;
+
+    // 1. Exchange authorization code for access_token with Google
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code'
+      })
+    });
+
+    const tokenData = await tokenRes.json();
+    if (!tokenRes.ok || !tokenData.access_token) {
+      console.error('Google token exchange error:', tokenData);
+      return res.status(400).send(`Authentication error: ${tokenData.error_description || 'Token exchange failed'}`);
+    }
+
+    // 2. Fetch authenticated user profile from Google
+    const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` }
+    });
+    const profile = await userinfoRes.json();
+    const cleanEmail = (profile.email || '').trim().toLowerCase();
+
+    if (!cleanEmail) {
+      return res.status(400).send('No verified email found from Google profile');
+    }
+
+    // 3. Register or load user into Klarity
+    const data = readData();
+    const isOwner = ['byzizo@protonmail.com', 'zeoe13@gmail.com'].includes(cleanEmail);
+    let user = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
+
+    if (!user) {
+      user = {
+        id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
+        email: cleanEmail,
+        name: profile.name || (isOwner ? 'Ziyad Elmahi' : cleanEmail.split('@')[0]),
+        avatar: profile.picture || '',
+        role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member'
+      };
+      data.users = data.users || [];
+      data.users.push(user);
+      writeData(data);
+    } else if (profile.name || profile.picture) {
+      if (profile.name) user.name = profile.name;
+      if (profile.picture) user.avatar = profile.picture;
+      writeData(data);
+    }
+
+    const safeUser = sanitizeUser(user);
     const session = createSession(safeUser);
     data.activeSession = session;
     writeData(data);
