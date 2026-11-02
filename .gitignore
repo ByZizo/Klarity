@@ -11,3 +11,7 @@ server/.env*
 .DS_Store
 *.log
 .vercel
+server/data.json
+data.json
+*.enc
+klarity_session.json
