@@ -92,7 +92,7 @@ const initialSeedData = {
   users: [
     {
       id: "u-ziyad",
-      email: "zeoe13@gmail.com",
+      email: "byzizo@protonmail.com",
       name: "Ziyad Elmahi",
       avatar: "",
       role: "Primary Member"
@@ -511,7 +511,7 @@ app.post('/api/auth/register', (req, res) => {
     return res.json({ user: sanitizeUser(existing) });
   }
 
-  const isOwner = cleanEmail === 'zeoe13@gmail.com';
+  const isOwner = ['byzizo@protonmail.com', 'zeoe13@gmail.com'].includes(cleanEmail);
   const newUser = {
     id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
     email: cleanEmail,
@@ -622,7 +622,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
     // 3. Register or load user into Klarity
     const data = readData();
-    const isOwner = cleanEmail === 'zeoe13@gmail.com';
+    const isOwner = ['byzizo@protonmail.com', 'zeoe13@gmail.com'].includes(cleanEmail);
     let user = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
 
     if (!user) {
@@ -727,7 +727,7 @@ app.post('/api/auth/google', async (req, res) => {
   }
 
   const data = readData();
-  const isOwner = verifiedEmail === 'zeoe13@gmail.com';
+  const isOwner = ['byzizo@protonmail.com', 'zeoe13@gmail.com'].includes(verifiedEmail);
   let user = (data.users || []).find(u => u.email.toLowerCase() === verifiedEmail);
 
   if (!user) {
@@ -754,7 +754,7 @@ app.post('/api/auth/google', async (req, res) => {
 app.get('/api/settings', (req, res) => {
   const userId = req.query.userId || req.headers['x-user-id'] || 'default';
   const data = readData();
-  const user = (data.users || []).find(u => u.id === userId) || data.users?.[0] || { name: 'Ziyad Elmahi', email: 'zeoe13@gmail.com' };
+  const user = (data.users || []).find(u => u.id === userId) || data.users?.[0] || { name: 'Ziyad Elmahi', email: 'byzizo@protonmail.com' };
   const userSettings = getUserSettings(data, userId);
   const ai = userSettings.ai;
   const plaid = userSettings.plaid;
@@ -795,7 +795,7 @@ app.post('/api/settings/profile', (req, res) => {
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
   const data = readData();
   if (!data.users || data.users.length === 0) {
-    data.users = [{ id: 'u-ziyad', name: name.trim(), email: 'zeoe13@gmail.com' }];
+    data.users = [{ id: 'u-ziyad', name: name.trim(), email: 'byzizo@protonmail.com' }];
   } else {
     data.users[0].name = name.trim();
   }

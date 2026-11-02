@@ -194,7 +194,7 @@ ipcMain.handle('klarity:google-sign-in', async () => {
   const clientId = '207624653160-vbp60vuujhl2h8jshvnosad9m2ft75jq.apps.googleusercontent.com';
   const port = localServerPort || 5173;
   const redirectUri = `http://localhost:${port}/api/auth/google/callback`;
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20profile%20email&state=${sid}&prompt=select_account&login_hint=zeoe13@gmail.com`;
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20profile%20email&state=${sid}&prompt=select_account`;
 
   // Open real system browser (Chrome/Edge) where user is already logged in with full passkey support
   shell.openExternal(authUrl);

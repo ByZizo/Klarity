@@ -1919,7 +1919,7 @@ function KlarityApp() {
         }
       } catch (err) {
         console.error('Sign in error:', err);
-        const isOwner = email.toLowerCase() === 'zeoe13@gmail.com';
+        const isOwner = ['byzizo@protonmail.com', 'zeoe13@gmail.com'].includes(email.toLowerCase());
         const localUser = {
           id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
           email,
@@ -2967,14 +2967,14 @@ function KlarityApp() {
                   type="button"
                   disabled={isAuthenticating}
                   onClick={() => handleGoogleProfileSuccess({
-                    email: 'zeoe13@gmail.com',
+                    email: 'byzizo@protonmail.com',
                     name: 'Ziyad',
                     desktopVerified: true
                   })}
                   className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-medium text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                 >
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Instant Owner Access (zeoe13@gmail.com)</span>
+                  <span>Instant Owner Access (byzizo@protonmail.com)</span>
                 </button>
               )}
             </div>
@@ -7487,7 +7487,7 @@ function KlarityApp() {
                           </div>
                           <div>
                             <p className="text-sm font-bold text-slate-900">{currentUser?.name || 'Ziyad Elmahi'}</p>
-                            <p className="text-xs text-slate-500">{currentUser?.email || 'zeoe13@gmail.com'}</p>
+                            <p className="text-xs text-slate-500">{currentUser?.email || 'byzizo@protonmail.com'}</p>
                           </div>
                         </div>
 
@@ -7506,7 +7506,7 @@ function KlarityApp() {
                             <label className="text-xs font-medium text-slate-700 block mb-1.5">Email</label>
                             <input
                               type="email"
-                              value={currentUser?.email || 'zeoe13@gmail.com'}
+                              value={currentUser?.email || 'byzizo@protonmail.com'}
                               disabled
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-600 cursor-not-allowed shadow-2xs"
                             />
@@ -8143,7 +8143,7 @@ function KlarityApp() {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-xs font-semibold text-slate-900">Signed in as</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email || 'zeoe13@gmail.com'}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email || 'byzizo@protonmail.com'}</p>
                           </div>
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             Active
