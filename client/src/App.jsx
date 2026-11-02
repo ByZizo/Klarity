@@ -14,6 +14,8 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   ChevronRight,
+  ChevronLeft,
+  GripVertical,
   CheckCircle2,
   AlertCircle,
   Calendar,
@@ -1092,6 +1094,59 @@ function KlarityApp() {
       localStorage.setItem('klarity_advisor_collapsed', isAdvisorCollapsed ? 'true' : 'false');
     } catch {}
   }, [isAdvisorCollapsed]);
+
+  // Movable collapsed advisor tab vertical position (in px from top)
+  const [advisorTabTop, setAdvisorTabTop] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_advisor_tab_top');
+      return saved !== null && !isNaN(Number(saved)) ? Number(saved) : 240;
+    } catch {
+      return 240;
+    }
+  });
+  const advisorTabTopRef = useRef(advisorTabTop);
+  useEffect(() => {
+    advisorTabTopRef.current = advisorTabTop;
+  }, [advisorTabTop]);
+
+  const isDraggingTabRef = useRef(false);
+  const tabDragMovedRef = useRef(false);
+
+  const handleTabMouseDown = (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    isDraggingTabRef.current = true;
+    tabDragMovedRef.current = false;
+    const startY = e.clientY;
+    const startTop = advisorTabTopRef.current;
+
+    const onMouseMove = (moveEvent) => {
+      if (!isDraggingTabRef.current) return;
+      const deltaY = moveEvent.clientY - startY;
+      if (Math.abs(deltaY) > 3) {
+        tabDragMovedRef.current = true;
+      }
+      const newTop = Math.max(60, Math.min(window.innerHeight - 80, startTop + deltaY));
+      advisorTabTopRef.current = newTop;
+      setAdvisorTabTop(newTop);
+    };
+
+    const onMouseUp = () => {
+      isDraggingTabRef.current = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      if (!tabDragMovedRef.current) {
+        setIsAdvisorCollapsed(false);
+      } else {
+        try {
+          localStorage.setItem('klarity_advisor_tab_top', String(advisorTabTopRef.current));
+        } catch {}
+      }
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
 
   const [isMiniSettingsOpen, setIsMiniSettingsOpen] = useState(false);
 
@@ -4544,16 +4599,7 @@ function KlarityApp() {
                 </h1>
                 <p className="text-xs text-slate-500 mt-0.5">Here's where your money stands today.</p>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleGenerateWeeklySummary}
-                  className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200/90 text-xs font-semibold text-[#18457c] shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-[#18457c]" />
-                  <span>Weekly Advisor Summary</span>
-                </button>
-              </div>
+              
             </div>
 
             {/* Smart Alerts Strip (Bill due soon, Card > 30% utilization, Budget near limit) */}
@@ -6316,18 +6362,21 @@ function KlarityApp() {
         )}
       </main>
 
-      {/* Floating Tab to Expand Advisor when Collapsed */}
+      {/* Floating Draggable Tab to Expand Advisor when Collapsed */}
       {isAdvisorCollapsed && activeTab !== 'advisor' && (
-        <button
-          type="button"
-          onClick={() => setIsAdvisorCollapsed(false)}
-          className="fixed right-0 top-24 z-40 bg-white hover:bg-slate-50 border-l border-y border-slate-200 shadow-md rounded-l-2xl py-2 px-3 flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-[#18457c] cursor-pointer transition-all animate-in slide-in-from-right-4"
-          title="Expand AI Advisor sidebar"
+        <div
+          role="button"
+          tabIndex={0}
+          onMouseDown={handleTabMouseDown}
+          style={{ top: `${advisorTabTop}px` }}
+          className="fixed right-0 z-50 bg-[#18457c] hover:bg-[#123561] text-white border-l border-y border-[#123561] shadow-xl rounded-l-2xl py-2.5 px-3 flex items-center gap-2 text-xs font-semibold select-none cursor-grab active:cursor-grabbing transition-colors group animate-in slide-in-from-right-4"
+          title="Drag up/down to reposition • Click to open AI Advisor"
         >
-          <Bot className="w-4 h-4 text-[#18457c]" />
+          <GripVertical className="w-3.5 h-3.5 text-blue-200/60 group-hover:text-white transition-colors" />
+          <ChevronLeft className="w-4 h-4 text-white group-hover:-translate-x-0.5 transition-transform" />
           <span>Advisor</span>
-          <ChevronRight className="w-4 h-4 text-slate-400 rotate-180" />
-        </button>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+        </div>
       )}
 
       {/* ======================================================================= */}
@@ -6352,25 +6401,25 @@ function KlarityApp() {
             isResizingAdvisor ? 'bg-blue-600' : 'bg-slate-300 group-hover:bg-blue-500'
           }`}></div>
         </div>
-        {/* Header: Weekly Summary & Settings (Left), Centered Name (Middle), Past Chats & Collapse (Right) */}
+        {/* Header: Collapse & Past Chats (Left), Centered Name (Middle), Weekly Summary, Mini Settings, Fullscreen (Right) */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-200/70 relative">
-          {/* Left: Weekly Summary + Mini Settings */}
+          {/* Left: Collapse Button + Past Chats */}
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={handleGenerateWeeklySummary}
-              className="p-1.5 rounded-xl text-[#18457c] bg-[#eff4f9] hover:bg-blue-100 border border-[#18457c]/20 transition-colors cursor-pointer shadow-2xs"
-              title="Generate Weekly Summary"
+              onClick={() => setIsAdvisorCollapsed(true)}
+              className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
+              title="Collapse Advisor"
             >
-              <Sparkles className="w-4 h-4" />
+              <ChevronRight className="w-4 h-4" />
             </button>
             <button
               type="button"
-              onClick={() => setIsMiniSettingsOpen(prev => !prev)}
+              onClick={() => setIsPastChatsOpen(true)}
               className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
-              title="AI Advisor Settings & Tools"
+              title="Past Conversations"
             >
-              <SlidersHorizontal className="w-4 h-4" />
+              <History className="w-4 h-4" />
             </button>
           </div>
 
@@ -6389,23 +6438,31 @@ function KlarityApp() {
             </span>
           </div>
 
-          {/* Right: Past Chats + Collapse Button */}
+          {/* Right: Weekly Summary + Mini Settings + Full Screen AI */}
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => setIsPastChatsOpen(true)}
-              className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
-              title="Past Conversations"
+              onClick={handleGenerateWeeklySummary}
+              className="p-1.5 rounded-xl text-[#18457c] bg-[#eff4f9] hover:bg-blue-100 border border-[#18457c]/20 transition-colors cursor-pointer shadow-2xs"
+              title="Weekly Advisor Summary"
             >
-              <History className="w-4 h-4" />
+              <Sparkles className="w-4 h-4" />
             </button>
             <button
               type="button"
-              onClick={() => setIsAdvisorCollapsed(true)}
+              onClick={() => setIsMiniSettingsOpen(prev => !prev)}
               className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
-              title="Collapse Advisor Sidebar"
+              title="AI Advisor Settings and Tools"
             >
-              <ChevronRight className="w-4 h-4" />
+              <SlidersHorizontal className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('advisor')}
+              className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
+              title="Full Screen Advisor"
+            >
+              <Maximize2 className="w-4 h-4" />
             </button>
           </div>
         </div>
