@@ -1080,6 +1080,48 @@ function KlarityApp() {
       }
     ];
   });
+  const [isAdvisorCollapsed, setIsAdvisorCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_advisor_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_advisor_collapsed', isAdvisorCollapsed ? 'true' : 'false');
+    } catch {}
+  }, [isAdvisorCollapsed]);
+
+  const [isMiniSettingsOpen, setIsMiniSettingsOpen] = useState(false);
+
+  const [aiResponseLength, setAiResponseLength] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_ai_response_length') || 'balanced';
+    } catch {
+      return 'balanced';
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_ai_response_length', aiResponseLength);
+    } catch {}
+  }, [aiResponseLength]);
+
+  const [aiWebSearchEnabled, setAiWebSearchEnabled] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_ai_web_search');
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_ai_web_search', aiWebSearchEnabled ? 'true' : 'false');
+    } catch {}
+  }, [aiWebSearchEnabled]);
+
   const [chatInput, setChatInput] = useState('');
   const [chatFiles, setChatFiles] = useState([]); // Array of { id, name, size, mimeType, ext, isImage, previewUrl, base64, textContent }
   const [isAiTyping, setIsAiTyping] = useState(false);
@@ -2679,6 +2721,8 @@ function KlarityApp() {
           clientProvider: cachedProvider,
           clientModel: cachedModel,
           attachments: payloadAttachments,
+          responseLength: aiResponseLength,
+          webSearchEnabled: aiWebSearchEnabled,
           statutoryShield: {
             ...calculateJudgmentProofRatio(incomeStreams),
             incomeStreams: incomeStreams
@@ -6272,10 +6316,24 @@ function KlarityApp() {
         )}
       </main>
 
+      {/* Floating Tab to Expand Advisor when Collapsed */}
+      {isAdvisorCollapsed && activeTab !== 'advisor' && (
+        <button
+          type="button"
+          onClick={() => setIsAdvisorCollapsed(false)}
+          className="fixed right-0 top-24 z-40 bg-white hover:bg-slate-50 border-l border-y border-slate-200 shadow-md rounded-l-2xl py-2 px-3 flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-[#18457c] cursor-pointer transition-all animate-in slide-in-from-right-4"
+          title="Expand AI Advisor sidebar"
+        >
+          <Bot className="w-4 h-4 text-[#18457c]" />
+          <span>Advisor</span>
+          <ChevronRight className="w-4 h-4 text-slate-400 rotate-180" />
+        </button>
+      )}
+
       {/* ======================================================================= */}
       {/* 3. RIGHT SIDEBAR: ADVISOR (Hidden when on AI Advisor full view) */}
       {/* ======================================================================= */}
-      {activeTab !== 'advisor' && (
+      {activeTab !== 'advisor' && !isAdvisorCollapsed && (
       <aside
         style={{ width: `${advisorWidth}px` }}
         className={`shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-5 xl:p-6 flex flex-col h-screen sticky top-0 hidden lg:flex relative transition-[width] duration-75 ${
@@ -6294,61 +6352,60 @@ function KlarityApp() {
             isResizingAdvisor ? 'bg-blue-600' : 'bg-slate-300 group-hover:bg-blue-500'
           }`}></div>
         </div>
-        {/* Header with Quick Actions */}
-        <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200/70">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h2 className="text-sm font-bold text-slate-900">Advisor</h2>
-              <span
-                title={isOnline ? 'Connected to the internet' : 'Connected locally only'}
-                className={`inline-flex items-center justify-center w-5 h-5 rounded-full border ${
-                  isOnline
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
-                    : 'bg-blue-50 border-blue-200 text-blue-600'
-                }`}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-              Reads your bills, cards and spending to answer questions.
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+        {/* Header: Weekly Summary & Settings (Left), Centered Name (Middle), Past Chats & Collapse (Right) */}
+        <div className="flex items-center justify-between pb-3 border-b border-slate-200/70 relative">
+          {/* Left: Weekly Summary + Mini Settings */}
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={handleGenerateWeeklySummary}
-              className="p-1.5 rounded-lg text-[#18457c] bg-[#eff4f9] hover:bg-blue-100 border border-[#18457c]/20 transition-colors cursor-pointer"
+              className="p-1.5 rounded-xl text-[#18457c] bg-[#eff4f9] hover:bg-blue-100 border border-[#18457c]/20 transition-colors cursor-pointer shadow-2xs"
               title="Generate Weekly Summary"
             >
               <Sparkles className="w-4 h-4" />
             </button>
             <button
               type="button"
+              onClick={() => setIsMiniSettingsOpen(prev => !prev)}
+              className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
+              title="AI Advisor Settings & Tools"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Middle: Name "Advisor" with Connection Checkmark */}
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-bold text-slate-900 tracking-tight">Advisor</h2>
+            <span
+              title={isOnline ? 'Connected to the internet' : 'Connected locally only'}
+              className={`inline-flex items-center justify-center w-4 h-4 rounded-full border ${
+                isOnline
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                  : 'bg-blue-50 border-blue-200 text-blue-600'
+              }`}
+            >
+              <CheckCircle2 className="w-3 h-3" />
+            </span>
+          </div>
+
+          {/* Right: Past Chats + Collapse Button */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
               onClick={() => setIsPastChatsOpen(true)}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer"
+              className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
               title="Past Conversations"
             >
               <History className="w-4 h-4" />
             </button>
             <button
               type="button"
-              onClick={() => setIsMemoryModalOpen(true)}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer relative"
-              title="Advisor Memory"
+              onClick={() => setIsAdvisorCollapsed(true)}
+              className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
+              title="Collapse Advisor Sidebar"
             >
-              <Brain className="w-4 h-4" />
-              {aiMemory.length > 0 && (
-                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('advisor')}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer"
-              title="Open full Advisor page"
-            >
-              <Maximize2 className="w-4 h-4" />
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -8174,43 +8231,220 @@ function KlarityApp() {
           </div>
         </div>
       )}
-      {/* AI Memory Modal */}
-      {isMemoryModalOpen && (
+      {/* Mini AI Advisor Settings & Tools Modal */}
+      {isMiniSettingsOpen && (
         <div
-          onClick={(e) => { if (e.target === e.currentTarget) setIsMemoryModalOpen(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget) setIsMiniSettingsOpen(false); }}
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
+            className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-5 text-slate-800 animate-in fade-in zoom-in-95 cursor-default max-h-[90vh] overflow-y-auto"
           >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-serif-title text-lg font-bold text-slate-900">AI Advisor Memory</h3>
-              <button onClick={() => setIsMemoryModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Add custom preference..."
-                value={newMemoryInput}
-                onChange={e => setNewMemoryInput(e.target.value)}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none"
-              />
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#18457c] flex items-center justify-center shrink-0">
+                  <SlidersHorizontal className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-serif-title text-lg font-bold text-slate-900">AI Advisor Tools & Settings</h3>
+                  <p className="text-[11px] text-slate-500">Fine-tune memory, response depth, and live web access</p>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => handleAddMemory()}
-                className="px-4 py-2 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
+                onClick={() => setIsMiniSettingsOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
               >
-                Add
+                ✕
               </button>
             </div>
-            <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
-              {aiMemory.map((item, idx) => (
-                <div key={idx} className="py-2 flex items-center justify-between text-xs">
-                  <span>{item}</span>
-                  <button type="button" onClick={() => handleRemoveMemory(idx)} className="text-slate-400 hover:text-rose-600">✕</button>
+
+            {/* Tool 1: Response Length / Typing Limit */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                Response Length & Detail
+              </label>
+              <p className="text-[11px] text-slate-500 -mt-1">
+                Controls how much the AI writes before finishing its response.
+              </p>
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                {[
+                  { id: 'concise', label: 'Concise', words: '~150 words', desc: 'Fast, bullet points only' },
+                  { id: 'balanced', label: 'Balanced', words: '~350 words', desc: 'Standard practical advice' },
+                  { id: 'detailed', label: 'In-Depth', words: '~700 words', desc: 'Comprehensive math & plans' }
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setAiResponseLength(opt.id)}
+                    className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                      aiResponseLength === opt.id
+                        ? 'bg-blue-50/70 border-blue-500 text-slate-900 shadow-2xs ring-1 ring-blue-500'
+                        : 'bg-slate-50/70 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="text-xs font-bold">{opt.label}</span>
+                    <span className="text-[10px] text-blue-700 font-semibold">{opt.words}</span>
+                    <span className="text-[10px] text-slate-400 leading-tight">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tool 2: Live Internet / Web Search Connection */}
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                  aiWebSearchEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-200 text-slate-500'
+                }`}>
+                  <Globe className="w-4 h-4" />
                 </div>
-              ))}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-bold text-slate-900">Live Internet Web Search</p>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                      aiWebSearchEnabled
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-slate-100 text-slate-600 border-slate-300'
+                    }`}>
+                      {aiWebSearchEnabled ? 'Active' : 'Offline Mode'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {aiWebSearchEnabled
+                      ? 'AI searches Google for live card rates, balance transfer promos, and yields.'
+                      : 'AI only evaluates local accounts and bills without external web lookups.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAiWebSearchEnabled(prev => !prev)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  aiWebSearchEnabled ? 'bg-[#18457c]' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    aiWebSearchEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Tool 3: Advisor Memory */}
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">Advisor Memory</label>
+                  <p className="text-[11px] text-slate-500">Custom rules the AI remembers across every question.</p>
+                </div>
+                <span className="text-[11px] font-semibold text-slate-400">{aiMemory.length} saved</span>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. Prioritize paying off high-interest cards before saving..."
+                  value={newMemoryInput}
+                  onChange={e => setNewMemoryInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddMemory();
+                    }
+                  }}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none focus:bg-white focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddMemory()}
+                  className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors shrink-0"
+                >
+                  Add
+                </button>
+              </div>
+
+              <div className="divide-y divide-slate-100 max-h-36 overflow-y-auto border border-slate-100 rounded-xl px-2">
+                {aiMemory.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 py-3 text-center italic">No custom preferences saved yet.</p>
+                ) : (
+                  aiMemory.map((item, idx) => (
+                    <div key={idx} className="py-2 flex items-center justify-between text-xs gap-2">
+                      <span className="text-slate-700 leading-snug">{item}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMemory(idx)}
+                        className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer shrink-0"
+                        title="Remove memory"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Tool 4: Data Permissions Quick Toggles */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">Data Access Permissions</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { id: 'cards', label: 'Cards' },
+                  { id: 'bills', label: 'Bills' },
+                  { id: 'subscriptions', label: 'Subscriptions' },
+                  { id: 'purchases', label: 'Purchases' }
+                ].map(p => {
+                  const allowed = settingsAiPermissions[p.id];
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleTogglePermission(p.id)}
+                      className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                        allowed
+                          ? 'bg-blue-50/60 border-blue-300 text-blue-900'
+                          : 'bg-slate-50 border-slate-200 text-slate-400 line-through'
+                      }`}
+                    >
+                      <span>{p.label}</span>
+                      <CheckCircle2 className={`w-3.5 h-3.5 ${allowed ? 'text-blue-600' : 'text-slate-300'}`} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('Clear current active conversation thread?')) {
+                    const freshThread = [{
+                      role: 'assistant',
+                      text: "Conversation cleared. How can I assist you with your finances today?"
+                    }];
+                    updateActiveSession(freshThread);
+                    setNotificationToast('Conversation thread cleared');
+                    setTimeout(() => setNotificationToast(''), 3000);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold cursor-pointer transition-colors"
+              >
+                Clear Current Chat
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsMiniSettingsOpen(false)}
+                className="px-5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>

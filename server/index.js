@@ -1692,7 +1692,9 @@ app.post('/api/ai/chat', async (req, res) => {
     manualAssets = [],
     netWorth,
     householdProfile,
-    householdMetrics
+    householdMetrics,
+    responseLength,
+    webSearchEnabled
   } = req.body;
   const data = readData();
   const userSettings = getUserSettings(data, userId);
@@ -1797,6 +1799,8 @@ Actual Connected Finances for ${currentUser.name} (strictly respecting permissio
 
 Rules:
 1. Provide concise, clear, and empathetic financial guidance based strictly on real numbers and current web knowledge.
+${responseLength === 'concise' ? '- RESPONSE LENGTH: Keep your answer short, concise, and under 150 words. Focus strictly on bullet points and key numbers.' : responseLength === 'detailed' ? '- RESPONSE LENGTH: Provide an in-depth, thorough analysis (~600-800 words) with detailed arithmetic, comparisons, and step-by-step guidance.' : '- RESPONSE LENGTH: Provide a balanced, clear response (~250-400 words) with practical numbers and actionable advice.'}
+${webSearchEnabled === false ? '- INTERNET ACCESS: Strictly offline/local mode. Do NOT search external web data; base advice strictly on user accounts and bills.' : '- INTERNET ACCESS: Live web search is active. Reference live card promotions and rate benchmarks where helpful.'}
 2. LIVE INTERNET & WEB KNOWLEDGE: Incorporate real-time web facts to recommend specific credit card promotions (e.g. Citi Simplicity, Wells Fargo Reflect, Chase Freedom), balance transfer fees, current HYSA yields, and ways to save money.
 3. FULL AUTONOMOUS CONTROL & ACTION EXECUTION:
    You have FULL ACCESS to view and autonomously modify all user finances on Klarity.
