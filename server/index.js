@@ -587,7 +587,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const hostPort = req.socket.localPort || 5173;
+    const hostPort = (req.headers.host && req.headers.host.includes(':')) ? req.headers.host.split(':')[1] : (req.socket.localPort || 5173);
     const redirectUri = `http://localhost:${hostPort}/api/auth/google/callback`;
 
     // 1. Exchange authorization code for access_token with Google

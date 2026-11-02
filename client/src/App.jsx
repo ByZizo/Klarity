@@ -2954,29 +2954,13 @@ function KlarityApp() {
             )}
 
             {/* REAL GOOGLE OAUTH SIGN IN BUTTON */}
-            <div className="flex flex-col gap-2">
+            <div>
               <GoogleSignInButton
                 onAuthSuccess={handleGoogleProfileSuccess}
                 onError={err => setAuthError(err)}
                 setIsAuthenticating={setIsAuthenticating}
                 isAuthenticating={isAuthenticating}
               />
-
-              {typeof window !== 'undefined' && window.klarityDesktop && (
-                <button
-                  type="button"
-                  disabled={isAuthenticating}
-                  onClick={() => handleGoogleProfileSuccess({
-                    email: 'byzizo@protonmail.com',
-                    name: 'Ziyad',
-                    desktopVerified: true
-                  })}
-                  className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-medium text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
-                >
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Instant Owner Access (byzizo@protonmail.com)</span>
-                </button>
-              )}
             </div>
 
             <div className="flex items-center gap-3">
