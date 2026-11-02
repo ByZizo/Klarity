@@ -2,6 +2,18 @@
 
 A clean, private finance tracker with a built-in AI assistant to help you stay on top of your money, cards, and bills.
 
+[![Download for Windows](https://img.shields.io/badge/Download-Windows%20(.exe)-18457c?logo=windows&style=for-the-badge)](https://github.com/ByZizo/Klarity/releases)
+
+---
+
+## 📥 Download & Install (Easiest Way)
+
+No coding or terminal needed. To install Klarity on your computer:
+
+1. Go to the **[Releases Page](https://github.com/ByZizo/Klarity/releases)**.
+2. Download **`Klarity-Setup.exe`** (or the portable `.exe`).
+3. Double-click the file to install and open Klarity. An icon will automatically be placed on your desktop.
+
 ---
 
 ## What is Klarity?
@@ -24,13 +36,9 @@ It also includes a built-in AI financial advisor that analyzes your real numbers
 
 ---
 
-## Getting Started
+## 💻 For Developers (Run from Source)
 
-### Prerequisites
-- Node.js (v18 or higher)
-- npm or yarn
-
-### Installation
+If you prefer to run or build from source code:
 
 1. Clone the repository:
    ```bash
@@ -44,28 +52,22 @@ It also includes a built-in AI financial advisor that analyzes your real numbers
    cd client && npm install && cd ..
    ```
 
-3. Set up environment variables:
-   Copy `.env.example` to `.env` and add your optional API keys (Gemini, Plaid, Google OAuth):
+3. Run the desktop app:
    ```bash
-   cp .env.example .env
+   npx electron .
    ```
 
-4. Run the app:
+4. Build your own Windows installer (.exe):
    ```bash
-   npm start
+   npm run dist
    ```
-
-For the desktop app:
-```bash
-npx electron .
-```
 
 ---
 
 ## Tech Stack
 
 - **Frontend:** React, Vite, Tailwind CSS, Lucide Icons
-- **Desktop:** Electron
+- **Desktop:** Electron, Electron Builder
 - **Backend:** Node.js, Express
 - **AI Integration:** Google Gemini, OpenAI, Anthropic Claude
 - **Bank Connectivity:** Plaid API
