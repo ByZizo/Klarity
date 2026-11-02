@@ -123,6 +123,7 @@ async function createDesktopWindow() {
     minWidth: 960,
     minHeight: 640,
     title: 'Klarity — Private Financial & Password Suite',
+    icon: path.join(__dirname, 'klarity.ico'),
     backgroundColor: '#f8fafc',
     autoHideMenuBar: true,
     webPreferences: {
