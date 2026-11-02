@@ -11,6 +11,16 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Bank-Grade HTTP Security Headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
 // In Vercel serverless environment, local filesystem root is read-only; use /tmp or memory
 const DATA_FILE = process.env.VERCEL ? '/tmp/klarity_data.json' : path.join(__dirname, '../server/data.json');
 
@@ -384,57 +394,141 @@ function calculateNextDueDate(dueDay) {
 // API ROUTES
 // =========================================================================
 
+// Salted scrypt password hashing & Brute-Force Rate Limiting
+const authRateMap = new Map();
+
+function checkAuthRateLimit(ip) {
+  const now = Date.now();
+  const entry = authRateMap.get(ip) || { count: 0, resetAt: now + 15 * 60 * 1000 };
+  if (now > entry.resetAt) {
+    entry.count = 0;
+    entry.resetAt = now + 15 * 60 * 1000;
+  }
+  if (entry.count >= 10) {
+    return { blocked: true, secondsLeft: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  return { blocked: false, entry };
+}
+
+function recordFailedAuth(ip) {
+  const now = Date.now();
+  const entry = authRateMap.get(ip) || { count: 0, resetAt: now + 15 * 60 * 1000 };
+  entry.count += 1;
+  authRateMap.set(ip, entry);
+}
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derived = crypto.scryptSync(String(password), salt, 64).toString('hex');
+  return `${salt}:${derived}`;
+}
+
+function verifyPassword(password, storedHash) {
+  if (!storedHash || !storedHash.includes(':')) return false;
+  try {
+    const [salt, keyHex] = storedHash.split(':');
+    const derived = crypto.scryptSync(String(password), salt, 64);
+    const keyBuf = Buffer.from(keyHex, 'hex');
+    if (derived.length !== keyBuf.length) return false;
+    return crypto.timingSafeEqual(derived, keyBuf);
+  } catch {
+    return false;
+  }
+}
+
+function sanitizeUser(u) {
+  if (!u) return null;
+  const { passwordHash, ...safeUser } = u;
+  return safeUser;
+}
+
 // 1. Authentication Routes
 app.post('/api/auth/register', (req, res) => {
+  const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'local';
+  const rate = checkAuthRateLimit(clientIp);
+  if (rate.blocked) {
+    return res.status(429).json({ error: `Too many attempts. Try again in ${rate.secondsLeft}s.` });
+  }
+
   const { name, email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
   }
 
   const data = readData();
-  const existing = (data.users || []).find(u => u.email.toLowerCase() === email.toLowerCase());
-  if (existing) {
+  const cleanEmail = email.trim().toLowerCase();
+  const existing = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
+  if (existing && existing.passwordHash) {
     return res.status(400).json({ error: 'User already exists with this email' });
   }
 
+  if (existing && !existing.passwordHash) {
+    existing.passwordHash = hashPassword(password);
+    if (name) existing.name = name;
+    writeData(data);
+    return res.json({ user: sanitizeUser(existing) });
+  }
+
+  const isOwner = cleanEmail === 'zeoe13@gmail.com';
   const newUser = {
-    id: `u-${Date.now()}`,
-    email,
-    name: name || email.split('@')[0],
-    role: (data.users || []).length === 0 ? 'Primary Member' : 'Member',
-    avatar: ''
+    id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
+    email: cleanEmail,
+    name: name || (isOwner ? 'Ziyad Elmahi' : cleanEmail.split('@')[0]),
+    role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member',
+    avatar: '',
+    passwordHash: hashPassword(password)
   };
 
   data.users = data.users || [];
   data.users.push(newUser);
   writeData(data);
 
-  res.json({ user: newUser });
+  res.json({ user: sanitizeUser(newUser) });
 });
 
 app.post('/api/auth/login', (req, res) => {
+  const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'local';
+  const rate = checkAuthRateLimit(clientIp);
+  if (rate.blocked) {
+    return res.status(429).json({ error: `Too many failed login attempts. Try again in ${rate.secondsLeft}s.` });
+  }
+
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
   }
 
   const data = readData();
-  let user = (data.users || []).find(u => u.email.toLowerCase() === email.toLowerCase());
+  const cleanEmail = email.trim().toLowerCase();
+  let user = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
 
   if (!user) {
+    const isOwner = cleanEmail === 'zeoe13@gmail.com';
     user = {
-      id: `u-${Date.now()}`,
-      email,
-      name: email.split('@')[0],
-      role: (data.users || []).length === 0 ? 'Primary Member' : 'Member',
-      avatar: ''
+      id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
+      email: cleanEmail,
+      name: isOwner ? 'Ziyad Elmahi' : cleanEmail.split('@')[0],
+      role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member',
+      avatar: '',
+      passwordHash: hashPassword(password)
     };
     data.users = data.users || [];
     data.users.push(user);
     writeData(data);
+  } else if (!user.passwordHash) {
+    // First-time password binding for seeded owner account
+    user.passwordHash = hashPassword(password);
+    writeData(data);
+  } else {
+    const valid = verifyPassword(password, user.passwordHash);
+    if (!valid) {
+      recordFailedAuth(clientIp);
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
   }
 
-  res.json({ user });
+  authRateMap.delete(clientIp);
+  res.json({ user: sanitizeUser(user) });
 });
 
 app.post('/api/auth/google', (req, res) => {
@@ -444,15 +538,17 @@ app.post('/api/auth/google', (req, res) => {
   }
 
   const data = readData();
-  let user = (data.users || []).find(u => u.email.toLowerCase() === email.toLowerCase());
+  const cleanEmail = email.trim().toLowerCase();
+  const isOwner = cleanEmail === 'zeoe13@gmail.com';
+  let user = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
 
   if (!user) {
     user = {
-      id: `u-${Date.now()}`,
-      email,
-      name: name || email.split('@')[0],
+      id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
+      email: cleanEmail,
+      name: name || (isOwner ? 'Ziyad Elmahi' : cleanEmail.split('@')[0]),
       avatar: avatar || '',
-      role: (data.users || []).length === 0 ? 'Primary Member' : 'Member'
+      role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member'
     };
     data.users = data.users || [];
     data.users.push(user);
@@ -463,7 +559,7 @@ app.post('/api/auth/google', (req, res) => {
     writeData(data);
   }
 
-  res.json({ user });
+  res.json({ user: sanitizeUser(user) });
 });
 
 // 2. Settings Endpoints (Encrypted Server Storage per User)

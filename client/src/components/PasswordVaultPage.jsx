@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import {
   KeyRound,
-  Upload,
   Download,
   Plus,
   Search,
@@ -14,8 +13,19 @@ import {
   Edit3,
   ExternalLink,
   X,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Lock,
+  Unlock,
+  ShieldCheck,
+  AlertCircle
 } from 'lucide-react';
+import {
+  hasMasterPinSet,
+  setMasterPin,
+  removeMasterPin,
+  verifyMasterPin,
+  copySensitiveWithAutoClear
+} from '../utils/securityCrypto';
 
 export const DEFAULT_VAULT_ITEMS = [
   {
@@ -50,9 +60,20 @@ export default function PasswordVaultPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const [copiedKey, setCopiedKey] = useState('');
+  const [clipboardNotice, setClipboardNotice] = useState('');
   const [importStatus, setImportStatus] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+
+  // Vault Master PIN Security State
+  const [pinConfigured, setPinConfigured] = useState(() => hasMasterPinSet());
+  const [isVaultLocked, setIsVaultLocked] = useState(() => hasMasterPinSet());
+  const [unlockPinInput, setUnlockPinInput] = useState('');
+  const [unlockError, setUnlockError] = useState('');
+  const [showPinSetupModal, setShowPinSetupModal] = useState(false);
+  const [newPinInput, setNewPinInput] = useState('');
+  const [confirmPinInput, setConfirmPinInput] = useState('');
+  const [pinSetupError, setPinSetupError] = useState('');
 
   const [formState, setFormState] = useState({
     service: '',
@@ -82,12 +103,69 @@ export default function PasswordVaultPage({
     setVisiblePasswords(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleCopy = (text, key) => {
+  const handleCopy = async (text, key, isSensitive = false) => {
     if (!text) return;
-    navigator.clipboard.writeText(String(text)).then(() => {
+    const ok = await copySensitiveWithAutoClear(
+      String(text),
+      30000,
+      () => setClipboardNotice('')
+    );
+    if (ok) {
       setCopiedKey(key);
+      if (isSensitive) {
+        setClipboardNotice('Copied (auto-clears in 30s)');
+        setTimeout(() => setClipboardNotice(''), 4000);
+      }
       setTimeout(() => setCopiedKey(''), 2000);
-    });
+    }
+  };
+
+  const handleUnlockVault = (e) => {
+    e.preventDefault();
+    const res = verifyMasterPin(unlockPinInput);
+    if (res.valid) {
+      setIsVaultLocked(false);
+      setUnlockPinInput('');
+      setUnlockError('');
+    } else {
+      setUnlockError(res.error || 'Incorrect PIN.');
+    }
+  };
+
+  const handleSaveMasterPin = (e) => {
+    e.preventDefault();
+    const p1 = newPinInput.trim();
+    const p2 = confirmPinInput.trim();
+    if (p1.length < 4) {
+      setPinSetupError('PIN must be at least 4 characters.');
+      return;
+    }
+    if (p1 !== p2) {
+      setPinSetupError('PINs do not match.');
+      return;
+    }
+    try {
+      setMasterPin(p1);
+      setPinConfigured(true);
+      setIsVaultLocked(false);
+      setNewPinInput('');
+      setConfirmPinInput('');
+      setPinSetupError('');
+      setShowPinSetupModal(false);
+      setImportStatus('Vault PIN protection enabled (AES-256 encrypted)');
+      setTimeout(() => setImportStatus(''), 4000);
+    } catch (err) {
+      setPinSetupError(err.message || 'Could not set PIN.');
+    }
+  };
+
+  const handleRemovePin = () => {
+    removeMasterPin();
+    setPinConfigured(false);
+    setIsVaultLocked(false);
+    setShowPinSetupModal(false);
+    setImportStatus('Vault PIN removed');
+    setTimeout(() => setImportStatus(''), 3000);
   };
 
   const inferCategory = (serviceName = '', rawCat = '') => {
@@ -190,7 +268,7 @@ export default function PasswordVaultPage({
 
         if (imported.length > 0) {
           onUpdateVaultItems([...imported, ...(vaultItems || [])]);
-          setImportStatus(`Added ${imported.length} account${imported.length === 1 ? '' : 's'} from "${file.name}"`);
+          setImportStatus(`Added & encrypted ${imported.length} account${imported.length === 1 ? '' : 's'} from "${file.name}"`);
           setTimeout(() => setImportStatus(''), 5000);
         } else {
           setImportStatus('No account rows found in file. Use columns: Service, Username, Password, Account #');
@@ -271,6 +349,52 @@ export default function PasswordVaultPage({
     onUpdateVaultItems((vaultItems || []).filter(item => item.id !== id));
   };
 
+  // Render Vault Lock Gate if PIN is set and Vault is currently locked
+  if (isVaultLocked) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-4">
+        <div className="max-w-sm w-full bg-white rounded-2xl border border-slate-200/90 shadow-lg p-6 text-center flex flex-col gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-[#18457c]/10 text-[#18457c] flex items-center justify-center mx-auto">
+            <Lock className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="font-serif-title text-xl font-bold text-slate-900">Vault Locked</h2>
+            <p className="text-xs text-slate-500 mt-1">Enter your Master PIN to decrypt and view passwords</p>
+          </div>
+
+          {unlockError && (
+            <div className="px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 justify-center">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{unlockError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleUnlockVault} className="flex flex-col gap-3">
+            <input
+              type="password"
+              autoFocus
+              placeholder="Enter PIN"
+              value={unlockPinInput}
+              onChange={e => setUnlockPinInput(e.target.value)}
+              className="w-full text-center tracking-widest text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:bg-white focus:outline-none focus:border-[#18457c]"
+            />
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-bold cursor-pointer transition-colors"
+            >
+              Unlock Vault
+            </button>
+          </form>
+
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-emerald-700 font-semibold">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>AES-256 Encrypted Storage Active</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-5">
       {/* Top Bar */}
@@ -280,12 +404,52 @@ export default function PasswordVaultPage({
             <KeyRound className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="font-serif-title text-xl font-bold text-slate-900">Passwords & Accounts</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-serif-title text-xl font-bold text-slate-900">Passwords & Accounts</h2>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold">
+                <ShieldCheck className="w-3 h-3" />
+                <span>AES-256 Encrypted</span>
+              </span>
+            </div>
             <p className="text-xs text-slate-500">Logins, passwords & account numbers</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {pinConfigured ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setVisiblePasswords({});
+                  setIsVaultLocked(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold cursor-pointer"
+                title="Lock Vault with PIN"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Lock</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPinSetupModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>PIN Settings</span>
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowPinSetupModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-800 text-xs font-bold cursor-pointer"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Set Vault PIN</span>
+            </button>
+          )}
+
           <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs cursor-pointer transition-colors">
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>Upload Excel / CSV</span>
@@ -329,11 +493,77 @@ export default function PasswordVaultPage({
         </div>
       </div>
 
-      {/* Upload Status Banner */}
-      {importStatus && (
+      {/* PIN Setup / Change Modal */}
+      {showPinSetupModal && (
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div className="flex items-center gap-2 font-bold text-slate-900">
+              <Lock className="w-4 h-4 text-[#18457c]" />
+              <span>{pinConfigured ? 'Update Vault Master PIN' : 'Set Vault Master PIN'}</span>
+            </div>
+            <button type="button" onClick={() => setShowPinSetupModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {pinSetupError && (
+            <div className="text-rose-600 font-semibold">{pinSetupError}</div>
+          )}
+          <form onSubmit={handleSaveMasterPin} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <div>
+              <label className="block font-semibold text-slate-600 mb-1">New PIN (4+ digits)</label>
+              <input
+                type="password"
+                required
+                placeholder="••••"
+                value={newPinInput}
+                onChange={e => setNewPinInput(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-600 mb-1">Confirm PIN</label>
+              <input
+                type="password"
+                required
+                placeholder="••••"
+                value={confirmPinInput}
+                onChange={e => setConfirmPinInput(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 font-mono"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                className="flex-1 py-2 px-3 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white font-bold cursor-pointer"
+              >
+                Save PIN
+              </button>
+              {pinConfigured && (
+                <button
+                  type="button"
+                  onClick={handleRemovePin}
+                  className="py-2 px-3 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold cursor-pointer"
+                >
+                  Remove PIN
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Upload / Security Status Banner */}
+      {(importStatus || clipboardNotice) && (
         <div className="px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-semibold flex items-center justify-between">
-          <span>{importStatus}</span>
-          <button type="button" onClick={() => setImportStatus('')} className="text-emerald-700 cursor-pointer">
+          <span>{importStatus || clipboardNotice}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setImportStatus('');
+              setClipboardNotice('');
+            }}
+            className="text-emerald-700 cursor-pointer"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -522,7 +752,7 @@ export default function PasswordVaultPage({
                     {item.username && (
                       <button
                         type="button"
-                        onClick={() => handleCopy(item.username, `${item.id}-user`)}
+                        onClick={() => handleCopy(item.username, `${item.id}-user`, false)}
                         className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
                         title="Copy username"
                       >
@@ -551,9 +781,9 @@ export default function PasswordVaultPage({
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleCopy(item.password, `${item.id}-pw`)}
+                          onClick={() => handleCopy(item.password, `${item.id}-pw`, true)}
                           className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                          title="Copy password"
+                          title="Copy password (auto-clears in 30s)"
                         >
                           {copiedKey === `${item.id}-pw` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                         </button>
@@ -572,9 +802,9 @@ export default function PasswordVaultPage({
                     {item.accountNumber && (
                       <button
                         type="button"
-                        onClick={() => handleCopy(item.accountNumber, `${item.id}-acct`)}
+                        onClick={() => handleCopy(item.accountNumber, `${item.id}-acct`, true)}
                         className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                        title="Copy account number"
+                        title="Copy account number (auto-clears in 30s)"
                       >
                         {copiedKey === `${item.id}-acct` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>

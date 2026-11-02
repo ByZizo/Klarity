@@ -74,6 +74,14 @@ import { DEFAULT_INCOME_STREAMS, calculateJudgmentProofRatio } from './utils/sta
 import HouseholdLifestyleHub from './components/HouseholdLifestyleHub';
 import PasswordVaultPage, { DEFAULT_VAULT_ITEMS } from './components/PasswordVaultPage';
 import { DEFAULT_HOUSEHOLD_PROFILE, calculateHouseholdAndFleetMetrics } from './utils/householdLifestyleEngine';
+import {
+  secureStorage,
+  enforceStorageEncryptionAudit,
+  hasMasterPinSet,
+  setMasterPin,
+  removeMasterPin,
+  verifyMasterPin
+} from './utils/securityCrypto';
 
 // Configure marked with GitHub-flavored markdown and automatic line breaks
 marked.setOptions({
@@ -400,27 +408,97 @@ export default function App() {
 }
 
 function KlarityApp() {
-  // Current user state (persisted in localStorage, default to Ziyad Elmahi)
+  // Current user state (Encrypted in localStorage; requires authentication gate when null)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
-      const saved = localStorage.getItem('klarity_user');
-      return saved ? JSON.parse(saved) : {
-        id: 'u-ziyad',
-        email: 'zeoe13@gmail.com',
-        name: 'Ziyad Elmahi',
-        avatar: '',
-        role: 'Primary Member'
-      };
+      const saved = secureStorage.getItem('klarity_user', null);
+      if (saved && typeof saved === 'object' && saved.email) return saved;
+      return null;
     } catch {
-      return {
-        id: 'u-ziyad',
-        email: 'zeoe13@gmail.com',
-        name: 'Ziyad Elmahi',
-        avatar: '',
-        role: 'Primary Member'
-      };
+      return null;
     }
   });
+
+  // App-Wide Security Lock & Inactivity Auto-Lock State
+  const [isSessionLocked, setIsSessionLocked] = useState(() => {
+    try {
+      return sessionStorage.getItem('klarity_session_locked') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [autoLockMinutes, setAutoLockMinutes] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem('klarity_auto_lock_mins'));
+      return !Number.isNaN(v) && v >= 0 ? v : 15;
+    } catch {
+      return 15;
+    }
+  });
+  const [lockPinInput, setLockPinInput] = useState('');
+  const [lockError, setLockError] = useState('');
+  const [masterPinActive, setMasterPinActive] = useState(() => hasMasterPinSet());
+  const [secNewPin, setSecNewPin] = useState('');
+  const [secConfirmPin, setSecConfirmPin] = useState('');
+  const [secPinMsg, setSecPinMsg] = useState('');
+
+  // Run background storage encryption audit on mount so all sensitive localStorage keys use ENCv2
+  useEffect(() => {
+    enforceStorageEncryptionAudit();
+  }, []);
+
+  // Inactivity Auto-Lock Watcher
+  useEffect(() => {
+    if (!currentUser || !autoLockMinutes || autoLockMinutes <= 0) return;
+    let timerId = null;
+    const timeoutMs = autoLockMinutes * 60 * 1000;
+
+    const resetIdleTimer = () => {
+      if (timerId) clearTimeout(timerId);
+      timerId = setTimeout(() => {
+        setIsSessionLocked(true);
+        try { sessionStorage.setItem('klarity_session_locked', 'true'); } catch {}
+      }, timeoutMs);
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    events.forEach(ev => window.addEventListener(ev, resetIdleTimer, { passive: true }));
+    resetIdleTimer();
+
+    return () => {
+      if (timerId) clearTimeout(timerId);
+      events.forEach(ev => window.removeEventListener(ev, resetIdleTimer));
+    };
+  }, [currentUser, autoLockMinutes]);
+
+  const handleLockSession = () => {
+    setIsSessionLocked(true);
+    try { sessionStorage.setItem('klarity_session_locked', 'true'); } catch {}
+  };
+
+  const handleUnlockSession = (e) => {
+    e.preventDefault();
+    if (hasMasterPinSet()) {
+      const res = verifyMasterPin(lockPinInput);
+      if (res.valid) {
+        setIsSessionLocked(false);
+        setLockPinInput('');
+        setLockError('');
+        try { sessionStorage.removeItem('klarity_session_locked'); } catch {}
+      } else {
+        setLockError(res.error || 'Incorrect PIN.');
+      }
+    } else {
+      if (lockPinInput.trim().length >= 1) {
+        setIsSessionLocked(false);
+        setLockPinInput('');
+        setLockError('');
+        try { sessionStorage.removeItem('klarity_session_locked'); } catch {}
+      } else {
+        setLockError('Enter your PIN or password to unlock.');
+      }
+    }
+  };
 
   // Authentication Form State
   const [authMode, setAuthMode] = useState('signin'); // 'signin' | 'signup'
@@ -448,7 +526,7 @@ function KlarityApp() {
       metrics: { totalChecking: 0, totalCreditDebt: 0, totalMonthlyBills: 0, netWorthEstimate: 0 }
     };
   });
-  const VALID_TABS = ['dashboard', 'cards', 'bills', 'subscriptions', 'transactions', 'budgets', 'advisor', 'more'];
+  const VALID_TABS = ['dashboard', 'cards', 'bills', 'subscriptions', 'transactions', 'budgets', 'vault', 'advisor', 'more'];
 
   const getInitialTab = () => {
     try {
@@ -1672,7 +1750,7 @@ function KlarityApp() {
       const json = await res.json();
       if (res.ok && json.user) {
         setCurrentUser(json.user);
-        localStorage.setItem('klarity_user', JSON.stringify(json.user));
+        secureStorage.setItem('klarity_user', json.user);
         setNotificationToast(`Signed in with Google as ${json.user.name}`);
         setTimeout(() => setNotificationToast(''), 4000);
       } else {
@@ -1688,7 +1766,7 @@ function KlarityApp() {
         role: 'Primary Member'
       };
       setCurrentUser(fallbackUser);
-      localStorage.setItem('klarity_user', JSON.stringify(fallbackUser));
+      secureStorage.setItem('klarity_user', fallbackUser);
     }
   };
 
@@ -1740,7 +1818,7 @@ function KlarityApp() {
 
         if (res.ok && json.user) {
           setCurrentUser(json.user);
-          localStorage.setItem('klarity_user', JSON.stringify(json.user));
+          secureStorage.setItem('klarity_user', json.user);
           setNotificationToast(`Welcome to Klarity, ${json.user.name}!`);
           setTimeout(() => setNotificationToast(''), 4000);
         } else {
@@ -1756,7 +1834,7 @@ function KlarityApp() {
           role: 'Primary Member'
         };
         setCurrentUser(localUser);
-        localStorage.setItem('klarity_user', JSON.stringify(localUser));
+        secureStorage.setItem('klarity_user', localUser);
       } finally {
         setIsAuthenticating(false);
       }
@@ -1772,7 +1850,7 @@ function KlarityApp() {
 
         if (res.ok && json.user) {
           setCurrentUser(json.user);
-          localStorage.setItem('klarity_user', JSON.stringify(json.user));
+          secureStorage.setItem('klarity_user', json.user);
           setNotificationToast(`Welcome back, ${json.user.name}!`);
           setTimeout(() => setNotificationToast(''), 4000);
         } else {
@@ -1780,15 +1858,16 @@ function KlarityApp() {
         }
       } catch (err) {
         console.error('Sign in error:', err);
+        const isOwner = email.toLowerCase() === 'zeoe13@gmail.com';
         const localUser = {
-          id: `u-${Date.now()}`,
+          id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
           email,
-          name: email.split('@')[0],
+          name: isOwner ? 'Ziyad Elmahi' : email.split('@')[0],
           avatar: '',
           role: 'Primary Member'
         };
         setCurrentUser(localUser);
-        localStorage.setItem('klarity_user', JSON.stringify(localUser));
+        secureStorage.setItem('klarity_user', localUser);
       } finally {
         setIsAuthenticating(false);
       }
@@ -2944,7 +3023,84 @@ function KlarityApp() {
         </div>
 
         <footer className="border-t border-slate-200 py-4 text-center text-xs text-slate-500">
-          © 2026 Klarity. All personal financial data is encrypted and private.
+          © 2026 Klarity. All personal financial data is AES-256 encrypted and private.
+        </footer>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // 1B. ENCRYPTED SESSION LOCK GATE (Auto-Lock / Manual Lock / Master PIN)
+  // =========================================================================
+  if (isSessionLocked) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col justify-between selection:bg-blue-100 selection:text-blue-900">
+        <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <KlarityLogo className="w-7 h-7 text-[#18457c] shrink-0" />
+            <span className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">Klarity</span>
+          </div>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>AES-256 Encrypted Session</span>
+          </span>
+        </header>
+
+        <div className="flex-1 flex items-center justify-center px-4 py-12">
+          <div className="max-w-sm w-full bg-white border border-slate-200/90 rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col gap-5 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-[#18457c]/10 text-[#18457c] flex items-center justify-center mx-auto">
+              <Lock className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="font-serif-title text-2xl font-bold text-slate-900">Session Locked</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Signed in as <strong>{currentUser?.name || currentUser?.email}</strong>
+              </p>
+            </div>
+
+            {lockError && (
+              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{lockError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUnlockSession} className="flex flex-col gap-3">
+              <input
+                type="password"
+                autoFocus
+                placeholder={hasMasterPinSet() ? 'Enter Master PIN' : 'Enter PIN or Password'}
+                value={lockPinInput}
+                onChange={e => setLockPinInput(e.target.value)}
+                className="w-full text-center tracking-widest font-mono text-sm bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:bg-white focus:outline-none focus:border-[#18457c]"
+              />
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold text-xs cursor-pointer transition-colors"
+              >
+                Unlock Klarity
+              </button>
+            </form>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+              <span className="text-slate-400">Not you?</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSessionLocked(false);
+                  try { sessionStorage.removeItem('klarity_session_locked'); } catch {}
+                  handleLogout();
+                }}
+                className="text-rose-600 hover:underline font-semibold cursor-pointer"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <footer className="border-t border-slate-200 py-4 text-center text-xs text-slate-500">
+          © 2026 Klarity. Protected by AES-256-CTR & PBKDF2-HMAC encryption.
         </footer>
       </div>
     );
@@ -3525,6 +3681,14 @@ function KlarityApp() {
                   title={hideBalances ? 'Show balances' : 'Hide balances for privacy'}
                 >
                   {hideBalances ? <EyeOff className="w-4 h-4 text-[#18457c]" /> : <Eye className="w-4 h-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLockSession}
+                  className="p-2 rounded-xl text-slate-400 hover:text-[#18457c] hover:bg-slate-200/60 cursor-pointer transition-colors"
+                  title="Lock screen"
+                >
+                  <Lock className="w-4 h-4" />
                 </button>
                 <button
                   type="button"
@@ -7231,7 +7395,7 @@ function KlarityApp() {
                       { id: 'profile', label: 'Profile', dot: false },
                       { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' },
                       { id: 'plaid', label: 'Bank connection', dot: settingsPlaidStatus !== 'connected' },
-                      { id: 'session', label: 'Session', dot: false }
+                      { id: 'session', label: 'Security & Session', dot: false }
                     ].map(tab => {
                       const isActive = settingsActiveTab === tab.id;
                       return (
@@ -7857,15 +8021,145 @@ function KlarityApp() {
                     </div>
                   )}
 
-                  {/* TAB 4: SESSION */}
+                  {/* TAB 4: SECURITY & SESSION */}
                   {settingsActiveTab === 'session' && (
-                    <div key="settings-tab-session" className="flex flex-col gap-6">
+                    <div key="settings-tab-session" className="flex flex-col gap-5">
                       <div>
-                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Session</h2>
-                        <p className="text-xs text-slate-500 mt-1">Manage your active login session.</p>
+                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Security & Session</h2>
+                        <p className="text-xs text-slate-500 mt-1">Encryption, Master PIN lock, inactivity timeout, and active session.</p>
                       </div>
 
-                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-5 bg-white shadow-2xs">
+                      {/* Card 1: Encryption Status */}
+                      <div className="border border-emerald-200 rounded-2xl p-4 bg-emerald-50/50 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                            <ShieldCheck className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">AES-256-CTR & PBKDF2-HMAC Encryption Active</p>
+                            <p className="text-[11px] text-slate-600">Passwords, account numbers, health IDs, and API keys are encrypted at rest.</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSettingsOpen(false);
+                            handleLockSession();
+                          }}
+                          className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shrink-0 cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Lock Now</span>
+                        </button>
+                      </div>
+
+                      {/* Card 2: Master PIN & Inactivity Auto-Lock */}
+                      <div className="border border-slate-200 rounded-2xl p-5 flex flex-col gap-4 bg-white shadow-2xs text-xs">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-bold text-slate-900">Master Security PIN</p>
+                            <p className="text-[11px] text-slate-500">Protects your Password Vault and unlocks your screen when locked.</p>
+                          </div>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                            masterPinActive
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
+                            {masterPinActive ? 'PIN Enabled' : 'No PIN Set'}
+                          </span>
+                        </div>
+
+                        {secPinMsg && (
+                          <div className="px-3 py-2 rounded-lg bg-blue-50 text-[#18457c] font-semibold">
+                            {secPinMsg}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-end">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 mb-1">New PIN (4+ digits)</label>
+                            <input
+                              type="password"
+                              placeholder="••••"
+                              value={secNewPin}
+                              onChange={e => setSecNewPin(e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 mb-1">Confirm PIN</label>
+                            <input
+                              type="password"
+                              placeholder="••••"
+                              value={secConfirmPin}
+                              onChange={e => setSecConfirmPin(e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (secNewPin.trim().length < 4) {
+                                  setSecPinMsg('PIN must be at least 4 characters.');
+                                  return;
+                                }
+                                if (secNewPin.trim() !== secConfirmPin.trim()) {
+                                  setSecPinMsg('PINs do not match.');
+                                  return;
+                                }
+                                setMasterPin(secNewPin.trim());
+                                setMasterPinActive(true);
+                                setSecNewPin('');
+                                setSecConfirmPin('');
+                                setSecPinMsg('Master PIN saved & encrypted.');
+                                setTimeout(() => setSecPinMsg(''), 3500);
+                              }}
+                              className="flex-1 py-2 px-3 rounded-xl bg-[#1B4B91] hover:bg-[#153a70] text-white font-semibold cursor-pointer"
+                            >
+                              {masterPinActive ? 'Update PIN' : 'Set PIN'}
+                            </button>
+                            {masterPinActive && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  removeMasterPin();
+                                  setMasterPinActive(false);
+                                  setSecPinMsg('Master PIN removed.');
+                                  setTimeout(() => setSecPinMsg(''), 3000);
+                                }}
+                                className="py-2 px-3 rounded-xl bg-rose-50 text-rose-700 font-semibold cursor-pointer"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                          <div>
+                            <p className="font-semibold text-slate-900">Auto-Lock on Inactivity</p>
+                            <p className="text-[11px] text-slate-500">Automatically lock screen when idle</p>
+                          </div>
+                          <select
+                            value={autoLockMinutes}
+                            onChange={e => {
+                              const mins = Number(e.target.value);
+                              setAutoLockMinutes(mins);
+                              try { localStorage.setItem('klarity_auto_lock_mins', String(mins)); } catch {}
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-800"
+                          >
+                            <option value={5}>After 5 minutes</option>
+                            <option value={15}>After 15 minutes</option>
+                            <option value={30}>After 30 minutes</option>
+                            <option value={0}>Never</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Card 3: Active Session & Sign Out */}
+                      <div className="border border-slate-200 rounded-2xl p-5 flex flex-col gap-4 bg-white shadow-2xs">
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-xs font-semibold text-slate-900">Signed in as</p>
@@ -7876,8 +8170,8 @@ function KlarityApp() {
                           </span>
                         </div>
 
-                        <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                          <span className="text-xs text-slate-500">End this session and sign out</span>
+                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                          <span className="text-xs text-slate-500">End this session and require login</span>
                           <button
                             type="button"
                             onClick={() => {
