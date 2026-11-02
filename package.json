@@ -17,7 +17,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "zeoe13",
+        "owner": "ByZizo",
         "repo": "Klarity"
       }
     ],

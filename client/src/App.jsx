@@ -458,7 +458,7 @@ function KlarityApp() {
   const [desktopAppInfo, setDesktopAppInfo] = useState({
     isDesktopApp: Boolean(typeof window !== 'undefined' && window.klarityDesktop?.isDesktopApp),
     version: '1.0.0',
-    updateStatus: { state: 'idle', message: 'Connected to GitHub Releases (zeoe13/Klarity)' }
+    updateStatus: { state: 'idle', message: 'Connected to GitHub Releases (ByZizo/Klarity)' }
   });
   const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
   const [isRefreshingApp, setIsRefreshingApp] = useState(false);
@@ -8088,7 +8088,7 @@ function KlarityApp() {
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 mt-0.5">
-                            {desktopAppInfo.updateStatus?.message || 'Auto-updates directly from GitHub Releases (zeoe13/Klarity)'}
+                            {desktopAppInfo.updateStatus?.message || 'Auto-updates directly from GitHub Releases (ByZizo/Klarity)'}
                           </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -8109,7 +8109,7 @@ function KlarityApp() {
                                 } else {
                                   setDesktopAppInfo(prev => ({
                                     ...prev,
-                                    updateStatus: { state: 'up-to-date', message: 'Up to date — v1.0.0 (Synced with zeoe13/Klarity)' }
+                                    updateStatus: { state: 'up-to-date', message: 'Up to date — v1.0.0 (Synced with ByZizo/Klarity)' }
                                   }));
                                 }
                               }}

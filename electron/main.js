@@ -35,7 +35,7 @@ function broadcastUpdateStatus(patch) {
   }
 }
 
-// Check GitHub (zeoe13/Klarity) for any newly pushed updates
+// Check GitHub (ByZizo/Klarity) for any newly pushed updates
 async function checkForGitHubUpdate() {
   const repoDir = path.join(__dirname, '..');
   try {
@@ -236,7 +236,7 @@ ipcMain.handle('klarity:get-app-info', () => ({
   isDesktopApp: true,
   version: app.getVersion(),
   userDataDir: app.getPath('userData'),
-  repo: 'zeoe13/Klarity',
+  repo: 'ByZizo/Klarity',
   updateStatus: updateStatusState
 }));
 
