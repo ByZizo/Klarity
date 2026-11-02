@@ -1,61 +1,78 @@
-# Klarity 🛡️ — Clear Finances & AI Guidance for the Whole Family
-### Deployed with **Vercel** + **Supabase** (100% Free Tier)
+# Klarity
 
-A private, cloud-hosted financial management website built specifically for a **family of 6**, with credit/debit card tracking, utility bills (PG&E, Fresno Water, Xfinity, T-Mobile), purchase auto-categorization, and an AI Financial Advisor.
+A clean, private finance tracker with a built-in AI assistant to help you stay on top of your money, cards, and bills.
 
 ---
 
-## 🚀 Step 1: Deploy to Vercel (1-Click or GitHub)
+## What is Klarity?
 
-### Method A: Via GitHub & Vercel Dashboard (Easiest)
-1. Push this folder to a private or public GitHub repository:
+Klarity gives you a simple, single dashboard to manage your financial life without ads, data selling, or clutter. Whether you want to connect your bank accounts or enter everything manually, Klarity helps you track balances, plan debt payoffs, and stay ahead of upcoming bills.
+
+It also includes a built-in AI financial advisor that analyzes your real numbers and gives you direct, practical advice—like how to pay down high-interest cards fastest, where you can trim monthly expenses, and how much you can safely save.
+
+---
+
+## Key Features
+
+- **Cards & Balances** — Track all your checking, savings, and credit accounts in one place with live Plaid syncing or manual entries.
+- **Bill & Subscription Tracker** — Keep tabs on upcoming due dates, autopay settings, and recurring charges so you never miss a payment.
+- **Budgets & Spending** — Set monthly spending targets across categories (groceries, dining, gas, shopping) and monitor your progress.
+- **Debt Payoff Engine** — Compare payoff methods like Avalanche vs. Snowball with clear timelines, interest savings, and payoff dates.
+- **AI Financial Assistant** — Ask questions about your money, get debt payoff recommendations, or analyze your spending. Works with Google Gemini, OpenAI, or Claude.
+- **Password & Account Vault** — A secure, client-side encrypted vault to keep financial logins, account numbers, and notes safe.
+- **100% Private** — Your financial data is AES-256 encrypted on your machine. You own your data.
+
+---
+
+## Getting Started
+
+### Prerequisites
+- Node.js (v18 or higher)
+- npm or yarn
+
+### Installation
+
+1. Clone the repository:
    ```bash
-   git remote add origin https://github.com/YOUR_USERNAME/family-finance.git
-   git branch -M main
-   git push -u origin main
+   git clone https://github.com/ByZizo/Klarity.git
+   cd Klarity
    ```
-2. Go to **[vercel.com](https://vercel.com)** and log in (or create a free account).
-3. Click **"Add New..." ➔ "Project"**.
-4. Select your `family-finance` repository and click **Deploy**.
-5. Vercel will automatically build the site and give you a live HTTPS link like:
-   `https://family-finance-yourname.vercel.app`
 
----
+2. Install dependencies:
+   ```bash
+   npm install
+   cd client && npm install && cd ..
+   ```
 
-## 🗄️ Step 2: Connect Supabase Cloud Database (Free)
+3. Set up environment variables:
+   Copy `.env.example` to `.env` and add your optional API keys (Gemini, Plaid, Google OAuth):
+   ```bash
+   cp .env.example .env
+   ```
 
-1. Go to **[supabase.com](https://supabase.com)** and create a free account / project.
-2. In your Supabase dashboard, click **SQL Editor** on the left menu.
-3. Open [`supabase/schema.sql`](supabase/schema.sql) from this project, copy the full contents, paste it into the Supabase SQL editor, and click **Run**.
-   * *This creates the `family_members`, `accounts`, `bills`, and `transactions` tables with Row-Level Security and pre-seeds your family's data.*
-4. Go to **Project Settings ➔ API** in Supabase and copy:
-   * **Project URL**
-   * **Project API Keys (`anon` public and `service_role` secret)**
-5. In your **Vercel Dashboard ➔ Settings ➔ Environment Variables**, add:
-   * `SUPABASE_URL` = your Project URL
-   * `SUPABASE_SERVICE_ROLE_KEY` = your secret key
-   * `GEMINI_API_KEY` = (Optional) your free key from [aistudio.google.com](https://aistudio.google.com)
-6. Click **Redeploy** on Vercel. Now your whole family connects to your live Supabase cloud database!
+4. Run the app:
+   ```bash
+   npm start
+   ```
 
----
-
-## 📱 Step 3: Put It on Your Family's Phones
-
-Once deployed to Vercel:
-1. Send the live Vercel URL (e.g. `https://family-finance-yourname.vercel.app`) to your family.
-2. On **iPhone (Safari)**: Tap the Share button ➔ **"Add to Home Screen"**.
-3. On **Android (Chrome)**: Tap the 3 dots ➔ **"Install app"** or **"Add to Home screen"**.
-4. It behaves just like a native app with an app icon on everyone's phone!
-
----
-
-## 💻 Local Testing & Development
-
-If you want to run it locally on your computer before deploying:
+For the desktop app:
 ```bash
-# Install dependencies
-npm install
-
-# Start local server (running on http://localhost:5000)
-npm start
+npx electron .
 ```
+
+---
+
+## Tech Stack
+
+- **Frontend:** React, Vite, Tailwind CSS, Lucide Icons
+- **Desktop:** Electron
+- **Backend:** Node.js, Express
+- **AI Integration:** Google Gemini, OpenAI, Anthropic Claude
+- **Bank Connectivity:** Plaid API
+- **Security:** AES-256-GCM client-side encryption
+
+---
+
+## License
+
+MIT License. Free to use and customize.

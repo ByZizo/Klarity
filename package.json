@@ -1,7 +1,7 @@
 {
   "name": "klarity",
   "version": "1.0.0",
-  "description": "Klarity — Private Family Finance, Cards, Bills & AI Advisor Desktop & Web Suite",
+  "description": "A clean, private finance tracker with a built-in AI assistant to help you manage your money, cards, and bills.",
   "main": "electron/main.js",
   "scripts": {
     "server": "node server/index.js",
