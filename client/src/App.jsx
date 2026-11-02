@@ -6133,7 +6133,7 @@ function KlarityApp() {
             )}
 
             {/* Chat Input */}
-            <form onSubmit={handleSendChatMessage} className="flex items-end gap-2 pt-3 border-t border-slate-100">
+            <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 pt-3 border-t border-slate-100">
               <input
                 type="file"
                 multiple
@@ -6149,7 +6149,7 @@ function KlarityApp() {
                 <button
                   type="button"
                   onClick={() => setIsFullUploadMenuOpen(prev => !prev)}
-                  className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5 flex items-center justify-center"
+                  className="w-[40px] h-[40px] rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
                   title="Add file or scan document"
                 >
                   <Plus className="w-4 h-4" />
@@ -6211,7 +6211,7 @@ function KlarityApp() {
                     await handleAttachFiles(files);
                   }
                 }}
-                className="flex-1 min-w-0 max-h-36 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs resize-none"
+                className="flex-1 min-w-0 h-[40px] min-h-[40px] max-h-36 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs resize-none leading-relaxed flex items-center"
               />
               {isAiTyping ? (
                 <button
@@ -6228,7 +6228,7 @@ function KlarityApp() {
                 <button
                   type="submit"
                   disabled={!chatInput.trim() && chatFiles.length === 0}
-                  className="px-5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
+                  className="h-[40px] px-5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
                 >
                   Send
                 </button>
@@ -6542,7 +6542,7 @@ function KlarityApp() {
           )}
 
           {/* Chat Form with Add File Menu (+ / Paperclip) and multiline Textarea */}
-          <form onSubmit={handleSendChatMessage} className="flex items-end gap-2 mt-1">
+          <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 mt-1">
             <input
               type="file"
               multiple
@@ -6558,7 +6558,7 @@ function KlarityApp() {
               <button
                 type="button"
                 onClick={() => setIsUploadMenuOpen(prev => !prev)}
-                className="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-600 hover:text-slate-900 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5 flex items-center justify-center"
+                className="w-[38px] h-[38px] rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-600 hover:text-slate-900 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
                 title="Add file or scan document"
               >
                 <Plus className="w-4 h-4" />
@@ -6620,13 +6620,13 @@ function KlarityApp() {
                   await handleAttachFiles(files);
                 }
               }}
-              className="flex-1 min-w-0 max-h-32 bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs resize-none"
+              className="flex-1 min-w-0 h-[38px] min-h-[38px] max-h-32 bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs resize-none leading-relaxed flex items-center"
             />
             {isAiTyping ? (
               <button
                 type="button"
                 onClick={handleStopGeneration}
-                className="h-[34px] px-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0 mb-0.5 animate-in fade-in zoom-in-90"
+                className="h-[38px] px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0 animate-in fade-in zoom-in-90"
                 title="Stop response"
                 aria-label="Stop generating response"
               >
@@ -6637,7 +6637,7 @@ function KlarityApp() {
               <button
                 type="submit"
                 disabled={!chatInput.trim() && chatFiles.length === 0}
-                className="px-3.5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
+                className="h-[38px] px-4 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
               >
                 Send
               </button>
