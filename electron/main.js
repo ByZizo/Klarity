@@ -81,37 +81,43 @@ function setupAutoUpdater() {
   });
 }
 
-// Start the embedded Express backend strictly on 127.0.0.1 (Loopback-only — unreachable from external network)
+// Start the embedded Express backend on localhost:5173 (matches Google OAuth Authorized Origin)
 async function startEmbeddedBackend() {
   const userDataDir = app.getPath('userData');
   process.env.KLARITY_USER_DATA_DIR = userDataDir;
   process.env.KLARITY_DESKTOP_APP = 'true';
 
   const expressApp = require('../server/index.js');
+  const preferredPorts = [5173, 5000, 3000, 0];
 
-  return new Promise((resolve, reject) => {
-    const server = http.createServer(expressApp);
-    // Listen on port 0 on 127.0.0.1 to pick a free local loopback port automatically
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address();
-      localServerPort = addr.port;
-      console.log(`Klarity Desktop Embedded Engine bound to http://127.0.0.1:${localServerPort}`);
-      resolve(localServerPort);
-    });
-    server.on('error', reject);
-  });
+  for (const candidatePort of preferredPorts) {
+    try {
+      const port = await new Promise((resolve, reject) => {
+        const server = http.createServer(expressApp);
+        server.once('error', reject);
+        server.listen(candidatePort, '127.0.0.1', () => {
+          resolve(server.address().port);
+        });
+      });
+      localServerPort = port;
+      console.log(`Klarity Desktop Embedded Engine bound to http://localhost:${localServerPort}`);
+      return localServerPort;
+    } catch (err) {
+      // Port busy, try next preferred port
+    }
+  }
+  throw new Error('Could not bind local Klarity engine port');
 }
 
 async function createDesktopWindow() {
   const port = await startEmbeddedBackend();
 
-  // Enforce strict Content Security Policy (Anti-XSS / Anti-Code-Injection)
+  // Enforce security headers while permitting Google OAuth popups
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'X-Content-Type-Options': ['nosniff'],
-        'X-Frame-Options': ['SAMEORIGIN'],
         'Referrer-Policy': ['strict-origin-when-cross-origin']
       }
     });
@@ -135,16 +141,32 @@ async function createDesktopWindow() {
     }
   });
 
-  // Open external links (e.g., PG&E, bank websites, Google AI Studio) in the user's default system browser
+  // Allow real Google OAuth & Plaid popups inside Electron; open other external links in default browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost') || url.includes('plaid.com')) {
-      return { action: 'allow' };
+    if (
+      url.startsWith('http://127.0.0.1') ||
+      url.startsWith('http://localhost') ||
+      url.includes('accounts.google.com') ||
+      url.includes('google.com/o/oauth2') ||
+      url.includes('gstatic.com') ||
+      url.includes('plaid.com') ||
+      url === 'about:blank'
+    ) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 520,
+          height: 680,
+          autoHideMenuBar: true,
+          title: 'Sign in with Google — Klarity'
+        }
+      };
     }
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  await mainWindow.loadURL(`http://127.0.0.1:${port}`);
+  await mainWindow.loadURL(`http://localhost:${port}`);
 
   setupAutoUpdater();
   if (app.isPackaged && autoUpdater) {
@@ -165,7 +187,6 @@ ipcMain.handle('klarity:get-app-info', () => ({
 
 ipcMain.handle('klarity:check-for-updates', async () => {
   if (!autoUpdater || !app.isPackaged) {
-    // In local unpacked desktop mode, check GitHub API directly for latest release tag
     try {
       broadcastUpdateStatus({ state: 'checking', message: 'Checking GitHub (zeoe13/Klarity) for updates...' });
       const res = await fetch('https://api.github.com/repos/zeoe13/Klarity/releases/latest', {

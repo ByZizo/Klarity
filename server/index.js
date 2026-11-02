@@ -544,21 +544,14 @@ app.post('/api/auth/login', (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
   let user = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
 
+  // Reject random unregistered emails on Sign In (must exist or be registered via Sign Up)
   if (!user) {
-    const isOwner = cleanEmail === 'zeoe13@gmail.com';
-    user = {
-      id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
-      email: cleanEmail,
-      name: isOwner ? 'Ziyad Elmahi' : cleanEmail.split('@')[0],
-      role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member',
-      avatar: '',
-      passwordHash: hashPassword(password)
-    };
-    data.users = data.users || [];
-    data.users.push(user);
-    writeData(data);
-  } else if (!user.passwordHash) {
-    // First-time password binding for seeded owner account
+    recordFailedAuth(clientIp);
+    return res.status(401).json({ error: 'No account found with that email. Please Sign Up first.' });
+  }
+
+  if (!user.passwordHash) {
+    // First-time password setup for the seeded owner account
     user.passwordHash = hashPassword(password);
     writeData(data);
   } else {
@@ -573,31 +566,53 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ user: sanitizeUser(user) });
 });
 
-app.post('/api/auth/google', (req, res) => {
-  const { email, name, avatar } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: 'Email is required from Google profile' });
+app.post('/api/auth/google', async (req, res) => {
+  const { accessToken, email: fallbackEmail, name: fallbackName, avatar } = req.body;
+
+  // Verify accessToken directly against Google's official OAuth2 userinfo server
+  let verifiedEmail = '';
+  let verifiedName = '';
+  let verifiedPicture = avatar || '';
+
+  if (accessToken) {
+    try {
+      const gRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (!gRes.ok) {
+        return res.status(401).json({ error: 'Google token verification failed.' });
+      }
+      const gProfile = await gRes.json();
+      verifiedEmail = (gProfile.email || '').trim().toLowerCase();
+      verifiedName = gProfile.name || gProfile.given_name || '';
+      verifiedPicture = gProfile.picture || verifiedPicture;
+    } catch (err) {
+      return res.status(401).json({ error: 'Could not verify Google token with Google servers.' });
+    }
+  }
+
+  if (!verifiedEmail) {
+    return res.status(401).json({ error: 'Valid Google OAuth authentication is required.' });
   }
 
   const data = readData();
-  const cleanEmail = email.trim().toLowerCase();
-  const isOwner = cleanEmail === 'zeoe13@gmail.com';
-  let user = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
+  const isOwner = verifiedEmail === 'zeoe13@gmail.com';
+  let user = (data.users || []).find(u => u.email.toLowerCase() === verifiedEmail);
 
   if (!user) {
     user = {
       id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
-      email: cleanEmail,
-      name: name || (isOwner ? 'Ziyad Elmahi' : cleanEmail.split('@')[0]),
-      avatar: avatar || '',
+      email: verifiedEmail,
+      name: verifiedName || fallbackName || (isOwner ? 'Ziyad Elmahi' : verifiedEmail.split('@')[0]),
+      avatar: verifiedPicture,
       role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member'
     };
     data.users = data.users || [];
     data.users.push(user);
     writeData(data);
-  } else if (name || avatar) {
-    if (name) user.name = name;
-    if (avatar) user.avatar = avatar;
+  } else if (verifiedName || verifiedPicture) {
+    if (verifiedName) user.name = verifiedName;
+    if (verifiedPicture) user.avatar = verifiedPicture;
     writeData(data);
   }
 
