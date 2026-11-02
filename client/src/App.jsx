@@ -80,7 +80,8 @@ import {
   hasMasterPinSet,
   setMasterPin,
   removeMasterPin,
-  verifyMasterPin
+  verifyMasterPin,
+  sanitizeHtmlAgainstInjection
 } from './utils/securityCrypto';
 
 // Configure marked with GitHub-flavored markdown and automatic line breaks
@@ -233,7 +234,7 @@ function FormattedChatMessage({ text, isUser }) {
   }
   let html = '';
   try {
-    html = marked.parse(text, { breaks: true, gfm: true });
+    html = sanitizeHtmlAgainstInjection(marked.parse(text, { breaks: true, gfm: true }));
   } catch (err) {
     return <div className="whitespace-pre-wrap leading-relaxed">{text}</div>;
   }
@@ -456,6 +457,23 @@ function KlarityApp() {
   const [secNewPin, setSecNewPin] = useState('');
   const [secConfirmPin, setSecConfirmPin] = useState('');
   const [secPinMsg, setSecPinMsg] = useState('');
+  const [desktopAppInfo, setDesktopAppInfo] = useState({
+    isDesktopApp: Boolean(typeof window !== 'undefined' && window.klarityDesktop?.isDesktopApp),
+    version: '1.0.0',
+    updateStatus: { state: 'idle', message: 'Connected to GitHub Releases (zeoe13/Klarity)' }
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.klarityDesktop) {
+      window.klarityDesktop.getAppInfo?.().then(info => {
+        if (info) setDesktopAppInfo(info);
+      }).catch(() => {});
+      const unsub = window.klarityDesktop.onUpdateStatus?.((status) => {
+        setDesktopAppInfo(prev => ({ ...prev, updateStatus: status }));
+      });
+      return () => { if (typeof unsub === 'function') unsub(); };
+    }
+  }, []);
 
   // Run background storage encryption audit on mount so all sensitive localStorage keys use ENCv2
   useEffect(() => {
@@ -8044,15 +8062,15 @@ function KlarityApp() {
                         <p className="text-xs text-slate-500 mt-1">Encryption, Master PIN lock, inactivity timeout, and active session.</p>
                       </div>
 
-                      {/* Card 1: Encryption Status */}
+                      {/* Card 1: Encryption & Anti-Code-Injection Firewall Status */}
                       <div className="border border-emerald-200 rounded-2xl p-4 bg-emerald-50/50 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
                             <ShieldCheck className="w-5 h-5" />
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-slate-900">AES-256-CTR & PBKDF2-HMAC Encryption Active</p>
-                            <p className="text-[11px] text-slate-600">Passwords, account numbers, health IDs, and API keys are encrypted at rest.</p>
+                            <p className="text-xs font-bold text-slate-900">AES-256 Encryption & Anti-Injection Firewall Active</p>
+                            <p className="text-[11px] text-slate-600">Blocks XSS, script injection, prototype pollution & Excel formula exploits.</p>
                           </div>
                         </div>
                         <button
@@ -8066,6 +8084,52 @@ function KlarityApp() {
                           <Lock className="w-3.5 h-3.5" />
                           <span>Lock Now</span>
                         </button>
+                      </div>
+
+                      {/* Card 1B: Desktop App Engine & GitHub Auto-Updater */}
+                      <div className="border border-slate-200 rounded-2xl p-4 bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900">
+                              {desktopAppInfo.isDesktopApp ? 'Klarity Desktop App (Local 127.0.0.1 Engine)' : 'Klarity App Version'}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
+                              v{desktopAppInfo.version || '1.0.0'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            {desktopAppInfo.updateStatus?.message || 'Auto-updates directly from GitHub Releases (zeoe13/Klarity)'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {desktopAppInfo.updateStatus?.state === 'ready' ? (
+                            <button
+                              type="button"
+                              onClick={() => window.klarityDesktop?.installUpdateNow?.()}
+                              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer"
+                            >
+                              Restart to Update
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (window.klarityDesktop?.checkForUpdates) {
+                                  await window.klarityDesktop.checkForUpdates();
+                                } else {
+                                  setDesktopAppInfo(prev => ({
+                                    ...prev,
+                                    updateStatus: { state: 'up-to-date', message: 'Up to date — v1.0.0 (Synced with zeoe13/Klarity)' }
+                                  }));
+                                }
+                              }}
+                              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold cursor-pointer flex items-center gap-1.5"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              <span>Check for Updates</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* Card 2: Master PIN & Inactivity Auto-Lock */}

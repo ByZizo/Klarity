@@ -24,7 +24,8 @@ import {
   setMasterPin,
   removeMasterPin,
   verifyMasterPin,
-  copySensitiveWithAutoClear
+  copySensitiveWithAutoClear,
+  sanitizeSpreadsheetCell
 } from '../utils/securityCrypto';
 
 export const DEFAULT_VAULT_ITEMS = [
@@ -208,7 +209,7 @@ export default function PasswordVaultPage({
               const keys = Object.keys(row);
               const findVal = (patterns) => {
                 const matchedKey = keys.find(k => patterns.some(p => k.toLowerCase().includes(p)));
-                return matchedKey ? String(row[matchedKey] ?? '').trim() : '';
+                return matchedKey ? sanitizeSpreadsheetCell(row[matchedKey]) : '';
               };
 
               let service = findVal(['service', 'site', 'website', 'company', 'provider', 'bill', 'name', 'account name', 'bank', 'app', 'title']);

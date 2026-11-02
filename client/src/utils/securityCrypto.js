@@ -387,3 +387,32 @@ export function enforceStorageEncryptionAudit() {
     cipherSuite: 'AES-256-CTR / PBKDF2-HMAC-SHA256 (ENCv2)'
   };
 }
+
+// ============================================================================
+// ANTI-HACKER / ANTI-CODE-INJECTION FIREWALL (XSS, Script & Formula Shield)
+// ============================================================================
+export function sanitizeHtmlAgainstInjection(rawHtml) {
+  if (!rawHtml || typeof rawHtml !== 'string') return '';
+  return rawHtml
+    // Strip <script>, <iframe>, <object>, <embed>, <applet>, <meta>, <link>, <style>, <form>
+    .replace(/<\s*(script|iframe|object|embed|applet|meta|link|style|form|base)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+    .replace(/<\s*(script|iframe|object|embed|applet|meta|link|base)\b[^>]*\/?>/gi, '')
+    // Strip inline event handlers like onerror=, onload=, onclick=, onmouseover=
+    .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    // Neutralize javascript:, vbscript:, data:text/html URIs in href/src
+    .replace(/(href|src|xlink:href|action|formaction)\s*=\s*(?:"\s*(?:javascript|vbscript|data\s*:\s*text\/html)[^"]*"|'\s*(?:javascript|vbscript|data\s*:\s*text\/html)[^']*')/gi, '$1="#"');
+}
+
+// Prevent CSV / Excel Formula & DDE Code Execution (=CMD|, +cmd, -cmd, @SUM)
+export function sanitizeSpreadsheetCell(val) {
+  if (val == null) return '';
+  let str = String(val).trim();
+  // Strip script tags if someone hid HTML inside a spreadsheet cell
+  str = str.replace(/<\s*\/?\s*script\b[^>]*>/gi, '');
+  // Neutralize dangerous formula prefixes used in CSV/Excel DDE attacks
+  if (/^[=+\-@|]/.test(str) && /(cmd|powershell|msexe|dde|http|javascript|importxml|webservice)/i.test(str)) {
+    str = "'" + str;
+  }
+  return str;
+}
+

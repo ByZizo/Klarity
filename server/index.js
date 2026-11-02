@@ -11,18 +11,45 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Bank-Grade HTTP Security Headers
+// Deep Anti-Code-Injection & Prototype-Pollution Request Sanitizer
+function sanitizeIncomingPayload(val) {
+  if (typeof val === 'string') {
+    return val
+      .replace(/<\s*\/?\s*script\b[^>]*>/gi, '')
+      .replace(/javascript\s*:/gi, 'blocked:')
+      .replace(/\bon(error|load|mouseover|focus|click)\s*=/gi, 'data-blocked-event=');
+  }
+  if (Array.isArray(val)) {
+    return val.map(sanitizeIncomingPayload);
+  }
+  if (val && typeof val === 'object') {
+    const clean = {};
+    for (const k of Object.keys(val)) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      clean[k] = sanitizeIncomingPayload(val[k]);
+    }
+    return clean;
+  }
+  return val;
+}
+
+// Bank-Grade HTTP Security Headers + Anti-Injection Request Firewall
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Frame-Options', process.env.KLARITY_DESKTOP_APP ? 'SAMEORIGIN' : 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (req.body && typeof req.body === 'object') {
+    req.body = sanitizeIncomingPayload(req.body);
+  }
   next();
 });
 
-// In Vercel serverless environment, local filesystem root is read-only; use /tmp or memory
-const DATA_FILE = process.env.VERCEL ? '/tmp/klarity_data.json' : path.join(__dirname, '../server/data.json');
+// Storage location: Desktop App uses private OS AppData folder; Vercel uses /tmp; Dev uses server/data.json
+const DATA_FILE = process.env.KLARITY_USER_DATA_DIR
+  ? path.join(process.env.KLARITY_USER_DATA_DIR, 'klarity_vault_data.enc')
+  : (process.env.VERCEL ? '/tmp/klarity_data.json' : path.join(__dirname, '../server/data.json'));
 
 // Encryption utilities for storing API keys & secrets securely server-side
 const ENCRYPTION_SECRET = process.env.SETTINGS_ENCRYPTION_KEY || 'klarity-aes-secure-encryption-key-32-chars!!';
@@ -253,7 +280,11 @@ let memoryData = JSON.parse(JSON.stringify(initialSeedData));
 function readData() {
   try {
     if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, 'utf8');
+      const raw = fs.readFileSync(DATA_FILE, 'utf8').trim();
+      if (raw.startsWith('DISK_ENC_V1:')) {
+        const decryptedStr = decrypt(raw.slice('DISK_ENC_V1:'.length));
+        if (decryptedStr) return JSON.parse(decryptedStr);
+      }
       return JSON.parse(raw);
     }
   } catch (err) {
@@ -265,7 +296,18 @@ function readData() {
 function writeData(data) {
   memoryData = data;
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+    const dir = path.dirname(DATA_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const jsonStr = JSON.stringify(data, null, 2);
+    // Encrypt on disk when running as Desktop App or in encrypted mode
+    if (process.env.KLARITY_USER_DATA_DIR) {
+      const cipherText = 'DISK_ENC_V1:' + encrypt(jsonStr);
+      fs.writeFileSync(DATA_FILE, cipherText, 'utf8');
+    } else {
+      fs.writeFileSync(DATA_FILE, jsonStr, 'utf8');
+    }
     return true;
   } catch (err) {
     console.warn('File write note (using memory store fallback):', err.message);
@@ -2351,6 +2393,15 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
     return res.json({ reply: `Advisor error: ${err.message}` });
   }
 });
+
+// Serve compiled frontend assets when running inside the Native Desktop App or local standalone server
+const clientDistPath = path.join(__dirname, '../client/dist');
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get(/^\/(?!api).*/, (req, res) => {
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 // Also copy to server for local dev
 const PORT = process.env.PORT || 5000;
