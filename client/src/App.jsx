@@ -348,10 +348,13 @@ function GoogleSignInButton({ onAuthSuccess, onError, setIsAuthenticating, isAut
     if (typeof window !== 'undefined' && window.klarityDesktop?.signInWithGoogle) {
       try {
         const res = await window.klarityDesktop.signInWithGoogle();
-        if (res?.ok && res?.profile?.email) {
-          await onAuthSuccess({ ...res.profile, desktopVerified: true });
-        } else if (!res?.cancelled) {
-          onError('Google sign-in was not completed.');
+        if (res?.ok && res?.user) {
+          setCurrentUser(res.user);
+          secureStorage.setItem('klarity_user', res.user);
+          setNotificationToast(`Welcome to Klarity, ${res.user.name}!`);
+          setTimeout(() => setNotificationToast(''), 4000);
+        } else if (res?.error) {
+          onError(res.error);
         }
       } catch (err) {
         onError('Google sign-in error: ' + (err.message || 'Please try again.'));

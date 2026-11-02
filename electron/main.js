@@ -188,90 +188,47 @@ async function createDesktopWindow() {
   }, 5 * 60 * 1000);
 }
 
-// Native Desktop Google Sign-In Window (Uses real accounts.google.com login + password/2FA with zero origin_mismatch)
+// Native Desktop Google Sign-In (RFC 8252 Loopback via Default System Browser — Bypasses all WebView/Passkey blocks)
 ipcMain.handle('klarity:google-sign-in', async () => {
+  const sid = 'dsk-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  const clientId = '207624653160-vbp60vuujhl2h8jshvnosad9m2ft75jq.apps.googleusercontent.com';
+  const port = localServerPort || 5173;
+  const redirectUri = `http://localhost:${port}/api/auth/google/callback`;
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20profile%20email&state=${sid}&prompt=select_account`;
+
+  // Open real system browser (Chrome/Edge) where user is already logged in with full passkey support
+  shell.openExternal(authUrl);
+
   return new Promise((resolve) => {
-    let resolved = false;
-    const finish = (result) => {
-      if (resolved) return;
-      resolved = true;
-      resolve(result);
+    let checkInterval = null;
+    let timeoutTimer = null;
+
+    const cleanup = () => {
+      if (checkInterval) clearInterval(checkInterval);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
     };
 
-    const authWin = new BrowserWindow({
-      width: 500,
-      height: 680,
-      parent: mainWindow || undefined,
-      modal: true,
-      autoHideMenuBar: true,
-      title: 'Sign in with Google — Klarity',
-      icon: path.join(__dirname, 'klarity.ico'),
-      webPreferences: {
-        preload: path.join(__dirname, 'google-preload.js'),
-        nodeIntegration: false,
-        contextIsolation: false
-      }
-    });
-
-    authWin.webContents.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
-    );
-
-    const targetContinueUrl = 'https://myaccount.google.com/personal-info';
-    const loginUrl = `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(targetContinueUrl)}`;
-
-    const tryExtractAuthenticatedProfile = async () => {
-      if (resolved || authWin.isDestroyed()) return;
-      const currentUrl = authWin.webContents.getURL() || '';
-      // Only extract once Google has finished authenticating and redirected to myaccount.google.com
-      if (!currentUrl.startsWith('https://myaccount.google.com')) return;
-
+    checkInterval = setInterval(async () => {
       try {
-        const profile = await authWin.webContents.executeJavaScript(`
-          (() => {
-            // Look for Google Account badge aria-label: "Google Account: Full Name (email@gmail.com)"
-            const acctEl = document.querySelector('[aria-label*="Google Account:"][aria-label*="@"]');
-            if (acctEl) {
-              const label = acctEl.getAttribute('aria-label') || '';
-              const m = label.match(/Google Account:\\s*([^\\n(]+?)\\s*\\(([^)]+@[^)]+)\\)/i);
-              if (m) {
-                return { name: m[1].trim(), email: m[2].trim().toLowerCase() };
-              }
+        const res = await fetch(`http://localhost:${port}/api/auth/google/check-session?sid=${sid}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.ok && json.user) {
+            cleanup();
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.show();
+              mainWindow.focus();
             }
-            const emailEl = document.querySelector('[data-email]');
-            if (emailEl && emailEl.getAttribute('data-email')) {
-              return {
-                email: emailEl.getAttribute('data-email').trim().toLowerCase(),
-                name: document.querySelector('h1, h2')?.innerText?.replace(/Welcome,\\s*/i, '').trim() || ''
-              };
-            }
-            const html = document.body ? document.body.innerText : '';
-            const emailMatch = html.match(/([a-zA-Z0-9._%+-]+@(?:gmail\\.com|googlemail\\.com|[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}))/);
-            if (emailMatch) {
-              return { email: emailMatch[1].toLowerCase(), name: '' };
-            }
-            return null;
-          })();
-        `);
-
-        if (profile && profile.email) {
-          finish({ ok: true, profile });
-          setTimeout(() => {
-            if (!authWin.isDestroyed()) authWin.close();
-          }, 150);
+            resolve({ ok: true, user: json.user });
+          }
         }
       } catch {}
-    };
+    }, 400);
 
-    authWin.webContents.on('did-navigate', tryExtractAuthenticatedProfile);
-    authWin.webContents.on('did-navigate-in-page', tryExtractAuthenticatedProfile);
-    authWin.webContents.on('did-finish-load', tryExtractAuthenticatedProfile);
-
-    authWin.on('closed', () => {
-      finish({ ok: false, cancelled: true });
-    });
-
-    authWin.loadURL(loginUrl);
+    timeoutTimer = setTimeout(() => {
+      cleanup();
+      resolve({ ok: false, error: 'Google sign-in timed out. Please try again.' });
+    }, 120000);
   });
 });
 
