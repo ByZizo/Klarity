@@ -3,12 +3,6 @@ const path = require('path');
 const http = require('http');
 const { exec } = require('child_process');
 
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
-  app.quit();
-  process.exit(0);
-}
-
 let autoUpdater = null;
 try {
   ({ autoUpdater } = require('electron-updater'));
@@ -282,13 +276,6 @@ ipcMain.handle('klarity:install-update-now', async () => {
       message: 'Update failed: ' + (err.message || 'Please try again.')
     });
     return { ok: false, error: err.message };
-  }
-});
-
-app.on('second-instance', () => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
   }
 });
 
