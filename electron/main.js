@@ -207,10 +207,15 @@ ipcMain.handle('klarity:google-sign-in', async () => {
       title: 'Sign in with Google — Klarity',
       icon: path.join(__dirname, 'klarity.ico'),
       webPreferences: {
+        preload: path.join(__dirname, 'google-preload.js'),
         nodeIntegration: false,
-        contextIsolation: true
+        contextIsolation: false
       }
     });
+
+    authWin.webContents.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
+    );
 
     const targetContinueUrl = 'https://myaccount.google.com/personal-info';
     const loginUrl = `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(targetContinueUrl)}`;
@@ -259,6 +264,7 @@ ipcMain.handle('klarity:google-sign-in', async () => {
     };
 
     authWin.webContents.on('did-navigate', tryExtractAuthenticatedProfile);
+    authWin.webContents.on('did-navigate-in-page', tryExtractAuthenticatedProfile);
     authWin.webContents.on('did-finish-load', tryExtractAuthenticatedProfile);
 
     authWin.on('closed', () => {
