@@ -3563,11 +3563,11 @@ function KlarityApp() {
           <nav className={`flex flex-col ${isSidebarCompact ? 'items-center gap-1.5 mt-5' : 'gap-1.5 mt-6'}`}>
             {[
               { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+              { id: 'cards', label: 'Cards', icon: CreditCard },
               { id: 'transactions', label: 'Transactions', icon: History },
-              { id: 'budgets', label: 'Budgets', icon: PieChart },
               { id: 'bills', label: 'Bills', icon: Receipt },
               { id: 'subscriptions', label: 'Subscriptions', icon: Zap },
-              { id: 'cards', label: 'Cards', icon: CreditCard },
+              { id: 'budgets', label: 'Budgets', icon: PieChart },
               { id: 'vault', label: 'Passwords', icon: KeyRound }
             ].map(item => {
               const isActive = activeTab === item.id;
