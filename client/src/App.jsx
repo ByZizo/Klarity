@@ -349,10 +349,7 @@ function GoogleSignInButton({ onAuthSuccess, onError, setIsAuthenticating, isAut
       try {
         const res = await window.klarityDesktop.signInWithGoogle();
         if (res?.ok && res?.user) {
-          setCurrentUser(res.user);
-          secureStorage.setItem('klarity_user', res.user);
-          setNotificationToast(`Welcome to Klarity, ${res.user.name}!`);
-          setTimeout(() => setNotificationToast(''), 4000);
+          await onAuthSuccess(res.user);
         } else if (res?.error) {
           onError(res.error);
         }
@@ -1804,6 +1801,14 @@ function KlarityApp() {
   // ================= GOOGLE AUTHENTICATION HANDLERS =================
   const handleGoogleProfileSuccess = async (profile) => {
     try {
+      if (profile?.id && profile?.email) {
+        setCurrentUser(profile);
+        secureStorage.setItem('klarity_user', profile);
+        setNotificationToast('Signed in with Google as ' + (profile.name || profile.email));
+        setTimeout(() => setNotificationToast(''), 4000);
+        return;
+      }
+
       const res = await fetch('/api/auth/google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
