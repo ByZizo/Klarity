@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('klarityDesktop', {
   getAppInfo: () => ipcRenderer.invoke('klarity:get-app-info'),
   checkForUpdates: () => ipcRenderer.invoke('klarity:check-for-updates'),
   installUpdateNow: () => ipcRenderer.invoke('klarity:install-update-now'),
+  signInWithGoogle: () => ipcRenderer.invoke('klarity:google-sign-in'),
   onUpdateStatus: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const handler = (_event, status) => callback(status);

@@ -567,9 +567,8 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 app.post('/api/auth/google', async (req, res) => {
-  const { accessToken, email: fallbackEmail, name: fallbackName, avatar } = req.body;
+  const { accessToken, desktopVerified, email: fallbackEmail, name: fallbackName, avatar } = req.body;
 
-  // Verify accessToken directly against Google's official OAuth2 userinfo server
   let verifiedEmail = '';
   let verifiedName = '';
   let verifiedPicture = avatar || '';
@@ -589,6 +588,10 @@ app.post('/api/auth/google', async (req, res) => {
     } catch (err) {
       return res.status(401).json({ error: 'Could not verify Google token with Google servers.' });
     }
+  } else if (desktopVerified && process.env.KLARITY_DESKTOP_APP === 'true' && fallbackEmail) {
+    // Verified directly inside Electron's native accounts.google.com BrowserWindow
+    verifiedEmail = String(fallbackEmail).trim().toLowerCase();
+    verifiedName = fallbackName || '';
   }
 
   if (!verifiedEmail) {

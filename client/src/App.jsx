@@ -341,8 +341,26 @@ function GoogleSignInButton({ onAuthSuccess, onError, setIsAuthenticating, isAut
     }
   };
 
-  const handleClick = () => {
+  const handleClick = async () => {
     setIsAuthenticating(true);
+
+    // In the Desktop App, use the native Electron Google Account login window (zero origin_mismatch + real Google password/2FA)
+    if (typeof window !== 'undefined' && window.klarityDesktop?.signInWithGoogle) {
+      try {
+        const res = await window.klarityDesktop.signInWithGoogle();
+        if (res?.ok && res?.profile?.email) {
+          await onAuthSuccess({ ...res.profile, desktopVerified: true });
+        } else if (!res?.cancelled) {
+          onError('Google sign-in was not completed.');
+        }
+      } catch (err) {
+        onError('Google sign-in error: ' + (err.message || 'Please try again.'));
+      } finally {
+        setIsAuthenticating(false);
+      }
+      return;
+    }
+
     if (!window.google?.accounts?.oauth2) {
       let count = 0;
       const waiter = setInterval(() => {
@@ -1791,7 +1809,8 @@ function KlarityApp() {
           name: profile.name || profile.given_name || profile.email.split('@')[0],
           avatar: profile.picture || '',
           sub: profile.sub || profile.id,
-          accessToken: profile.accessToken || ''
+          accessToken: profile.accessToken || '',
+          desktopVerified: Boolean(profile.desktopVerified)
         })
       });
       const json = await res.json();

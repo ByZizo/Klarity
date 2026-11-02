@@ -21,7 +21,7 @@ let updateStatusState = {
 
 function runShell(cmd, cwd) {
   return new Promise((resolve, reject) => {
-    exec(cmd, { cwd, windowsHide: true }, (err, stdout, stderr) => {
+    exec(cmd, { cwd, windowsHide: true }, (err, stdout) => {
       if (err) return reject(err);
       resolve(String(stdout || '').trim());
     });
@@ -41,7 +41,6 @@ async function checkForGitHubUpdate() {
   try {
     broadcastUpdateStatus({ state: 'checking', message: 'Checking for updates...' });
 
-    // 1. Check local git SHA vs GitHub origin/main SHA
     await runShell('git fetch origin main --quiet', repoDir);
     const localSha = await runShell('git rev-parse HEAD', repoDir);
     const remoteSha = await runShell('git rev-parse origin/main', repoDir);
@@ -60,7 +59,6 @@ async function checkForGitHubUpdate() {
       return updateStatusState;
     }
 
-    // 2. If packaged with electron-updater, also check GitHub Releases
     if (app.isPackaged && autoUpdater) {
       await autoUpdater.checkForUpdates();
       return updateStatusState;
@@ -103,7 +101,7 @@ function setupAutoUpdater() {
   autoUpdater.on('error', () => {});
 }
 
-// Start the embedded Express backend on localhost:5173 (matches Google OAuth Authorized Origin)
+// Start the embedded Express backend
 async function startEmbeddedBackend() {
   const userDataDir = app.getPath('userData');
   process.env.KLARITY_USER_DATA_DIR = userDataDir;
@@ -163,26 +161,13 @@ async function createDesktopWindow() {
     }
   });
 
-  // Allow real Google OAuth & Plaid popups inside Electron; open other external links in default browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (
       url.startsWith('http://127.0.0.1') ||
       url.startsWith('http://localhost') ||
-      url.includes('accounts.google.com') ||
-      url.includes('google.com/o/oauth2') ||
-      url.includes('gstatic.com') ||
-      url.includes('plaid.com') ||
-      url === 'about:blank'
+      url.includes('plaid.com')
     ) {
-      return {
-        action: 'allow',
-        overrideBrowserWindowOptions: {
-          width: 520,
-          height: 680,
-          autoHideMenuBar: true,
-          title: 'Sign in with Google — Klarity'
-        }
-      };
+      return { action: 'allow' };
     }
     shell.openExternal(url);
     return { action: 'deny' };
@@ -192,7 +177,6 @@ async function createDesktopWindow() {
 
   setupAutoUpdater();
 
-  // Automatically check for updates every time the user opens the app (and every 5 minutes)
   mainWindow.webContents.once('did-finish-load', () => {
     setTimeout(() => {
       checkForGitHubUpdate();
@@ -204,7 +188,87 @@ async function createDesktopWindow() {
   }, 5 * 60 * 1000);
 }
 
-// IPC Handlers for Desktop App Info & On-The-Spot Auto-Updater
+// Native Desktop Google Sign-In Window (Uses real accounts.google.com login + password/2FA with zero origin_mismatch)
+ipcMain.handle('klarity:google-sign-in', async () => {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (result) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(result);
+    };
+
+    const authWin = new BrowserWindow({
+      width: 500,
+      height: 680,
+      parent: mainWindow || undefined,
+      modal: true,
+      autoHideMenuBar: true,
+      title: 'Sign in with Google — Klarity',
+      icon: path.join(__dirname, 'klarity.ico'),
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true
+      }
+    });
+
+    const targetContinueUrl = 'https://myaccount.google.com/personal-info';
+    const loginUrl = `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(targetContinueUrl)}`;
+
+    const tryExtractAuthenticatedProfile = async () => {
+      if (resolved || authWin.isDestroyed()) return;
+      const currentUrl = authWin.webContents.getURL() || '';
+      // Only extract once Google has finished authenticating and redirected to myaccount.google.com
+      if (!currentUrl.startsWith('https://myaccount.google.com')) return;
+
+      try {
+        const profile = await authWin.webContents.executeJavaScript(`
+          (() => {
+            // Look for Google Account badge aria-label: "Google Account: Full Name (email@gmail.com)"
+            const acctEl = document.querySelector('[aria-label*="Google Account:"][aria-label*="@"]');
+            if (acctEl) {
+              const label = acctEl.getAttribute('aria-label') || '';
+              const m = label.match(/Google Account:\\s*([^\\n(]+?)\\s*\\(([^)]+@[^)]+)\\)/i);
+              if (m) {
+                return { name: m[1].trim(), email: m[2].trim().toLowerCase() };
+              }
+            }
+            const emailEl = document.querySelector('[data-email]');
+            if (emailEl && emailEl.getAttribute('data-email')) {
+              return {
+                email: emailEl.getAttribute('data-email').trim().toLowerCase(),
+                name: document.querySelector('h1, h2')?.innerText?.replace(/Welcome,\\s*/i, '').trim() || ''
+              };
+            }
+            const html = document.body ? document.body.innerText : '';
+            const emailMatch = html.match(/([a-zA-Z0-9._%+-]+@(?:gmail\\.com|googlemail\\.com|[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}))/);
+            if (emailMatch) {
+              return { email: emailMatch[1].toLowerCase(), name: '' };
+            }
+            return null;
+          })();
+        `);
+
+        if (profile && profile.email) {
+          finish({ ok: true, profile });
+          setTimeout(() => {
+            if (!authWin.isDestroyed()) authWin.close();
+          }, 150);
+        }
+      } catch {}
+    };
+
+    authWin.webContents.on('did-navigate', tryExtractAuthenticatedProfile);
+    authWin.webContents.on('did-finish-load', tryExtractAuthenticatedProfile);
+
+    authWin.on('closed', () => {
+      finish({ ok: false, cancelled: true });
+    });
+
+    authWin.loadURL(loginUrl);
+  });
+});
+
 ipcMain.handle('klarity:get-app-info', () => ({
   isDesktopApp: true,
   version: app.getVersion(),
@@ -230,11 +294,9 @@ ipcMain.handle('klarity:install-update-now', async () => {
       return { ok: true };
     }
 
-    // Pull latest update from GitHub origin/main on the spot
     await runShell('git fetch origin main --quiet', repoDir);
     await runShell('git reset --hard origin/main', repoDir);
 
-    // Close local server port cleanly before relaunching so the reopened app binds to 5173
     if (httpServerInstance) {
       try { httpServerInstance.close(); } catch {}
     }
