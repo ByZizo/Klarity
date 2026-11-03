@@ -7,7 +7,6 @@ import {
   Droplets,
   Car,
   BatteryCharging,
-  Sparkles,
   Plus,
   Trash2,
   CheckCircle2,
@@ -53,6 +52,7 @@ export default function HouseholdLifestyleHub({
   const [isFetchingProperty, setIsFetchingProperty] = useState(false);
   const [propertyLookupError, setPropertyLookupError] = useState('');
   const [propertyLookupSuccess, setPropertyLookupSuccess] = useState('');
+  const [isEditingPropertyLink, setIsEditingPropertyLink] = useState(false);
 
   const handleFetchProperty = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -104,6 +104,7 @@ export default function HouseholdLifestyleHub({
       onUpdateProfile(updatedProfile);
       setPropertyLookupSuccess(`Imported specs for ${data.address || 'Property'} (${data.bedrooms || 3} bd, ${data.bathrooms || 2} ba, ${data.sqFt || 2100} sq ft)!`);
       setPropertyUrlInput('');
+      setIsEditingPropertyLink(false);
     } catch (err) {
       console.error('Property fetch error:', err);
       setPropertyLookupError(err.message || 'Could not fetch house details. You can enter details manually.');
@@ -371,24 +372,6 @@ export default function HouseholdLifestyleHub({
               Save to Bills
             </button>
           )}
-          {onAskAiAdvisor && (
-            <button
-              type="button"
-              onClick={() => {
-                if (section === 'household') {
-                  onAskAiAdvisor(`Review my Household setup (${metrics.dwelling.label}, ${metrics.people} people, PG&E $${metrics.utilities.totalPgeCombinedBill}/mo, Water $${metrics.utilities.waterTrashTotalCost}/mo, Food $${foodMonthly}/mo).`);
-                } else if (section === 'auto') {
-                  onAskAiAdvisor(`Review my Auto fleet (${metrics.fleet.vehicles.length} cars, Gas $${metrics.fleet.totalMonthlyGasCost}/mo) and show me free EV chargers nearby and the best 0% APR EV deals.`);
-                } else {
-                  onAskAiAdvisor(`Review my Health coverage (${health.provider}, copays, and doctors) and suggest ways to optimize medical expenses.`);
-                }
-              }}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-[#18457c] text-xs font-bold cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Ask AI</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -397,75 +380,126 @@ export default function HouseholdLifestyleHub({
       {/* ================================================================= */}
       {section === 'household' && (
         <div className="p-5 flex flex-col gap-4">
-          {/* Zillow & Address Property Importer */}
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/70 via-indigo-50/50 to-slate-50 border border-blue-200/80 shadow-2xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                  <Building className="w-4 h-4 text-[#18457c]" />
-                  <span>Import Property from Zillow or Street Address</span>
-                </h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Auto-fetches square footage, bedrooms, bathrooms, estimated home value, local utility rate region, and surrounding shopping intelligence.
-                </p>
+          {/* Zillow & Address Property Connection Status / Importer */}
+          {householdProfile.zillowUrl && !isEditingPropertyLink ? (
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-slate-50 border border-emerald-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <CheckCircle2 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-slate-900">
+                      {householdProfile.address || 'Property Connected'}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-300/50">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                      Zillow Link Connected
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap font-medium">
+                    <span>{householdProfile.dwellingType ? DWELLING_TYPES.find(d => d.id === householdProfile.dwellingType)?.label || 'Single-Family' : 'Home'}</span>
+                    <span>•</span>
+                    <span>{householdProfile.bedrooms || 3} Beds, {householdProfile.bathrooms || 2} Baths</span>
+                    <span>•</span>
+                    <span>{Number(householdProfile.sqFt || 2100).toLocaleString()} sq ft</span>
+                    {householdProfile.estimatedValue && (
+                      <>
+                        <span>•</span>
+                        <span className="text-slate-700 font-semibold">Est. Value: {householdProfile.estimatedValue}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
-              {householdProfile.zillowUrl && (
+
+              <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
                 <a
                   href={householdProfile.zillowUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-[#18457c] hover:underline"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-[11px] font-bold text-[#18457c] transition-colors shadow-2xs"
                 >
                   <span>View on Zillow</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditingPropertyLink(true);
+                    setPropertyLookupSuccess('');
+                    setPropertyLookupError('');
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-600 transition-colors shadow-2xs cursor-pointer"
+                >
+                  Change Link
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/70 via-indigo-50/50 to-slate-50 border border-blue-200/80 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                    <Building className="w-4 h-4 text-[#18457c]" />
+                    <span>Import Property from Zillow or Street Address</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Auto-fetches square footage, bedrooms, bathrooms, estimated home value, local utility rate region, and surrounding shopping intelligence.
+                  </p>
+                </div>
+                {householdProfile.zillowUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditingPropertyLink(false);
+                      setPropertyLookupError('');
+                    }}
+                    className="text-[11px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+
+              <form onSubmit={handleFetchProperty} className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={propertyUrlInput}
+                    onChange={e => setPropertyUrlInput(e.target.value)}
+                    placeholder="Paste Zillow URL (zillow.com/homedetails/...) or street address (e.g. 485 N 1st St, San Jose, CA)..."
+                    className="w-full text-xs font-medium pl-9 pr-3 py-2 rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#18457c]/20 text-slate-900 placeholder:text-slate-400"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isFetchingProperty || !propertyUrlInput.trim()}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#12345e] disabled:opacity-50 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
+                >
+                  {isFetchingProperty ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Fetching Specs...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-3.5 h-3.5" />
+                      <span>Fetch House Specs</span>
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {propertyLookupError && (
+                <div className="mt-2.5 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{propertyLookupError}</span>
+                </div>
               )}
             </div>
-
-            <form onSubmit={handleFetchProperty} className="flex flex-col sm:flex-row gap-2">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={propertyUrlInput}
-                  onChange={e => setPropertyUrlInput(e.target.value)}
-                  placeholder="Paste Zillow URL (zillow.com/homedetails/...) or street address (e.g. 485 N 1st St, San Jose, CA)..."
-                  className="w-full text-xs font-medium pl-9 pr-3 py-2 rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#18457c]/20 text-slate-900 placeholder:text-slate-400"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isFetchingProperty || !propertyUrlInput.trim()}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#12345e] disabled:opacity-50 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
-              >
-                {isFetchingProperty ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Fetching Specs...</span>
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-3.5 h-3.5" />
-                    <span>Fetch House Specs</span>
-                  </>
-                )}
-              </button>
-            </form>
-
-            {propertyLookupError && (
-              <div className="mt-2.5 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{propertyLookupError}</span>
-              </div>
-            )}
-
-            {propertyLookupSuccess && (
-              <div className="mt-2.5 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                <span>{propertyLookupSuccess}</span>
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Quick Inputs Row */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
