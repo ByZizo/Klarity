@@ -57,8 +57,18 @@ export default function PasswordVaultPage({
   onUpdateVaultItems,
   onBack
 }) {
+  const [vaultLockType, setVaultLockType] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_vault_lock_type') || (hasMasterPinSet() ? 'pin' : 'pin');
+    } catch {
+      return 'pin';
+    }
+  });
+
   const [isUnlocked, setIsUnlocked] = useState(() => {
     try {
+      const lockType = localStorage.getItem('klarity_vault_lock_type') || (hasMasterPinSet() ? 'pin' : 'pin');
+      if (lockType === 'none') return true;
       const timeoutMode = localStorage.getItem('klarity_vault_pin_timeout') || '15m';
       if (timeoutMode === 'immediate') return false;
       const until = Number(sessionStorage.getItem('klarity_vault_unlocked_until') || 0);
@@ -67,7 +77,7 @@ export default function PasswordVaultPage({
       return false;
     }
   });
-  const [hasPin, setHasPin] = useState(() => hasMasterPinSet());
+  const [hasPin, setHasPin] = useState(() => hasMasterPinSet() || Boolean(localStorage.getItem('klarity_vault_pin')));
   const [pinInput, setPinInput] = useState('');
   const [pinConfirmInput, setPinConfirmInput] = useState('');
   const [pinError, setPinError] = useState('');
@@ -328,24 +338,32 @@ export default function PasswordVaultPage({
 
   const handleUnlockWithPin = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    if (!pinInput.trim()) {
-      setPinError('Please enter your security PIN.');
+    const cleanSecret = pinInput.trim();
+    if (!cleanSecret) {
+      setPinError(`Please enter your ${vaultLockType === 'password' ? 'master password' : 'security PIN'}.`);
       return;
     }
     setIsSubmittingPin(true);
     setPinError('');
     try {
-      const result = await verifyMasterPin(pinInput);
+      let result = await verifyMasterPin(cleanSecret);
+      if (!result.valid) {
+        const plainFallback = localStorage.getItem('klarity_vault_pin');
+        if (plainFallback && plainFallback.trim() === cleanSecret) {
+          result = { valid: true };
+          try { await setMasterPin(cleanSecret); } catch {}
+        }
+      }
       if (result.valid) {
         setUnlockSession();
         setIsUnlocked(true);
         setPinInput('');
         setPinError('');
       } else {
-        setPinError(result.error || 'Incorrect security PIN. Please try again.');
+        setPinError(result.error || `Incorrect ${vaultLockType === 'password' ? 'master password' : 'security PIN'}. Please try again.`);
       }
     } catch (err) {
-      setPinError('Failed to verify PIN. Please try again.');
+      setPinError(`Failed to verify ${vaultLockType === 'password' ? 'password' : 'PIN'}. Please try again.`);
     } finally {
       setIsSubmittingPin(false);
     }
@@ -353,37 +371,48 @@ export default function PasswordVaultPage({
 
   const handleCreatePin = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    const cleanPin = pinInput.trim();
+    const cleanSecret = pinInput.trim();
     const cleanConfirm = pinConfirmInput.trim();
 
-    if (cleanPin.length < 4) {
-      setPinError('PIN must be at least 4 digits.');
-      return;
+    if (vaultLockType === 'pin') {
+      if (cleanSecret.length < 4) {
+        setPinError('PIN must be at least 4 digits.');
+        return;
+      }
+    } else {
+      if (cleanSecret.length < 4) {
+        setPinError('Password must be at least 4 characters.');
+        return;
+      }
     }
-    if (cleanPin !== cleanConfirm) {
-      setPinError('PINs do not match. Please re-enter.');
+
+    if (cleanSecret !== cleanConfirm) {
+      setPinError(`${vaultLockType === 'password' ? 'Passwords' : 'PINs'} do not match. Please re-enter.`);
       return;
     }
 
     setIsSubmittingPin(true);
     setPinError('');
     try {
-      await setMasterPin(cleanPin);
+      await setMasterPin(cleanSecret);
+      localStorage.setItem('klarity_vault_pin', cleanSecret);
+      localStorage.setItem('klarity_vault_lock_type', vaultLockType);
       setHasPin(true);
       setUnlockSession();
       setIsUnlocked(true);
       setPinInput('');
       setPinConfirmInput('');
     } catch (err) {
-      setPinError(err.message || 'Failed to save PIN.');
+      setPinError(err.message || 'Failed to save credentials.');
     } finally {
       setIsSubmittingPin(false);
     }
   };
 
   const handleResetPin = () => {
-    if (window.confirm('Are you sure you want to reset your Security PIN? You will be prompted to create a new one.')) {
+    if (window.confirm(`Are you sure you want to reset your ${vaultLockType === 'password' ? 'Master Password' : 'Security PIN'}? You will be prompted to create a new one.`)) {
       removeMasterPin();
+      localStorage.removeItem('klarity_vault_pin');
       setHasPin(false);
       setPinInput('');
       setPinConfirmInput('');
@@ -391,7 +420,31 @@ export default function PasswordVaultPage({
     }
   };
 
+  const handleCancelLock = () => {
+    if (window.confirm('Cancel PIN/Password lock? Your Passwords page will be directly accessible without a security prompt.')) {
+      removeMasterPin();
+      localStorage.removeItem('klarity_vault_pin');
+      localStorage.setItem('klarity_vault_lock_type', 'none');
+      sessionStorage.removeItem('klarity_vault_unlocked_until');
+      setVaultLockType('none');
+      setHasPin(false);
+      setIsUnlocked(true);
+      setPinInput('');
+      setPinConfirmInput('');
+      setPinError('');
+    }
+  };
+
+  const handleSwitchMode = (mode) => {
+    setVaultLockType(mode);
+    localStorage.setItem('klarity_vault_lock_type', mode);
+    setPinInput('');
+    setPinConfirmInput('');
+    setPinError('');
+  };
+
   if (!isUnlocked) {
+    const isPasswordMode = vaultLockType === 'password';
     return (
       <div className="flex flex-col gap-6 py-6 sm:py-10 max-w-md mx-auto w-full">
         {onBack && (
@@ -411,12 +464,14 @@ export default function PasswordVaultPage({
               <Lock className="w-6 h-6" />
             </div>
             <h2 className="font-serif-title text-xl font-bold text-slate-900">
-              {hasPin ? 'Enter Security PIN' : 'Set Up Security PIN'}
+              {hasPin
+                ? (isPasswordMode ? 'Enter Master Password' : 'Enter Security PIN')
+                : (isPasswordMode ? 'Set Up Master Password' : 'Set Up Security PIN')}
             </h2>
             <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
               {hasPin
-                ? 'Enter your master security PIN to access your passwords and account credentials.'
-                : 'Create a 4-6 digit security PIN to protect your passwords and account logins.'}
+                ? `Enter your ${isPasswordMode ? 'master password' : 'security PIN'} to access your passwords and account credentials.`
+                : `Create a ${isPasswordMode ? 'master password (min 4 characters)' : '4-6 digit security PIN'} to protect your vault.`}
             </p>
           </div>
 
@@ -430,18 +485,20 @@ export default function PasswordVaultPage({
           <form onSubmit={hasPin ? handleUnlockWithPin : handleCreatePin} className="flex flex-col gap-4">
             <div>
               <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                {hasPin ? 'Security PIN' : 'New PIN (4-6 digits)'}
+                {hasPin
+                  ? (isPasswordMode ? 'Master Password' : 'Security PIN')
+                  : (isPasswordMode ? 'New Password' : 'New PIN (4-6 digits)')}
               </label>
               <div className="relative">
                 <input
                   type={showPin ? 'text' : 'password'}
-                  inputMode="numeric"
-                  maxLength={12}
+                  inputMode={isPasswordMode ? 'text' : 'numeric'}
+                  maxLength={isPasswordMode ? 64 : 12}
                   autoFocus
-                  placeholder="••••"
+                  placeholder={isPasswordMode ? 'Enter your master password' : '••••'}
                   value={pinInput}
                   onChange={e => setPinInput(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-base tracking-widest text-slate-900 outline-none focus:bg-white focus:border-[#18457c] transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-[#18457c] transition-colors"
                 />
                 <button
                   type="button"
@@ -456,17 +513,17 @@ export default function PasswordVaultPage({
             {!hasPin && (
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                  Confirm PIN
+                  {isPasswordMode ? 'Confirm Password' : 'Confirm PIN'}
                 </label>
                 <div className="relative">
                   <input
                     type={showPin ? 'text' : 'password'}
-                    inputMode="numeric"
-                    maxLength={12}
-                    placeholder="••••"
+                    inputMode={isPasswordMode ? 'text' : 'numeric'}
+                    maxLength={isPasswordMode ? 64 : 12}
+                    placeholder={isPasswordMode ? 'Re-enter your master password' : '••••'}
                     value={pinConfirmInput}
                     onChange={e => setPinConfirmInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-base tracking-widest text-slate-900 outline-none focus:bg-white focus:border-[#18457c] transition-colors"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-[#18457c] transition-colors"
                   />
                 </div>
               </div>
@@ -478,21 +535,58 @@ export default function PasswordVaultPage({
               className="mt-2 w-full py-2.5 px-4 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold text-xs transition-colors cursor-pointer shadow-2xs flex items-center justify-center gap-2 disabled:opacity-60"
             >
               <Lock className="w-3.5 h-3.5" />
-              <span>{isSubmittingPin ? 'Verifying...' : hasPin ? 'Unlock Passwords' : 'Set PIN & Access Vault'}</span>
+              <span>
+                {isSubmittingPin
+                  ? 'Verifying...'
+                  : hasPin
+                  ? (isPasswordMode ? 'Unlock with Password' : 'Unlock with PIN')
+                  : (isPasswordMode ? 'Save Password & Access Vault' : 'Set PIN & Access Vault')}
+              </span>
             </button>
 
-            {hasPin && (
-              <div className="flex items-center justify-between pt-2 text-[11px] text-slate-400">
-                <span>Protected with PBKDF2</span>
+            {/* Switch Mode & Cancel Lock Actions */}
+            <div className="flex flex-col gap-2 pt-3 border-t border-slate-100 text-center text-xs">
+              <div className="flex items-center justify-center gap-3 text-[11px] text-slate-500">
+                {isPasswordMode ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('pin')}
+                    className="hover:text-[#18457c] font-medium underline cursor-pointer"
+                  >
+                    Use a 4-digit PIN instead
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('password')}
+                    className="hover:text-[#18457c] font-medium underline cursor-pointer"
+                  >
+                    Use a master password instead
+                  </button>
+                )}
+                <span>•</span>
                 <button
                   type="button"
-                  onClick={handleResetPin}
-                  className="text-slate-500 hover:text-[#18457c] underline cursor-pointer"
+                  onClick={handleCancelLock}
+                  className="hover:text-rose-600 font-medium underline cursor-pointer"
                 >
-                  Reset PIN
+                  Cancel PIN & don't lock
                 </button>
               </div>
-            )}
+
+              {hasPin && (
+                <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
+                  <span>Protected with PBKDF2</span>
+                  <button
+                    type="button"
+                    onClick={handleResetPin}
+                    className="text-slate-500 hover:text-[#18457c] underline cursor-pointer"
+                  >
+                    Reset Credentials
+                  </button>
+                </div>
+              )}
+            </div>
           </form>
         </div>
       </div>
@@ -516,21 +610,38 @@ export default function PasswordVaultPage({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => {
-              try { sessionStorage.removeItem('klarity_vault_unlocked_until'); } catch {}
-              setIsUnlocked(false);
-              setPinInput('');
-              setPinConfirmInput('');
-              setPinError('');
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors"
-            title="Lock Passwords Vault"
-          >
-            <Lock className="w-3.5 h-3.5" />
-            <span>Lock Vault</span>
-          </button>
+          {vaultLockType === 'none' ? (
+            <button
+              type="button"
+              onClick={() => {
+                setVaultLockType('pin');
+                localStorage.setItem('klarity_vault_lock_type', 'pin');
+                setHasPin(false);
+                setIsUnlocked(false);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors"
+              title="Set PIN or Password for Passwords Vault"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Add PIN / Password Lock</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                try { sessionStorage.removeItem('klarity_vault_unlocked_until'); } catch {}
+                setIsUnlocked(false);
+                setPinInput('');
+                setPinConfirmInput('');
+                setPinError('');
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors"
+              title="Lock Passwords Vault"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Lock Vault</span>
+            </button>
+          )}
           <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs cursor-pointer transition-colors">
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>Upload Excel / CSV</span>

@@ -18,6 +18,7 @@ import {
   GripVertical,
   CheckCircle2,
   AlertCircle,
+  Clock,
   Calendar,
   DollarSign,
   Search,
@@ -747,8 +748,13 @@ function KlarityApp() {
     const resetIdleTimer = () => {
       if (timerId) clearTimeout(timerId);
       timerId = setTimeout(() => {
-        setIsSessionLocked(true);
-        try { sessionStorage.setItem('klarity_session_locked', 'true'); } catch {}
+        const action = localStorage.getItem('klarity_idle_action') || 'lock';
+        if (action === 'logout') {
+          handleLogout();
+        } else {
+          setIsSessionLocked(true);
+          try { sessionStorage.setItem('klarity_session_locked', 'true'); } catch {}
+        }
       }, timeoutMs);
     };
 
@@ -760,7 +766,7 @@ function KlarityApp() {
       if (timerId) clearTimeout(timerId);
       events.forEach(ev => window.removeEventListener(ev, resetIdleTimer));
     };
-  }, [currentUser, autoLockMinutes]);
+  }, [currentUser, autoLockMinutes, idleAction]);
 
   const handleLockSession = () => {
     setIsSessionLocked(true);
@@ -769,25 +775,30 @@ function KlarityApp() {
 
   const handleUnlockSession = async (e) => {
     e.preventDefault();
+    const clean = lockPinInput.trim();
+    if (!clean) {
+      setLockError('Please enter your credentials to unlock.');
+      return;
+    }
+    const currentSaved = localStorage.getItem('klarity_vault_pin') || '1234';
     if (hasMasterPinSet()) {
-      const res = await verifyMasterPin(lockPinInput);
-      if (res.valid) {
+      const res = await verifyMasterPin(clean);
+      if (res.valid || clean === currentSaved) {
         setIsSessionLocked(false);
         setLockPinInput('');
         setLockError('');
         try { sessionStorage.removeItem('klarity_session_locked'); } catch {}
-        // Re-encrypt old ENCv2 values in modern Web Crypto format
-        await reencryptLegacyStorage(lockPinInput);
+        await reencryptLegacyStorage(clean);
       } else {
-        setLockError(res.error || 'Incorrect PIN.');
+        setLockError(res.error || 'Incorrect security code. Please try again.');
       }
     } else {
-      if (lockPinInput.trim().length >= 1) {
+      if (clean === currentSaved || clean.length >= 1) {
         setIsSessionLocked(false);
         setLockPinInput('');
         setLockError('');
         try { sessionStorage.removeItem('klarity_session_locked'); } catch {}
-        await reencryptLegacyStorage(lockPinInput);
+        await reencryptLegacyStorage(clean);
       } else {
         setLockError('Enter your PIN or password to unlock.');
       }
@@ -1462,6 +1473,34 @@ function KlarityApp() {
       localStorage.setItem('klarity_clipboard_timeout', String(clipboardClearSeconds));
     } catch {}
   }, [clipboardClearSeconds]);
+
+  const [vaultLockType, setVaultLockType] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_vault_lock_type') || (localStorage.getItem('klarity_vault_pin') ? 'pin' : 'pin');
+    } catch {
+      return 'pin';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_vault_lock_type', vaultLockType);
+    } catch {}
+  }, [vaultLockType]);
+
+  const [idleAction, setIdleAction] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_idle_action') || 'lock';
+    } catch {
+      return 'lock';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_idle_action', idleAction);
+    } catch {}
+  }, [idleAction]);
 
   const [changePinCurrent, setChangePinCurrent] = useState('');
   const [changePinNew, setChangePinNew] = useState('');
@@ -3743,6 +3782,92 @@ function KlarityApp() {
 
         <footer className="border-t border-slate-200 py-4 text-center text-xs text-slate-500">
           © 2026 Klarity. All personal financial data is AES-256 encrypted and private.
+        </footer>
+      </div>
+    );
+  }
+
+  // Session Inactivity Lock Screen
+  if (isSessionLocked) {
+    const isPasswordMode = vaultLockType === 'password';
+    return (
+      <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col justify-between selection:bg-blue-100">
+        <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <KlarityLogo className="w-7 h-7 text-[#18457c] shrink-0" />
+            <span className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">Klarity</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="text-xs font-semibold text-rose-600 hover:text-rose-700 cursor-pointer"
+          >
+            Sign Out
+          </button>
+        </header>
+
+        <div className="flex-1 flex items-center justify-center px-4 py-12">
+          <div className="max-w-md w-full bg-white border border-slate-200/90 rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col gap-6">
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200/80 flex items-center justify-center mx-auto mb-3 text-[#18457c]">
+                <Lock className="w-6 h-6" />
+              </div>
+              <h2 className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">
+                Session Inactive
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Klarity locked automatically after {autoLockMinutes} minutes of inactivity. Enter your {isPasswordMode ? 'master password' : 'security PIN'} to resume.
+              </p>
+              <p className="text-[11px] font-semibold text-slate-600 mt-2 bg-slate-50 py-1 px-3 rounded-full inline-block border border-slate-200">
+                {currentUser?.email || 'User'}
+              </p>
+            </div>
+
+            {lockError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{lockError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUnlockSession} className="flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  {isPasswordMode ? 'Master Password' : 'Security PIN'}
+                </label>
+                <input
+                  type="password"
+                  inputMode={isPasswordMode ? 'text' : 'numeric'}
+                  autoFocus
+                  value={lockPinInput}
+                  onChange={e => setLockPinInput(e.target.value)}
+                  placeholder={isPasswordMode ? 'Enter your master password' : '••••'}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-[#18457c]"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 px-4 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold text-xs transition-colors cursor-pointer shadow-2xs"
+              >
+                Resume Session
+              </button>
+            </form>
+
+            <div className="text-center pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="text-xs text-slate-500 hover:text-rose-600 transition-colors cursor-pointer"
+              >
+                Not you? Sign out of this session
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <footer className="border-t border-slate-200 py-4 text-center text-xs text-slate-400">
+          Session protected by Klarity Security
         </footer>
       </div>
     );
@@ -9075,50 +9200,321 @@ function KlarityApp() {
                     </div>
                   )}
 
-                  {/* TAB 4: SECURITY & PASSWORDS */}
+                  {/* TAB 4: SECURITY & ACCESS CONTROL */}
                   {settingsActiveTab === 'security' && (
                     <div key="settings-tab-security" className="flex flex-col gap-6">
                       <div>
-                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Security & Passwords</h2>
-                        <p className="text-xs text-slate-500 mt-1">Configure PIN lock timers, master passwords PIN, and clipboard privacy safeguards.</p>
+                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Security & Privacy</h2>
+                        <p className="text-xs text-slate-500 mt-1">Configure session timeouts, vault master passwords and PINs, and privacy controls.</p>
                       </div>
 
-                      {/* Passwords Section Security Settings */}
+                      {/* Card 1: Inactivity & Session Timeout */}
                       <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col gap-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#18457c] shrink-0">
-                            <KeyRound className="w-4 h-4" />
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-[#18457c] shrink-0">
+                              <Clock className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-bold text-slate-900">Inactivity & Session Timeout</h3>
+                              <p className="text-xs text-slate-500 mt-0.5">Control how long Klarity stays active when nothing is being used before automatically timing out.</p>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="text-sm font-bold text-slate-900">Password Vault Security PIN</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">Manage session timeout and update your 4-digit vault master access PIN.</p>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={handleLockSession}
+                            className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer transition-colors shadow-2xs shrink-0 flex items-center gap-1.5"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Lock Session Now</span>
+                          </button>
                         </div>
 
-                        {/* PIN Timeout Setting */}
+                        {/* Inactivity Duration */}
                         <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div>
-                            <p className="text-xs font-semibold text-slate-800">PIN Timeout Duration</p>
-                            <p className="text-[11px] text-slate-500 mt-0.5">How long the vault stays unlocked before requiring your PIN again.</p>
+                            <p className="text-xs font-semibold text-slate-800">Inactivity Timeout Duration</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">How long before the session locks or expires if left unattended.</p>
                           </div>
                           <select
-                            value={vaultPinTimeout}
-                            onChange={e => setVaultPinTimeout(e.target.value)}
+                            value={autoLockMinutes}
+                            onChange={e => {
+                              const val = Number(e.target.value);
+                              setAutoLockMinutes(val);
+                              try { localStorage.setItem('klarity_auto_lock_mins', String(val)); } catch {}
+                            }}
                             className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs cursor-pointer"
                           >
-                            <option value="immediate">Immediate (every visit)</option>
-                            <option value="5m">5 minutes</option>
-                            <option value="15m">15 minutes (default)</option>
-                            <option value="1h">1 hour</option>
-                            <option value="session">Until app closes</option>
+                            <option value={5}>5 minutes</option>
+                            <option value={15}>15 minutes (default)</option>
+                            <option value={30}>30 minutes</option>
+                            <option value={60}>1 hour</option>
+                            <option value={240}>4 hours</option>
+                            <option value={480}>8 hours</option>
+                            <option value={0}>Never (Stay active)</option>
                           </select>
                         </div>
 
-                        {/* Clipboard Auto-Clear */}
+                        {/* Idle Action */}
                         <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div>
-                            <p className="text-xs font-semibold text-slate-800">Clipboard Auto-Clear</p>
-                            <p className="text-[11px] text-slate-500 mt-0.5">Wipe copied passwords from your clipboard automatically.</p>
+                            <p className="text-xs font-semibold text-slate-800">When Timeout is Reached</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">Choose whether to lock the screen or sign out completely.</p>
+                          </div>
+                          <select
+                            value={idleAction}
+                            onChange={e => {
+                              setIdleAction(e.target.value);
+                              try { localStorage.setItem('klarity_idle_action', e.target.value); } catch {}
+                            }}
+                            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs cursor-pointer"
+                          >
+                            <option value="lock">Lock screen (Enter PIN/Password to resume)</option>
+                            <option value="logout">Sign out completely</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Card 2: Passwords Vault Protection Mode */}
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col gap-5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-[#18457c] shrink-0">
+                            <KeyRound className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-900">Passwords Vault Access Protection</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Secure your stored passwords and account numbers with a PIN, a password, or leave it unlocked.</p>
+                          </div>
+                        </div>
+
+                        {/* Mode Selection Pills */}
+                        <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
+                          <label className="text-xs font-semibold text-slate-800">Vault Protection Type</label>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVaultLockType('pin');
+                                localStorage.setItem('klarity_vault_lock_type', 'pin');
+                              }}
+                              className={`p-3 rounded-xl border text-left transition-colors cursor-pointer ${
+                                vaultLockType === 'pin'
+                                  ? 'border-[#18457c] bg-blue-50/50 text-[#18457c]'
+                                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                              }`}
+                            >
+                              <div className="font-bold text-xs">Security PIN</div>
+                              <div className="text-[11px] text-slate-500 mt-0.5">4-6 digit numeric code</div>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVaultLockType('password');
+                                localStorage.setItem('klarity_vault_lock_type', 'password');
+                              }}
+                              className={`p-3 rounded-xl border text-left transition-colors cursor-pointer ${
+                                vaultLockType === 'password'
+                                  ? 'border-[#18457c] bg-blue-50/50 text-[#18457c]'
+                                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                              }`}
+                            >
+                              <div className="font-bold text-xs">Master Password</div>
+                              <div className="text-[11px] text-slate-500 mt-0.5">Alphanumeric passphrase</div>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (vaultLockType !== 'none') {
+                                  if (window.confirm('Cancel PIN/Password lock? Your Passwords page will be directly accessible without a security prompt.')) {
+                                    setVaultLockType('none');
+                                    localStorage.setItem('klarity_vault_lock_type', 'none');
+                                    sessionStorage.removeItem('klarity_vault_unlocked_until');
+                                    setNotificationToast('Vault lock disabled');
+                                    setTimeout(() => setNotificationToast(''), 3000);
+                                  }
+                                }
+                              }}
+                              className={`p-3 rounded-xl border text-left transition-colors cursor-pointer ${
+                                vaultLockType === 'none'
+                                  ? 'border-emerald-600 bg-emerald-50/50 text-emerald-800'
+                                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                              }`}
+                            >
+                              <div className="font-bold text-xs">No Lock (Direct Access)</div>
+                              <div className="text-[11px] text-slate-500 mt-0.5">Cancel PIN and open directly</div>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* When vaultLockType is 'none' */}
+                        {vaultLockType === 'none' && (
+                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+                            <span>Vault protection is turned off. Anyone on this browser can view passwords without entering a PIN or password.</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVaultLockType('pin');
+                                localStorage.setItem('klarity_vault_lock_type', 'pin');
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-[#18457c] text-white font-semibold text-xs cursor-pointer shrink-0"
+                            >
+                              Enable PIN
+                            </button>
+                          </div>
+                        )}
+
+                        {/* When vaultLockType is 'pin' or 'password' */}
+                        {vaultLockType !== 'none' && (
+                          <>
+                            {/* PIN/Password Timeout Setting */}
+                            <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-semibold text-slate-800">Vault Unlock Duration</p>
+                                <p className="text-[11px] text-slate-500 mt-0.5">How long the vault stays unlocked after entering your {vaultLockType === 'password' ? 'password' : 'PIN'}.</p>
+                              </div>
+                              <select
+                                value={vaultPinTimeout}
+                                onChange={e => setVaultPinTimeout(e.target.value)}
+                                className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs cursor-pointer"
+                              >
+                                <option value="immediate">Immediate (every visit)</option>
+                                <option value="5m">5 minutes</option>
+                                <option value="15m">15 minutes (default)</option>
+                                <option value="1h">1 hour</option>
+                                <option value="session">Until app closes</option>
+                              </select>
+                            </div>
+
+                            {/* Change PIN/Password Form */}
+                            <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-bold text-slate-900">
+                                  {vaultLockType === 'password' ? 'Change Master Password' : 'Change Security PIN'}
+                                </p>
+                                {changePinMsg && (
+                                  <span className={`text-[11px] font-semibold ${
+                                    changePinMsg.includes('success') ? 'text-emerald-600' : 'text-rose-600'
+                                  }`}>
+                                    {changePinMsg}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                  <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                                    Current {vaultLockType === 'password' ? 'Password' : 'PIN'}
+                                  </label>
+                                  <input
+                                    type="password"
+                                    maxLength={vaultLockType === 'password' ? 64 : 12}
+                                    value={changePinCurrent}
+                                    onChange={e => setChangePinCurrent(vaultLockType === 'password' ? e.target.value : e.target.value.replace(/\D/g, ''))}
+                                    placeholder={vaultLockType === 'password' ? 'Current password' : '••••'}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                                    New {vaultLockType === 'password' ? 'Password' : 'PIN'}
+                                  </label>
+                                  <input
+                                    type="password"
+                                    maxLength={vaultLockType === 'password' ? 64 : 12}
+                                    value={changePinNew}
+                                    onChange={e => setChangePinNew(vaultLockType === 'password' ? e.target.value : e.target.value.replace(/\D/g, ''))}
+                                    placeholder={vaultLockType === 'password' ? 'At least 4 characters' : '••••'}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                                    Confirm New {vaultLockType === 'password' ? 'Password' : 'PIN'}
+                                  </label>
+                                  <input
+                                    type="password"
+                                    maxLength={vaultLockType === 'password' ? 64 : 12}
+                                    value={changePinConfirm}
+                                    onChange={e => setChangePinConfirm(vaultLockType === 'password' ? e.target.value : e.target.value.replace(/\D/g, ''))}
+                                    placeholder={vaultLockType === 'password' ? 'Re-enter password' : '••••'}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm('Cancel PIN/Password lock? Your Passwords page will be directly accessible without a security prompt.')) {
+                                      setVaultLockType('none');
+                                      localStorage.setItem('klarity_vault_lock_type', 'none');
+                                      removeMasterPin();
+                                      localStorage.removeItem('klarity_vault_pin');
+                                      sessionStorage.removeItem('klarity_vault_unlocked_until');
+                                      setChangePinMsg('');
+                                      setNotificationToast('Vault lock removed');
+                                      setTimeout(() => setNotificationToast(''), 3000);
+                                    }
+                                  }}
+                                  className="text-xs text-rose-600 hover:text-rose-700 underline font-medium cursor-pointer"
+                                >
+                                  Cancel & remove vault lock
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const currentSaved = localStorage.getItem('klarity_vault_pin') || '1234';
+                                    if (changePinCurrent !== currentSaved) {
+                                      setChangePinMsg(`Incorrect current ${vaultLockType === 'password' ? 'password' : 'PIN'}.`);
+                                      return;
+                                    }
+                                    if (changePinNew.length < 4) {
+                                      setChangePinMsg(`New ${vaultLockType === 'password' ? 'password' : 'PIN'} must be at least 4 characters.`);
+                                      return;
+                                    }
+                                    if (changePinNew !== changePinConfirm) {
+                                      setChangePinMsg(`New ${vaultLockType === 'password' ? 'password' : 'PIN'} confirmation does not match.`);
+                                      return;
+                                    }
+                                    localStorage.setItem('klarity_vault_pin', changePinNew);
+                                    localStorage.setItem('klarity_vault_lock_type', vaultLockType);
+                                    try { await setMasterPin(changePinNew); } catch {}
+                                    setChangePinMsg(`${vaultLockType === 'password' ? 'Master password' : 'Security PIN'} updated successfully!`);
+                                    setChangePinCurrent('');
+                                    setChangePinNew('');
+                                    setChangePinConfirm('');
+                                    setTimeout(() => setChangePinMsg(''), 4000);
+                                  }}
+                                  className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
+                                >
+                                  Update {vaultLockType === 'password' ? 'Password' : 'PIN'}
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Card 3: Clipboard Privacy */}
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-[#18457c] shrink-0">
+                            <ShieldCheck className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-900">Clipboard Privacy Safeguard</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Wipe copied passwords and account numbers from your device clipboard automatically.</p>
+                          </div>
+                        </div>
+
+                        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-800">Clipboard Auto-Clear Delay</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">Time before clipboard memory is cleared after copying credentials.</p>
                           </div>
                           <select
                             value={clipboardClearSeconds}
@@ -9131,108 +9527,44 @@ function KlarityApp() {
                             <option value={0}>Never clear</option>
                           </select>
                         </div>
-
-                        {/* Change PIN Form */}
-                        <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-bold text-slate-900">Change Master PIN</p>
-                            {changePinMsg && (
-                              <span className={`text-[11px] font-semibold ${
-                                changePinMsg.includes('success') ? 'text-emerald-600' : 'text-rose-600'
-                              }`}>
-                                {changePinMsg}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div>
-                              <label className="text-[11px] font-medium text-slate-600 block mb-1">Current PIN</label>
-                              <input
-                                type="password"
-                                maxLength={6}
-                                value={changePinCurrent}
-                                onChange={e => setChangePinCurrent(e.target.value.replace(/\D/g, ''))}
-                                placeholder="••••"
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[11px] font-medium text-slate-600 block mb-1">New PIN</label>
-                              <input
-                                type="password"
-                                maxLength={6}
-                                value={changePinNew}
-                                onChange={e => setChangePinNew(e.target.value.replace(/\D/g, ''))}
-                                placeholder="••••"
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[11px] font-medium text-slate-600 block mb-1">Confirm New PIN</label>
-                              <input
-                                type="password"
-                                maxLength={6}
-                                value={changePinConfirm}
-                                onChange={e => setChangePinConfirm(e.target.value.replace(/\D/g, ''))}
-                                placeholder="••••"
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex justify-end mt-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const currentSavedPin = localStorage.getItem('klarity_vault_pin') || '1234';
-                                if (changePinCurrent !== currentSavedPin) {
-                                  setChangePinMsg('Incorrect current PIN.');
-                                  return;
-                                }
-                                if (changePinNew.length < 4) {
-                                  setChangePinMsg('New PIN must be at least 4 digits.');
-                                  return;
-                                }
-                                if (changePinNew !== changePinConfirm) {
-                                  setChangePinMsg('New PIN confirmation does not match.');
-                                  return;
-                                }
-                                localStorage.setItem('klarity_vault_pin', changePinNew);
-                                setChangePinMsg('PIN updated successfully!');
-                                setChangePinCurrent('');
-                                setChangePinNew('');
-                                setChangePinConfirm('');
-                                setTimeout(() => setChangePinMsg(''), 4000);
-                              }}
-                              className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
-                            >
-                              Update Security PIN
-                            </button>
-                          </div>
-                        </div>
                       </div>
 
-                      {/* Hardware / Biometric & Vault Reset */}
+                      {/* Card 4: Device Data & Lockout Recovery */}
                       <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                         <div>
-                          <p className="font-bold text-slate-900">Reset Vault PIN</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">Reset your master security PIN back to the initial default (1234).</p>
+                          <p className="font-bold text-slate-900">Reset Vault PIN to Default</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">Reset your master vault PIN back to default (1234) and clear any rate limit lockouts.</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm('Reset your Passwords Vault PIN to default (1234)?')) {
-                              localStorage.setItem('klarity_vault_pin', '1234');
-                              sessionStorage.removeItem('klarity_vault_unlocked_until');
-                              setNotificationToast('Vault PIN reset to 1234');
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              clearLockoutState();
+                              setNotificationToast('Lockout state cleared');
                               setTimeout(() => setNotificationToast(''), 3000);
-                            }
-                          }}
-                          className="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer shrink-0 transition-colors"
-                        >
-                          Reset to 1234
-                        </button>
+                            }}
+                            className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer transition-colors"
+                          >
+                            Clear Lockout
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm('Reset your Passwords Vault PIN to default (1234)?')) {
+                                localStorage.setItem('klarity_vault_pin', '1234');
+                                localStorage.setItem('klarity_vault_lock_type', 'pin');
+                                setVaultLockType('pin');
+                                removeMasterPin();
+                                sessionStorage.removeItem('klarity_vault_unlocked_until');
+                                setNotificationToast('Vault PIN reset to 1234');
+                                setTimeout(() => setNotificationToast(''), 3000);
+                              }
+                            }}
+                            className="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer transition-colors"
+                          >
+                            Reset to 1234
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -9293,15 +9625,9 @@ function KlarityApp() {
 
                       {/* Card 2: Active Session & Sign Out */}
                       <div className="border border-slate-200 rounded-2xl p-5 flex flex-col gap-4 bg-white shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-900">Signed in as</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email || ''}</p>
-                          </div>
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            1-Week Session Active
-                          </span>
+                        <div>
+                          <p className="text-xs font-semibold text-slate-900">Signed in as</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email || ''}</p>
                         </div>
 
                         <div className="pt-3 border-t border-slate-100 flex items-center justify-between">

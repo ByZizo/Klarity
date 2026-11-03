@@ -407,7 +407,7 @@ export default function HouseholdLifestyleHub({
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <Search className="w-3.5 h-3.5" />
                     <span>Fetch House Specs</span>
                   </>
                 )}
