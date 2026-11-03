@@ -89,6 +89,7 @@ import {
   setMasterPin,
   removeMasterPin,
   verifyMasterPin,
+  clearLockoutState,
   reencryptLegacyStorage,
   sanitizeHtmlAgainstInjection
 } from './utils/securityCrypto';
@@ -552,6 +553,34 @@ function KlarityApp() {
       return 15;
     }
   });
+
+  const [idleAction, setIdleAction] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_idle_action') || 'lock';
+    } catch {
+      return 'lock';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_idle_action', idleAction);
+    } catch {}
+  }, [idleAction]);
+
+  const [vaultLockType, setVaultLockType] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_vault_lock_type') || (localStorage.getItem('klarity_vault_pin') ? 'pin' : 'pin');
+    } catch {
+      return 'pin';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_vault_lock_type', vaultLockType);
+    } catch {}
+  }, [vaultLockType]);
   const [lockPinInput, setLockPinInput] = useState('');
   const [lockError, setLockError] = useState('');
   const [masterPinActive, setMasterPinActive] = useState(() => hasMasterPinSet());
@@ -1474,33 +1503,7 @@ function KlarityApp() {
     } catch {}
   }, [clipboardClearSeconds]);
 
-  const [vaultLockType, setVaultLockType] = useState(() => {
-    try {
-      return localStorage.getItem('klarity_vault_lock_type') || (localStorage.getItem('klarity_vault_pin') ? 'pin' : 'pin');
-    } catch {
-      return 'pin';
-    }
-  });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('klarity_vault_lock_type', vaultLockType);
-    } catch {}
-  }, [vaultLockType]);
-
-  const [idleAction, setIdleAction] = useState(() => {
-    try {
-      return localStorage.getItem('klarity_idle_action') || 'lock';
-    } catch {
-      return 'lock';
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('klarity_idle_action', idleAction);
-    } catch {}
-  }, [idleAction]);
 
   const [changePinCurrent, setChangePinCurrent] = useState('');
   const [changePinNew, setChangePinNew] = useState('');
