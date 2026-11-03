@@ -493,3 +493,325 @@ export const EV_REBATE_STACK_PROGRAMS = [
     eligibility: 'Active Costco members frequently receive $1,000+ stackable member-only incentives on Chevy, Volvo, Polestar, and GMC EVs on top of 0% APR.'
   }
 ];
+
+// Major Health Insurance Providers & Common Exact Plans
+export const MAJOR_HEALTH_PLANS = [
+  // UnitedHealthcare
+  {
+    id: 'uhc-choice-plus',
+    provider: 'UnitedHealthcare',
+    planName: 'Choice Plus (PPO)',
+    network: 'PPO',
+    copays: { primaryCare: 25, specialist: 50, urgentCare: 35, er: 250, rxGeneric: 10 }
+  },
+  {
+    id: 'uhc-navigate',
+    provider: 'UnitedHealthcare',
+    planName: 'Navigate (HMO)',
+    network: 'HMO',
+    copays: { primaryCare: 20, specialist: 40, urgentCare: 30, er: 200, rxGeneric: 10 }
+  },
+  {
+    id: 'uhc-charter',
+    provider: 'UnitedHealthcare',
+    planName: 'Charter (EPO/HMO)',
+    network: 'EPO/HMO',
+    copays: { primaryCare: 20, specialist: 40, urgentCare: 30, er: 200, rxGeneric: 10 }
+  },
+  {
+    id: 'uhc-nexus-aco',
+    provider: 'UnitedHealthcare',
+    planName: 'NexusACO (Open Access)',
+    network: 'ACO',
+    copays: { primaryCare: 20, specialist: 40, urgentCare: 30, er: 250, rxGeneric: 10 }
+  },
+  {
+    id: 'uhc-dual-complete',
+    provider: 'UnitedHealthcare',
+    planName: 'Dual Complete (HMO-POS D-SNP)',
+    network: 'Medicare Advantage D-SNP',
+    copays: { primaryCare: 0, specialist: 0, urgentCare: 0, er: 0, rxGeneric: 0 }
+  },
+  {
+    id: 'uhc-aarp-medicare',
+    provider: 'UnitedHealthcare',
+    planName: 'AARP Medicare Advantage (HMO-POS / PPO)',
+    network: 'Medicare Advantage',
+    copays: { primaryCare: 0, specialist: 35, urgentCare: 30, er: 120, rxGeneric: 4 }
+  },
+  {
+    id: 'uhc-community',
+    provider: 'UnitedHealthcare',
+    planName: 'Community Plan (Medicaid / CHIP)',
+    network: 'Medicaid / CHIP',
+    copays: { primaryCare: 0, specialist: 0, urgentCare: 0, er: 0, rxGeneric: 0 }
+  },
+
+  // Kaiser Permanente
+  {
+    id: 'kaiser-traditional-hmo',
+    provider: 'Kaiser Permanente',
+    planName: 'Traditional HMO',
+    network: 'HMO',
+    copays: { primaryCare: 15, specialist: 30, urgentCare: 20, er: 100, rxGeneric: 10 }
+  },
+  {
+    id: 'kaiser-deductible-hmo',
+    provider: 'Kaiser Permanente',
+    planName: 'Deductible HMO (Silver / Bronze)',
+    network: 'HMO',
+    copays: { primaryCare: 35, specialist: 50, urgentCare: 35, er: 250, rxGeneric: 15 }
+  },
+  {
+    id: 'kaiser-gold-hmo',
+    provider: 'Kaiser Permanente',
+    planName: 'Gold / Platinum HMO',
+    network: 'HMO',
+    copays: { primaryCare: 10, specialist: 20, urgentCare: 15, er: 100, rxGeneric: 5 }
+  },
+  {
+    id: 'kaiser-senior-advantage',
+    provider: 'Kaiser Permanente',
+    planName: 'Senior Advantage (Medicare HMO)',
+    network: 'Medicare Advantage HMO',
+    copays: { primaryCare: 5, specialist: 15, urgentCare: 10, er: 75, rxGeneric: 3 }
+  },
+  {
+    id: 'kaiser-added-choice',
+    provider: 'Kaiser Permanente',
+    planName: 'Added Choice (POS)',
+    network: 'POS',
+    copays: { primaryCare: 25, specialist: 40, urgentCare: 30, er: 150, rxGeneric: 15 }
+  },
+
+  // Blue Cross Blue Shield / Anthem
+  {
+    id: 'bcbs-blue-choice-ppo',
+    provider: 'Blue Cross Blue Shield',
+    planName: 'Blue Choice (PPO)',
+    network: 'PPO',
+    copays: { primaryCare: 25, specialist: 45, urgentCare: 35, er: 250, rxGeneric: 10 }
+  },
+  {
+    id: 'bcbs-blue-preferred-epo',
+    provider: 'Blue Cross Blue Shield',
+    planName: 'Blue Preferred (EPO)',
+    network: 'EPO',
+    copays: { primaryCare: 25, specialist: 45, urgentCare: 30, er: 200, rxGeneric: 10 }
+  },
+  {
+    id: 'bcbs-blue-care-hmo',
+    provider: 'Blue Cross Blue Shield',
+    planName: 'Blue Care (HMO)',
+    network: 'HMO',
+    copays: { primaryCare: 20, specialist: 40, urgentCare: 25, er: 175, rxGeneric: 10 }
+  },
+  {
+    id: 'anthem-prudent-buyer-ppo',
+    provider: 'Anthem Blue Cross',
+    planName: 'Prudent Buyer PPO',
+    network: 'PPO',
+    copays: { primaryCare: 25, specialist: 45, urgentCare: 35, er: 250, rxGeneric: 10 }
+  },
+  {
+    id: 'anthem-select-hmo',
+    provider: 'Anthem Blue Cross',
+    planName: 'Select HMO',
+    network: 'HMO',
+    copays: { primaryCare: 20, specialist: 40, urgentCare: 25, er: 175, rxGeneric: 10 }
+  },
+  {
+    id: 'bcbs-fep-standard',
+    provider: 'Blue Cross Blue Shield',
+    planName: 'Federal Employee Program (FEP) Standard PPO',
+    network: 'Federal PPO',
+    copays: { primaryCare: 30, specialist: 40, urgentCare: 35, er: 250, rxGeneric: 10 }
+  },
+  {
+    id: 'bcbs-fep-basic',
+    provider: 'Blue Cross Blue Shield',
+    planName: 'Federal Employee Program (FEP) Basic',
+    network: 'Federal PPO',
+    copays: { primaryCare: 35, specialist: 45, urgentCare: 35, er: 250, rxGeneric: 15 }
+  },
+  {
+    id: 'blue-shield-ca-trio',
+    provider: 'Blue Shield of California',
+    planName: 'Trio HMO',
+    network: 'HMO',
+    copays: { primaryCare: 20, specialist: 35, urgentCare: 25, er: 150, rxGeneric: 10 }
+  },
+  {
+    id: 'blue-shield-ca-access-plus',
+    provider: 'Blue Shield of California',
+    planName: 'Access+ HMO',
+    network: 'HMO',
+    copays: { primaryCare: 25, specialist: 40, urgentCare: 30, er: 150, rxGeneric: 10 }
+  },
+
+  // Aetna
+  {
+    id: 'aetna-choice-pos-2',
+    provider: 'Aetna',
+    planName: 'Choice POS II (Open Access)',
+    network: 'POS',
+    copays: { primaryCare: 25, specialist: 45, urgentCare: 35, er: 250, rxGeneric: 12 }
+  },
+  {
+    id: 'aetna-open-choice-ppo',
+    provider: 'Aetna',
+    planName: 'Open Choice (PPO)',
+    network: 'PPO',
+    copays: { primaryCare: 30, specialist: 50, urgentCare: 40, er: 300, rxGeneric: 15 }
+  },
+  {
+    id: 'aetna-select-hmo',
+    provider: 'Aetna',
+    planName: 'Select (HMO / EPO)',
+    network: 'HMO/EPO',
+    copays: { primaryCare: 20, specialist: 35, urgentCare: 30, er: 200, rxGeneric: 10 }
+  },
+  {
+    id: 'aetna-medicare-advantage',
+    provider: 'Aetna',
+    planName: 'Aetna Medicare Advantage (PPO / HMO)',
+    network: 'Medicare Advantage',
+    copays: { primaryCare: 0, specialist: 30, urgentCare: 25, er: 100, rxGeneric: 4 }
+  },
+
+  // Cigna
+  {
+    id: 'cigna-open-access-plus',
+    provider: 'Cigna Healthcare',
+    planName: 'Open Access Plus (OAP)',
+    network: 'OAP/PPO',
+    copays: { primaryCare: 25, specialist: 45, urgentCare: 35, er: 250, rxGeneric: 12 }
+  },
+  {
+    id: 'cigna-localplus',
+    provider: 'Cigna Healthcare',
+    planName: 'LocalPlus',
+    network: 'HMO/EPO',
+    copays: { primaryCare: 20, specialist: 40, urgentCare: 30, er: 200, rxGeneric: 10 }
+  },
+  {
+    id: 'cigna-connect',
+    provider: 'Cigna Healthcare',
+    planName: 'Connect (Marketplace HMO/EPO)',
+    network: 'Marketplace',
+    copays: { primaryCare: 30, specialist: 55, urgentCare: 40, er: 300, rxGeneric: 15 }
+  },
+  {
+    id: 'cigna-true-choice-medicare',
+    provider: 'Cigna Healthcare',
+    planName: 'True Choice Medicare (PPO)',
+    network: 'Medicare Advantage',
+    copays: { primaryCare: 0, specialist: 35, urgentCare: 25, er: 120, rxGeneric: 4 }
+  },
+
+  // Humana
+  {
+    id: 'humana-gold-plus',
+    provider: 'Humana',
+    planName: 'Gold Plus (HMO)',
+    network: 'Medicare Advantage HMO',
+    copays: { primaryCare: 0, specialist: 25, urgentCare: 20, er: 100, rxGeneric: 3 }
+  },
+  {
+    id: 'humana-choice-ppo',
+    provider: 'Humana',
+    planName: 'Humana Choice (PPO)',
+    network: 'Medicare Advantage PPO',
+    copays: { primaryCare: 0, specialist: 35, urgentCare: 30, er: 125, rxGeneric: 5 }
+  },
+  {
+    id: 'humana-commercial-ppo',
+    provider: 'Humana',
+    planName: 'Commercial Open Access PPO',
+    network: 'PPO',
+    copays: { primaryCare: 30, specialist: 50, urgentCare: 35, er: 250, rxGeneric: 15 }
+  },
+
+  // Centene / Ambetter / Wellcare / Health Net
+  {
+    id: 'ambetter-complete',
+    provider: 'Ambetter',
+    planName: 'Complete (Silver HMO)',
+    network: 'Marketplace HMO',
+    copays: { primaryCare: 20, specialist: 40, urgentCare: 30, er: 250, rxGeneric: 15 }
+  },
+  {
+    id: 'wellcare-medicare-hmo',
+    provider: 'Wellcare',
+    planName: 'Medicare Advantage (HMO)',
+    network: 'Medicare Advantage',
+    copays: { primaryCare: 0, specialist: 25, urgentCare: 20, er: 100, rxGeneric: 0 }
+  },
+  {
+    id: 'health-net-communitycare',
+    provider: 'Health Net',
+    planName: 'CommunityCare HMO',
+    network: 'HMO',
+    copays: { primaryCare: 15, specialist: 30, urgentCare: 25, er: 150, rxGeneric: 10 }
+  },
+
+  // Molina Healthcare
+  {
+    id: 'molina-marketplace-hmo',
+    provider: 'Molina Healthcare',
+    planName: 'Marketplace HMO',
+    network: 'Marketplace HMO',
+    copays: { primaryCare: 20, specialist: 40, urgentCare: 30, er: 250, rxGeneric: 15 }
+  },
+  {
+    id: 'molina-complete-care',
+    provider: 'Molina Healthcare',
+    planName: 'Complete Care (Medicaid / Medi-Cal)',
+    network: 'Medicaid',
+    copays: { primaryCare: 0, specialist: 0, urgentCare: 0, er: 0, rxGeneric: 0 }
+  },
+
+  // Government & State Programs
+  {
+    id: 'medical-california',
+    provider: 'Medi-Cal',
+    planName: 'California Medicaid (Full Scope)',
+    network: 'State Medicaid',
+    copays: { primaryCare: 0, specialist: 0, urgentCare: 0, er: 0, rxGeneric: 0 }
+  },
+  {
+    id: 'medicare-part-ab',
+    provider: 'Medicare',
+    planName: 'Original Medicare (Part A & Part B)',
+    network: 'Federal Medicare',
+    copays: { primaryCare: 20, specialist: 40, urgentCare: 30, er: 150, rxGeneric: 10 }
+  },
+  {
+    id: 'medigap-plan-g',
+    provider: 'Medicare Supplement',
+    planName: 'Medigap Plan G',
+    network: 'Medicare Supplement',
+    copays: { primaryCare: 0, specialist: 0, urgentCare: 0, er: 0, rxGeneric: 0 }
+  },
+  {
+    id: 'tricare-prime',
+    provider: 'TRICARE',
+    planName: 'TRICARE Prime (Military)',
+    network: 'Military Health',
+    copays: { primaryCare: 0, specialist: 0, urgentCare: 0, er: 0, rxGeneric: 0 }
+  },
+  {
+    id: 'tricare-select',
+    provider: 'TRICARE',
+    planName: 'TRICARE Select (Military PPO)',
+    network: 'Military Health',
+    copays: { primaryCare: 22, specialist: 33, urgentCare: 25, er: 70, rxGeneric: 12 }
+  },
+  {
+    id: 'va-health-care',
+    provider: 'VA Health Care',
+    planName: 'Veterans Affairs Health Benefits',
+    network: 'Veterans Affairs',
+    copays: { primaryCare: 0, specialist: 0, urgentCare: 0, er: 0, rxGeneric: 0 }
+  }
+];

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Home,
   Users,
@@ -32,7 +32,8 @@ import {
   UTILITY_REGIONS,
   calculateHouseholdAndFleetMetrics,
   FREE_EV_CHARGING_GUIDE,
-  ZERO_APR_EV_MODELS
+  ZERO_APR_EV_MODELS,
+  MAJOR_HEALTH_PLANS
 } from '../utils/householdLifestyleEngine';
 
 export default function HouseholdLifestyleHub({
@@ -148,6 +149,43 @@ export default function HouseholdLifestyleHub({
     copays: { primaryCare: 15, specialist: 30, urgentCare: 20, er: 100, rxGeneric: 10 },
     doctors: [],
     cards: []
+  };
+
+  const [planSearchQuery, setPlanSearchQuery] = useState('');
+  const [showPlanDropdown, setShowPlanDropdown] = useState(false);
+  const planDropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (planDropdownRef.current && !planDropdownRef.current.contains(event.target)) {
+        setShowPlanDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredPlans = useMemo(() => {
+    const q = planSearchQuery.trim().toLowerCase();
+    if (!q) return MAJOR_HEALTH_PLANS;
+    const terms = q.split(/\s+/).filter(Boolean);
+    return MAJOR_HEALTH_PLANS.filter(p => {
+      const combined = `${p.provider} ${p.planName} ${p.network || ''}`.toLowerCase();
+      return terms.every(term => combined.includes(term));
+    });
+  }, [planSearchQuery]);
+
+  const handleSelectPlan = (plan) => {
+    handleHealthChange({
+      provider: plan.provider,
+      planName: plan.planName,
+      copays: {
+        ...(health.copays || {}),
+        ...(plan.copays || {})
+      }
+    });
+    setPlanSearchQuery('');
+    setShowPlanDropdown(false);
   };
 
   const handleFieldChange = (field, value) => {
@@ -804,21 +842,149 @@ export default function HouseholdLifestyleHub({
       {/* ================================================================= */}
       {section === 'health' && (
         <div className="p-5 flex flex-col gap-5 text-xs">
-          {/* Row 1: Insurance Plan & Copays */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
-            <div className="col-span-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+          {/* Search Major Health Insurances & Select Exact Plan */}
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-2 relative">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                  <Search className="w-3.5 h-3.5 text-[#18457c]" />
+                  <span>Search & Select Major Insurance Plan</span>
+                </span>
+                <span className="text-[10px] text-slate-500 block">
+                  Search UnitedHealthcare, Kaiser, Blue Cross Blue Shield, Aetna, Cigna, Humana, Medi-Cal, or Medicare to auto-fill your exact plan and copays.
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px]">
+                {health.provider && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200/60 text-[10px]">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span>{health.provider}{health.planName ? ` • ${health.planName}` : ''}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="relative" ref={planDropdownRef}>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200 focus-within:border-[#18457c] focus-within:ring-1 focus-within:ring-[#18457c] transition-all">
+                <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  value={planSearchQuery}
+                  onChange={e => {
+                    setPlanSearchQuery(e.target.value);
+                    setShowPlanDropdown(true);
+                  }}
+                  onFocus={() => setShowPlanDropdown(true)}
+                  placeholder="Type insurance name or plan (e.g. UnitedHealthcare Choice Plus, Kaiser HMO, Anthem PPO, Aetna, Medi-Cal)..."
+                  className="w-full bg-transparent text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none"
+                />
+                {planSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setPlanSearchQuery('')}
+                    className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Dropdown Menu */}
+              {showPlanDropdown && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 max-h-72 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-30 py-1 divide-y divide-slate-100">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                    <span>Major Health Insurance Plans ({filteredPlans.length})</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowPlanDropdown(false)}
+                      className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {filteredPlans.length > 0 ? (
+                    filteredPlans.map(plan => {
+                      const isSelected = health.provider === plan.provider && health.planName === plan.planName;
+                      return (
+                        <button
+                          key={plan.id}
+                          type="button"
+                          onClick={() => handleSelectPlan(plan)}
+                          className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer ${
+                            isSelected ? 'bg-sky-50/70 font-semibold text-[#18457c]' : 'text-slate-800'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-slate-900">{plan.provider}</span>
+                              <span className="text-[11px] text-slate-600 font-medium">{plan.planName}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                              <span className="px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded text-[9px] font-semibold">{plan.network}</span>
+                              <span>PCP: ${plan.copays.primaryCare}</span>
+                              <span>•</span>
+                              <span>Spec: ${plan.copays.specialist}</span>
+                              <span>•</span>
+                              <span>Urgent: ${plan.copays.urgentCare}</span>
+                              <span>•</span>
+                              <span>ER: ${plan.copays.er}</span>
+                              <span>•</span>
+                              <span>Rx: ${plan.copays.rxGeneric}</span>
+                            </div>
+                          </div>
+                          {isSelected && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="p-3 text-center text-slate-500">
+                      <p className="text-xs">No exact matches found for "{planSearchQuery}"</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Don't have one of these major plans? You can write your insurance details manually below.</p>
+                    </div>
+                  )}
+
+                  {/* Manual Write Option */}
+                  <div className="p-2 bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => setShowPlanDropdown(false)}
+                      className="w-full text-center py-1.5 px-2 rounded-lg text-xs font-semibold text-[#18457c] hover:bg-white border border-slate-200 transition-colors cursor-pointer"
+                    >
+                      ✏️ Don't have one of these major insurances? Write your provider & plan manually below
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Plan Details & Member Info (Fully editable manually or via search selection) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-2.5">
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
               <span className="text-[10px] font-semibold text-slate-400 block">Insurance Provider</span>
               <input
                 type="text"
                 value={health.provider || ''}
                 onChange={e => handleHealthChange({ provider: e.target.value })}
-                placeholder="e.g. Kaiser, Medi-Cal, Medicare"
+                placeholder="e.g. UnitedHealthcare, Kaiser, or write your own"
                 className="w-full font-bold text-slate-900 bg-transparent mt-0.5 focus:outline-none"
               />
             </div>
 
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-              <span className="text-[10px] font-semibold text-slate-400 block">Member ID</span>
+              <span className="text-[10px] font-semibold text-slate-400 block">Exact Plan Name</span>
+              <input
+                type="text"
+                value={health.planName || ''}
+                onChange={e => handleHealthChange({ planName: e.target.value })}
+                placeholder="e.g. Choice Plus (PPO), HMO, or custom"
+                className="w-full font-bold text-slate-900 bg-transparent mt-0.5 focus:outline-none"
+              />
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <span className="text-[10px] font-semibold text-slate-400 block">Member ID / MRN</span>
               <input
                 type="text"
                 value={health.memberId || ''}
@@ -838,9 +1004,12 @@ export default function HouseholdLifestyleHub({
                 className="w-full font-mono font-bold text-slate-900 bg-transparent mt-0.5 focus:outline-none"
               />
             </div>
+          </div>
 
+          {/* Copays Row */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-              <span className="text-[10px] font-semibold text-slate-400 block">Primary Copay</span>
+              <span className="text-[10px] font-semibold text-slate-400 block">Primary Care Copay</span>
               <div className="flex items-center gap-0.5 mt-0.5">
                 <span className="font-bold text-slate-500">$</span>
                 <input
@@ -853,13 +1022,26 @@ export default function HouseholdLifestyleHub({
             </div>
 
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-              <span className="text-[10px] font-semibold text-slate-400 block">Specialist</span>
+              <span className="text-[10px] font-semibold text-slate-400 block">Specialist Copay</span>
               <div className="flex items-center gap-0.5 mt-0.5">
                 <span className="font-bold text-slate-500">$</span>
                 <input
                   type="number"
                   value={health.copays?.specialist ?? 30}
                   onChange={e => handleCopayChange('specialist', e.target.value)}
+                  className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <span className="text-[10px] font-semibold text-slate-400 block">Urgent Care Copay</span>
+              <div className="flex items-center gap-0.5 mt-0.5">
+                <span className="font-bold text-slate-500">$</span>
+                <input
+                  type="number"
+                  value={health.copays?.urgentCare ?? 20}
+                  onChange={e => handleCopayChange('urgentCare', e.target.value)}
                   className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
                 />
               </div>
@@ -879,7 +1061,7 @@ export default function HouseholdLifestyleHub({
             </div>
 
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-              <span className="text-[10px] font-semibold text-slate-400 block">Rx Copay</span>
+              <span className="text-[10px] font-semibold text-slate-400 block">Generic Rx Copay</span>
               <div className="flex items-center gap-0.5 mt-0.5">
                 <span className="font-bold text-slate-500">$</span>
                 <input
