@@ -1022,41 +1022,120 @@ function KlarityApp() {
     } catch (e) {}
   }, [incomeStreams]);
 
-  // Retirement & Pension Plans (CalPERS, CalSTRS, FERS, 401k, 403b, 457, IRA, Roth IRA, Social Security)
-  const [retirementPlans, setRetirementPlans] = useState([
-    {
-      id: 'ret-1',
-      name: 'California Public Employees Pension',
-      planType: 'pension',
-      provider: 'CalPERS',
-      tier: '2% at 62',
-      yearsOfService: 15,
-      benefitFactorPct: 2.0,
-      highestAverageSalary: 95000,
-      retirementAge: 62,
-      employeeContributionPct: 7.0,
-      estimatedMonthlyBenefit: 2375,
-      notes: 'Vested member'
-    },
-    {
-      id: 'ret-2',
-      name: 'Workplace 401(k)',
-      planType: '401k',
-      provider: 'Fidelity',
-      balance: 48500,
-      employeeContribution: 500,
-      employerMatch: 250,
-      targetRetirementAge: 65,
-      notes: 'Pre-tax payroll deduction'
+  // Feature Flags (Retirement, Budgets, Savings Goals, Vault)
+  const DEFAULT_FEATURE_FLAGS = {
+    retirement: true,
+    budgets: true,
+    savingsGoals: true,
+    vault: true
+  };
+
+  const [featureFlags, setFeatureFlags] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_feature_flags');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            retirement: parsed.retirement !== undefined ? Boolean(parsed.retirement) : true,
+            budgets: parsed.budgets !== undefined ? Boolean(parsed.budgets) : true,
+            savingsGoals: parsed.savingsGoals !== undefined ? Boolean(parsed.savingsGoals) : true,
+            vault: parsed.vault !== undefined ? Boolean(parsed.vault) : true
+          };
+        }
+      }
+    } catch (e) {}
+    return DEFAULT_FEATURE_FLAGS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_feature_flags', JSON.stringify(featureFlags));
+    } catch (e) {}
+  }, [featureFlags]);
+
+  const handleUpdateFeatureFlags = async (newFlags) => {
+    const updated = {
+      ...featureFlags,
+      ...newFlags
+    };
+    setFeatureFlags(updated);
+    try {
+      localStorage.setItem('klarity_feature_flags', JSON.stringify(updated));
+    } catch (e) {}
+
+    // Reset prompt dismissal if retirement was re-enabled
+    if (newFlags.retirement === true) {
+      setRetirementPromptDismissed(false);
+      try { localStorage.removeItem('klarity_retirement_prompt_dismissed'); } catch {}
     }
-  ]);
+
+    try {
+      await fetch('/api/feature-flags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ featureFlags: updated })
+      });
+    } catch (err) {
+      console.warn('Could not sync feature flags to server:', err);
+    }
+  };
+
+  // Dismissal of the Dashboard retirement prompt
+  const [retirementPromptDismissed, setRetirementPromptDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_retirement_prompt_dismissed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // 6-Second Undo Toast
+  const [undoToast, setUndoToast] = useState(null);
+
+  const handleHideRetirement = () => {
+    handleUpdateFeatureFlags({ retirement: false });
+    setActiveTab('dashboard');
+
+    if (undoToast?.timeoutId) {
+      clearTimeout(undoToast.timeoutId);
+    }
+
+    const tId = setTimeout(() => {
+      setUndoToast(null);
+    }, 6000);
+
+    setUndoToast({
+      message: 'Retirement tracking hidden.',
+      onUndo: () => {
+        clearTimeout(tId);
+        handleUpdateFeatureFlags({ retirement: true });
+        setUndoToast(null);
+      },
+      timeoutId: tId
+    });
+  };
+
+  // Auto-redirect if current activeTab is a hidden feature
+  useEffect(() => {
+    if (activeTab === 'retirement' && featureFlags.retirement === false) {
+      setActiveTab('dashboard');
+    } else if (activeTab === 'budgets' && featureFlags.budgets === false) {
+      setActiveTab('dashboard');
+    } else if (activeTab === 'vault' && featureFlags.vault === false) {
+      setActiveTab('dashboard');
+    }
+  }, [activeTab, featureFlags]);
+
+  // Retirement & Pension Plans (CalPERS, CalSTRS, FERS, 401k, 403b, 457, IRA, Roth IRA, Social Security)
+  const [retirementPlans, setRetirementPlans] = useState([]);
 
   useEffect(() => {
     let active = true;
     async function loadEncryptedRetirementPlans() {
       try {
         const stored = await secureStorage.getItem('klarity_retirement_plans', null);
-        if (active && Array.isArray(stored) && stored.length > 0) {
+        if (active && Array.isArray(stored)) {
           setRetirementPlans(stored);
         }
       } catch (e) {}
@@ -1767,6 +1846,9 @@ function KlarityApp() {
         if (json.user?.name) {
           setSettingsDisplayName(json.user.name);
         }
+        if (json.featureFlags && typeof json.featureFlags === 'object') {
+          setFeatureFlags(prev => ({ ...prev, ...json.featureFlags }));
+        }
         if (json.ai) {
           const storedProv = localStorage.getItem(`klarity_${uid}_ai_provider`);
           const storedMod = localStorage.getItem(`klarity_${uid}_ai_model`);
@@ -2039,9 +2121,12 @@ function KlarityApp() {
           }
         };
 
-        if (Array.isArray(json.retirementPlans) && json.retirementPlans.length > 0) {
+        if (Array.isArray(json.retirementPlans)) {
           setRetirementPlans(json.retirementPlans);
           secureStorage.setItem('klarity_retirement_plans', json.retirementPlans).catch(() => {});
+        }
+        if (json.featureFlags && typeof json.featureFlags === 'object') {
+          setFeatureFlags(prev => ({ ...prev, ...json.featureFlags }));
         }
         setData(finalData);
         try {
@@ -2951,10 +3036,10 @@ function KlarityApp() {
             ...calculateJudgmentProofRatio(incomeStreams),
             incomeStreams: incomeStreams
           },
-          budgets: budgets,
-          savingsGoals: savingsGoals,
+          budgets: featureFlags.budgets ? budgets : [],
+          savingsGoals: (featureFlags.budgets && featureFlags.savingsGoals) ? savingsGoals : [],
           manualAssets: manualAssets,
-          retirementPlans: retirementPlans,
+          retirementPlans: featureFlags.retirement ? retirementPlans : [],
           netWorth: totalNetWorth || 0,
           householdProfile: householdProfile,
           householdMetrics: calculateHouseholdAndFleetMetrics(householdProfile)
@@ -3711,9 +3796,23 @@ function KlarityApp() {
     .filter(a => a.type === 'loan')
     .reduce((s, a) => s + Number(a.balance || 0), 0);
   // Retirement Account Balances (401k, 403b, 457, IRA, Roth IRA - strictly excluding pensions and Social Security)
-  const retirementAccountBalances = retirementPlans
-    .filter(p => p.planType !== 'pension' && p.planType !== 'social_security')
-    .reduce((s, p) => s + Number(p.balance || 0), 0);
+  const retirementAccountBalances = featureFlags.retirement
+    ? retirementPlans
+        .filter(p => p.planType !== 'pension' && p.planType !== 'social_security')
+        .reduce((s, p) => s + Number(p.balance || 0), 0)
+    : 0;
+
+  // Projected Monthly Retirement Income (Pensions + Social Security + 4% safe draw on accounts)
+  const projectedRetirementMonthlyIncome = useMemo(() => {
+    if (!featureFlags.retirement || retirementPlans.length === 0) return 0;
+    return retirementPlans.reduce((sum, p) => {
+      if (p.planType === 'pension' || p.planType === 'social_security') {
+        return sum + Number(p.estimatedMonthlyBenefit || 0);
+      } else {
+        return sum + ((Number(p.balance || 0) * 0.04) / 12);
+      }
+    }, 0);
+  }, [featureFlags.retirement, retirementPlans]);
   const totalNetWorth = displayCash + manualPositiveAssets + retirementAccountBalances - displayCardBalances - manualLoans;
   const netWorthHistory = [
     { month: 'May', value: Math.round(totalNetWorth * 0.78) },
@@ -3987,9 +4086,10 @@ function KlarityApp() {
               { id: 'transactions', label: 'Transactions', icon: History },
               { id: 'bills', label: 'Bills', icon: Receipt },
               { id: 'subscriptions', label: 'Subscriptions', icon: Zap },
-              { id: 'budgets', label: 'Budgets', icon: PieChart },
-              { id: 'vault', label: 'Passwords', icon: KeyRound }
-            ].map(item => {
+              { id: 'budgets', label: 'Budgets', icon: PieChart, flag: 'budgets' },
+              { id: 'retirement', label: 'Retirement', icon: Landmark, flag: 'retirement' },
+              { id: 'vault', label: 'Passwords', icon: KeyRound, flag: 'vault' }
+            ].filter(item => !item.flag || featureFlags[item.flag] !== false).map(item => {
               const isActive = activeTab === item.id;
               const Icon = item.icon;
               return !isSidebarCompact ? (
@@ -4161,6 +4261,75 @@ function KlarityApp() {
                       </p>
                     </div>
                   </div>
+
+                  {/* Mobile Retirement Prompt (when on, no plans, not dismissed) */}
+                  {featureFlags.retirement !== false && retirementPlans.length === 0 && !retirementPromptDismissed && (
+                    <div className="bg-white rounded-2xl border border-blue-200/80 p-4 shadow-2xs flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#18457c] flex items-center justify-center shrink-0">
+                            <Landmark className="w-4 h-4" />
+                          </div>
+                          <span className="text-sm font-bold text-slate-900">Planning for retirement?</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRetirementPromptDismissed(true);
+                            try { localStorage.setItem('klarity_retirement_prompt_dismissed', 'true'); } catch {}
+                          }}
+                          className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+                          title="Dismiss"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Forecast your pensions, 401(k), IRAs, and Social Security lifetime benefits.
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('retirement')}
+                          className="px-4 py-2 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer shadow-2xs hover:bg-[#123561] transition-colors"
+                        >
+                          Set up
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRetirementPromptDismissed(true);
+                            try { localStorage.setItem('klarity_retirement_prompt_dismissed', 'true'); } catch {}
+                            handleHideRetirement();
+                          }}
+                          className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium cursor-pointer transition-colors"
+                        >
+                          Not for me
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mobile Projected Retirement Income Card (when on and has plans) */}
+                  {featureFlags.retirement !== false && retirementPlans.length > 0 && (
+                    <div
+                      onClick={() => setActiveTab('retirement')}
+                      className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs flex items-center justify-between cursor-pointer hover:border-blue-300 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
+                          <Landmark className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500 font-medium">Projected retirement income</p>
+                          <p className="font-serif-title text-xl font-bold text-slate-900 mt-0.5">
+                            ${Math.round(projectedRetirementMonthlyIncome).toLocaleString('en-US')}<span className="text-xs font-normal text-slate-500">/mo</span>
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400" />
+                    </div>
+                  )}
 
                   {/* Horizontal Scrollable Cards Carousel */}
                   <div>
@@ -4509,7 +4678,8 @@ function KlarityApp() {
                       { label: 'Bills', onClick: () => setActiveTab('bills') },
                       { label: 'Subscriptions', onClick: () => setActiveTab('subscriptions') },
                       { label: 'Cards', onClick: () => setActiveTab('cards') },
-                      { label: 'Passwords & Accounts', onClick: () => setActiveTab('vault') },
+                      ...(featureFlags.retirement !== false ? [{ label: 'Retirement & Pensions', onClick: () => setActiveTab('retirement') }] : []),
+                      ...(featureFlags.vault !== false ? [{ label: 'Passwords & Accounts', onClick: () => setActiveTab('vault') }] : []),
                       { label: 'Settings', onClick: () => setIsSettingsOpen(true) }
                     ].map((item, idx) => (
                       <button
@@ -4659,7 +4829,22 @@ function KlarityApp() {
                 </div>
               )}
 
-              {activeTab === 'vault' && (
+              {activeTab === 'retirement' && featureFlags.retirement !== false && (
+                <div className="p-4 sm:p-5 flex flex-col gap-4">
+                  <RetirementPage
+                    retirementPlans={retirementPlans}
+                    onUpdatePlans={setRetirementPlans}
+                    onNavigateBack={() => setActiveTab('dashboard')}
+                    onAskAiAdvisor={(prompt) => {
+                      setChatInput(prompt);
+                      setActiveTab('advisor');
+                    }}
+                    onHideRetirement={handleHideRetirement}
+                  />
+                </div>
+              )}
+
+              {activeTab === 'vault' && featureFlags.vault !== false && (
                 <div className="p-5 flex flex-col gap-4">
                   <PasswordVaultPage
                     vaultItems={vaultItems}
@@ -4672,31 +4857,37 @@ function KlarityApp() {
         })()}
 
         {/* Fixed Bottom Navigation Bar (Home, Activity, Budgets, Advisor, More) */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 grid grid-cols-5">
-          {[
+        {(() => {
+          const mobileTabs = [
             { id: 'dashboard', label: 'Home', matchIds: ['dashboard'] },
             { id: 'transactions', label: 'Activity', matchIds: ['transactions'] },
-            { id: 'budgets', label: 'Budgets', matchIds: ['budgets'] },
+            ...(featureFlags.budgets !== false ? [{ id: 'budgets', label: 'Budgets', matchIds: ['budgets'] }] : []),
             { id: 'advisor', label: 'Advisor', matchIds: ['advisor'] },
-            { id: 'more', label: 'More', matchIds: ['more', 'bills', 'subscriptions', 'cards', 'vault'] }
-          ].map(tab => {
-            const isActive = tab.matchIds.includes(activeTab);
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`py-3.5 text-xs text-center transition-colors cursor-pointer border-t-2 ${
-                  isActive
-                    ? 'border-[#18457c] text-[#18457c] font-bold'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
+            { id: 'more', label: 'More', matchIds: ['more', 'bills', 'subscriptions', 'cards', 'vault', 'retirement'] }
+          ];
+          const gridColClass = mobileTabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4';
+          return (
+            <nav className={`fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 grid ${gridColClass}`}>
+              {mobileTabs.map(tab => {
+                const isActive = tab.matchIds.includes(activeTab);
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`py-3.5 text-xs text-center transition-colors cursor-pointer border-t-2 ${
+                      isActive
+                        ? 'border-[#18457c] text-[#18457c] font-bold'
+                        : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </nav>
+          );
+        })()}
       </div>
 
       {/* ======================================================================= */}
@@ -4850,6 +5041,83 @@ function KlarityApp() {
                 </div>
               </div>
             </div>
+
+            {/* Desktop Retirement Prompt (when on, no plans, not dismissed) */}
+            {featureFlags.retirement !== false && retirementPlans.length === 0 && !retirementPromptDismissed && (
+              <div className="rounded-xl border border-blue-200/80 bg-gradient-to-r from-blue-50/90 via-sky-50/70 to-blue-50/90 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs shadow-2xs">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-[#18457c] text-white flex items-center justify-center shadow-2xs shrink-0">
+                    <Landmark className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 text-sm">Planning for retirement?</p>
+                    <p className="text-slate-600 text-xs mt-0.5">
+                      Forecast your public pensions (CalPERS, CalSTRS, FERS), 401(k), IRAs, and Social Security estimates.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('retirement')}
+                    className="px-3.5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold text-xs cursor-pointer shadow-2xs transition-colors"
+                  >
+                    Set up
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRetirementPromptDismissed(true);
+                      try { localStorage.setItem('klarity_retirement_prompt_dismissed', 'true'); } catch {}
+                      handleHideRetirement();
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-600 font-medium text-xs border border-slate-200 cursor-pointer transition-colors shadow-2xs"
+                  >
+                    Not for me
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRetirementPromptDismissed(true);
+                      try { localStorage.setItem('klarity_retirement_prompt_dismissed', 'true'); } catch {}
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer transition-colors"
+                    title="Dismiss"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Desktop Projected Retirement Income Card (when on and has plans) */}
+            {featureFlags.retirement !== false && retirementPlans.length > 0 && (
+              <div
+                onClick={() => setActiveTab('retirement')}
+                className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 hover:border-blue-300 hover:shadow-xs transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
+                    <Landmark className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 font-medium flex items-center gap-2">
+                      <span>Projected retirement income</span>
+                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">
+                        {retirementPlans.length} {retirementPlans.length === 1 ? 'plan' : 'plans'} tracked
+                      </span>
+                    </div>
+                    <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
+                      ${Math.round(projectedRetirementMonthlyIncome).toLocaleString('en-US')}<span className="text-xs font-normal text-slate-500">/mo</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900">
+                  <span>View retirement forecast</span>
+                  <ChevronRight className="w-4 h-4" />
+                </div>
+              </div>
+            )}
 
             {/* Net Worth & Cash Flow Forecast Card */}
             <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
@@ -5378,6 +5646,7 @@ function KlarityApp() {
             )}
 
             {/* Savings Goals Section */}
+            {featureFlags.savingsGoals !== false && (
             <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -5457,6 +5726,7 @@ function KlarityApp() {
                 })}
               </div>
             </div>
+            )}
           </div>
         )}
 
@@ -6004,8 +6274,23 @@ function KlarityApp() {
         )}
 
         {/* --------------------------------------------------------------------- */}
+        {/* TAB: RETIREMENT & PENSIONS TRACKER */}
+        {activeTab === 'retirement' && featureFlags.retirement !== false && (
+          <RetirementPage
+            retirementPlans={retirementPlans}
+            onUpdatePlans={setRetirementPlans}
+            onNavigateBack={() => setActiveTab('dashboard')}
+            onAskAiAdvisor={(prompt) => {
+              setChatInput(prompt);
+              setActiveTab('advisor');
+            }}
+            onHideRetirement={handleHideRetirement}
+          />
+        )}
+
+        {/* --------------------------------------------------------------------- */}
         {/* TAB: PASSWORDS & ACCOUNTS VAULT */}
-        {activeTab === 'vault' && (
+        {activeTab === 'vault' && featureFlags.vault !== false && (
           <PasswordVaultPage vaultItems={vaultItems} onUpdateVaultItems={setVaultItems} />
         )}
 
@@ -7704,6 +7989,20 @@ function KlarityApp() {
         </div>
       )}
 
+      {/* Undo Toast Notification (6 seconds) */}
+      {undoToast && (
+        <div className="fixed bottom-20 md:bottom-6 right-4 left-4 md:left-auto md:right-6 z-50 flex items-center justify-between gap-4 px-4 py-3 rounded-xl bg-slate-900 text-white shadow-xl text-xs sm:text-sm animate-in fade-in slide-in-from-bottom-3 border border-slate-700">
+          <span>{undoToast.message}</span>
+          <button
+            type="button"
+            onClick={undoToast.onUndo}
+            className="font-bold text-amber-300 hover:text-amber-200 underline underline-offset-2 cursor-pointer transition-colors"
+          >
+            Undo
+          </button>
+        </div>
+      )}
+
       {/* Settings Modal - Redesigned matching reference mockup */}
       {isSettingsOpen && (
         <div
@@ -7727,6 +8026,7 @@ function KlarityApp() {
                   <nav className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
                     {[
                       { id: 'profile', label: 'Profile', dot: false },
+                      { id: 'features', label: 'Features', dot: false },
                       { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' },
                       { id: 'plaid', label: 'Bank connection', dot: settingsPlaidStatus !== 'connected' },
                       { id: 'session', label: 'Security & Session', dot: false }
@@ -7759,6 +8059,76 @@ function KlarityApp() {
               {/* Right Content Panel */}
               <div className="flex-1 p-6 sm:p-8 flex flex-col justify-between overflow-y-auto bg-white">
                 <div>
+                  {/* TAB: FEATURES */}
+                  {settingsActiveTab === 'features' && (
+                    <div key="settings-tab-features" className="flex flex-col gap-6">
+                      <div>
+                        <h3 className="font-serif-title text-xl font-bold text-slate-900">Features & Navigation</h3>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Customize your workspace by showing or hiding optional features. Hiding keeps your data safe—turning a feature back on restores it immediately.
+                        </p>
+                      </div>
+
+                      <div className="border border-slate-200/90 rounded-2xl divide-y divide-slate-100 overflow-hidden bg-white shadow-2xs">
+                        {[
+                          {
+                            id: 'retirement',
+                            title: 'Retirement & Pensions',
+                            description: 'Public pensions (CalPERS, CalSTRS, FERS), 401(k), IRAs, and Social Security forecasts.',
+                            enabled: featureFlags.retirement !== false
+                          },
+                          {
+                            id: 'budgets',
+                            title: 'Monthly Budgets',
+                            description: 'Category spending limits, card-level tracking, and budget alerts.',
+                            enabled: featureFlags.budgets !== false
+                          },
+                          {
+                            id: 'savingsGoals',
+                            title: 'Savings Goals',
+                            description: 'Target amounts and projected timelines for emergency funds and milestones.',
+                            enabled: featureFlags.savingsGoals !== false
+                          },
+                          {
+                            id: 'vault',
+                            title: 'Password & Account Vault',
+                            description: 'Client-side AES-GCM encrypted vault for credentials and account PINs.',
+                            enabled: featureFlags.vault !== false
+                          }
+                        ].map(feature => (
+                          <div key={feature.id} className="p-4 sm:p-5 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-bold text-slate-900">{feature.title}</p>
+                              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{feature.description}</p>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={feature.enabled}
+                              onClick={() => handleUpdateFeatureFlags({ [feature.id]: !feature.enabled })}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                                feature.enabled ? 'bg-[#18457c]' : 'bg-slate-200'
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                  feature.enabled ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-500 flex items-start gap-2.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <p className="leading-relaxed">
+                          Your feature settings are securely synced across your sessions. Disabling a feature will never delete your accounts, plans, or stored goals.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* TAB 1: PROFILE */}
                   {settingsActiveTab === 'profile' && (
                     <div key="settings-tab-profile" className="flex flex-col gap-6">
@@ -7992,7 +8362,8 @@ function KlarityApp() {
                             { id: 'bills', label: 'Bills' },
                             { id: 'subscriptions', label: 'Subscriptions' },
                             { id: 'cards', label: 'Cards' },
-                            { id: 'purchases', label: 'Purchases' }
+                            { id: 'purchases', label: 'Purchases' },
+                            ...(featureFlags.retirement !== false ? [{ id: 'retirement', label: 'Retirement Plans' }] : [])
                           ].map(perm => {
                             const isAllowed = settingsAiPermissions[perm.id];
                             return (
@@ -8638,7 +9009,8 @@ function KlarityApp() {
                   { id: 'cards', label: 'Cards' },
                   { id: 'bills', label: 'Bills' },
                   { id: 'subscriptions', label: 'Subscriptions' },
-                  { id: 'purchases', label: 'Purchases' }
+                  { id: 'purchases', label: 'Purchases' },
+                  ...(featureFlags.retirement !== false ? [{ id: 'retirement', label: 'Retirement Plans' }] : [])
                 ].map(p => {
                   const allowed = settingsAiPermissions[p.id];
                   return (

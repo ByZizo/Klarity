@@ -125,7 +125,8 @@ export default function RetirementPage({
   retirementPlans = [],
   onUpdatePlans,
   onNavigateBack,
-  onAskAiAdvisor
+  onAskAiAdvisor,
+  onHideRetirement
 }) {
   const [plans, setPlans] = useState(retirementPlans);
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'pension' | 'account' | 'social_security'
@@ -515,36 +516,155 @@ export default function RetirementPage({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => handleOpenAddModal('pension')}
-            className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Pension</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleOpenAddModal('401k')}
-            className="px-3.5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add 401(k) / IRA</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleOpenAddModal('social_security')}
-            className="px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-2 transition-all"
-          >
-            <ShieldCheck className="w-4 h-4 text-sky-600" />
-            <span>Add Social Security</span>
-          </button>
-        </div>
+        {plans.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleOpenAddModal('pension')}
+              className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Pension</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOpenAddModal('401k')}
+              className="px-3.5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add 401(k) / IRA</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOpenAddModal('social_security')}
+              className="px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-2 transition-all"
+            >
+              <ShieldCheck className="w-4 h-4 text-sky-600" />
+              <span>Add Social Security</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Top KPI Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {plans.length === 0 ? (
+        <div className="p-8 sm:p-12 bg-white rounded-2xl border border-slate-200/90 shadow-2xs">
+          <div className="max-w-2xl mx-auto text-center mb-8">
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#18457c] flex items-center justify-center mx-auto mb-3 shadow-2xs">
+              <Landmark className="w-6 h-6" />
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
+              Plan for Your Retirement
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1.5">
+              Choose a plan type to get started. Track lifetime pensions, tax-advantaged accounts, and Social Security estimates in one place.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-4xl mx-auto">
+            {/* Card 1: Pension */}
+            <div
+              onClick={() => handleOpenAddModal('pension')}
+              className="p-6 rounded-2xl border-2 border-slate-100 hover:border-emerald-500/50 bg-slate-50/50 hover:bg-emerald-50/20 transition-all cursor-pointer flex flex-col justify-between group shadow-2xs"
+            >
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                  <Landmark className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900 group-hover:text-emerald-900">
+                  Pension
+                </h3>
+                <span className="inline-block mt-0.5 text-[11px] font-semibold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">
+                  Defined Benefit
+                </span>
+                <p className="text-xs text-slate-500 mt-2.5 leading-relaxed">
+                  CalPERS, CalSTRS, FERS, military, or municipal pensions with guaranteed lifetime monthly benefits.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleOpenAddModal('pension'); }}
+                className="mt-6 w-full py-2.5 px-3 rounded-xl bg-white border border-slate-200 group-hover:bg-emerald-600 group-hover:text-white group-hover:border-emerald-600 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Pension</span>
+              </button>
+            </div>
+
+            {/* Card 2: Retirement Account */}
+            <div
+              onClick={() => handleOpenAddModal('401k')}
+              className="p-6 rounded-2xl border-2 border-slate-100 hover:border-blue-500/50 bg-slate-50/50 hover:bg-blue-50/20 transition-all cursor-pointer flex flex-col justify-between group shadow-2xs"
+            >
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                  <Building className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-900">
+                  Retirement Account
+                </h3>
+                <span className="inline-block mt-0.5 text-[11px] font-semibold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-md">
+                  401(k), 403(b), IRAs
+                </span>
+                <p className="text-xs text-slate-500 mt-2.5 leading-relaxed">
+                  Employer-sponsored 401(k), 403(b), 457(b), or personal Traditional and Roth IRAs with market growth.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleOpenAddModal('401k'); }}
+                className="mt-6 w-full py-2.5 px-3 rounded-xl bg-white border border-slate-200 group-hover:bg-[#18457c] group-hover:text-white group-hover:border-[#18457c] text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add 401(k) / IRA</span>
+              </button>
+            </div>
+
+            {/* Card 3: Social Security */}
+            <div
+              onClick={() => handleOpenAddModal('social_security')}
+              className="p-6 rounded-2xl border-2 border-slate-100 hover:border-sky-500/50 bg-slate-50/50 hover:bg-sky-50/20 transition-all cursor-pointer flex flex-col justify-between group shadow-2xs"
+            >
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-800 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900 group-hover:text-sky-900">
+                  Social Security
+                </h3>
+                <span className="inline-block mt-0.5 text-[11px] font-semibold text-sky-700 bg-sky-100/70 px-2 py-0.5 rounded-md">
+                  Statutory Benefit
+                </span>
+                <p className="text-xs text-slate-500 mt-2.5 leading-relaxed">
+                  Estimated monthly Social Security retirement benefits protected under federal law from creditors.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleOpenAddModal('social_security'); }}
+                className="mt-6 w-full py-2.5 px-3 rounded-xl bg-white border border-slate-200 group-hover:bg-sky-600 group-hover:text-white group-hover:border-sky-600 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Social Security</span>
+              </button>
+            </div>
+          </div>
+
+          {onHideRetirement && (
+            <div className="mt-8 text-center pt-6 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={onHideRetirement}
+                className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-4 cursor-pointer transition-colors"
+              >
+                I don't need this. Hide it.
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Top KPI Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Estimated Monthly Income */}
         <div className="p-5 rounded-2xl bg-gradient-to-br from-[#18457c] to-[#123258] text-white shadow-md flex flex-col justify-between">
           <div className="flex items-center justify-between text-blue-200 text-xs font-medium mb-2">
@@ -1037,6 +1157,9 @@ export default function RetirementPage({
           </p>
         </div>
       </div>
+
+        </>
+      )}
 
       {/* --------------------------------------------------------------------- */}
       {/* ADD / EDIT RETIREMENT PLAN MODAL */}

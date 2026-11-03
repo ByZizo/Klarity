@@ -621,6 +621,12 @@ const db = {
           plaid: {
             encryptedClientId: settingsRes.data.encrypted_plaid_client_id || '',
             encryptedSecret: settingsRes.data.encrypted_plaid_secret || ''
+          },
+          featureFlags: settingsRes.data.feature_flags || {
+            retirement: true,
+            budgets: true,
+            savingsGoals: true,
+            vault: true
           }
         };
       }
@@ -790,6 +796,7 @@ const db = {
           data_permissions: st.ai?.permissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true },
           encrypted_plaid_client_id: st.plaid?.encryptedClientId || '',
           encrypted_plaid_secret: st.plaid?.encryptedSecret || '',
+          feature_flags: st.featureFlags || { retirement: true, budgets: true, savingsGoals: true, vault: true },
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' }));
       }

@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS manual_assets (
 
 CREATE INDEX IF NOT EXISTS idx_manual_assets_user_id ON manual_assets(user_id);
 
--- 10. User Settings Table (Encrypted API keys and permissions per user)
+-- 10. User Settings Table (Encrypted API keys, permissions, and feature flags per user)
 CREATE TABLE IF NOT EXISTS user_settings (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   ai_provider TEXT DEFAULT 'gemini',
@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   data_permissions JSONB DEFAULT '{"bills": true, "subscriptions": true, "cards": true, "purchases": true, "retirement": true}'::jsonb,
   encrypted_plaid_client_id TEXT DEFAULT '',
   encrypted_plaid_secret TEXT DEFAULT '',
+  feature_flags JSONB DEFAULT '{"retirement": true, "budgets": true, "savingsGoals": true, "vault": true}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

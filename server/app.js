@@ -170,7 +170,7 @@ function maskSecret(val) {
 
 // User-scoped Settings Helper
 function getUserSettings(data, userId) {
-  if (!data) return { ai: {}, plaid: {} };
+  if (!data) return { ai: {}, plaid: {}, featureFlags: { retirement: true, budgets: true, savingsGoals: true, vault: true } };
   if (!data.userSettings) data.userSettings = {};
   const uid = userId || 'default';
   if (!data.userSettings[uid]) {
@@ -185,15 +185,29 @@ function getUserSettings(data, userId) {
           model: "gemini-3.8-flash",
           encryptedKey: "",
           status: "not_connected",
-          dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true }
+          dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
         },
         plaid: {
           clientId: "",
           encryptedSecret: "",
           status: "not_connected"
+        },
+        featureFlags: {
+          retirement: true,
+          budgets: true,
+          savingsGoals: true,
+          vault: true
         }
       };
     }
+  }
+  if (!data.userSettings[uid].featureFlags) {
+    data.userSettings[uid].featureFlags = {
+      retirement: true,
+      budgets: true,
+      savingsGoals: true,
+      vault: true
+    };
   }
   return data.userSettings[uid];
 }
@@ -843,8 +857,43 @@ app.get('/api/settings', async (req, res) => {
       institution: item.institution || 'Connected Bank',
       connectedAt: item.connectedAt,
       accounts: (data.accounts || []).filter(a => a.institution === item.institution && (!a.ownerId || a.ownerId === userId))
-    }))
+    })),
+    featureFlags: userSettings.featureFlags || {
+      retirement: true,
+      budgets: true,
+      savingsGoals: true,
+      vault: true
+    }
   });
+});
+
+// Feature Flags Endpoints (User-scoped, server-side persisted)
+app.get(['/api/feature-flags', '/api/settings/feature-flags'], async (req, res) => {
+  const data = await readData(req.userId);
+  const userSettings = getUserSettings(data, req.userId);
+  res.json({
+    success: true,
+    featureFlags: userSettings.featureFlags || {
+      retirement: true,
+      budgets: true,
+      savingsGoals: true,
+      vault: true
+    }
+  });
+});
+
+app.post(['/api/feature-flags', '/api/settings/feature-flags'], async (req, res) => {
+  const data = await readData(req.userId);
+  const userSettings = getUserSettings(data, req.userId);
+  const incoming = (req.body && req.body.featureFlags) ? req.body.featureFlags : (req.body || {});
+  userSettings.featureFlags = {
+    retirement: incoming.retirement !== undefined ? Boolean(incoming.retirement) : (userSettings.featureFlags?.retirement ?? true),
+    budgets: incoming.budgets !== undefined ? Boolean(incoming.budgets) : (userSettings.featureFlags?.budgets ?? true),
+    savingsGoals: incoming.savingsGoals !== undefined ? Boolean(incoming.savingsGoals) : (userSettings.featureFlags?.savingsGoals ?? true),
+    vault: incoming.vault !== undefined ? Boolean(incoming.vault) : (userSettings.featureFlags?.vault ?? true)
+  };
+  await writeData(data, req.userId);
+  res.json({ success: true, featureFlags: userSettings.featureFlags });
 });
 
 app.post('/api/settings/profile', async (req, res) => {
@@ -1347,6 +1396,7 @@ app.get('/api/data', async (req, res) => {
   const userRetirementPlans = (data.retirementPlans || []).filter(isUserOwner);
 
   const currentUser = (data.users || []).find(u => u.id === userId);
+  const userSettings = getUserSettings(data, userId);
 
   res.json({
     users: currentUser ? [sanitizeUser(currentUser)] : [],
@@ -1358,6 +1408,12 @@ app.get('/api/data', async (req, res) => {
     savingsGoals: userSavingsGoals,
     manualAssets: userManualAssets,
     retirementPlans: userRetirementPlans,
+    featureFlags: userSettings.featureFlags || {
+      retirement: true,
+      budgets: true,
+      savingsGoals: true,
+      vault: true
+    },
     metrics: {
       totalChecking,
       totalCreditDebt,
@@ -1850,9 +1906,22 @@ app.post('/api/ai/chat', async (req, res) => {
   const userBills = permissions.bills ? (data.bills || []).filter(isOwnedByCurrentUser) : [];
   const userSubscriptions = permissions.subscriptions ? (data.subscriptions || []).filter(isOwnedByCurrentUser) : [];
   const userTransactions = permissions.purchases ? (data.transactions || []).filter(isOwnedByCurrentUser).slice(0, 10) : [];
-  const userRetirementPlans = permissions.retirement !== false
+  const isRetirementEnabled = userSettings.featureFlags?.retirement !== false;
+  const userRetirementPlans = (isRetirementEnabled && permissions.retirement !== false)
     ? (Array.isArray(retirementPlans) && retirementPlans.length > 0 ? retirementPlans : (data.retirementPlans || []).filter(isOwnedByCurrentUser))
     : [];
+
+  let retirementSection = '';
+  if (isRetirementEnabled) {
+    const retirementItems = userRetirementPlans.length > 0 ? userRetirementPlans.map(p => {
+      if (p.planType === 'pension') {
+        return `[Pension] ${p.name || p.provider || 'Pension'}: Est. ${Number(p.estimatedMonthlyBenefit || 0).toLocaleString()}/mo (Provider: ${p.provider || 'N/A'}, Tier: ${p.tier || 'N/A'}, Service: ${p.yearsOfService || 0} yrs, Factor: ${p.benefitFactorPct || 0}%, Highest Avg Salary: ${Number(p.highestAverageSalary || 0).toLocaleString()}, Normal Retire Age: ${p.retirementAge || 62}, Employee Contribution: ${p.employeeContributionPct || 0}%)`;
+      } else {
+        return `[${(p.planType || 'Account').toUpperCase()}] ${p.name}: Balance ${Number(p.balance || 0).toLocaleString()} (Employee Contribution: ${Number(p.employeeContribution || 0).toLocaleString()}/mo, Employer Match: ${Number(p.employerMatch || 0).toLocaleString()}/mo, Target Age: ${p.targetRetirementAge || 65})`;
+      }
+    }).join(' | ') : 'None configured';
+    retirementSection = `\n- Retirement Plans & Pensions (${permissions.retirement !== false ? 'Permitted' : 'Access Restricted'}): ${retirementItems}`;
+  }
 
   const memoryContext = (userMemory && userMemory.length > 0)
     ? `\n\nUser Financial Preferences & Memory:\n${userMemory.map(m => `- ${m}`).join('\n')}`
@@ -1878,14 +1947,7 @@ Actual Connected Finances for ${currentUser.name} (strictly respecting permissio
 - Recent Purchases (${permissions.purchases ? 'Permitted' : 'Access Restricted'}): ${userTransactions.length > 0 ? userTransactions.map(t => `${t.name}: ${Math.abs(Number(t.amount)).toFixed(2)} on ${t.date}`).join(' | ') : 'None recorded'}
 - Monthly Category Budgets: ${budgets && budgets.length > 0 ? budgets.map(b => `${b.category}: ${b.limit}/mo`).join(' | ') : 'None set'}
 - Savings Goals: ${savingsGoals && savingsGoals.length > 0 ? savingsGoals.map(g => `${g.name}: ${g.currentAmount} of ${g.targetAmount} (${g.monthlyContribution || 0}/mo)`).join(' | ') : 'None created'}
-- Manual Assets & Investments: ${manualAssets && manualAssets.length > 0 ? manualAssets.map(a => `${a.name}: ${Number(a.balance || 0).toLocaleString()} (${a.type})`).join(' | ') : 'None'}
-- Retirement Plans & Pensions (${permissions.retirement !== false ? 'Permitted' : 'Access Restricted'}): ${userRetirementPlans.length > 0 ? userRetirementPlans.map(p => {
-    if (p.planType === 'pension') {
-      return `[Pension] ${p.name || p.provider || 'Pension'}: Est. $${Number(p.estimatedMonthlyBenefit || 0).toLocaleString()}/mo (Provider: ${p.provider || 'N/A'}, Tier: ${p.tier || 'N/A'}, Service: ${p.yearsOfService || 0} yrs, Factor: ${p.benefitFactorPct || 0}%, Highest Avg Salary: $${Number(p.highestAverageSalary || 0).toLocaleString()}, Normal Retire Age: ${p.retirementAge || 62}, Employee Contribution: ${p.employeeContributionPct || 0}%)`;
-    } else {
-      return `[${(p.planType || 'Account').toUpperCase()}] ${p.name}: Balance $${Number(p.balance || 0).toLocaleString()} (Employee Contribution: $${Number(p.employeeContribution || 0).toLocaleString()}/mo, Employer Match: $${Number(p.employerMatch || 0).toLocaleString()}/mo, Target Age: ${p.targetRetirementAge || 65})`;
-    }
-  }).join(' | ') : 'None configured'}
+- Manual Assets & Investments: ${manualAssets && manualAssets.length > 0 ? manualAssets.map(a => `${a.name}: ${Number(a.balance || 0).toLocaleString()} (${a.type})`).join(' | ') : 'None'}${retirementSection}
 - Net Worth: ${Number(netWorth || 0).toLocaleString()}
 - Household & Residence Profile: ${householdProfile ? `${householdProfile.dwellingType} (${householdProfile.sqFt || 2000} sq ft) in ${householdProfile.cityOrZip || 'California'} | Household Size: ${householdProfile.householdSize || 4} people | PG&E CARE Discount: ${householdProfile.hasCareDiscount ? 'Enrolled (~32% Off)' : 'Not Enrolled'} | Solar: ${householdProfile.hasSolar ? 'Yes' : 'No'}` : 'Standard Single-Family Household'}
 - Calculated Real-Life Monthly Utilities: ${householdMetrics?.utilities ? `Combined PG&E (Electric + Gas): ${householdMetrics.utilities.totalPgeCombinedBill}/mo [Home Electric: ${householdMetrics.utilities.homeKwh} kWh (${householdMetrics.utilities.homeElectricCost}), EV Home Charging: ${householdMetrics.utilities.evHomeKwh} kWh (${householdMetrics.utilities.evHomeChargingCost}), Natural Gas: ${householdMetrics.utilities.monthlyTherms} Therms (${householdMetrics.utilities.naturalGasCost})] | Water, Sewer & Trash: ${householdMetrics.utilities.waterTrashTotalCost}/mo (${householdMetrics.utilities.monthlyWaterGallons} gal/mo) | Total Utilities: ${householdMetrics.utilities.totalUtilitiesMonthly}/mo` : 'Not calculated yet'}
