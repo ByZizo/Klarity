@@ -805,7 +805,7 @@ function KlarityApp() {
     if (saved && !saved.includes('2.0') && !saved.includes('2.5') && !saved.includes('tts')) return saved;
     return 'gemini-3.8-flash';
   });
-  const [settingsAiApiKey, setSettingsAiApiKey] = useState(() => getInitialUserStorage('ai_api_key', ''));
+  const [settingsAiApiKey, setSettingsAiApiKey] = useState('');
   const [settingsAiMaskedKey, setSettingsAiMaskedKey] = useState(() => getInitialUserStorage('ai_masked_key', ''));
   const [settingsAiStatus, setSettingsAiStatus] = useState(() => getInitialUserStorage('ai_status', 'not_connected'));
   const [settingsAiShowKey, setSettingsAiShowKey] = useState(false);
@@ -1023,47 +1023,50 @@ function KlarityApp() {
   }, [incomeStreams]);
 
   // Retirement & Pension Plans (CalPERS, CalSTRS, FERS, 401k, 403b, 457, IRA, Roth IRA, Social Security)
-  const [retirementPlans, setRetirementPlans] = useState(() => {
-    try {
-      const saved = localStorage.getItem('klarity_retirement_plans');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {}
-    return [
-      {
-        id: 'ret-1',
-        name: 'California Public Employees Pension',
-        planType: 'pension',
-        provider: 'CalPERS',
-        tier: '2% at 62',
-        yearsOfService: 15,
-        benefitFactorPct: 2.0,
-        highestAverageSalary: 95000,
-        retirementAge: 62,
-        employeeContributionPct: 7.0,
-        estimatedMonthlyBenefit: 2375,
-        notes: 'Vested member'
-      },
-      {
-        id: 'ret-2',
-        name: 'Workplace 401(k)',
-        planType: '401k',
-        provider: 'Fidelity',
-        balance: 48500,
-        employeeContribution: 500,
-        employerMatch: 250,
-        targetRetirementAge: 65,
-        notes: 'Pre-tax payroll deduction'
-      }
-    ];
-  });
+  const [retirementPlans, setRetirementPlans] = useState([
+    {
+      id: 'ret-1',
+      name: 'California Public Employees Pension',
+      planType: 'pension',
+      provider: 'CalPERS',
+      tier: '2% at 62',
+      yearsOfService: 15,
+      benefitFactorPct: 2.0,
+      highestAverageSalary: 95000,
+      retirementAge: 62,
+      employeeContributionPct: 7.0,
+      estimatedMonthlyBenefit: 2375,
+      notes: 'Vested member'
+    },
+    {
+      id: 'ret-2',
+      name: 'Workplace 401(k)',
+      planType: '401k',
+      provider: 'Fidelity',
+      balance: 48500,
+      employeeContribution: 500,
+      employerMatch: 250,
+      targetRetirementAge: 65,
+      notes: 'Pre-tax payroll deduction'
+    }
+  ]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('klarity_retirement_plans', JSON.stringify(retirementPlans));
-    } catch (e) {}
+    let active = true;
+    async function loadEncryptedRetirementPlans() {
+      try {
+        const stored = await secureStorage.getItem('klarity_retirement_plans', null);
+        if (active && Array.isArray(stored) && stored.length > 0) {
+          setRetirementPlans(stored);
+        }
+      } catch (e) {}
+    }
+    loadEncryptedRetirementPlans();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    secureStorage.setItem('klarity_retirement_plans', retirementPlans).catch(() => {});
   }, [retirementPlans]);
 
 
@@ -1765,33 +1768,31 @@ function KlarityApp() {
           setSettingsDisplayName(json.user.name);
         }
         if (json.ai) {
-          const storedProv = localStorage.getItem(`klarity_${uid}_ai_provider`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_provider') : null);
-          const storedMod = localStorage.getItem(`klarity_${uid}_ai_model`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_model') : null);
-          const storedKey = localStorage.getItem(`klarity_${uid}_ai_api_key`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_api_key') : null);
-          const storedMasked = localStorage.getItem(`klarity_${uid}_ai_masked_key`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_masked_key') : null);
-          const storedStatus = localStorage.getItem(`klarity_${uid}_ai_status`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_status') : null);
+          const storedProv = localStorage.getItem(`klarity_${uid}_ai_provider`);
+          const storedMod = localStorage.getItem(`klarity_${uid}_ai_model`);
+          const storedMasked = localStorage.getItem(`klarity_${uid}_ai_masked_key`);
+          const storedStatus = localStorage.getItem(`klarity_${uid}_ai_status`);
 
           let prov = storedProv || json.ai.provider || 'gemini';
           let mod = storedMod || json.ai.model || 'gemini-3.8-flash';
           if (mod.includes('2.0') || mod.includes('2.5') || mod.includes('tts')) mod = 'gemini-3.8-flash';
 
           const finalMasked = json.ai.maskedKey || storedMasked || '';
-          const finalStatus = (json.ai.status === 'connected' || storedStatus === 'connected' || Boolean(storedKey)) ? 'connected' : 'not_connected';
+          const finalStatus = (json.ai.status === 'connected' || storedStatus === 'connected') ? 'connected' : 'not_connected';
 
           setSettingsAiProvider(prov);
           setSettingsAiModel(mod);
           setSettingsAiMaskedKey(finalMasked);
-          setSettingsAiApiKey(storedKey || '');
+          setSettingsAiApiKey('');
           setSettingsAiStatus(finalStatus);
           if (json.ai.dataPermissions) {
             setSettingsAiPermissions(json.ai.dataPermissions);
           }
         }
         if (json.plaid) {
-          const storedClientId = localStorage.getItem(`klarity_${uid}_plaid_client_id`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_client_id') : '');
-          const storedMaskedSecret = localStorage.getItem(`klarity_${uid}_plaid_masked_secret`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_masked_secret') : '');
-          const storedSecret = localStorage.getItem(`klarity_${uid}_plaid_secret`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_secret') : '');
-          const storedStatus = localStorage.getItem(`klarity_${uid}_plaid_status`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_status') : 'not_connected');
+          const storedClientId = localStorage.getItem(`klarity_${uid}_plaid_client_id`) || '';
+          const storedMaskedSecret = localStorage.getItem(`klarity_${uid}_plaid_masked_secret`) || '';
+          const storedStatus = localStorage.getItem(`klarity_${uid}_plaid_status`) || 'not_connected';
 
           const finalClientId = json.plaid.clientId || storedClientId;
           const finalMasked = json.plaid.maskedSecret || storedMaskedSecret;
@@ -1799,7 +1800,7 @@ function KlarityApp() {
 
           setSettingsPlaidClientId(finalClientId || '');
           setSettingsPlaidMaskedSecret(finalMasked || '');
-          setSettingsPlaidSecret(storedSecret || '');
+          setSettingsPlaidSecret('');
           setSettingsPlaidStatus(finalStatus);
         }
       }
@@ -1834,8 +1835,8 @@ function KlarityApp() {
   };
 
   const handleSaveAndTestAiKey = async () => {
-    const uid = currentUser?.id || 'u-ziyad';
-    const rawKey = settingsAiApiKey.trim() || localStorage.getItem(`klarity_${uid}_ai_api_key`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_api_key') : '') || '';
+    const uid = currentUser?.id || 'default';
+    const rawKey = settingsAiApiKey.trim();
     if (!rawKey) {
       setNotificationToast('Please enter an API key to test');
       setTimeout(() => setNotificationToast(''), 3000);
@@ -1857,19 +1858,12 @@ function KlarityApp() {
       if (res.ok && json.success) {
         setSettingsAiStatus('connected');
         setSettingsAiMaskedKey(json.maskedKey);
+        setSettingsAiApiKey('');
         try {
-          localStorage.setItem(`klarity_${uid}_ai_api_key`, rawKey);
           localStorage.setItem(`klarity_${uid}_ai_masked_key`, json.maskedKey);
           localStorage.setItem(`klarity_${uid}_ai_provider`, settingsAiProvider);
           localStorage.setItem(`klarity_${uid}_ai_model`, settingsAiModel);
           localStorage.setItem(`klarity_${uid}_ai_status`, 'connected');
-          if (uid === 'u-ziyad') {
-            localStorage.setItem('klarity_ai_api_key', rawKey);
-            localStorage.setItem('klarity_ai_masked_key', json.maskedKey);
-            localStorage.setItem('klarity_ai_provider', settingsAiProvider);
-            localStorage.setItem('klarity_ai_model', settingsAiModel);
-            localStorage.setItem('klarity_ai_status', 'connected');
-          }
         } catch {}
         setNotificationToast('API key verified and securely saved for your account!');
       } else {
@@ -1886,7 +1880,7 @@ function KlarityApp() {
   };
 
   const handleRemoveAiKey = async () => {
-    const uid = currentUser?.id || 'u-ziyad';
+    const uid = currentUser?.id || 'default';
     try {
       const res = await fetch('/api/settings/ai-key/remove', {
         method: 'POST',
@@ -1898,14 +1892,8 @@ function KlarityApp() {
         setSettingsAiMaskedKey('');
         setSettingsAiApiKey('');
         try {
-          localStorage.removeItem(`klarity_${uid}_ai_api_key`);
           localStorage.removeItem(`klarity_${uid}_ai_masked_key`);
           localStorage.removeItem(`klarity_${uid}_ai_status`);
-          if (uid === 'u-ziyad') {
-            localStorage.removeItem('klarity_ai_api_key');
-            localStorage.removeItem('klarity_ai_masked_key');
-            localStorage.removeItem('klarity_ai_status');
-          }
         } catch {}
         setNotificationToast('AI API key removed.');
         setTimeout(() => setNotificationToast(''), 3000);
@@ -1932,12 +1920,11 @@ function KlarityApp() {
 
   const handleSavePlaidCredentials = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    const uid = currentUser?.id || 'u-ziyad';
+    const uid = currentUser?.id || 'default';
     try {
       if (settingsPlaidClientId) {
         try {
           localStorage.setItem(`klarity_${uid}_plaid_client_id`, settingsPlaidClientId);
-          if (uid === 'u-ziyad') localStorage.setItem('klarity_plaid_client_id', settingsPlaidClientId);
         } catch {}
       }
       const res = await fetch('/api/settings/plaid', {
@@ -1956,18 +1943,11 @@ function KlarityApp() {
         try {
           if (json.clientId) {
             localStorage.setItem(`klarity_${uid}_plaid_client_id`, json.clientId);
-            if (uid === 'u-ziyad') localStorage.setItem('klarity_plaid_client_id', json.clientId);
           }
           if (json.maskedSecret) {
             localStorage.setItem(`klarity_${uid}_plaid_masked_secret`, json.maskedSecret);
-            if (uid === 'u-ziyad') localStorage.setItem('klarity_plaid_masked_secret', json.maskedSecret);
-          }
-          if (settingsPlaidSecret) {
-            localStorage.setItem(`klarity_${uid}_plaid_secret`, settingsPlaidSecret);
-            if (uid === 'u-ziyad') localStorage.setItem('klarity_plaid_secret', settingsPlaidSecret);
           }
           localStorage.setItem(`klarity_${uid}_plaid_status`, json.status || 'connected');
-          if (uid === 'u-ziyad') localStorage.setItem('klarity_plaid_status', json.status || 'connected');
         } catch {}
         setNotificationToast('Plaid credentials saved securely for your account!');
         setTimeout(() => setNotificationToast(''), 3000);
@@ -2061,9 +2041,7 @@ function KlarityApp() {
 
         if (Array.isArray(json.retirementPlans) && json.retirementPlans.length > 0) {
           setRetirementPlans(json.retirementPlans);
-          try {
-            localStorage.setItem('klarity_retirement_plans', JSON.stringify(json.retirementPlans));
-          } catch (e) {}
+          secureStorage.setItem('klarity_retirement_plans', json.retirementPlans).catch(() => {});
         }
         setData(finalData);
         try {
@@ -2227,15 +2205,7 @@ function KlarityApp() {
         }
       } catch (err) {
         console.error('Sign in error:', err);
-        const isOwner = ['byzizo@protonmail.com', 'zeoe13@gmail.com'].includes(email.toLowerCase());
-        const localUser = {
-          id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
-          email,
-          name: isOwner ? 'Ziyad Elmahi' : email.split('@')[0],
-          avatar: '',
-          role: 'Primary Member'
-        };
-        await handleAuthSessionSuccess(localUser);
+        setAuthError('Could not connect to authentication server.');
       } finally {
         setIsAuthenticating(false);
       }
@@ -2270,18 +2240,11 @@ function KlarityApp() {
   const initiatePlaidLink = async () => {
     setIsConnectingPlaid(true);
     setPlaidError('');
-    const uid = currentUser?.id || 'u-ziyad';
     try {
-      const storedClientId = settingsPlaidClientId || localStorage.getItem(`klarity_${uid}_plaid_client_id`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_client_id') : '') || '';
-      const storedSecret = settingsPlaidSecret || localStorage.getItem(`klarity_${uid}_plaid_secret`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_secret') : '') || '';
-
       const res = await fetch('/api/plaid/create-link-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientPlaidId: storedClientId,
-          clientPlaidSecret: storedSecret
-        })
+        body: JSON.stringify({})
       });
       const json = await res.json();
 
@@ -2307,20 +2270,15 @@ function KlarityApp() {
   };
 
   const handlePlaidSuccess = async (public_token, metadata) => {
-    const uid = currentUser?.id || 'u-ziyad';
     try {
       setIsConnectingPlaid(true);
-      const storedClientId = settingsPlaidClientId || localStorage.getItem(`klarity_${uid}_plaid_client_id`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_client_id') : '') || '';
-      const storedSecret = settingsPlaidSecret || localStorage.getItem(`klarity_${uid}_plaid_secret`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_secret') : '') || '';
 
       const res = await fetch('/api/plaid/exchange-public-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           public_token,
-          metadata,
-          clientPlaidId: storedClientId,
-          clientPlaidSecret: storedSecret
+          metadata
         })
       });
 
@@ -2960,15 +2918,13 @@ function KlarityApp() {
     chatAbortControllerRef.current = controller;
 
     try {
-      const uid = currentUser?.id || 'u-ziyad';
-      const cachedApiKey = settingsAiApiKey.trim() || localStorage.getItem(`klarity_${uid}_ai_api_key`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_api_key') : '') || '';
-      const cachedProvider = settingsAiProvider || localStorage.getItem(`klarity_${uid}_ai_provider`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_provider') : '') || 'gemini';
-      let cachedModel = settingsAiModel || localStorage.getItem(`klarity_${uid}_ai_model`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_model') : '') || 'gemini-3.8-flash';
+      const uid = currentUser?.id || 'default';
+      const cachedProvider = settingsAiProvider || localStorage.getItem(`klarity_${uid}_ai_provider`) || 'gemini';
+      let cachedModel = settingsAiModel || localStorage.getItem(`klarity_${uid}_ai_model`) || 'gemini-3.8-flash';
       if (cachedModel.includes('2.0') || cachedModel.includes('2.5') || cachedModel.includes('tts')) {
         cachedModel = 'gemini-3.8-flash';
         try {
           localStorage.setItem(`klarity_${uid}_ai_model`, 'gemini-3.8-flash');
-          if (uid === 'u-ziyad') localStorage.setItem('klarity_ai_model', 'gemini-3.8-flash');
         } catch {}
       }
 
@@ -2986,7 +2942,6 @@ function KlarityApp() {
         body: JSON.stringify({
           message: userMsg,
           userMemory: aiMemory,
-          clientApiKey: cachedApiKey,
           clientProvider: cachedProvider,
           clientModel: cachedModel,
           attachments: payloadAttachments,
@@ -7819,7 +7774,7 @@ function KlarityApp() {
                           </div>
                           <div>
                             <p className="text-sm font-bold text-slate-900">{currentUser?.name || 'Ziyad Elmahi'}</p>
-                            <p className="text-xs text-slate-500">{currentUser?.email || 'byzizo@protonmail.com'}</p>
+                            <p className="text-xs text-slate-500">{currentUser?.email || ''}</p>
                           </div>
                         </div>
 
@@ -7838,7 +7793,7 @@ function KlarityApp() {
                             <label className="text-xs font-medium text-slate-700 block mb-1.5">Email</label>
                             <input
                               type="email"
-                              value={currentUser?.email || 'byzizo@protonmail.com'}
+                              value={currentUser?.email || ''}
                               disabled
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-600 cursor-not-allowed shadow-2xs"
                             />
@@ -8475,7 +8430,7 @@ function KlarityApp() {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-xs font-semibold text-slate-900">Signed in as</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email || 'byzizo@protonmail.com'}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email || ''}</p>
                           </div>
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>

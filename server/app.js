@@ -7,15 +7,29 @@ const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 require('dotenv').config();
 
 const app = express();
+
+// Configurable Owner Emails from environment variable
+const OWNER_EMAILS_LIST = process.env.OWNER_EMAILS
+  ? process.env.OWNER_EMAILS.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  : [];
+
+function isOwnerEmail(email) {
+  if (!email) return false;
+  return OWNER_EMAILS_LIST.includes(String(email).trim().toLowerCase());
+}
+
 // Configurable CORS Allowlist
-const defaultAllowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:5000',
-  'http://localhost:3000',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:5000',
-  'http://127.0.0.1:3000'
-];
+const isProductionEnv = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
+const defaultAllowedOrigins = isProductionEnv
+  ? []
+  : [
+      'http://localhost:5173',
+      'http://localhost:5000',
+      'http://localhost:3000',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5000',
+      'http://127.0.0.1:3000'
+    ];
 const allowedOriginsList = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
   : defaultAllowedOrigins;
@@ -27,8 +41,7 @@ app.use(cors({
     if (
       allowedOriginsList.includes(norm) ||
       process.env.KLARITY_DESKTOP_APP === 'true' ||
-      norm.startsWith('http://localhost:') ||
-      norm.startsWith('http://127.0.0.1:')
+      (!isProductionEnv && (norm.startsWith('http://localhost:') || norm.startsWith('http://127.0.0.1:')))
     ) {
       return callback(null, true);
     }
@@ -36,8 +49,16 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// File-upload routes that require up to 50mb body limit
+const largeBodyJson = express.json({ limit: '50mb' });
+const largeBodyUrlencoded = express.urlencoded({ limit: '50mb', extended: true });
+app.use('/api/ai/chat', largeBodyJson, largeBodyUrlencoded);
+app.use('/api/bills/scan', largeBodyJson, largeBodyUrlencoded);
+
+// Default 1mb body limit for all other routes
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
 
 // Deep Anti-Code-Injection & Prototype-Pollution Request Sanitizer
 function sanitizeIncomingPayload(val) {
@@ -354,20 +375,25 @@ async function createUserSession(data, userId) {
 
 // Global authentication gate for /api routes
 async function requireAuth(req, res, next) {
-  const publicPaths = [
+  const publicPaths = new Set([
+    '/auth/register',
+    '/auth/login',
+    '/auth/setup-owner',
+    '/auth/google',
+    '/auth/google/callback',
+    '/auth/google/check-session',
+    '/auth/session',
     '/api/auth/register',
     '/api/auth/login',
+    '/api/auth/setup-owner',
     '/api/auth/google',
     '/api/auth/google/callback',
     '/api/auth/google/check-session',
     '/api/auth/session'
-  ];
+  ]);
 
-  const fullPath = (req.originalUrl || req.url || '').split('?')[0];
   const reqPath = (req.path || '').split('?')[0];
-  if (
-    publicPaths.some(p => fullPath === p || fullPath.endsWith(p) || reqPath === p || ('/api' + (reqPath.startsWith('/') ? reqPath : '/' + reqPath)) === p)
-  ) {
+  if (publicPaths.has(reqPath)) {
     return next();
   }
 
@@ -438,35 +464,35 @@ app.post('/api/auth/register', async (req, res) => {
     return res.status(400).json({ error: 'Email and password are required' });
   }
 
-  const data = await readData(req.userId);
   const cleanEmail = email.trim().toLowerCase();
-  const existing = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
-  if (existing && existing.passwordHash) {
+  const existingDbUser = await db.getUserByEmail(cleanEmail);
+  const data = await readData(req.userId);
+  const existing = existingDbUser || (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
+  if (existing) {
     return res.status(400).json({ error: 'User already exists with this email' });
   }
 
-  if (existing && !existing.passwordHash) {
-    existing.passwordHash = hashPassword(password);
-    if (name) existing.name = name;
-    await writeData(data, req.userId);
-    return res.json({ user: sanitizeUser(existing) });
-  }
-
-  const isOwner = ['byzizo@protonmail.com', 'zeoe13@gmail.com'].includes(cleanEmail);
+  const isOwner = isOwnerEmail(cleanEmail);
   const newUser = {
-    id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
+    id: isOwner ? 'u-owner' : `u-${Date.now()}`,
     email: cleanEmail,
-    name: name || (isOwner ? 'Ziyad Elmahi' : cleanEmail.split('@')[0]),
+    name: name || cleanEmail.split('@')[0],
     role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member',
     avatar: '',
     passwordHash: hashPassword(password)
   };
 
-  data.users = data.users || [];
-  data.users.push(newUser);
+  await db.createUser(newUser);
   const safeUser = sanitizeUser(newUser);
-  const session = await createUserSession(data, safeUser.id);
-  res.json({ user: safeUser, session });
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = Date.now() + SESSION_DURATION_MS;
+  await db.createSession(safeUser.id, tokenHash, expiresAt);
+
+  res.json({
+    user: safeUser,
+    session: { token: rawToken, expiresAt, user: safeUser }
+  });
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -482,7 +508,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  let user = await db.getUserByEmail(cleanEmail);
+  const user = await db.getUserByEmail(cleanEmail);
 
   if (!user) {
     recordFailedAuth(clientIp);
@@ -490,18 +516,93 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   if (!user.passwordHash) {
-    user.passwordHash = hashPassword(password);
-    await db.updateUser(user.id, { passwordHash: user.passwordHash });
-  } else {
-    const valid = verifyPassword(password, user.passwordHash);
-    if (!valid) {
-      recordFailedAuth(clientIp);
-      return res.status(401).json({ error: 'Invalid email or password.' });
-    }
+    recordFailedAuth(clientIp);
+    return res.status(401).json({ error: 'This account has no password configured and cannot be logged into.' });
+  }
+
+  const valid = verifyPassword(password, user.passwordHash);
+  if (!valid) {
+    recordFailedAuth(clientIp);
+    return res.status(401).json({ error: 'Invalid email or password.' });
   }
 
   authRateMap.delete(clientIp);
   const safeUser = sanitizeUser(user);
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = Date.now() + SESSION_DURATION_MS;
+  await db.createSession(safeUser.id, tokenHash, expiresAt);
+
+  res.json({
+    user: safeUser,
+    session: { token: rawToken, expiresAt, user: safeUser }
+  });
+});
+
+// Dedicated one-time Owner Setup Route (disabled once an owner password exists)
+app.post('/api/auth/setup-owner', async (req, res) => {
+  const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'local';
+  const rate = checkAuthRateLimit(clientIp);
+  if (rate.blocked) {
+    return res.status(429).json({ error: `Too many attempts. Try again in ${rate.secondsLeft}s.` });
+  }
+
+  const setupTokenEnv = process.env.OWNER_SETUP_TOKEN;
+  if (!setupTokenEnv) {
+    return res.status(403).json({ error: 'Owner setup is not enabled on this server (OWNER_SETUP_TOKEN not set).' });
+  }
+
+  const { setupToken, email, password, name } = req.body;
+  if (!setupToken || !email || !password) {
+    return res.status(400).json({ error: 'setupToken, email, and password are required.' });
+  }
+
+  const tokenBufA = Buffer.from(String(setupToken));
+  const tokenBufB = Buffer.from(String(setupTokenEnv));
+  if (tokenBufA.length !== tokenBufB.length || !crypto.timingSafeEqual(tokenBufA, tokenBufB)) {
+    recordFailedAuth(clientIp);
+    return res.status(403).json({ error: 'Invalid owner setup token.' });
+  }
+
+  const cleanEmail = String(email).trim().toLowerCase();
+  if (OWNER_EMAILS_LIST.length > 0 && !isOwnerEmail(cleanEmail)) {
+    return res.status(403).json({ error: 'Email is not listed in OWNER_EMAILS.' });
+  }
+
+  let existingUser = await db.getUserByEmail(cleanEmail);
+  if (existingUser && existingUser.passwordHash) {
+    return res.status(403).json({ error: 'Owner password is already configured. This setup route is disabled.' });
+  }
+
+  // Also check if any configured owner email already has a password
+  for (const ownerEmail of OWNER_EMAILS_LIST) {
+    const ownerRecord = await db.getUserByEmail(ownerEmail);
+    if (ownerRecord && ownerRecord.passwordHash) {
+      return res.status(403).json({ error: 'Owner password is already configured. This setup route is disabled.' });
+    }
+  }
+
+  const passwordHash = hashPassword(password);
+  let targetUser;
+  if (existingUser) {
+    await db.updateUser(existingUser.id, {
+      passwordHash,
+      ...(name ? { name: name.trim() } : {})
+    });
+    targetUser = { ...existingUser, passwordHash, ...(name ? { name: name.trim() } : {}) };
+  } else {
+    targetUser = {
+      id: 'u-owner',
+      email: cleanEmail,
+      name: (name && name.trim()) || cleanEmail.split('@')[0],
+      role: 'Primary Member',
+      avatar: '',
+      passwordHash
+    };
+    await db.createUser(targetUser);
+  }
+
+  const safeUser = sanitizeUser(targetUser);
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashToken(rawToken);
   const expiresAt = Date.now() + SESSION_DURATION_MS;
@@ -568,14 +669,14 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
     // 3. Register or load user into Klarity
     const data = await readData(req.userId);
-    const isOwner = ['byzizo@protonmail.com', 'zeoe13@gmail.com'].includes(cleanEmail);
+    const isOwner = isOwnerEmail(cleanEmail);
     let user = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
 
     if (!user) {
       user = {
-        id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
+        id: isOwner ? 'u-owner' : `u-${Date.now()}`,
         email: cleanEmail,
-        name: profile.name || (isOwner ? 'Ziyad Elmahi' : cleanEmail.split('@')[0]),
+        name: profile.name || cleanEmail.split('@')[0],
         avatar: profile.picture || '',
         role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member'
       };
@@ -674,14 +775,14 @@ app.post('/api/auth/google', async (req, res) => {
   }
 
   const data = await readData(req.userId);
-  const isOwner = ['byzizo@protonmail.com', 'zeoe13@gmail.com'].includes(verifiedEmail);
+  const isOwner = isOwnerEmail(verifiedEmail);
   let user = (data.users || []).find(u => u.email.toLowerCase() === verifiedEmail);
 
   if (!user) {
     user = {
-      id: isOwner ? 'u-ziyad' : `u-${Date.now()}`,
+      id: isOwner ? 'u-owner' : `u-${Date.now()}`,
       email: verifiedEmail,
-      name: verifiedName || fallbackName || (isOwner ? 'Ziyad Elmahi' : verifiedEmail.split('@')[0]),
+      name: verifiedName || fallbackName || verifiedEmail.split('@')[0],
       avatar: verifiedPicture,
       role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member'
     };
@@ -694,14 +795,23 @@ app.post('/api/auth/google', async (req, res) => {
     await writeData(data, req.userId);
   }
 
-  res.json({ user: sanitizeUser(user) });
+  const safeUser = sanitizeUser(user);
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = Date.now() + SESSION_DURATION_MS;
+  await db.createSession(safeUser.id, tokenHash, expiresAt);
+
+  res.json({
+    user: safeUser,
+    session: { token: rawToken, expiresAt, user: safeUser }
+  });
 });
 
 // 2. Settings Endpoints (Encrypted Server Storage per User)
 app.get('/api/settings', async (req, res) => {
   const userId = req.userId;
   const data = await readData(req.userId);
-  const user = (data.users || []).find(u => u.id === userId) || data.users?.[0] || { name: 'Ziyad Elmahi', email: 'byzizo@protonmail.com' };
+  const user = (data.users || []).find(u => u.id === userId) || req.user || { name: '', email: '' };
   const userSettings = getUserSettings(data, userId);
   const ai = userSettings.ai;
   const plaid = userSettings.plaid;
@@ -909,8 +1019,7 @@ app.post('/api/settings/plaid', async (req, res) => {
 // 3. Plaid Link & Webhook Endpoints (User-scoped)
 app.post('/api/plaid/create-link-token', async (req, res) => {
   const userId = req.userId;
-  const { clientPlaidId, clientPlaidSecret } = req.body;
-  const plaidClient = await getPlaidClient(clientPlaidId, clientPlaidSecret, userId);
+  const plaidClient = await getPlaidClient(null, null, userId);
 
   if (!plaidClient) {
     return res.status(400).json({
@@ -937,8 +1046,8 @@ app.post('/api/plaid/create-link-token', async (req, res) => {
 
 app.post('/api/plaid/exchange-public-token', async (req, res) => {
   const userId = req.userId;
-  const { public_token, metadata, clientPlaidId, clientPlaidSecret } = req.body;
-  const plaidClient = await getPlaidClient(clientPlaidId, clientPlaidSecret, userId);
+  const { public_token, metadata } = req.body;
+  const plaidClient = await getPlaidClient(null, null, userId);
 
   if (!plaidClient) {
     return res.status(400).json({ error: 'Plaid keys not configured for this account' });
@@ -1196,8 +1305,14 @@ app.post('/api/retirement', async (req, res) => {
 
 app.delete('/api/retirement/:id', async (req, res) => {
   const data = await readData(req.userId);
-  data.retirementPlans = (data.retirementPlans || []).filter(p => p.id !== req.params.id || (p.ownerId && p.ownerId !== req.userId));
-  await writeData(data, req.userId);
+  const isTargetOwnedByUser = (p) =>
+    p.id === req.params.id && (p.ownerId === req.userId || p.userId === req.userId);
+
+  if ((data.retirementPlans || []).some(isTargetOwnedByUser)) {
+    data.retirementPlans = (data.retirementPlans || []).filter(p => !isTargetOwnedByUser(p));
+    await db.deleteItem('retirement_plans', req.params.id, req.userId);
+    await writeData(data, req.userId);
+  }
   const userPlans = (data.retirementPlans || []).filter(p => p.ownerId === req.userId || p.userId === req.userId);
   res.json({ success: true, retirementPlans: userPlans });
 });
@@ -1349,8 +1464,193 @@ app.post('/api/bills', async (req, res) => {
   const data = await readData(req.userId);
 
   const newBill = {
+    id: `bill-${Date.now()}`,
+    ownerId: req.userId,
+    userId: req.userId,
+    name: name || 'Utility Bill',
+    category: category || 'Utilities',
+    expectedAmount: parseFloat(expectedAmount || 0),
+    dueDay: parseInt(dueDay || 15),
+    nextDueDate: nextDueDate || calculateNextDueDate(parseInt(dueDay || 15)),
+    autopay: Boolean(autopay),
+    status: 'pending',
+    recurrence: recurrence || 'monthly',
+    account: account || 'Checking •••• 4821',
+    cardId: cardId || ''
+  };
+
+  data.bills = data.bills || [];
+  data.bills.push(newBill);
+  await writeData(data, req.userId);
+
+  res.json({ success: true, bill: newBill });
+});
+
+app.patch('/api/bills/:id', async (req, res) => {
+  const { id } = req.params;
+  const data = await readData(req.userId);
+  const bill = (data.bills || []).find(b => b.id === id && (b.ownerId === req.userId || b.userId === req.userId));
+  if (!bill) return res.status(404).json({ error: 'Bill not found' });
+  Object.assign(bill, req.body);
+  await writeData(data, req.userId);
+  res.json({ success: true, bill });
+});
+
+app.delete('/api/bills/:id', async (req, res) => {
+  const { id } = req.params;
+  const data = await readData(req.userId);
+  data.bills = (data.bills || []).filter(b => !(b.id === id && (b.ownerId === req.userId || b.userId === req.userId)));
+  await db.deleteItem('bills', id, req.userId);
+  await writeData(data, req.userId);
+  res.json({ success: true });
+});
+
+app.post('/api/bills/:id/pay', async (req, res) => {
+  const { id } = req.params;
+  const data = await readData(req.userId);
+  const bill = (data.bills || []).find(b => b.id === id && (b.ownerId === req.userId || b.userId === req.userId));
+  if (!bill) return res.status(404).json({ error: 'Bill not found' });
+
+  bill.status = 'paid';
+  bill.lastPaidDate = new Date().toISOString().split('T')[0];
+
+  data.transactions = data.transactions || [];
+  data.transactions.unshift({
+    id: `tx-bill-${Date.now()}`,
+    ownerId: req.userId,
+    userId: req.userId,
+    name: `Payment: ${bill.name}`,
+    category: bill.category || 'Utilities',
+    amount: bill.expectedAmount,
+    date: new Date().toISOString().split('T')[0],
+    account: bill.account || 'Checking •••• 4821',
+    cardId: bill.cardId || ''
+  });
+
+  await writeData(data, req.userId);
+  res.json({ success: true, bill });
+});
+
+// 7. Transactions Management
+app.post('/api/transactions', async (req, res) => {
+  const { name, amount, category, date, account, cardId, notes } = req.body;
+  const data = await readData(req.userId);
+
+  const newTx = {
+    id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    ownerId: req.userId,
+    userId: req.userId,
+    name: name || 'Purchase',
+    amount: parseFloat(amount || 0),
+    category: category || categorizeTransaction(name),
+    date: date || new Date().toISOString().split('T')[0],
+    account: account || 'Everyday Rewards •••• 4417',
+    cardId: cardId || '',
+    notes: notes || ''
+  };
+
+  data.transactions = data.transactions || [];
+  data.transactions.unshift(newTx);
+  await writeData(data, req.userId);
+
+  res.json({ success: true, transaction: newTx });
+});
+
+app.patch('/api/transactions/:id', async (req, res) => {
+  const { id } = req.params;
+  const data = await readData(req.userId);
+  const tx = (data.transactions || []).find(t => t.id === id && (t.ownerId === req.userId || t.userId === req.userId));
+  if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+  Object.assign(tx, req.body);
+  await writeData(data, req.userId);
+  res.json({ success: true, transaction: tx });
+});
+
+app.delete('/api/transactions/:id', async (req, res) => {
+  const { id } = req.params;
+  const data = await readData(req.userId);
+  data.transactions = (data.transactions || []).filter(t => !(t.id === id && (t.ownerId === req.userId || t.userId === req.userId)));
+  await db.deleteItem('transactions', id, req.userId);
+  await writeData(data, req.userId);
+  res.json({ success: true });
+});
+
+// 8. Subscriptions Management
+app.get('/api/subscriptions', async (req, res) => {
+  const data = await readData(req.userId);
+  res.json((data.subscriptions || []).filter(s => s.ownerId === req.userId || s.userId === req.userId));
+});
+
+app.post('/api/subscriptions', async (req, res) => {
+  const { name, amount, renewDay, renewalDate, billingCycle, category, account, cardId } = req.body;
+  const data = await readData(req.userId);
+
+  const newSub = {
+    id: `sub-${Date.now()}`,
+    ownerId: req.userId,
+    userId: req.userId,
+    name: name || 'Subscription',
+    amount: parseFloat(amount || 0),
+    renewDay: parseInt(renewDay || 1),
+    renewalDate: renewalDate || 'Renews monthly',
+    billingCycle: billingCycle || 'monthly',
+    category: category || 'Entertainment',
+    account: account || 'Everyday Rewards •••• 4417',
+    cardId: cardId || '',
+    active: true
+  };
+
+  data.subscriptions = data.subscriptions || [];
+  data.subscriptions.push(newSub);
+  await writeData(data, req.userId);
+
+  res.json({ success: true, subscription: newSub });
+});
+
+app.patch('/api/subscriptions/:id', async (req, res) => {
+  const { id } = req.params;
+  const data = await readData(req.userId);
+  const sub = (data.subscriptions || []).find(s => s.id === id && (s.ownerId === req.userId || s.userId === req.userId));
+  if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+  Object.assign(sub, req.body);
+  await writeData(data, req.userId);
+  res.json({ success: true, subscription: sub });
+});
+
+app.delete('/api/subscriptions/:id', async (req, res) => {
+  const { id } = req.params;
+  const data = await readData(req.userId);
+  data.subscriptions = (data.subscriptions || []).filter(s => !(s.id === id && (s.ownerId === req.userId || s.userId === req.userId)));
+  await db.deleteItem('subscriptions', id, req.userId);
+  await writeData(data, req.userId);
+  res.json({ success: true });
+});
+
+// 9. Document & Bill Scanning Endpoint
+app.post('/api/bills/scan', async (req, res) => {
+  const { text } = req.body;
+  const content = text || '';
+
+  let amount = 0;
+  let biller = 'Utility Provider';
+  let dueDate = calculateNextDueDate(15);
+
+  const amountMatch = content.match(/\$\s?([0-9]+(?:\.[0-9]{2})?)/);
+  if (amountMatch) amount = parseFloat(amountMatch[1]);
+
+  if (/pge|pacific gas|electric/i.test(content)) biller = 'PG&E Electric';
+  else if (/water|fresno/i.test(content)) biller = 'Fresno City Water';
+  else if (/rent|lease|mortgage/i.test(content)) biller = 'Apartment Rent';
+  else if (/at&t|verizon|t-mobile|comcast|xfinity/i.test(content)) biller = 'Telecom & Internet';
+
+  const dateMatch = content.match(/(?:due|by|date)[:\s]+([A-Za-z0-9\/\-\, ]{6,15})/i);
+  if (dateMatch) dueDate = dateMatch[1].trim();
+
+  const data = await readData(req.userId);
+  const newBill = {
     id: `bill-scanned-${Date.now()}`,
     ownerId: req.userId,
+    userId: req.userId,
     name: biller,
     category: 'Utilities',
     expectedAmount: amount || 85.00,
@@ -1366,6 +1666,8 @@ app.post('/api/bills', async (req, res) => {
   data.transactions = data.transactions || [];
   data.transactions.unshift({
     id: `tx-scanned-${Date.now()}`,
+    ownerId: req.userId,
+    userId: req.userId,
     name: biller,
     amount: amount || 85.00,
     category: 'Utilities',
@@ -1476,7 +1778,6 @@ app.post('/api/ai/chat', async (req, res) => {
   const {
     message,
     userMemory = [],
-    clientApiKey,
     clientProvider,
     clientModel,
     imageBase64,
@@ -1496,19 +1797,7 @@ app.post('/api/ai/chat', async (req, res) => {
   const data = await readData(req.userId);
   const userSettings = getUserSettings(data, userId);
   const aiConfig = userSettings.ai || {};
-  let rawApiKey = clientApiKey || (aiConfig.encryptedKey ? decrypt(aiConfig.encryptedKey) : '');
-
-  // If serverless disk reset occurred and client has cached credentials, restore them into user settings
-  if (clientApiKey && !aiConfig.encryptedKey) {
-    userSettings.ai = {
-      provider: clientProvider || 'gemini',
-      model: clientModel || 'gemini-3.8-flash',
-      encryptedKey: encrypt(clientApiKey),
-      status: 'connected',
-      dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
-    };
-    await writeData(data, req.userId);
-  }
+  let rawApiKey = aiConfig.encryptedKey ? decrypt(aiConfig.encryptedKey) : '';
 
   if (!rawApiKey) {
     return res.json({
@@ -1554,17 +1843,15 @@ app.post('/api/ai/chat', async (req, res) => {
   const currentUser = (data.users || []).find(u => u.id === userId) || req.user || { name: 'User' };
 
   // Data restricted by user toggles and account ownership
-  const userAccounts = (data.accounts || []).filter(a => {
-    if (!userId || userId === 'u-ziyad') return true;
-    return a.ownerId === userId;
-  });
+  const isOwnedByCurrentUser = (item) => item && (item.ownerId === userId || item.userId === userId);
+  const userAccounts = (data.accounts || []).filter(isOwnedByCurrentUser);
   const userCards = permissions.cards ? userAccounts.filter(a => a.type === 'credit') : [];
   const userChecking = permissions.cards ? userAccounts.filter(a => a.type === 'depository') : [];
-  const userBills = permissions.bills ? (data.bills || []) : [];
-  const userSubscriptions = permissions.subscriptions ? (data.subscriptions || []) : [];
-  const userTransactions = permissions.purchases ? (data.transactions || []).slice(0, 10) : [];
+  const userBills = permissions.bills ? (data.bills || []).filter(isOwnedByCurrentUser) : [];
+  const userSubscriptions = permissions.subscriptions ? (data.subscriptions || []).filter(isOwnedByCurrentUser) : [];
+  const userTransactions = permissions.purchases ? (data.transactions || []).filter(isOwnedByCurrentUser).slice(0, 10) : [];
   const userRetirementPlans = permissions.retirement !== false
-    ? (Array.isArray(retirementPlans) && retirementPlans.length > 0 ? retirementPlans : (data.retirementPlans || []).filter(p => p.ownerId === userId || p.userId === userId))
+    ? (Array.isArray(retirementPlans) && retirementPlans.length > 0 ? retirementPlans : (data.retirementPlans || []).filter(isOwnedByCurrentUser))
     : [];
 
   const memoryContext = (userMemory && userMemory.length > 0)

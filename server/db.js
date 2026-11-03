@@ -46,16 +46,18 @@ const DATA_FILE = process.env.KLARITY_USER_DATA_DIR
   ? path.join(process.env.KLARITY_USER_DATA_DIR, 'klarity_vault_data.enc')
   : path.join(__dirname, 'data.json');
 
+const ownerEmailsFromEnv = process.env.OWNER_EMAILS
+  ? process.env.OWNER_EMAILS.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  : [];
+
 const initialSeedData = {
-  users: [
-    {
-      id: "u-ziyad",
-      name: "Ziyad Elmahi",
-      email: "byzizo@protonmail.com",
-      role: "Primary Member",
-      avatar: ""
-    }
-  ],
+  users: ownerEmailsFromEnv.map((email, idx) => ({
+    id: idx === 0 ? 'u-owner' : `u-owner-${idx + 1}`,
+    name: email.split('@')[0],
+    email,
+    role: 'Primary Member',
+    avatar: ''
+  })),
   sessions: [],
   accounts: [],
   bills: [],
@@ -72,13 +74,20 @@ const initialSeedData = {
 let memoryData = JSON.parse(JSON.stringify(initialSeedData));
 
 function getEncryptionKey() {
-  const key = process.env.SETTINGS_ENCRYPTION_KEY || 'klarity-dev-default-encryption-key-32bytes!';
+  const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
+  const key = process.env.SETTINGS_ENCRYPTION_KEY;
+  if (!key) {
+    if (isProd) {
+      throw new Error('FATAL: SETTINGS_ENCRYPTION_KEY environment variable is required in production.');
+    }
+    return crypto.createHash('sha256').update('klarity-dev-default-encryption-key-32bytes!').digest();
+  }
   return crypto.createHash('sha256').update(key).digest();
 }
 
 function encryptDisk(text) {
+  const key = getEncryptionKey();
   try {
-    const key = getEncryptionKey();
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
     const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
@@ -90,8 +99,8 @@ function encryptDisk(text) {
 }
 
 function decryptDisk(cipherText) {
+  const key = getEncryptionKey();
   try {
-    const key = getEncryptionKey();
     if (cipherText.startsWith('GCM:')) {
       const parts = cipherText.split(':');
       const iv = Buffer.from(parts[1], 'hex');
@@ -122,6 +131,7 @@ function readLocalData() {
       return JSON.parse(raw);
     }
   } catch (err) {
+    if (err && err.message && err.message.startsWith('FATAL:')) throw err;
     console.error('Error reading local file:', err.message);
   }
   return memoryData;
@@ -140,6 +150,7 @@ function writeLocalData(data) {
     }
     return true;
   } catch (err) {
+    if (err && err.message && err.message.startsWith('FATAL:')) throw err;
     console.warn('Local file write notice:', err.message);
     return false;
   }
@@ -818,7 +829,7 @@ const db = {
 
     const data = readLocalData();
     if (data[table]) {
-      data[table] = data[table].filter(item => item.id !== id);
+      data[table] = data[table].filter(item => !(item.id === id && (!userId || item.ownerId === userId || item.userId === userId)));
       writeLocalData(data);
     }
   }

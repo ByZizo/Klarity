@@ -132,6 +132,8 @@ export default function RetirementPage({
   const [simulatedAge, setSimulatedAge] = useState(62);
   const [currentAge, setCurrentAge] = useState(48);
   const [assumedReturnRate, setAssumedReturnRate] = useState(6.0); // % real return for defined contribution growth
+  const [safeWithdrawalRate, setSafeWithdrawalRate] = useState(4.0); // Editable safe annual withdrawal rate % (default 4%)
+  const [defaultBenefitFactorPct, setDefaultBenefitFactorPct] = useState(2.0); // Editable default pension benefit factor %
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -196,18 +198,21 @@ export default function RetirementPage({
     setEditingPlanId(null);
     setIsBenefitManualOverride(false);
     if (type === 'pension') {
+      const initYears = 15;
+      const initSalary = 95000;
+      const initFactor = Number(defaultBenefitFactorPct) || 2.0;
       setFormData({
         ...defaultFormData,
         planType: 'pension',
         name: 'California Public Employees Pension',
         provider: 'CalPERS',
-        tier: '2% at 62',
-        yearsOfService: 15,
-        benefitFactorPct: 2.0,
-        highestAverageSalary: 95000,
+        tier: `${initFactor}% at 62`,
+        yearsOfService: initYears,
+        benefitFactorPct: initFactor,
+        highestAverageSalary: initSalary,
         retirementAge: 62,
         employeeContributionPct: 7.0,
-        estimatedMonthlyBenefit: 2375,
+        estimatedMonthlyBenefit: calculatePensionBenefit(initYears, initFactor, initSalary),
         notes: 'Vested member'
       });
     } else if (type === 'social_security') {
@@ -366,8 +371,9 @@ export default function RetirementPage({
 
     const totalPaycheckDeductions = totalMonthlyEmployeeContributions + pensionMonthlyContributions;
 
-    // Projected 4% safe monthly withdrawal from current balances
-    const monthlyDrawFromCurrentBalances = Math.round((totalDcBalances * 0.04) / 12);
+    // Projected safe monthly withdrawal from current balances using editable safeWithdrawalRate %
+    const swrFraction = (Number(safeWithdrawalRate) || 0) / 100;
+    const monthlyDrawFromCurrentBalances = Math.round((totalDcBalances * swrFraction) / 12);
 
     // Total baseline monthly retirement income
     const totalEstimatedMonthlyIncome = totalPensionMonthly + totalSocialSecurityMonthly + monthlyDrawFromCurrentBalances;
@@ -383,7 +389,7 @@ export default function RetirementPage({
       monthlyDrawFromCurrentBalances,
       totalEstimatedMonthlyIncome
     };
-  }, [plans]);
+  }, [plans, safeWithdrawalRate]);
 
   // "What if I retire at ___" dynamic simulation
   const simulation = useMemo(() => {
@@ -394,7 +400,7 @@ export default function RetirementPage({
     plans.filter(p => p.planType === 'pension').forEach(p => {
       const normalAge = Number(p.retirementAge || 62);
       const curYears = Number(p.yearsOfService || 0);
-      const factorPct = Number(p.benefitFactorPct || 2.0);
+      const factorPct = Number(p.benefitFactorPct || defaultBenefitFactorPct || 2.0);
       const salary = Number(p.highestAverageSalary || 0);
 
       // If simulatedAge differs from normalAge, years of service adjust by the difference
@@ -445,8 +451,9 @@ export default function RetirementPage({
       simProjectedBalance += futureVal;
     });
 
-    // 4% Safe annual withdrawal rate converted to monthly
-    const simMonthlyPortfolioDraw = Math.round((simProjectedBalance * 0.04) / 12);
+    // Safe annual withdrawal rate converted to monthly using editable safeWithdrawalRate %
+    const swrFraction = (Number(safeWithdrawalRate) || 0) / 100;
+    const simMonthlyPortfolioDraw = Math.round((simProjectedBalance * swrFraction) / 12);
     const simTotalMonthly = simPensionMonthly + simSocialSecurityMonthly + simMonthlyPortfolioDraw;
 
     const diffFromBaseline = simTotalMonthly - metrics.totalEstimatedMonthlyIncome;
@@ -460,7 +467,7 @@ export default function RetirementPage({
       diffFromBaseline,
       yearsUntilRetirement
     };
-  }, [plans, simulatedAge, currentAge, assumedReturnRate, metrics.totalEstimatedMonthlyIncome]);
+  }, [plans, simulatedAge, currentAge, assumedReturnRate, safeWithdrawalRate, defaultBenefitFactorPct, metrics.totalEstimatedMonthlyIncome]);
 
   // Filtered plans list
   const filteredPlans = plans.filter(p => {
@@ -723,8 +730,61 @@ export default function RetirementPage({
           </div>
         </div>
 
+        {/* Editable Modeling Assumptions Bar (Safe Withdrawal Rate & Default Pension Benefit Factor) */}
+        <div className="mt-5 pt-4 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+          <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="swr-input" className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <Percent className="w-3.5 h-3.5 text-amber-400" />
+                <span>Annual Safe Withdrawal Rate (%)</span>
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  id="swr-input"
+                  type="number"
+                  step="0.1"
+                  min="1.0"
+                  max="10.0"
+                  value={safeWithdrawalRate}
+                  onChange={(e) => setSafeWithdrawalRate(Math.max(0.5, Math.min(15, parseFloat(e.target.value) || 0)))}
+                  className="w-20 px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-600 text-amber-300 font-bold text-xs text-right focus:outline-hidden focus:border-amber-400"
+                />
+                <span className="text-xs text-slate-300 font-semibold">% / yr</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Note: Defaults to the standard 4.0% rule for converting 401(k)/IRA balances into estimated monthly retirement income. Adjust lower (e.g., 3.2%–3.5%) for early retirement or conservative horizons.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="default-factor-input" className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <Landmark className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Default Pension Benefit Factor (%)</span>
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  id="default-factor-input"
+                  type="number"
+                  step="0.1"
+                  min="0.5"
+                  max="5.0"
+                  value={defaultBenefitFactorPct}
+                  onChange={(e) => setDefaultBenefitFactorPct(Math.max(0.1, Math.min(10, parseFloat(e.target.value) || 0)))}
+                  className="w-20 px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-600 text-emerald-300 font-bold text-xs text-right focus:outline-hidden focus:border-emerald-400"
+                />
+                <span className="text-xs text-slate-300 font-semibold">% / yr</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Note: Used as the starting multiplier per year of service when adding a new pension or when a plan has no custom factor set (e.g., 2.0% for CalPERS/CalSTRS PEPRA at 62, 1.0%–1.1% for FERS). Each pension card can also override its own factor.
+            </p>
+          </div>
+        </div>
+
         {/* Simulation Output Breakdown */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 pt-5 border-t border-white/10 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5 pt-5 border-t border-white/10 text-xs">
           <div className="p-3 rounded-xl bg-white/5 border border-white/5">
             <span className="text-slate-400 block text-[11px]">Simulated Pension Monthly</span>
             <span className="text-base font-bold text-emerald-300">${simulation.simPensionMonthly.toLocaleString('en-US')}/mo</span>
@@ -740,7 +800,7 @@ export default function RetirementPage({
           <div className="p-3 rounded-xl bg-white/5 border border-white/5">
             <span className="text-slate-400 block text-[11px]">401(k) / IRA Portfolio at Age {simulatedAge}</span>
             <span className="text-base font-bold text-amber-300">${simulation.simProjectedBalance.toLocaleString('en-US')}</span>
-            <span className="text-[10px] text-slate-400 block mt-0.5">Provides ~${simulation.simMonthlyPortfolioDraw.toLocaleString('en-US')}/mo via 4% rule</span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">Provides ~${simulation.simMonthlyPortfolioDraw.toLocaleString('en-US')}/mo via {safeWithdrawalRate}% withdrawal rate</span>
           </div>
         </div>
       </div>
@@ -929,8 +989,8 @@ export default function RetirementPage({
                           <span className="font-semibold text-slate-800">Age {plan.targetRetirementAge || 65}</span>
                         </div>
                         <div className="p-2 rounded-lg bg-slate-50/70 border border-slate-100">
-                          <span className="text-slate-400 text-[10px] block">Safe Draw (4%)</span>
-                          <span className="font-semibold text-emerald-700">${Math.round((Number(plan.balance || 0) * 0.04) / 12).toLocaleString('en-US')}/mo</span>
+                          <span className="text-slate-400 text-[10px] block">Safe Draw ({safeWithdrawalRate}%)</span>
+                          <span className="font-semibold text-emerald-700">${Math.round((Number(plan.balance || 0) * ((Number(safeWithdrawalRate) || 0) / 100)) / 12).toLocaleString('en-US')}/mo</span>
                         </div>
                       </>
                     )}
