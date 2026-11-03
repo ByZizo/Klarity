@@ -14,11 +14,17 @@ import {
   ExternalLink,
   X,
   FileSpreadsheet,
-  ShieldCheck
+  Lock,
+  AlertCircle,
+  ArrowLeft
 } from 'lucide-react';
 import {
   copySensitiveWithAutoClear,
-  sanitizeSpreadsheetCell
+  sanitizeSpreadsheetCell,
+  hasMasterPinSet,
+  setMasterPin,
+  verifyMasterPin,
+  removeMasterPin
 } from '../utils/securityCrypto';
 
 export const DEFAULT_VAULT_ITEMS = [
@@ -48,8 +54,17 @@ const CATEGORIES = ['All', 'Household', 'Auto', 'Health', 'Banking', 'Other'];
 
 export default function PasswordVaultPage({
   vaultItems = [],
-  onUpdateVaultItems
+  onUpdateVaultItems,
+  onBack
 }) {
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [hasPin, setHasPin] = useState(() => hasMasterPinSet());
+  const [pinInput, setPinInput] = useState('');
+  const [pinConfirmInput, setPinConfirmInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [showPin, setShowPin] = useState(false);
+  const [isSubmittingPin, setIsSubmittingPin] = useState(false);
+
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [visiblePasswords, setVisiblePasswords] = useState({});
@@ -285,6 +300,177 @@ export default function PasswordVaultPage({
     onUpdateVaultItems((vaultItems || []).filter(item => item.id !== id));
   };
 
+  const handleUnlockWithPin = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!pinInput.trim()) {
+      setPinError('Please enter your security PIN.');
+      return;
+    }
+    setIsSubmittingPin(true);
+    setPinError('');
+    try {
+      const result = await verifyMasterPin(pinInput);
+      if (result.valid) {
+        setIsUnlocked(true);
+        setPinInput('');
+        setPinError('');
+      } else {
+        setPinError(result.error || 'Incorrect security PIN. Please try again.');
+      }
+    } catch (err) {
+      setPinError('Failed to verify PIN. Please try again.');
+    } finally {
+      setIsSubmittingPin(false);
+    }
+  };
+
+  const handleCreatePin = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const cleanPin = pinInput.trim();
+    const cleanConfirm = pinConfirmInput.trim();
+
+    if (cleanPin.length < 4) {
+      setPinError('PIN must be at least 4 digits.');
+      return;
+    }
+    if (cleanPin !== cleanConfirm) {
+      setPinError('PINs do not match. Please re-enter.');
+      return;
+    }
+
+    setIsSubmittingPin(true);
+    setPinError('');
+    try {
+      await setMasterPin(cleanPin);
+      setHasPin(true);
+      setIsUnlocked(true);
+      setPinInput('');
+      setPinConfirmInput('');
+    } catch (err) {
+      setPinError(err.message || 'Failed to save PIN.');
+    } finally {
+      setIsSubmittingPin(false);
+    }
+  };
+
+  const handleResetPin = () => {
+    if (window.confirm('Are you sure you want to reset your Security PIN? You will be prompted to create a new one.')) {
+      removeMasterPin();
+      setHasPin(false);
+      setPinInput('');
+      setPinConfirmInput('');
+      setPinError('');
+    }
+  };
+
+  if (!isUnlocked) {
+    return (
+      <div className="flex flex-col gap-6 py-6 sm:py-10 max-w-md mx-auto w-full">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-xs text-slate-500 hover:text-slate-900 flex items-center gap-1.5 font-semibold cursor-pointer w-fit"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Overview</span>
+          </button>
+        )}
+
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col gap-5">
+          <div className="flex flex-col items-center text-center gap-2">
+            <div className="w-12 h-12 rounded-2xl bg-[#18457c] text-white flex items-center justify-center shadow-2xs">
+              <Lock className="w-6 h-6" />
+            </div>
+            <h2 className="font-serif-title text-xl font-bold text-slate-900">
+              {hasPin ? 'Enter Security PIN' : 'Set Up Security PIN'}
+            </h2>
+            <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+              {hasPin
+                ? 'Enter your master security PIN to access your passwords and account credentials.'
+                : 'Create a 4-6 digit security PIN to protect your passwords and account logins.'}
+            </p>
+          </div>
+
+          {pinError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span className="leading-snug">{pinError}</span>
+            </div>
+          )}
+
+          <form onSubmit={hasPin ? handleUnlockWithPin : handleCreatePin} className="flex flex-col gap-4">
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                {hasPin ? 'Security PIN' : 'New PIN (4-6 digits)'}
+              </label>
+              <div className="relative">
+                <input
+                  type={showPin ? 'text' : 'password'}
+                  inputMode="numeric"
+                  maxLength={12}
+                  autoFocus
+                  placeholder="••••"
+                  value={pinInput}
+                  onChange={e => setPinInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-base tracking-widest text-slate-900 outline-none focus:bg-white focus:border-[#18457c] transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPin(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+                >
+                  {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {!hasPin && (
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  Confirm PIN
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPin ? 'text' : 'password'}
+                    inputMode="numeric"
+                    maxLength={12}
+                    placeholder="••••"
+                    value={pinConfirmInput}
+                    onChange={e => setPinConfirmInput(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-base tracking-widest text-slate-900 outline-none focus:bg-white focus:border-[#18457c] transition-colors"
+                  />
+                </div>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSubmittingPin}
+              className="mt-2 w-full py-2.5 px-4 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold text-xs transition-colors cursor-pointer shadow-2xs flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>{isSubmittingPin ? 'Verifying...' : hasPin ? 'Unlock Passwords' : 'Set PIN & Access Vault'}</span>
+            </button>
+
+            {hasPin && (
+              <div className="flex items-center justify-between pt-2 text-[11px] text-slate-400">
+                <span>Protected with PBKDF2</span>
+                <button
+                  type="button"
+                  onClick={handleResetPin}
+                  className="text-slate-500 hover:text-[#18457c] underline cursor-pointer"
+                >
+                  Reset PIN
+                </button>
+              </div>
+            )}
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-5">
       {/* Top Bar */}
@@ -296,16 +482,26 @@ export default function PasswordVaultPage({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-serif-title text-xl font-bold text-slate-900">Passwords & Accounts</h2>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold">
-                <ShieldCheck className="w-3 h-3" />
-                <span>AES-256 Encrypted</span>
-              </span>
             </div>
             <p className="text-xs text-slate-500">Logins, passwords & account numbers</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              setIsUnlocked(false);
+              setPinInput('');
+              setPinConfirmInput('');
+              setPinError('');
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors"
+            title="Lock Passwords Vault"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span>Lock Vault</span>
+          </button>
           <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs cursor-pointer transition-colors">
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>Upload Excel / CSV</span>

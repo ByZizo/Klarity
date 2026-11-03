@@ -846,12 +846,18 @@ function KlarityApp() {
   const [settingsAiStatus, setSettingsAiStatus] = useState(() => getInitialUserStorage('ai_status', 'not_connected'));
   const [settingsAiShowKey, setSettingsAiShowKey] = useState(false);
   const [settingsAiTesting, setSettingsAiTesting] = useState(false);
-  const [settingsAiPermissions, setSettingsAiPermissions] = useState({
-    bills: true,
-    subscriptions: true,
-    cards: true,
-    purchases: true,
-    retirement: true
+  const [settingsAiPermissions, setSettingsAiPermissions] = useState(() => {
+    try {
+      const raw = getInitialUserStorage('ai_permissions', '');
+      if (raw) return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {}
+    return {
+      bills: true,
+      subscriptions: true,
+      cards: true,
+      purchases: true,
+      retirement: true
+    };
   });
   const [settingsPlaidClientId, setSettingsPlaidClientId] = useState(() => getInitialUserStorage('plaid_client_id', ''));
   const [settingsPlaidSecret, setSettingsPlaidSecret] = useState('');
@@ -1479,30 +1485,50 @@ function KlarityApp() {
 
   const [aiResponseLength, setAiResponseLength] = useState(() => {
     try {
-      return localStorage.getItem('klarity_ai_response_length') || 'balanced';
+      return getInitialUserStorage('ai_response_length', 'balanced') || 'balanced';
     } catch {
       return 'balanced';
     }
   });
   useEffect(() => {
+    const uid = currentUser?.id || 'default';
     try {
       localStorage.setItem('klarity_ai_response_length', aiResponseLength);
+      localStorage.setItem(`klarity_${uid}_ai_response_length`, aiResponseLength);
     } catch {}
-  }, [aiResponseLength]);
+    try {
+      fetch('/api/settings/ai-quick-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ responseLength: aiResponseLength })
+      }).catch(() => {});
+    } catch {}
+  }, [aiResponseLength, currentUser?.id]);
 
   const [aiWebSearchEnabled, setAiWebSearchEnabled] = useState(() => {
     try {
-      const saved = localStorage.getItem('klarity_ai_web_search');
-      return saved === null ? true : saved === 'true';
+      const saved = getInitialUserStorage('ai_web_search', 'true');
+      return saved === null || saved === undefined ? true : String(saved) === 'true';
     } catch {
       return true;
     }
   });
   useEffect(() => {
+    const uid = currentUser?.id || 'default';
     try {
       localStorage.setItem('klarity_ai_web_search', aiWebSearchEnabled ? 'true' : 'false');
+      localStorage.setItem(`klarity_${uid}_ai_web_search`, aiWebSearchEnabled ? 'true' : 'false');
     } catch {}
-  }, [aiWebSearchEnabled]);
+    try {
+      fetch('/api/settings/ai-quick-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webSearchEnabled: aiWebSearchEnabled })
+      }).catch(() => {});
+    } catch {}
+  }, [aiWebSearchEnabled, currentUser?.id]);
+
+  const isAdvisorOnline = Boolean(isOnline && aiWebSearchEnabled);
 
   const [chatInput, setChatInput] = useState('');
   const [chatFiles, setChatFiles] = useState([]); // Array of { id, name, size, mimeType, ext, isImage, previewUrl, base64, textContent }
@@ -1903,6 +1929,12 @@ function KlarityApp() {
           setSettingsAiMaskedKey(finalMasked);
           setSettingsAiApiKey('');
           setSettingsAiStatus(finalStatus);
+          if (json.ai.responseLength) {
+            setAiResponseLength(json.ai.responseLength);
+          }
+          if (json.ai.webSearchEnabled !== undefined) {
+            setAiWebSearchEnabled(Boolean(json.ai.webSearchEnabled));
+          }
           if (json.ai.dataPermissions) {
             setSettingsAiPermissions(json.ai.dataPermissions);
           }
@@ -2031,9 +2063,13 @@ function KlarityApp() {
   };
 
   const handleTogglePermission = async (category) => {
-    const uid = currentUser?.id || 'u-ziyad';
+    const uid = currentUser?.id || 'default';
     const updated = { ...settingsAiPermissions, [category]: !settingsAiPermissions[category] };
     setSettingsAiPermissions(updated);
+    try {
+      localStorage.setItem('klarity_ai_permissions', JSON.stringify(updated));
+      localStorage.setItem(`klarity_${uid}_ai_permissions`, JSON.stringify(updated));
+    } catch {}
     try {
       await fetch('/api/settings/ai-permissions', {
         method: 'POST',
@@ -4893,6 +4929,7 @@ function KlarityApp() {
                   <PasswordVaultPage
                     vaultItems={vaultItems}
                     onUpdateVaultItems={setVaultItems}
+                    onBack={() => setActiveTab('dashboard')}
                   />
                 </div>
               )}
@@ -6247,14 +6284,7 @@ function KlarityApp() {
               </div>
             )}
 
-                        {/* 1. Statutory Legal Shield Status Card (42 U.S.C. § 407, CA CCP § 704.110, 31 CFR Part 212) */}
-            <LegalShieldStatusCard 
-              incomeStreams={incomeStreams} 
-              debtAccounts={allFilterableCards.filter(c => c.type === 'credit')} 
-              transactions={data.transactions || []}
-              accounts={data.accounts || []}
-              onUpdateIncomeStreams={setIncomeStreams}
-            />
+            
 
             {/* 2. Mathematical 4-Option Payoff Engine (Minimum, Accelerated, 0% Hardship/NFCC, Family Qard Hasan) */}
             <InteractivePayoffComparison 
@@ -6335,7 +6365,11 @@ function KlarityApp() {
         {/* --------------------------------------------------------------------- */}
         {/* TAB: PASSWORDS & ACCOUNTS VAULT */}
         {activeTab === 'vault' && featureFlags.vault !== false && (
-          <PasswordVaultPage vaultItems={vaultItems} onUpdateVaultItems={setVaultItems} />
+          <PasswordVaultPage
+            vaultItems={vaultItems}
+            onUpdateVaultItems={setVaultItems}
+            onBack={() => setActiveTab('dashboard')}
+          />
         )}
 
         {/* TAB: TRANSACTIONS (Dedicated Purchases Page with Multi-Card Filter) */}
@@ -6576,9 +6610,9 @@ function KlarityApp() {
                   <div className="flex items-center gap-2">
                     <h2 className="font-serif-title text-xl font-bold text-slate-900">Advisor</h2>
                     <span
-                      title={isOnline ? 'Connected to the internet' : 'Connected locally only'}
+                      title={isAdvisorOnline ? 'Connected to the internet' : 'Connected locally only (Web search disabled)'}
                       className={`inline-flex items-center justify-center w-5 h-5 rounded-full border ${
-                        isOnline
+                        isAdvisorOnline
                           ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
                           : 'bg-blue-50 border-blue-200 text-blue-600'
                       }`}
@@ -6888,7 +6922,7 @@ function KlarityApp() {
           <GripVertical className="w-3.5 h-3.5 text-blue-200/60 group-hover:text-white transition-colors" />
           <ChevronLeft className="w-4 h-4 text-white group-hover:-translate-x-0.5 transition-transform" />
           <span>Advisor</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          <span className={`w-1.5 h-1.5 rounded-full ${isAdvisorOnline ? 'bg-emerald-400' : 'bg-blue-400'}`}></span>
         </div>
       )}
 
@@ -6940,9 +6974,9 @@ function KlarityApp() {
           <div className="flex items-center gap-1.5">
             <h2 className="text-sm font-bold text-slate-900 tracking-tight">Advisor</h2>
             <span
-              title={isOnline ? 'Connected to the internet' : 'Connected locally only'}
+              title={isAdvisorOnline ? 'Connected to the internet' : 'Connected locally only (Web search disabled)'}
               className={`inline-flex items-center justify-center w-4 h-4 rounded-full border ${
-                isOnline
+                isAdvisorOnline
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
                   : 'bg-blue-50 border-blue-200 text-blue-600'
               }`}
@@ -8215,46 +8249,27 @@ function KlarityApp() {
                           </div>
                         </div>
 
-                        {/* Retirement & Income Sources */}
-                        <div className="pt-2 border-t border-slate-100 flex flex-col gap-2.5">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-xs font-bold text-slate-900">Retirement & Income Sources</p>
-                              <p className="text-[11px] text-slate-500">Select your active income sources to unlock legal protections and senior hardship tools.</p>
-                            </div>
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Protected</span>
-                            </span>
+                        {/* Retirement Section Option */}
+                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">Retirement Planning Section</p>
+                            <p className="text-[11px] text-slate-500">Hide the Retirement tab and calculators if you don't need retirement tracking.</p>
                           </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                            {[
-                              'Social Security',
-                              'CalPERS Public Pension',
-                              'STRS / State Pension',
-                              '401(k) / IRA Distribution',
-                              'CalPERS 457(b)',
-                              'Medi-Cal / Medicare',
-                              'Employment / Salary'
-                            ].map(source => {
-                              const isSelected = incomeSources.includes(source);
-                              return (
-                                <button
-                                  key={source}
-                                  type="button"
-                                  onClick={() => handleToggleIncomeSource(source)}
-                                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
-                                    isSelected
-                                      ? 'bg-blue-50/80 border-[#1B4B91]/40 text-[#1B4B91] shadow-2xs'
-                                      : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600'
-                                  }`}
-                                >
-                                  <span className="truncate pr-1 text-[11px]">{source}</span>
-                                  <span className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-[#1B4B91]' : 'bg-slate-300'}`}></span>
-                                </button>
-                              );
-                            })}
-                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={featureFlags.retirement !== false}
+                            onClick={() => handleUpdateFeatureFlags({ retirement: featureFlags.retirement === false })}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                              featureFlags.retirement !== false ? 'bg-[#18457c]' : 'bg-slate-200'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                featureFlags.retirement !== false ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
                         </div>
 
                         <div className="flex justify-end pt-2 border-t border-slate-100">
@@ -8778,21 +8793,7 @@ function KlarityApp() {
                         <p className="text-xs text-slate-500 mt-1">Background encryption, anti-injection firewall, app updates, and active session.</p>
                       </div>
 
-                      {/* Card 1: Encryption & Anti-Code-Injection Firewall Status */}
-                      <div className="border border-emerald-200 rounded-2xl p-4 bg-emerald-50/50 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                            <ShieldCheck className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-slate-900">AES-256 Encryption & Anti-Injection Firewall Active</p>
-                            <p className="text-[11px] text-slate-600">Blocks XSS, script injection, prototype pollution & Excel formula exploits in the background.</p>
-                          </div>
-                        </div>
-                        <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold shrink-0">
-                          Protected
-                        </span>
-                      </div>
+
 
                       {/* Card 1B: Desktop App Engine & GitHub Auto-Updater */}
                       <div className="border border-slate-200 rounded-2xl p-4 bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">

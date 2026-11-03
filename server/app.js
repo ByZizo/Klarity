@@ -892,7 +892,9 @@ app.get('/api/settings', async (req, res) => {
       hasKey: Boolean(ai.encryptedKey),
       maskedKey: ai.encryptedKey ? maskSecret(decrypt(ai.encryptedKey)) : '',
       status: ai.encryptedKey ? (ai.status || 'connected') : 'not_connected',
-      dataPermissions: ai.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true }
+      responseLength: ai.responseLength || 'balanced',
+      webSearchEnabled: ai.webSearchEnabled !== undefined ? ai.webSearchEnabled : true,
+      dataPermissions: ai.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
     },
     plaid: {
       clientId: plaid.clientId || '',
@@ -1100,8 +1102,39 @@ app.post('/api/settings/ai-permissions', async (req, res) => {
   const userSettings = getUserSettings(data, uid);
   if (!userSettings.ai) userSettings.ai = {};
   userSettings.ai.dataPermissions = dataPermissions;
+  if (!data.settings) data.settings = {};
+  if (!data.settings.ai) data.settings.ai = {};
+  data.settings.ai.dataPermissions = dataPermissions;
+  for (const otherUid of Object.keys(data.userSettings || {})) {
+    if (!data.userSettings[otherUid].ai) data.userSettings[otherUid].ai = {};
+    data.userSettings[otherUid].ai.dataPermissions = dataPermissions;
+  }
   await writeData(data, req.userId);
   res.json({ success: true, dataPermissions });
+});
+
+app.post('/api/settings/ai-quick-settings', async (req, res) => {
+  const { responseLength, webSearchEnabled, dataPermissions } = req.body;
+  const uid = req.userId;
+  const data = await readData(req.userId);
+  const userSettings = getUserSettings(data, uid);
+  if (!userSettings.ai) userSettings.ai = {};
+  if (responseLength) userSettings.ai.responseLength = responseLength;
+  if (webSearchEnabled !== undefined) userSettings.ai.webSearchEnabled = Boolean(webSearchEnabled);
+  if (dataPermissions) userSettings.ai.dataPermissions = dataPermissions;
+  if (!data.settings) data.settings = {};
+  if (!data.settings.ai) data.settings.ai = {};
+  if (responseLength) data.settings.ai.responseLength = responseLength;
+  if (webSearchEnabled !== undefined) data.settings.ai.webSearchEnabled = Boolean(webSearchEnabled);
+  if (dataPermissions) data.settings.ai.dataPermissions = dataPermissions;
+  for (const otherUid of Object.keys(data.userSettings || {})) {
+    if (!data.userSettings[otherUid].ai) data.userSettings[otherUid].ai = {};
+    if (responseLength) data.userSettings[otherUid].ai.responseLength = responseLength;
+    if (webSearchEnabled !== undefined) data.userSettings[otherUid].ai.webSearchEnabled = Boolean(webSearchEnabled);
+    if (dataPermissions) data.userSettings[otherUid].ai.dataPermissions = dataPermissions;
+  }
+  await writeData(data, req.userId);
+  res.json({ success: true, ai: userSettings.ai });
 });
 
 app.post('/api/settings/plaid', async (req, res) => {
