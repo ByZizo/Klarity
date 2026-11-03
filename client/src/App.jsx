@@ -589,42 +589,63 @@ function KlarityApp() {
     let isMounted = true;
     async function verifyWeeklySession() {
       try {
+        let activeToken = null;
+        let activeUser = null;
+
+        // 1. Check Electron persistent disk store
         if (typeof window !== 'undefined' && window.klarityDesktop?.getSession) {
           const diskSession = await window.klarityDesktop.getSession();
-          if (diskSession?.user && diskSession?.expiresAt) {
-            if (Date.now() < diskSession.expiresAt) {
-              if (isMounted) {
-                setCurrentUser(diskSession.user);
-                setAuthSession(diskSession);
-                await secureStorage.setItem('klarity_auth_session', diskSession);
-                await secureStorage.setItem('klarity_user', diskSession.user);
-              }
-              return;
-            } else {
-              if (window.klarityDesktop?.clearSession) {
-                await window.klarityDesktop.clearSession();
-              }
+          if (diskSession && diskSession.expiresAt && Date.now() < diskSession.expiresAt) {
+            if (diskSession.token) activeToken = diskSession.token;
+            if (diskSession.user) activeUser = diskSession.user;
+            if (isMounted && activeUser) {
+              setCurrentUser(activeUser);
+              setAuthSession(diskSession);
+              try { localStorage.setItem('klarity_user', JSON.stringify(activeUser)); } catch {}
+              await secureStorage.setItem('klarity_auth_session', diskSession);
+              await secureStorage.setItem('klarity_user', activeUser);
             }
+          } else if (diskSession && window.klarityDesktop?.clearSession) {
+            await window.klarityDesktop.clearSession();
           }
         }
 
-        const res = await fetch('/api/auth/session');
-        if (res.ok) {
-          const json = await res.json();
-          if (json.authenticated && json.session?.user && json.session?.expiresAt) {
-            if (Date.now() < json.session.expiresAt) {
+        // 2. Check local secureStorage if no token found yet
+        if (!activeToken) {
+          const localSess = await secureStorage.getItem('klarity_auth_session', null);
+          if (localSess && localSess.token && localSess.expiresAt && Date.now() < localSess.expiresAt) {
+            activeToken = localSess.token;
+            if (!activeUser && localSess.user) activeUser = localSess.user;
+          }
+        }
+
+        // 3. Verify with server using Bearer token
+        if (activeToken) {
+          const res = await fetch('/api/auth/session', {
+            headers: { Authorization: `Bearer ${activeToken}` }
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (json.authenticated && json.session && json.session.user) {
               if (isMounted) {
+                const mergedSession = { ...json.session, token: activeToken };
                 setCurrentUser(json.session.user);
-                setAuthSession(json.session);
-                await secureStorage.setItem('klarity_auth_session', json.session);
+                setAuthSession(mergedSession);
+                try { localStorage.setItem('klarity_user', JSON.stringify(json.session.user)); } catch {}
+                await secureStorage.setItem('klarity_auth_session', mergedSession);
                 await secureStorage.setItem('klarity_user', json.session.user);
                 if (typeof window !== 'undefined' && window.klarityDesktop?.saveSession) {
-                  window.klarityDesktop.saveSession(json.session);
+                  await window.klarityDesktop.saveSession(mergedSession);
                 }
               }
               return;
             }
           }
+        }
+
+        // If activeUser was found from disk and valid, keep user logged in even if offline
+        if (activeUser && isMounted) {
+          return;
         }
 
         const localSess = await secureStorage.getItem('klarity_auth_session', null);
@@ -647,21 +668,31 @@ function KlarityApp() {
   }, []);
 
   const handleAuthSessionSuccess = async (user, sessionData = null) => {
-    const session = sessionData || {
-      user,
-      authenticatedAt: Date.now(),
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+    const session = {
+      ...(sessionData || {}),
+      user: user || sessionData?.user,
+      token: sessionData?.token,
+      authenticatedAt: sessionData?.authenticatedAt || Date.now(),
+      expiresAt: sessionData?.expiresAt || (Date.now() + 7 * 24 * 60 * 60 * 1000)
     };
-    setCurrentUser(user);
+    const activeUser = session.user;
+    setCurrentUser(activeUser);
     setAuthSession(session);
+    try {
+      if (activeUser) {
+        localStorage.setItem('klarity_user', JSON.stringify(activeUser));
+      }
+    } catch {}
     await secureStorage.setItem('klarity_auth_session', session);
-    await secureStorage.setItem('klarity_user', user);
+    if (activeUser) {
+      await secureStorage.setItem('klarity_user', activeUser);
+    }
 
     try {
       await fetch('/api/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user })
+        body: JSON.stringify({ user: activeUser })
       });
     } catch {}
 
@@ -785,14 +816,19 @@ function KlarityApp() {
   const getInitialUserStorage = (key, fallback = '') => {
     try {
       const savedUser = localStorage.getItem('klarity_user');
-      const u = savedUser ? JSON.parse(savedUser) : null;
-      const uid = u?.id || 'u-ziyad';
+      let uid = 'default';
+      if (savedUser && !savedUser.startsWith('ENCv')) {
+        try {
+          const u = JSON.parse(savedUser);
+          if (u?.id) uid = u.id;
+        } catch {}
+      }
       const userVal = localStorage.getItem(`klarity_${uid}_${key}`);
       if (userVal !== null && userVal !== undefined) return userVal;
-      if (uid === 'u-ziyad') {
-        const legacy = localStorage.getItem(`klarity_${key}`);
-        if (legacy !== null && legacy !== undefined) return legacy;
-      }
+      const globalVal = localStorage.getItem(`klarity_${key}`);
+      if (globalVal !== null && globalVal !== undefined) return globalVal;
+      const ziyadVal = localStorage.getItem(`klarity_u-ziyad_${key}`);
+      if (ziyadVal !== null && ziyadVal !== undefined) return ziyadVal;
       return fallback;
     } catch {
       return fallback;
@@ -1850,17 +1886,17 @@ function KlarityApp() {
           setFeatureFlags(prev => ({ ...prev, ...json.featureFlags }));
         }
         if (json.ai) {
-          const storedProv = localStorage.getItem(`klarity_${uid}_ai_provider`);
-          const storedMod = localStorage.getItem(`klarity_${uid}_ai_model`);
-          const storedMasked = localStorage.getItem(`klarity_${uid}_ai_masked_key`);
-          const storedStatus = localStorage.getItem(`klarity_${uid}_ai_status`);
+          const storedProv = localStorage.getItem(`klarity_${uid}_ai_provider`) || localStorage.getItem('klarity_ai_provider') || localStorage.getItem('klarity_u-ziyad_ai_provider');
+          const storedMod = localStorage.getItem(`klarity_${uid}_ai_model`) || localStorage.getItem('klarity_ai_model') || localStorage.getItem('klarity_u-ziyad_ai_model');
+          const storedMasked = localStorage.getItem(`klarity_${uid}_ai_masked_key`) || localStorage.getItem('klarity_ai_masked_key') || localStorage.getItem('klarity_u-ziyad_ai_masked_key');
+          const storedStatus = localStorage.getItem(`klarity_${uid}_ai_status`) || localStorage.getItem('klarity_ai_status') || localStorage.getItem('klarity_u-ziyad_ai_status');
 
-          let prov = storedProv || json.ai.provider || 'gemini';
-          let mod = storedMod || json.ai.model || 'gemini-3.8-flash';
+          let prov = json.ai.provider || storedProv || 'gemini';
+          let mod = json.ai.model || storedMod || 'gemini-3.8-flash';
           if (mod.includes('2.0') || mod.includes('2.5') || mod.includes('tts')) mod = 'gemini-3.8-flash';
 
           const finalMasked = json.ai.maskedKey || storedMasked || '';
-          const finalStatus = (json.ai.status === 'connected' || storedStatus === 'connected') ? 'connected' : 'not_connected';
+          const finalStatus = (json.ai.status === 'connected' || Boolean(json.ai.maskedKey) || storedStatus === 'connected' || Boolean(storedMasked)) ? 'connected' : 'not_connected';
 
           setSettingsAiProvider(prov);
           setSettingsAiModel(mod);
@@ -1872,13 +1908,13 @@ function KlarityApp() {
           }
         }
         if (json.plaid) {
-          const storedClientId = localStorage.getItem(`klarity_${uid}_plaid_client_id`) || '';
-          const storedMaskedSecret = localStorage.getItem(`klarity_${uid}_plaid_masked_secret`) || '';
-          const storedStatus = localStorage.getItem(`klarity_${uid}_plaid_status`) || 'not_connected';
+          const storedClientId = localStorage.getItem(`klarity_${uid}_plaid_client_id`) || localStorage.getItem('klarity_plaid_client_id') || '';
+          const storedMaskedSecret = localStorage.getItem(`klarity_${uid}_plaid_masked_secret`) || localStorage.getItem('klarity_plaid_masked_secret') || '';
+          const storedStatus = localStorage.getItem(`klarity_${uid}_plaid_status`) || localStorage.getItem('klarity_plaid_status') || 'not_connected';
 
           const finalClientId = json.plaid.clientId || storedClientId;
           const finalMasked = json.plaid.maskedSecret || storedMaskedSecret;
-          const finalStatus = (json.plaid.status === 'connected' || storedStatus === 'connected' || Boolean(storedClientId)) ? 'connected' : 'not_connected';
+          const finalStatus = (json.plaid.status === 'connected' || storedStatus === 'connected' || Boolean(storedClientId) || Boolean(finalClientId)) ? 'connected' : 'not_connected';
 
           setSettingsPlaidClientId(finalClientId || '');
           setSettingsPlaidMaskedSecret(finalMasked || '');
@@ -1946,6 +1982,11 @@ function KlarityApp() {
           localStorage.setItem(`klarity_${uid}_ai_provider`, settingsAiProvider);
           localStorage.setItem(`klarity_${uid}_ai_model`, settingsAiModel);
           localStorage.setItem(`klarity_${uid}_ai_status`, 'connected');
+          // Global fallbacks
+          localStorage.setItem('klarity_ai_masked_key', json.maskedKey);
+          localStorage.setItem('klarity_ai_provider', settingsAiProvider);
+          localStorage.setItem('klarity_ai_model', settingsAiModel);
+          localStorage.setItem('klarity_ai_status', 'connected');
         } catch {}
         setNotificationToast('API key verified and securely saved for your account!');
       } else {
@@ -1976,6 +2017,10 @@ function KlarityApp() {
         try {
           localStorage.removeItem(`klarity_${uid}_ai_masked_key`);
           localStorage.removeItem(`klarity_${uid}_ai_status`);
+          localStorage.removeItem('klarity_ai_masked_key');
+          localStorage.removeItem('klarity_ai_status');
+          localStorage.removeItem('klarity_u-ziyad_ai_masked_key');
+          localStorage.removeItem('klarity_u-ziyad_ai_status');
         } catch {}
         setNotificationToast('AI API key removed.');
         setTimeout(() => setNotificationToast(''), 3000);

@@ -224,7 +224,9 @@ ipcMain.handle('klarity:google-sign-in', async () => {
               mainWindow.setAlwaysOnTop(false);
               mainWindow.flashFrame(true);
             }
-            resolve({ ok: true, user: json.user, session: json.session });
+            const fullSession = { ...(json.session || {}), user: json.user };
+            writePersistentSession(fullSession);
+            resolve({ ok: true, user: json.user, session: fullSession });
           }
         }
       } catch {}

@@ -173,34 +173,64 @@ function getUserSettings(data, userId) {
   if (!data) return { ai: {}, plaid: {}, featureFlags: { retirement: true, budgets: true, savingsGoals: true, vault: true } };
   if (!data.userSettings) data.userSettings = {};
   const uid = userId || 'default';
-  if (!data.userSettings[uid]) {
-    // If it's the primary default user 'u-ziyad' and legacy settings exist, migrate them:
-    if (uid === 'u-ziyad' && data.settings?.ai?.encryptedKey) {
-      data.userSettings[uid] = JSON.parse(JSON.stringify(data.settings));
-    } else {
-      // New or separate account starts completely fresh with no keys
-      data.userSettings[uid] = {
-        ai: {
-          provider: "gemini",
-          model: "gemini-3.8-flash",
-          encryptedKey: "",
-          status: "not_connected",
-          dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
-        },
-        plaid: {
-          clientId: "",
-          encryptedSecret: "",
-          status: "not_connected"
-        },
-        featureFlags: {
-          retirement: true,
-          budgets: true,
-          savingsGoals: true,
-          vault: true
-        }
-      };
+
+  // Discover any existing configured AI key across users or legacy settings to prevent key loss
+  let existingAi = null;
+  if (data.settings?.ai?.encryptedKey) {
+    existingAi = data.settings.ai;
+  } else {
+    for (const otherUid of Object.keys(data.userSettings)) {
+      if (data.userSettings[otherUid]?.ai?.encryptedKey) {
+        existingAi = data.userSettings[otherUid].ai;
+        break;
+      }
     }
   }
+
+  // Discover any existing Plaid settings to prevent key loss
+  let existingPlaid = null;
+  if (data.settings?.plaid?.encryptedSecret) {
+    existingPlaid = data.settings.plaid;
+  } else {
+    for (const otherUid of Object.keys(data.userSettings)) {
+      if (data.userSettings[otherUid]?.plaid?.encryptedSecret) {
+        existingPlaid = data.userSettings[otherUid].plaid;
+        break;
+      }
+    }
+  }
+
+  if (!data.userSettings[uid]) {
+    data.userSettings[uid] = {
+      ai: existingAi ? JSON.parse(JSON.stringify(existingAi)) : {
+        provider: 'gemini',
+        model: 'gemini-3.8-flash',
+        encryptedKey: '',
+        status: 'not_connected',
+        dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
+      },
+      plaid: existingPlaid ? JSON.parse(JSON.stringify(existingPlaid)) : {
+        clientId: '',
+        encryptedSecret: '',
+        status: 'not_connected'
+      },
+      featureFlags: {
+        retirement: true,
+        budgets: true,
+        savingsGoals: true,
+        vault: true
+      }
+    };
+  } else {
+    // Backfill if this entry lacks key but existing configured key was found
+    if (!data.userSettings[uid].ai?.encryptedKey && existingAi?.encryptedKey) {
+      data.userSettings[uid].ai = JSON.parse(JSON.stringify(existingAi));
+    }
+    if (!data.userSettings[uid].plaid?.encryptedSecret && existingPlaid?.encryptedSecret) {
+      data.userSettings[uid].plaid = JSON.parse(JSON.stringify(existingPlaid));
+    }
+  }
+
   if (!data.userSettings[uid].featureFlags) {
     data.userSettings[uid].featureFlags = {
       retirement: true,
@@ -360,7 +390,8 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex');
 }
 
-async function createUserSession(data, userId) {
+async function createUserSession(data, userOrId) {
+  const userId = typeof userOrId === 'object' && userOrId !== null ? userOrId.id : userOrId;
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashToken(rawToken);
   const expiresAt = Date.now() + SESSION_DURATION_MS;
@@ -380,10 +411,20 @@ async function createUserSession(data, userId) {
   delete data.activeSession;
 
   await writeData(data, userId);
+  await db.createSession(userId, tokenHash, expiresAt);
+
+  let safeUser = null;
+  if (typeof userOrId === 'object' && userOrId !== null) {
+    safeUser = sanitizeUser(userOrId);
+  } else {
+    const foundUser = (data.users || []).find(u => u.id === userId);
+    if (foundUser) safeUser = sanitizeUser(foundUser);
+  }
 
   return {
     token: rawToken,
-    expiresAt
+    expiresAt,
+    user: safeUser
   };
 }
 
@@ -433,6 +474,11 @@ async function requireAuth(req, res, next) {
 }
 
 app.use('/api', requireAuth);
+
+app.post('/api/auth/session', async (req, res) => {
+  // Session heartbeat and client profile synchronization endpoint
+  res.json({ ok: true, active: true });
+});
 
 app.get('/api/auth/session', async (req, res) => {
   const authHeader = req.headers.authorization || req.headers.Authorization;
@@ -704,11 +750,14 @@ app.get('/api/auth/google/callback', async (req, res) => {
     }
 
     const safeUser = sanitizeUser(user);
-    const session = await createUserSession(data, safeUser.id);
+    const session = await createUserSession(data, safeUser);
 
-    // Save for desktop app poller
+    // Save for desktop app poller with full user info
     if (state) {
-      global.completedDesktopAuths.set(state, { user: safeUser, session });
+      global.completedDesktopAuths.set(state, {
+        user: safeUser,
+        session: { token: session.token, expiresAt: session.expiresAt, user: safeUser }
+      });
     }
 
     res.send(`
@@ -1003,8 +1052,14 @@ app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
     model: model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-3.8-flash'),
     encryptedKey: encrypt(keyToTest),
     status: 'connected',
-    dataPermissions: dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true }
+    dataPermissions: dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
   };
+  // Preserve in global settings and across all user settings so signing in never loses the AI key
+  data.settings = data.settings || {};
+  data.settings.ai = JSON.parse(JSON.stringify(userSettings.ai));
+  for (const otherUid of Object.keys(data.userSettings || {})) {
+    data.userSettings[otherUid].ai = JSON.parse(JSON.stringify(userSettings.ai));
+  }
   await writeData(data, req.userId);
 
   return res.json({
@@ -1026,8 +1081,14 @@ app.post('/api/settings/ai-key/remove', async (req, res) => {
     model: userSettings.ai?.model || 'gemini-3.8-flash',
     encryptedKey: '',
     status: 'not_connected',
-    dataPermissions: userSettings.ai?.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true }
+    dataPermissions: userSettings.ai?.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
   };
+  if (data.settings && data.settings.ai) {
+    data.settings.ai = JSON.parse(JSON.stringify(userSettings.ai));
+  }
+  for (const otherUid of Object.keys(data.userSettings || {})) {
+    data.userSettings[otherUid].ai = JSON.parse(JSON.stringify(userSettings.ai));
+  }
   await writeData(data, req.userId);
   res.json({ success: true, status: 'not_connected' });
 });
@@ -1055,6 +1116,11 @@ app.post('/api/settings/plaid', async (req, res) => {
     encryptedSecret: secret ? encrypt(secret) : (currentPlaid.encryptedSecret || ''),
     status: (clientId || currentPlaid.clientId) ? 'connected' : 'not_connected'
   };
+  data.settings = data.settings || {};
+  data.settings.plaid = JSON.parse(JSON.stringify(userSettings.plaid));
+  for (const otherUid of Object.keys(data.userSettings || {})) {
+    data.userSettings[otherUid].plaid = JSON.parse(JSON.stringify(userSettings.plaid));
+  }
   await writeData(data, req.userId);
 
   res.json({
