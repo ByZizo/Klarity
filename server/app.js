@@ -204,7 +204,7 @@ function getUserSettings(data, userId) {
     data.userSettings[uid] = {
       ai: existingAi ? JSON.parse(JSON.stringify(existingAi)) : {
         provider: 'gemini',
-        model: 'gemini-3.8-flash',
+        model: 'gemini-2.5-flash',
         encryptedKey: '',
         status: 'not_connected',
         dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
@@ -888,7 +888,7 @@ app.get('/api/settings', async (req, res) => {
     },
     ai: {
       provider: ai.provider || 'gemini',
-      model: ai.model || 'gemini-3.8-flash',
+      model: ai.model || 'gemini-2.5-flash',
       hasKey: Boolean(ai.encryptedKey),
       maskedKey: ai.encryptedKey ? maskSecret(decrypt(ai.encryptedKey)) : '',
       status: ai.encryptedKey ? (ai.status || 'connected') : 'not_connected',
@@ -1057,7 +1057,7 @@ app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
   const userSettings = getUserSettings(data, uid);
   userSettings.ai = {
     provider,
-    model: model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-3.8-flash'),
+    model: model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.5-flash'),
     encryptedKey: encrypt(keyToTest),
     status: 'connected',
     dataPermissions: dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
@@ -1086,7 +1086,7 @@ app.post('/api/settings/ai-key/remove', async (req, res) => {
   const userSettings = getUserSettings(data, uid);
   userSettings.ai = {
     provider: userSettings.ai?.provider || 'gemini',
-    model: userSettings.ai?.model || 'gemini-3.8-flash',
+    model: userSettings.ai?.model || 'gemini-2.5-flash',
     encryptedKey: '',
     status: 'not_connected',
     dataPermissions: userSettings.ai?.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
@@ -2150,6 +2150,9 @@ app.post('/api/household/zillow-lookup', async (req, res) => {
   }
 });
 
+// In-memory cache for dynamically fetched Gemini models (15-min TTL per API key)
+const geminiModelsCache = new Map();
+
 // 10. AI Advisor Chat with Navigation Capabilities & User Key Encryption
 app.post('/api/ai/chat', async (req, res) => {
   const userId = req.userId;
@@ -2212,10 +2215,10 @@ app.post('/api/ai/chat', async (req, res) => {
 
   const permissions = aiConfig.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true };
   const provider = clientProvider || aiConfig.provider || 'gemini';
-  let model = clientModel || aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-3.8-flash');
-  // Auto-upgrade any old/preview/tts/deprecated gemini names
-  if (model.includes('2.0') || model.includes('tts') || model.includes('audio') || model.includes('image') || model === 'gemini-2.5-flash') {
-    model = 'gemini-3.8-flash';
+  let model = clientModel || aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.5-flash');
+  // Clean up any audio/tts/non-chat model names
+  if (model.includes('tts') || model.includes('audio') || model.includes('image') || model.includes('embedding') || model.includes('aqa')) {
+    model = 'gemini-2.5-flash';
   }
 
   const currentUser = (data.users || []).find(u => u.id === userId) || req.user || { name: 'User' };
@@ -2466,74 +2469,119 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
         reply = `OpenAI API error: ${errJson?.error?.message || aiRes.statusText}`;
       }
     } else if (provider === 'gemini') {
-      // Query the API for all active available text/multimodal models for this user's key dynamically
+      // Query the API for all active available text/multimodal models for this user's key dynamically (15-min cache)
+      const cacheKey = rawApiKey.slice(-8);
       let activeGeminiModels = [];
-      try {
-        const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${rawApiKey}`);
-        if (listRes.ok) {
-          const listJson = await listRes.json();
-          const supported = (listJson.models || [])
-            .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
-            .filter(m => {
-              const n = m.name.toLowerCase();
-              return !n.includes('tts') && !n.includes('audio') && !n.includes('image') && !n.includes('transcribe') && !n.includes('translate') && !n.includes('embedding') && !n.includes('aqa');
-            })
-            .map(m => m.name.replace(/^models\//, ''));
-          if (supported.length > 0) {
-            activeGeminiModels = supported;
+      const cached = geminiModelsCache.get(cacheKey);
+      if (cached && cached.expires > Date.now()) {
+        activeGeminiModels = cached.models;
+      } else {
+        try {
+          const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${rawApiKey}`);
+          if (listRes.ok) {
+            const listJson = await listRes.json();
+            const supported = (listJson.models || [])
+              .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+              .filter(m => {
+                const n = (m.name || '').toLowerCase();
+                return !n.includes('tts') && !n.includes('audio') && !n.includes('image') &&
+                       !n.includes('transcribe') && !n.includes('translate') &&
+                       !n.includes('embedding') && !n.includes('aqa') && !n.includes('robotics');
+              })
+              .map(m => m.name.replace(/^models\//, ''));
+            if (supported.length > 0) {
+              activeGeminiModels = supported;
+              geminiModelsCache.set(cacheKey, { models: supported, expires: Date.now() + 15 * 60 * 1000 });
+            }
           }
+        } catch (e) {
+          console.warn('Could not dynamically fetch models list:', e.message);
         }
-      } catch (e) {
-        console.warn('Could not dynamically fetch models list:', e.message);
       }
 
-      // Prioritize verified active flash models first so we don't hit 404s on unavailable model names
-      const preferredActive = activeGeminiModels.filter(m => m.includes('flash'));
-      const candidateModels = [
-        ...new Set([
-          ...preferredActive,
-          ...activeGeminiModels,
-          ...(model && !model.includes('tts') && !model.includes('audio') && !model.includes('image') ? [model] : []),
-          'gemini-2.5-flash',
-          'gemini-2.0-flash',
-          'gemini-1.5-flash'
-        ])
+      // Candidate models:
+      // 1. User's explicitly chosen model first
+      // 2. High-availability standard production models (Gemini 2.5 Flash, 2.0 Flash, 1.5 Flash)
+      // 3. Fallback lite models (2.5 Flash-Lite, 2.0 Flash-Lite) for rate-limit tolerance
+      // 4. Any other active models from the user's Google Cloud project
+      const requestedModel = (model || '').trim();
+      const standardFlashModels = [
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash-lite',
+        'gemini-3.8-flash',
+        'gemini-1.5-pro'
       ];
 
+      const candidateModels = [
+        ...new Set([
+          ...(requestedModel ? [requestedModel] : []),
+          ...standardFlashModels,
+          ...activeGeminiModels
+        ])
+      ].filter(m => m && !m.includes('tts') && !m.includes('audio') && !m.includes('image') && !m.includes('embedding') && !m.includes('aqa'));
+
       let lastGeminiError = '';
-      for (const curModel of candidateModels) {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${rawApiKey}`;
-        const parts = [{ text: `${systemContext}\n\nUser Request:\n${fullUserPrompt}` }];
+      let isRateLimited = false;
 
-        for (const att of fileAttachments) {
-          if (!att.base64) continue;
-          const fileName = (att.name || '').toLowerCase();
-          const rawMime = (att.mimeType || '').toLowerCase();
-          if (rawMime === 'application/pdf' || fileName.endsWith('.pdf')) {
-            parts.push({
-              inlineData: {
-                mimeType: 'application/pdf',
-                data: att.base64
-              }
-            });
-          } else if (rawMime.startsWith('image/')) {
-            parts.push({
-              inlineData: {
-                mimeType: att.mimeType || 'image/jpeg',
-                data: att.base64
-              }
-            });
-          }
+      // Prepare multimodal parts
+      const parts = [{ text: `${systemContext}\n\nUser Request:\n${fullUserPrompt}` }];
+      for (const att of fileAttachments) {
+        if (!att.base64) continue;
+        const fileName = (att.name || '').toLowerCase();
+        const rawMime = (att.mimeType || '').toLowerCase();
+        if (rawMime === 'application/pdf' || fileName.endsWith('.pdf')) {
+          parts.push({
+            inlineData: {
+              mimeType: 'application/pdf',
+              data: att.base64
+            }
+          });
+        } else if (rawMime.startsWith('image/')) {
+          parts.push({
+            inlineData: {
+              mimeType: att.mimeType || 'image/jpeg',
+              data: att.base64
+            }
+          });
         }
+      }
 
-        // Try first with Google Search Grounding enabled for live internet search
+      const standardSafetySettings = [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' }
+      ];
+
+      const standardGenConfig = {
+        temperature: 0.7,
+        maxOutputTokens: responseLength === 'concise' ? 1024 : (responseLength === 'detailed' ? 4096 : 2500)
+      };
+
+      // Only attach Google Search tools if webSearch is enabled AND no file attachments
+      // (Gemini generateContent returns 400 when tools are combined with file/multimodal inlineData)
+      const allowGoogleSearch = webSearchEnabled !== false && fileAttachments.length === 0;
+
+      for (let i = 0; i < candidateModels.length; i++) {
+        const curModel = candidateModels[i];
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${rawApiKey}`;
+
         let geminiPayload = {
           contents: [{ role: 'user', parts }],
-          tools: [{ googleSearch: {} }]
+          safetySettings: standardSafetySettings,
+          generationConfig: standardGenConfig
         };
 
+        if (allowGoogleSearch) {
+          geminiPayload.tools = [{ googleSearch: {} }];
+        }
+
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 25000);
+        const timeoutId = setTimeout(() => controller.abort(), 22000);
 
         let aiRes = await fetch(geminiUrl, {
           method: 'POST',
@@ -2541,53 +2589,67 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(geminiPayload)
         }).catch(err => ({ ok: false, status: 504, errorText: err.message }));
-
-        // If tools is not supported by a legacy model, retry without tools
-        if (!aiRes.ok && (aiRes.status === 400 || aiRes.status === 404)) {
-          geminiPayload = { contents: [{ role: 'user', parts }] };
-          aiRes = await fetch(geminiUrl, {
-            method: 'POST',
-            signal: controller.signal,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(geminiPayload)
-          }).catch(err => ({ ok: false, status: 504, errorText: err.message }));
-        }
-
         clearTimeout(timeoutId);
 
+        // If tools is not supported or returns 400, retry that same model immediately without tools
+        if (!aiRes.ok && (aiRes.status === 400 || aiRes.status === 404) && geminiPayload.tools) {
+          const retryController = new AbortController();
+          const retryTimeoutId = setTimeout(() => retryController.abort(), 20000);
+          const noToolsPayload = { ...geminiPayload };
+          delete noToolsPayload.tools;
+
+          aiRes = await fetch(geminiUrl, {
+            method: 'POST',
+            signal: retryController.signal,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(noToolsPayload)
+          }).catch(err => ({ ok: false, status: 504, errorText: err.message }));
+          clearTimeout(retryTimeoutId);
+        }
+
         if (aiRes && aiRes.ok) {
-          const aiJson = await aiRes.json();
-          reply = aiJson.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('\n').trim();
+          const aiJson = await aiRes.json().catch(() => null);
+          const candidate = aiJson?.candidates?.[0];
+          reply = candidate?.content?.parts?.map(p => p.text || '').join('\n').trim();
           if (reply) break;
+
+          // If safety filtered or no text returned
+          if (candidate?.finishReason === 'SAFETY') {
+            lastGeminiError = 'Response was flagged by default content safety filters.';
+            continue;
+          }
         } else if (aiRes) {
           let errMsg = aiRes.errorText;
           if (!errMsg && typeof aiRes.json === 'function') {
             const errJson = await aiRes.json().catch(() => ({}));
             errMsg = errJson?.error?.message || `HTTP ${aiRes.status}`;
           }
-          lastGeminiError = errMsg || 'Unknown request error';
-          if (
-            aiRes.status === 404 ||
-            aiRes.status === 503 ||
-            aiRes.status === 429 ||
-            errMsg?.includes('not found') ||
-            errMsg?.includes('no longer available') ||
-            errMsg?.includes('not supported') ||
-            errMsg?.includes('high demand') ||
-            errMsg?.includes('overloaded') ||
-            errMsg?.includes('capacity') ||
-            errMsg?.includes('quota') ||
-            errMsg?.includes('aborted')
-          ) {
+          lastGeminiError = errMsg || `HTTP ${aiRes.status}`;
+
+          // Detect rate limits (429) and short backoff
+          if (aiRes.status === 429 || errMsg?.includes('quota') || errMsg?.includes('RESOURCE_EXHAUSTED')) {
+            isRateLimited = true;
+            await new Promise(r => setTimeout(r, 1000));
             continue;
           }
-          reply = `Gemini API error: ${errMsg}`;
-          break;
+
+          // If 404 (model unavailable), 503/500 (overloaded), or 400, continue to next fallback model
+          continue;
         }
       }
 
-      if (!reply && lastGeminiError) {
-        reply = `Gemini API error: ${lastGeminiError}`;
+      if (!reply) {
+        if (isRateLimited) {
+          reply = "Your Google Gemini API rate limit has been temporarily reached (the free tier allows up to 15 requests per minute). Please wait a few moments and try your question again, or you can switch models in Settings > AI Advisor.";
+        } else if (lastGeminiError) {
+          if (lastGeminiError.includes('API key not valid')) {
+            reply = "Your Google Gemini API key appears to be invalid. Please verify and update your key in Settings > AI Advisor.";
+          } else if (lastGeminiError.includes('overloaded') || lastGeminiError.includes('high demand')) {
+            reply = "Google Gemini is currently experiencing heavy server demand. Please try sending your message again in a moment.";
+          } else {
+            reply = `Gemini connection notice: ${lastGeminiError}. Please try sending your question again.`;
+          }
+        }
       }
     }
 
