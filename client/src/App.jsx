@@ -477,9 +477,33 @@ export default function App() {
 }
 
 function KlarityApp() {
-  // Current user state (Encrypted in localStorage with Web Crypto AES-256-GCM; 7-day session validity)
-  const [currentUser, setCurrentUser] = useState(null);
-  const [authSession, setAuthSession] = useState(null);
+  // Current user state (Synchronously initialized from localStorage to prevent OAuth flicker)
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_user');
+      if (saved && !saved.startsWith('ENCv')) {
+        const u = JSON.parse(saved);
+        if (u && (u.id || u.email)) return u;
+      }
+    } catch {}
+    return null;
+  });
+  const [authSession, setAuthSession] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_auth_session_cached');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
+  const [isCheckingSession, setIsCheckingSession] = useState(() => {
+    try {
+      const hasCachedUser = Boolean(localStorage.getItem('klarity_user'));
+      const isDesktop = Boolean(typeof window !== 'undefined' && window.klarityDesktop?.getSession);
+      return hasCachedUser || isDesktop;
+    } catch {
+      return false;
+    }
+  });
 
   // Load authenticated session asynchronously from secureStorage on initial mount
   useEffect(() => {
@@ -490,6 +514,7 @@ function KlarityApp() {
         if (active && sess && sess.user && sess.expiresAt && Date.now() < sess.expiresAt) {
           setCurrentUser(sess.user);
           setAuthSession(sess);
+          try { localStorage.setItem('klarity_auth_session_cached', JSON.stringify(sess)); } catch {}
           return;
         }
         const user = await secureStorage.getItem('klarity_user', null);
@@ -498,6 +523,8 @@ function KlarityApp() {
         }
       } catch (err) {
         console.warn('Initial session load notice:', err);
+      } finally {
+        if (active) setIsCheckingSession(false);
       }
     }
     loadInitialSession();
@@ -661,6 +688,8 @@ function KlarityApp() {
         }
       } catch (err) {
         console.warn('Session verification notice:', err);
+      } finally {
+        if (isMounted) setIsCheckingSession(false);
       }
     }
     verifyWeeklySession();
@@ -681,6 +710,7 @@ function KlarityApp() {
     try {
       if (activeUser) {
         localStorage.setItem('klarity_user', JSON.stringify(activeUser));
+        localStorage.setItem('klarity_auth_session_cached', JSON.stringify(session));
       }
     } catch {}
     await secureStorage.setItem('klarity_auth_session', session);
@@ -1628,12 +1658,21 @@ function KlarityApp() {
   // AI Memory (e.g. custom financial rules, goals, lifestyle constraints)
   const [aiMemory, setAiMemory] = useState(() => {
     try {
-      const saved = localStorage.getItem('klarity_ai_memory');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
+      const raw = getInitialUserStorage('ai_memory', '[]');
+      if (raw) {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
   });
+  useEffect(() => {
+    const uid = currentUser?.id || 'default';
+    try {
+      localStorage.setItem('klarity_ai_memory', JSON.stringify(aiMemory));
+      localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(aiMemory));
+    } catch {}
+  }, [aiMemory, currentUser?.id]);
   const [newMemoryInput, setNewMemoryInput] = useState('');
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
 
@@ -1828,21 +1867,43 @@ function KlarityApp() {
 
   // Save AI Memory helper
   const handleAddMemory = (fact) => {
+    const uid = currentUser?.id || 'default';
     const item = (fact || newMemoryInput).trim();
     if (!item) return;
     if (aiMemory.includes(item)) return;
     const updated = [...aiMemory, item];
     setAiMemory(updated);
-    localStorage.setItem('klarity_ai_memory', JSON.stringify(updated));
+    try {
+      localStorage.setItem('klarity_ai_memory', JSON.stringify(updated));
+      localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(updated));
+    } catch {}
+    try {
+      fetch('/api/settings/ai-quick-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memory: updated })
+      }).catch(() => {});
+    } catch {}
     setNewMemoryInput('');
     setNotificationToast('Saved to AI Memory!');
     setTimeout(() => setNotificationToast(''), 3000);
   };
 
   const handleRemoveMemory = (index) => {
+    const uid = currentUser?.id || 'default';
     const updated = aiMemory.filter((_, i) => i !== index);
     setAiMemory(updated);
-    localStorage.setItem('klarity_ai_memory', JSON.stringify(updated));
+    try {
+      localStorage.setItem('klarity_ai_memory', JSON.stringify(updated));
+      localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(updated));
+    } catch {}
+    try {
+      fetch('/api/settings/ai-quick-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memory: updated })
+      }).catch(() => {});
+    } catch {}
     setNotificationToast('Removed from AI Memory');
     setTimeout(() => setNotificationToast(''), 3000);
   };
@@ -1937,6 +1998,13 @@ function KlarityApp() {
           }
           if (json.ai.dataPermissions) {
             setSettingsAiPermissions(json.ai.dataPermissions);
+          }
+          if (Array.isArray(json.ai.memory)) {
+            setAiMemory(json.ai.memory);
+            try {
+              localStorage.setItem('klarity_ai_memory', JSON.stringify(json.ai.memory));
+              localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(json.ai.memory));
+            } catch {}
           }
         }
         if (json.plaid) {
@@ -3364,6 +3432,18 @@ function KlarityApp() {
     }
   };
 
+  // Splash loading screen while verifying existing stored session (prevents Google sign-in flash)
+  if (isCheckingSession && !currentUser) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center selection:bg-blue-100">
+        <div className="flex flex-col items-center gap-3">
+          <KlarityLogo className="w-12 h-12 text-[#18457c] animate-pulse" />
+          <span className="font-serif-title text-2xl font-bold tracking-tight text-slate-800">Klarity</span>
+        </div>
+      </div>
+    );
+  }
+
   // =========================================================================
   // 1. SIGN IN SCREEN: GOOGLE OAUTH + OPTIONAL EMAIL
   // =========================================================================
@@ -4108,7 +4188,7 @@ function KlarityApp() {
       {/* ======================================================================= */}
       {/* 1. LEFT SIDEBAR (Overview, Transactions, Budgets, Bills, Subscriptions, Cards) */}
       {/* ======================================================================= */}
-      <aside className={`shrink-0 border-r border-slate-200/80 bg-[#f8fafc] flex flex-col justify-between h-screen sticky top-0 hidden md:flex transition-all duration-200 ease-in-out ${
+      <aside className={`shrink-0 border-r border-slate-200/80 bg-[#f8fafc] flex flex-col justify-between h-screen sticky top-0 hidden md:flex transition-all duration-200 ease-in-out relative z-30 ${
         isSidebarCompact ? 'w-[72px] px-2.5 py-5' : 'w-60 p-5'
       }`}>
         <div>
@@ -4209,35 +4289,66 @@ function KlarityApp() {
           </nav>
         </div>
 
-        {/* User Profile Footer */}
-        {!isSidebarCompact ? (
-          <div className="pt-4 border-t border-slate-200/80 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#183b6b] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-              {userInitials}
+        {/* Left Sidebar Footer: Refresh App + User Profile */}
+        <div className="flex flex-col gap-2 pt-3 border-t border-slate-200/80">
+          {!isSidebarCompact ? (
+            <button
+              type="button"
+              onClick={handleRefreshApp}
+              disabled={isRefreshingApp}
+              className="w-full inline-flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] text-xs font-semibold shadow-2xs cursor-pointer transition-all"
+              title="Refresh app data & check for updates"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-[#18457c] shrink-0 ${isRefreshingApp ? 'animate-spin' : ''}`} />
+              <span>{isRefreshingApp ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
+          ) : (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={handleRefreshApp}
+                disabled={isRefreshingApp}
+                className="w-10 h-10 flex items-center justify-center rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] shadow-2xs cursor-pointer transition-all relative group"
+                title="Refresh app data & check for updates"
+              >
+                <RefreshCw className={`w-4 h-4 text-[#18457c] ${isRefreshingApp ? 'animate-spin' : ''}`} />
+                <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
+                  Refresh
+                </span>
+              </button>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-slate-900 truncate leading-snug">{currentUser?.name || 'Ziyad Elmahi'}</p>
+          )}
+
+          {/* User Profile Footer */}
+          {!isSidebarCompact ? (
+            <div className="pt-2 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-[#183b6b] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                {userInitials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-slate-900 truncate leading-snug">{currentUser?.name || 'Ziyad Elmahi'}</p>
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="text-xs text-slate-400 hover:text-slate-700 cursor-pointer transition-colors block leading-none mt-0.5"
+                >
+                  Settings
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="pt-2 flex flex-col items-center">
               <button
                 type="button"
                 onClick={() => setIsSettingsOpen(true)}
-                className="text-xs text-slate-400 hover:text-slate-700 cursor-pointer transition-colors block leading-none mt-0.5"
+                title={`Settings (${currentUser?.name || 'User'})`}
+                className="w-9 h-9 rounded-full bg-[#183b6b] hover:ring-2 hover:ring-[#183b6b]/40 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs cursor-pointer transition-all"
               >
-                Settings
+                {userInitials}
               </button>
             </div>
-          </div>
-        ) : (
-          <div className="pt-4 border-t border-slate-200/80 flex flex-col items-center">
-            <button
-              type="button"
-              onClick={() => setIsSettingsOpen(true)}
-              title={`Settings (${currentUser?.name || 'User'})`}
-              className="w-9 h-9 rounded-full bg-[#183b6b] hover:ring-2 hover:ring-[#183b6b]/40 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs cursor-pointer transition-all"
-            >
-              {userInitials}
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </aside>
 
       {/* ======================================================================= */}
@@ -4646,34 +4757,8 @@ function KlarityApp() {
                   </div>
 
                   <div className="flex-1 overflow-y-auto px-5 py-2 flex flex-col gap-3">
-                    {/* Initial Advisor Card */}
-                    <div className="bg-white border border-slate-200/80 rounded-2xl p-4 text-xs sm:text-sm text-slate-800 leading-relaxed shadow-2xs max-w-[92%]">
-                      Your cash covers everything due this month. The {highestAprCard ? highestAprCard.name : 'Travel Card'} has the highest rate at {highestAprCard ? highestAprCard.apr : '24.4'}%, so extra payments there save the most interest.
-                    </div>
-
-                    {/* Quick-Prompt Pills */}
-                    <div className="flex flex-col items-start gap-2">
-                      {[
-                        'What should I pay off first?',
-                        "What's due in 14 days?",
-                        'Where can I cut subscriptions?',
-                        'Social Security & CalPERS protections',
-                        'Get 0% Bank Hardship script',
-                        'Compare minimums vs 0% plan'
-                      ].map((qText, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => handleSendChatMessage(qText)}
-                          className="px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200/90 text-xs font-medium text-slate-800 shadow-2xs cursor-pointer transition-colors"
-                        >
-                          {qText}
-                        </button>
-                      ))}
-                    </div>
-
                     {/* Active Chat Thread Messages */}
-                    {chatMessages.filter((_, idx) => idx > 0).map((msg, i) => (
+                    {chatMessages.map((msg, i) => (
                       <div
                         key={i}
                         className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -5013,19 +5098,7 @@ function KlarityApp() {
           </div>
         )}
 
-        {/* Top-Right Refresh Button right next to the AI Advisor sidebar */}
-        <div className="flex items-center justify-end -mb-3">
-          <button
-            type="button"
-            onClick={handleRefreshApp}
-            disabled={isRefreshingApp}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 hover:text-[#18457c] text-xs font-semibold shadow-2xs cursor-pointer transition-all"
-            title="Refresh app data & check for updates"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-[#18457c] ${isRefreshingApp ? 'animate-spin' : ''}`} />
-            <span>{isRefreshingApp ? 'Refreshing...' : 'Refresh'}</span>
-          </button>
-        </div>
+
 
         {plaidError && (
           <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between">
@@ -7039,50 +7112,8 @@ function KlarityApp() {
             </div>
           )}
 
-          <div className="bg-[#eff4f9] rounded-2xl p-4 text-xs text-slate-700 leading-relaxed border border-slate-200/60 shadow-2xs flex flex-col gap-2.5">
-            {highestAprCard ? (
-              <span>
-                Your cash covers everything due this month. The <strong>{highestAprCard.name}</strong> has the highest rate at <strong>{highestAprCard.apr}%</strong>, so extra payments there save the most interest.
-              </span>
-            ) : (
-              <span>
-                Your cash covers everything due this month. Your accounts and bills are in great financial health.
-              </span>
-            )}
-            <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-200/70">
-              <button
-                type="button"
-                onClick={handleGenerateWeeklySummary}
-                className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#18457c] text-[#18457c] hover:text-white border border-[#18457c]/25 text-[10px] font-semibold transition-colors cursor-pointer shadow-2xs"
-              >
-                Weekly Summary
-              </button>
-              <button
-                type="button"
-                onClick={() => handleExecuteSuggestedAction({ type: 'set_budget', category: 'Groceries', limit: 400 })}
-                className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#18457c] text-[#18457c] hover:text-white border border-[#18457c]/25 text-[10px] font-semibold transition-colors cursor-pointer shadow-2xs"
-              >
-                Create $400 Groceries budget
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSendChatMessage('What are my Social Security and CalPERS debt protections and how do I get a 0% bank hardship script?')}
-                className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border border-emerald-300 text-[10px] font-semibold transition-colors cursor-pointer shadow-2xs"
-              >
-                Senior Legal Shield
-              </button>
-              <button
-                type="button"
-                onClick={() => handleExecuteSuggestedAction({ type: 'payment_reminder' })}
-                className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#18457c] text-[#18457c] hover:text-white border border-[#18457c]/25 text-[10px] font-semibold transition-colors cursor-pointer shadow-2xs"
-              >
-                Set payment reminder
-              </button>
-            </div>
-          </div>
-
           {/* Active Chat Messages in Sidebar */}
-          {chatMessages.filter((_, idx) => idx > 0).map((msg, i) => (
+          {chatMessages.map((msg, i) => (
             <div
               key={i}
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
