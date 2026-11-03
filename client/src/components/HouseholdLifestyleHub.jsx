@@ -24,7 +24,10 @@ import {
   Building,
   Navigation,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Shield,
+  ShieldCheck,
+  Gauge
 } from 'lucide-react';
 import {
   DWELLING_TYPES,
@@ -33,7 +36,10 @@ import {
   FREE_EV_CHARGING_GUIDE,
   ZERO_APR_EV_MODELS,
   MAJOR_HEALTH_PLANS,
-  POPULAR_CAR_DATABASE
+  POPULAR_CAR_DATABASE,
+  POPULAR_CAR_MAKES,
+  AUTO_INSURANCE_PROVIDERS,
+  AUTO_INSURANCE_TYPES
 } from '../utils/householdLifestyleEngine';
 
 export default function HouseholdLifestyleHub({
@@ -115,20 +121,79 @@ export default function HouseholdLifestyleHub({
   };
 
   const [newCar, setNewCar] = useState({
+    year: 2025,
+    make: 'Toyota',
+    model: '',
     name: '',
     type: 'gas',
-    ownership: 'owned', // 'owned' | 'lease' | 'financed'
-    fuelGrade: 'regular', // 'regular' | 'premium' | 'diesel' | 'electric'
-    mpgOrEfficiency: 30,
-    batteryKwh: 0,
-    monthlyMiles: 900,
+    ownership: 'lease', // 'lease' | 'financed' | 'owned'
+    odometer: '',
+    threeYearMileLimit: 36000,
+    monthlyMiles: 1000,
     insuranceMonthly: 120,
-    monthlyPayment: 0,
+    monthlyPayment: 399,
+    fuelGrade: 'regular',
+    mpgOrEfficiency: 32,
+    batteryKwh: 0,
     freeChargingSharePercent: 30
   });
 
+  const [selectedEvForChargers, setSelectedEvForChargers] = useState(null);
+  const [carModelSearch, setCarModelSearch] = useState('');
   const [carSearchFocused, setCarSearchFocused] = useState(false);
   const carDropdownRef = useRef(null);
+
+  const autoInsurance = householdProfile.autoInsurance || {
+    provider: 'State Farm',
+    policyType: 'full_coverage',
+    deductible: 500,
+    hasRoadside: true,
+    hasGapCoverage: true,
+    monthlyPremium: 140,
+    policyNumber: ''
+  };
+
+  const handleAutoInsuranceChange = (patch) => {
+    onUpdateProfile({
+      ...householdProfile,
+      autoInsurance: {
+        ...autoInsurance,
+        ...patch
+      }
+    });
+  };
+
+  const handleYearChange = (yr) => {
+    setNewCar(prev => {
+      const modelPart = prev.model || '';
+      return {
+        ...prev,
+        year: Number(yr) || yr,
+        name: modelPart ? `${yr} ${prev.make || ''} ${modelPart}`.replace(/\s+/g, ' ').trim() : ''
+      };
+    });
+  };
+
+  const handleMakeChange = (mk) => {
+    setNewCar(prev => ({
+      ...prev,
+      make: mk,
+      model: '',
+      name: ''
+    }));
+    setCarModelSearch('');
+    setCarSearchFocused(true);
+  };
+
+  const handleMileLimitChange = (val) => {
+    const limitNum = Number(val) || 0;
+    const derivedMonthly = limitNum > 0 ? Math.round(limitNum / 36) : newCar.monthlyMiles;
+    setNewCar(prev => ({
+      ...prev,
+      threeYearMileLimit: val,
+      monthlyMiles: derivedMonthly
+    }));
+  };
 
   const [newDoc, setNewDoc] = useState({
     name: '',
@@ -177,26 +242,36 @@ export default function HouseholdLifestyleHub({
   }, []);
 
   const filteredCars = useMemo(() => {
-    const q = (newCar.name || '').trim().toLowerCase();
-    if (!q) return POPULAR_CAR_DATABASE.slice(0, 15);
-    const terms = q.split(/\s+/).filter(Boolean);
+    const q = (carModelSearch || newCar.model || '').trim().toLowerCase();
+    const make = (newCar.make || '').toLowerCase();
     return POPULAR_CAR_DATABASE.filter(c => {
-      const combined = `${c.fullName} ${c.make} ${c.model} ${c.type}`.toLowerCase();
-      return terms.every(t => combined.includes(t));
-    }).slice(0, 20);
-  }, [newCar.name]);
+      const matchesMake = !make || make === 'other' || c.make.toLowerCase() === make;
+      if (!q) return matchesMake;
+      const combined = `${c.fullName} ${c.model} ${c.type}`.toLowerCase();
+      return matchesMake && combined.includes(q);
+    }).slice(0, 16);
+  }, [newCar.make, carModelSearch, newCar.model]);
 
   const handleSelectCarSuggestion = (car) => {
+    const yr = newCar.year || 2025;
+    const computedMonthlyMiles = newCar.threeYearMileLimit
+      ? Math.round(Number(newCar.threeYearMileLimit) / 36)
+      : (car.type === 'ev' ? 1000 : 900);
+
     setNewCar(prev => ({
       ...prev,
-      name: car.fullName,
+      make: car.make,
+      model: car.model,
+      name: `${yr} ${car.fullName}`,
       type: car.type,
       mpgOrEfficiency: car.mpgOrEfficiency,
       batteryKwh: car.batteryKwh || (car.type === 'ev' ? 75 : 0),
       fuelGrade: car.fuelGrade || (car.type === 'ev' ? 'electric' : 'regular'),
       insuranceMonthly: car.defaultInsurance || 120,
-      monthlyPayment: prev.ownership === 'owned' ? 0 : prev.monthlyPayment
+      monthlyMiles: computedMonthlyMiles,
+      monthlyPayment: prev.ownership === 'owned' ? 0 : (prev.monthlyPayment || (prev.ownership === 'lease' ? 399 : 450))
     }));
+    setCarModelSearch(car.model);
     setCarSearchFocused(false);
   };
 
@@ -298,17 +373,27 @@ export default function HouseholdLifestyleHub({
 
   const handleAddVehicle = (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    if (!newCar.name.trim()) return;
+    const finalModel = (newCar.model || newCar.name || '').trim();
+    if (!finalModel) return;
     const isOwned = newCar.ownership === 'owned';
+    const computedName = `${newCar.year || ''} ${newCar.make || ''} ${finalModel}`.replace(/\s+/g, ' ').trim();
+    const threeYrLimit = Number(newCar.threeYearMileLimit) || 36000;
+    const monthlyAllowance = Math.round(threeYrLimit / 36);
+
     const item = {
       id: `veh-${Date.now()}`,
-      name: newCar.name.trim(),
+      year: Number(newCar.year) || new Date().getFullYear(),
+      make: newCar.make || 'Custom',
+      model: finalModel,
+      name: computedName,
       type: newCar.type,
-      ownership: newCar.ownership || 'owned',
+      ownership: newCar.ownership || 'lease',
+      odometer: Number(newCar.odometer) || 0,
+      threeYearMileLimit: threeYrLimit,
+      monthlyMiles: Number(newCar.monthlyMiles) || monthlyAllowance || 1000,
       fuelGrade: newCar.fuelGrade || (newCar.type === 'ev' ? 'electric' : 'regular'),
       batteryKwh: newCar.type === 'ev' ? (Number(newCar.batteryKwh) || 75) : null,
       mpgOrEfficiency: Number(newCar.mpgOrEfficiency) || (newCar.type === 'ev' ? 28 : 30),
-      monthlyMiles: Number(newCar.monthlyMiles) || 900,
       insuranceMonthly: Number(newCar.insuranceMonthly) || 120,
       monthlyPayment: isOwned ? 0 : (Number(newCar.monthlyPayment) || 0),
       freeChargingSharePercent: newCar.type === 'ev' ? Number(newCar.freeChargingSharePercent || 30) : 0
@@ -318,17 +403,23 @@ export default function HouseholdLifestyleHub({
       vehicles: [...(householdProfile.vehicles || []), item]
     });
     setNewCar({
+      year: 2025,
+      make: 'Toyota',
+      model: '',
       name: '',
       type: 'gas',
-      ownership: 'owned',
-      fuelGrade: 'regular',
-      mpgOrEfficiency: 30,
-      batteryKwh: 0,
-      monthlyMiles: 900,
+      ownership: 'lease',
+      odometer: '',
+      threeYearMileLimit: 36000,
+      monthlyMiles: 1000,
       insuranceMonthly: 120,
-      monthlyPayment: 0,
+      monthlyPayment: 399,
+      fuelGrade: 'regular',
+      mpgOrEfficiency: 32,
+      batteryKwh: 0,
       freeChargingSharePercent: 30
     });
+    setCarModelSearch('');
     setShowAddCar(false);
     setCarSearchFocused(false);
   };
@@ -689,454 +780,559 @@ export default function HouseholdLifestyleHub({
       )}
 
       {/* ================================================================= */}
-      {/* SECTION 2: AUTO (Vehicles, Gas, Free Chargers, 0% APR Deals)      */}
+      {/* SECTION 2: AUTO (Vehicle Fleet, Lease Tracking, Auto Insurance)   */}
       {/* ================================================================= */}
       {section === 'auto' && (
         <div className="p-5 flex flex-col gap-4">
+          {/* Fleet Header */}
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
-              {[
-                { id: 'vehicles', label: `Vehicles (${metrics.fleet.vehicles.length})` },
-                { id: 'chargers', label: 'Free Chargers' },
-                { id: 'deals', label: '0% APR Deals' }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setAutoView(tab.id)}
-                  className={`px-3 py-1 rounded-lg cursor-pointer ${
-                    autoView === tab.id ? 'bg-white text-[#18457c] shadow-2xs font-bold' : 'text-slate-600'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            <div>
+              <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                <Car className="w-4 h-4 text-[#18457c]" />
+                <span>Vehicle Fleet ({metrics.fleet.vehicles.length})</span>
+              </span>
+              <span className="text-[11px] text-slate-500 block">
+                Manage cars, lease mileage limits, and auto insurance coverage.
+              </span>
             </div>
 
-            {autoView === 'vehicles' && (
-              <button
-                type="button"
-                onClick={() => setShowAddCar(!showAddCar)}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#18457c] text-white text-xs font-bold cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Car</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setShowAddCar(!showAddCar)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#18457c] hover:bg-[#133763] text-white text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Car</span>
+            </button>
           </div>
 
-          {autoView === 'vehicles' && (
-            <>
-              {showAddCar && (
-                <form
-                  onSubmit={handleAddVehicle}
-                  className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col gap-3 text-xs"
+          {/* Add Car Form (Structured with Separate Boxes & Auto-Filling Specs) */}
+          {showAddCar && (
+            <form
+              onSubmit={handleAddVehicle}
+              className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col gap-3.5 text-xs"
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                  <Car className="w-4 h-4 text-[#18457c]" />
+                  <span>Add Vehicle to Fleet</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCar(false)}
+                  className="text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
                 >
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                      <Car className="w-4 h-4 text-[#18457c]" />
-                      <span>Add Vehicle to Fleet</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddCar(false)}
-                      className="text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
-                  {/* Row 1: Search / Type Car with Suggestions Popup */}
-                  <div className="relative" ref={carDropdownRef}>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                      Car Make & Model (Type to Search Popular Options)
+              {/* Row 1: Separate Boxes for Year, Make, Model */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* Box 1: Year */}
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Model Year
+                  </label>
+                  <select
+                    value={newCar.year || 2025}
+                    onChange={e => handleYearChange(e.target.value)}
+                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                  >
+                    {[2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010].map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Box 2: Make */}
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Vehicle Make
+                  </label>
+                  <select
+                    value={newCar.make || 'Toyota'}
+                    onChange={e => handleMakeChange(e.target.value)}
+                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                  >
+                    {POPULAR_CAR_MAKES.map(mk => (
+                      <option key={mk} value={mk}>{mk}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Box 3: Model (with auto-suggest popup) */}
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 relative" ref={carDropdownRef}>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      Vehicle Model
                     </label>
-                    <div className="relative">
-                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-                      <input
-                        type="text"
-                        required
-                        placeholder="Type car name (e.g. Camry, Model Y, Civic, F-150, BMW 330i, Ioniq 5)..."
-                        value={newCar.name}
-                        onChange={e => {
-                          setNewCar({ ...newCar, name: e.target.value });
-                          setCarSearchFocused(true);
-                        }}
-                        onFocus={() => setCarSearchFocused(true)}
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#18457c] focus:outline-none text-slate-900 font-semibold"
-                      />
-                    </div>
-
-                    {/* Pop-up Suggestions Dropdown */}
-                    {carSearchFocused && filteredCars.length > 0 && (
-                      <div className="absolute left-0 right-0 top-full mt-1.5 max-h-64 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-30 py-1 divide-y divide-slate-100">
-                        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between bg-slate-50/70">
-                          <span>Suggested Vehicles & Auto-Specs ({filteredCars.length})</span>
-                          <span className="text-[9px] text-slate-400 font-normal">Click to auto-fill</span>
-                        </div>
-                        {filteredCars.map((car, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => handleSelectCarSuggestion(car)}
-                            className="w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
-                          >
-                            <div>
-                              <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                                <span>{car.fullName}</span>
-                              </div>
-                              <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2">
-                                {car.type === 'ev' ? (
-                                  <>
-                                    <span className="text-emerald-700 font-semibold">⚡ {car.mpgOrEfficiency} kWh/100mi</span>
-                                    <span>•</span>
-                                    <span>{car.batteryKwh} kWh Battery</span>
-                                    <span>•</span>
-                                    <span>Electric</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span className="text-blue-700 font-semibold">⛽ {car.mpgOrEfficiency} MPG</span>
-                                    <span>•</span>
-                                    <span className="capitalize">{car.fuelGrade === 'premium' ? 'Premium 91+' : car.fuelGrade === 'diesel' ? 'Diesel' : 'Regular 87'}</span>
-                                    <span>•</span>
-                                    <span className="uppercase">{car.type}</span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${
-                              car.type === 'ev'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : car.type === 'hybrid'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : car.type === 'phev'
-                                    ? 'bg-indigo-100 text-indigo-800'
-                                    : 'bg-slate-100 text-slate-700'
-                            }`}>
-                              {car.type}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    <span className="text-[9px] text-[#18457c] font-semibold">Auto-fills specs</span>
                   </div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Type or select model..."
+                    value={carModelSearch || newCar.model || ''}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setCarModelSearch(val);
+                      setNewCar(prev => ({
+                        ...prev,
+                        model: val,
+                        name: `${prev.year || 2025} ${prev.make || ''} ${val}`.replace(/\s+/g, ' ').trim()
+                      }));
+                      setCarSearchFocused(true);
+                    }}
+                    onFocus={() => setCarSearchFocused(true)}
+                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
+                  />
 
-                  {/* Row 2: Ownership / Lease Status + Monthly Payment + Powertrain + Fuel Grade */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                        Ownership / Financing
-                      </label>
-                      <select
-                        value={newCar.ownership || 'owned'}
-                        onChange={e => {
-                          const own = e.target.value;
-                          setNewCar({
-                            ...newCar,
-                            ownership: own,
-                            monthlyPayment: own === 'owned' ? 0 : (newCar.monthlyPayment || 350)
-                          });
-                        }}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:bg-white focus:border-[#18457c] focus:outline-none cursor-pointer"
-                      >
-                        <option value="owned">Owned Outright (Paid Off)</option>
-                        <option value="lease">Lease</option>
-                        <option value="financed">Financed (Car Loan)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                        {newCar.ownership === 'lease' ? 'Monthly Lease Payment' : newCar.ownership === 'financed' ? 'Monthly Loan Payment' : 'Payment'}
-                      </label>
-                      <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus-within:bg-white focus-within:border-[#18457c]">
-                        <span className="text-slate-400 font-bold">$</span>
-                        <input
-                          type="number"
-                          disabled={newCar.ownership === 'owned'}
-                          value={newCar.ownership === 'owned' ? 0 : newCar.monthlyPayment}
-                          onChange={e => setNewCar({ ...newCar, monthlyPayment: Number(e.target.value) || 0 })}
-                          placeholder={newCar.ownership === 'owned' ? 'Paid Off ($0)' : 'e.g. 450'}
-                          className="w-full bg-transparent font-bold text-slate-900 focus:outline-none disabled:text-slate-400"
-                        />
-                        <span className="text-[10px] text-slate-400">/mo</span>
+                  {/* Dropdown Suggestions matching Make & Model */}
+                  {carSearchFocused && filteredCars.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1.5 max-h-56 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-30 py-1 divide-y divide-slate-100">
+                      <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between bg-slate-50/80">
+                        <span>{newCar.make} Models ({filteredCars.length})</span>
+                        <span className="text-[9px] text-slate-400 font-normal">Click to auto-fill specs</span>
                       </div>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                        Powertrain Type
-                      </label>
-                      <select
-                        value={newCar.type}
-                        onChange={e => {
-                          const t = e.target.value;
-                          setNewCar({
-                            ...newCar,
-                            type: t,
-                            fuelGrade: t === 'ev' ? 'electric' : 'regular',
-                            mpgOrEfficiency: t === 'ev' ? 28 : t === 'hybrid' ? 48 : 28,
-                            batteryKwh: t === 'ev' ? 75 : 0
-                          });
-                        }}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:bg-white focus:border-[#18457c] focus:outline-none cursor-pointer capitalize"
-                      >
-                        <option value="gas">Gasoline (ICE)</option>
-                        <option value="hybrid">Standard Hybrid</option>
-                        <option value="phev">Plug-in Hybrid (PHEV)</option>
-                        <option value="ev">Electric (EV)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                        Fuel / Energy Type
-                      </label>
-                      {newCar.type === 'ev' ? (
-                        <div className="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-800 flex items-center justify-between">
-                          <span>⚡ Electricity</span>
-                          <span className="text-[10px] text-emerald-600">{newCar.batteryKwh ? `${newCar.batteryKwh} kWh` : 'EV Battery'}</span>
-                        </div>
-                      ) : (
-                        <select
-                          value={newCar.fuelGrade || 'regular'}
-                          onChange={e => setNewCar({ ...newCar, fuelGrade: e.target.value })}
-                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:bg-white focus:border-[#18457c] focus:outline-none cursor-pointer"
+                      {filteredCars.map((car, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectCarSuggestion(car)}
+                          className="w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
                         >
-                          <option value="regular">Regular Unleaded (87)</option>
-                          <option value="premium">Premium Unleaded (91+)</option>
-                          <option value="diesel">Diesel</option>
-                        </select>
-                      )}
+                          <div>
+                            <span className="font-bold text-slate-900 text-xs">{car.model}</span>
+                            <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                              {car.type === 'ev' ? (
+                                <span className="text-emerald-700 font-semibold">⚡ {car.mpgOrEfficiency} kWh/100mi • {car.batteryKwh} kWh</span>
+                              ) : (
+                                <span className="text-blue-700 font-semibold">⛽ {car.mpgOrEfficiency} MPG • {car.fuelGrade === 'premium' ? 'Premium 91+' : 'Regular 87'}</span>
+                              )}
+                              <span>•</span>
+                              <span className="uppercase text-[9px] font-bold">{car.type}</span>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${
+                            car.type === 'ev'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : car.type === 'hybrid'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {car.type}
+                          </span>
+                        </button>
+                      ))}
                     </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Row 2: Separate Boxes for Lease/Ownership, Odometer, 3-Year Mile Limit, Monthly Payment */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                {/* Box 4: Ownership / Lease */}
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Financing / Lease Status
+                  </label>
+                  <select
+                    value={newCar.ownership || 'lease'}
+                    onChange={e => {
+                      const own = e.target.value;
+                      setNewCar(prev => ({
+                        ...prev,
+                        ownership: own,
+                        monthlyPayment: own === 'owned' ? 0 : (prev.monthlyPayment || 399)
+                      }));
+                    }}
+                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                  >
+                    <option value="lease">Lease</option>
+                    <option value="financed">Financed (Car Loan)</option>
+                    <option value="owned">Owned Outright (Paid Off)</option>
+                  </select>
+                </div>
+
+                {/* Box 5: Current Odometer */}
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Current Odometer
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <Gauge className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <input
+                      type="number"
+                      placeholder="e.g. 14,200"
+                      value={newCar.odometer || ''}
+                      onChange={e => setNewCar({ ...newCar, odometer: e.target.value })}
+                      className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
+                    />
+                    <span className="text-[10px] text-slate-400">mi</span>
                   </div>
+                </div>
 
-                  {/* Row 3: Efficiency & Driving Mileage & Insurance */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                        {newCar.type === 'ev' ? 'Efficiency (kWh / 100 mi)' : 'Fuel Economy (MPG)'}
-                      </label>
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={newCar.mpgOrEfficiency}
-                        onChange={e => setNewCar({ ...newCar, mpgOrEfficiency: Number(e.target.value) || 0 })}
-                        placeholder={newCar.type === 'ev' ? '28 kWh/100mi' : '30 MPG'}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:bg-white focus:border-[#18457c] focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                        Est. Monthly Miles
-                      </label>
-                      <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus-within:bg-white focus-within:border-[#18457c]">
-                        <input
-                          type="number"
-                          value={newCar.monthlyMiles}
-                          onChange={e => setNewCar({ ...newCar, monthlyMiles: Number(e.target.value) || 0 })}
-                          placeholder="900"
-                          className="w-full bg-transparent font-bold text-slate-900 focus:outline-none"
-                        />
-                        <span className="text-[10px] text-slate-400">mi/mo</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                        Monthly Auto Insurance
-                      </label>
-                      <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus-within:bg-white focus-within:border-[#18457c]">
-                        <span className="text-slate-400 font-bold">$</span>
-                        <input
-                          type="number"
-                          value={newCar.insuranceMonthly}
-                          onChange={e => setNewCar({ ...newCar, insuranceMonthly: Number(e.target.value) || 0 })}
-                          placeholder="120"
-                          className="w-full bg-transparent font-bold text-slate-900 focus:outline-none"
-                        />
-                        <span className="text-[10px] text-slate-400">/mo</span>
-                      </div>
-                    </div>
+                {/* Box 6: 3-Year Mile Limit */}
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      3-Year Mile Limit
+                    </label>
+                    <span className="text-[9px] text-emerald-700 font-bold">
+                      ~{Math.round((Number(newCar.threeYearMileLimit) || 36000) / 36)} mi/mo
+                    </span>
                   </div>
+                  <select
+                    value={newCar.threeYearMileLimit || 36000}
+                    onChange={e => handleMileLimitChange(e.target.value)}
+                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                  >
+                    <option value="30000">30,000 miles (10,000 mi/yr)</option>
+                    <option value="36000">36,000 miles (12,000 mi/yr - Standard)</option>
+                    <option value="45000">45,000 miles (15,000 mi/yr - High)</option>
+                    <option value="60000">60,000 miles (20,000 mi/yr)</option>
+                  </select>
+                </div>
 
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                {/* Box 7: Monthly Payment */}
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    {newCar.ownership === 'lease' ? 'Monthly Lease Payment' : newCar.ownership === 'financed' ? 'Monthly Loan Payment' : 'Payment Status'}
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <span className="font-bold text-slate-400">$</span>
+                    <input
+                      type="number"
+                      disabled={newCar.ownership === 'owned'}
+                      value={newCar.ownership === 'owned' ? 0 : newCar.monthlyPayment}
+                      onChange={e => setNewCar({ ...newCar, monthlyPayment: Number(e.target.value) || 0 })}
+                      placeholder={newCar.ownership === 'owned' ? 'Paid Off ($0)' : 'e.g. 399'}
+                      className="w-full font-bold text-slate-900 bg-transparent focus:outline-none disabled:text-slate-400"
+                    />
+                    <span className="text-[10px] text-slate-400">/mo</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 3: Auto-filled Specs Row (App automatically puts everything else) */}
+              <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div>
+                  <span className="text-[10px] font-semibold text-slate-400 block">Powertrain (Auto)</span>
+                  <span className="font-bold text-slate-900 uppercase text-xs mt-0.5 block">{newCar.type}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-semibold text-slate-400 block">Fuel / Energy (Auto)</span>
+                  <span className="font-bold text-slate-900 text-xs mt-0.5 block capitalize">
+                    {newCar.type === 'ev' ? `⚡ Electric (${newCar.batteryKwh || 75} kWh)` : newCar.fuelGrade === 'premium' ? 'Premium 91+' : 'Regular 87'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-semibold text-slate-400 block">Rated Efficiency (Auto)</span>
+                  <span className="font-bold text-slate-900 text-xs mt-0.5 block">
+                    {newCar.type === 'ev' ? `${newCar.mpgOrEfficiency} kWh/100mi` : `${newCar.mpgOrEfficiency} MPG`}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-semibold text-slate-400 block">Est. Insurance (Auto)</span>
+                  <div className="flex items-center gap-0.5 mt-0.5">
+                    <span className="font-bold text-slate-400 text-xs">$</span>
+                    <input
+                      type="number"
+                      value={newCar.insuranceMonthly}
+                      onChange={e => setNewCar({ ...newCar, insuranceMonthly: Number(e.target.value) || 0 })}
+                      className="w-full font-bold text-slate-900 bg-transparent text-xs focus:outline-none"
+                    />
+                    <span className="text-[10px] text-slate-400">/mo</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCar(false)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer shadow-2xs"
+                >
+                  Add Vehicle to Fleet
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Vehicle Fleet Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {metrics.fleet.vehicles.map(v => (
+              <div key={v.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-slate-900 text-sm">
+                      {v.name}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-bold uppercase text-slate-700">
+                      {v.type}
+                    </span>
+                    {v.ownership && (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        v.ownership === 'lease'
+                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                          : v.ownership === 'financed'
+                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                            : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      }`}>
+                        {v.ownership === 'lease' ? 'Lease' : v.ownership === 'financed' ? 'Financed' : 'Owned'}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-slate-400">
+                      {v.type === 'ev' ? `${v.mpgOrEfficiency} kWh/100mi` : `${v.mpgOrEfficiency} MPG (${v.fuelGrade === 'premium' ? 'Premium 91+' : v.fuelGrade === 'diesel' ? 'Diesel' : 'Regular 87'})`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveVehicle(v.id)}
+                    className="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Odometer & 3-Year Mileage Tracking Line */}
+                {(v.odometer || v.threeYearMileLimit) && (
+                  <div className="flex items-center gap-2 text-[11px] text-slate-600 bg-white/70 px-2.5 py-1 rounded-lg border border-slate-200/60 flex-wrap">
+                    {v.odometer ? (
+                      <span>Odometer: <strong className="text-slate-900">{Number(v.odometer).toLocaleString()} mi</strong></span>
+                    ) : null}
+                    {v.odometer && v.threeYearMileLimit ? <span>•</span> : null}
+                    {v.threeYearMileLimit ? (
+                      <span>3-Yr Lease Limit: <strong className="text-slate-900">{Number(v.threeYearMileLimit).toLocaleString()} mi</strong> (~{Math.round(Number(v.threeYearMileLimit) / 36)} mi/mo)</span>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Costs Breakdown Grid */}
+                <div className={`grid ${v.monthlyPayment > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 bg-white p-2.5 rounded-lg border border-slate-200/70`}>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">{v.type === 'ev' ? 'Charging' : 'Fuel'}</span>
+                    <span className="font-bold text-slate-900">${v.monthlyFuelOrChargeCost}/mo</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Insurance</span>
+                    <span className="font-bold text-slate-900">${v.insuranceMonthly}/mo</span>
+                  </div>
+                  {v.monthlyPayment > 0 && (
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">{v.ownership === 'lease' ? 'Lease' : 'Payment'}</span>
+                      <span className="font-bold text-slate-900">${v.monthlyPayment}/mo</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Total</span>
+                    <span className="font-bold text-[#18457c]">${v.totalMonthlyVehicleCost}/mo</span>
+                  </div>
+                </div>
+
+                {/* ONLY FOR ELECTRIC VEHICLES: Free EV Chargers Near Me button */}
+                {v.type === 'ev' && (
+                  <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between gap-2 flex-wrap">
                     <button
                       type="button"
-                      onClick={() => setShowAddCar(false)}
-                      className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                      onClick={() => setSelectedEvForChargers(v)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors cursor-pointer shadow-2xs"
                     >
-                      Cancel
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>Free EV Chargers Near Me</span>
                     </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer shadow-2xs"
-                    >
-                      Add Vehicle to Fleet
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                {metrics.fleet.vehicles.map(v => (
-                  <div key={v.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-3 text-xs">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-slate-900 text-sm">{v.name}</span>
-                        <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-bold uppercase text-slate-700">
-                          {v.type}
-                        </span>
-                        {v.ownership && (
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            v.ownership === 'lease'
-                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                              : v.ownership === 'financed'
-                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                          }`}>
-                            {v.ownership === 'lease' ? 'Lease' : v.ownership === 'financed' ? 'Financed' : 'Owned'}
-                          </span>
-                        )}
-                        <span className="text-[10px] text-slate-400">
-                          {v.type === 'ev' ? `${v.mpgOrEfficiency} kWh/100mi` : `${v.mpgOrEfficiency} MPG (${v.fuelGrade === 'premium' ? 'Premium 91+' : v.fuelGrade === 'diesel' ? 'Diesel' : 'Regular 87'})`}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveVehicle(v.id)}
-                        className="text-slate-400 hover:text-rose-600 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-800">
+                      <span>Free Charging: <strong>{v.freeChargingSharePercent || 0}%</strong></span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="5"
+                        value={v.freeChargingSharePercent || 0}
+                        onChange={e => handleUpdateVehicle(v.id, { freeChargingSharePercent: Number(e.target.value) })}
+                        className="w-24 accent-emerald-600 cursor-pointer"
+                      />
                     </div>
-
-                    <div className={`grid ${v.monthlyPayment > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 bg-white p-2.5 rounded-lg border border-slate-200/70`}>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">{v.type === 'ev' ? 'Charging' : 'Fuel'}</span>
-                        <span className="font-bold text-slate-900">${v.monthlyFuelOrChargeCost}/mo</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Insurance</span>
-                        <span className="font-bold text-slate-900">${v.insuranceMonthly}/mo</span>
-                      </div>
-                      {v.monthlyPayment > 0 && (
-                        <div>
-                          <span className="text-[10px] text-slate-400 block">{v.ownership === 'lease' ? 'Lease' : 'Payment'}</span>
-                          <span className="font-bold text-slate-900">${v.monthlyPayment}/mo</span>
-                        </div>
-                      )}
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Total</span>
-                        <span className="font-bold text-[#18457c]">${v.totalMonthlyVehicleCost}/mo</span>
-                      </div>
-                    </div>
-
-                    {v.type === 'ev' ? (
-                      <div className="flex items-center justify-between gap-2 text-[11px] text-emerald-800">
-                        <span>Free Charging: <strong>{v.freeChargingSharePercent || 0}%</strong></span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          step="5"
-                          value={v.freeChargingSharePercent || 0}
-                          onChange={e => handleUpdateVehicle(v.id, { freeChargingSharePercent: Number(e.target.value) })}
-                          className="w-36 accent-emerald-600 cursor-pointer"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between text-[11px] text-slate-600">
-                        <span>EV switch saves <strong>~${v.potentialEvSwitchSavings}/mo</strong></span>
-                        <button
-                          type="button"
-                          onClick={() => setAutoView('deals')}
-                          className="text-[#18457c] font-bold hover:underline cursor-pointer"
-                        >
-                          0% APR Deals →
-                        </button>
-                      </div>
-                    )}
                   </div>
-                ))}
+                )}
               </div>
-            </>
-          )}
+            ))}
+          </div>
 
-          {autoView === 'chargers' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-              {FREE_EV_CHARGING_GUIDE.map((item, idx) => (
-                <div key={idx} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-900">{item.category}</span>
-                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">{item.cost}</span>
-                  </div>
-                  <p className="text-slate-600 text-[11px]">{item.locations}</p>
+          {/* ================================================================= */}
+          {/* AUTO INSURANCE POLICY & COVERAGE SECTION                          */}
+          {/* ================================================================= */}
+          <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#18457c] text-white flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-4 h-4" />
                 </div>
-              ))}
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Auto Insurance & Coverage Policy</h4>
+                  <p className="text-[10px] text-slate-500">
+                    Select your active auto insurance carrier, policy coverage type, and deductibles across your vehicles.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-[10px] text-slate-400 font-semibold">Total Premium:</span>
+                <span className="font-bold text-[#18457c] text-sm">
+                  ${autoInsurance.monthlyPremium || 140}/mo
+                </span>
+              </div>
             </div>
-          )}
 
-          {autoView === 'deals' && (
-            <div className="flex flex-col gap-4 text-xs">
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <div>
-                  <span className="text-[10px] text-slate-400 block">Price</span>
-                  <input
-                    type="number"
-                    value={simEvMsrp}
-                    onChange={e => setSimEvMsrp(Number(e.target.value) || 0)}
-                    className="w-full font-bold text-slate-900 bg-white px-2 py-1 rounded border border-slate-200 mt-0.5"
-                  />
-                </div>
-                <div>
-                  <span className="text-[10px] text-emerald-700 block">IRS Credit</span>
-                  <input
-                    type="number"
-                    value={simFedCredit}
-                    onChange={e => setSimFedCredit(Number(e.target.value) || 0)}
-                    className="w-full font-bold text-emerald-700 bg-white px-2 py-1 rounded border border-slate-200 mt-0.5"
-                  />
-                </div>
-                <div>
-                  <span className="text-[10px] text-emerald-700 block">Rebates</span>
-                  <input
-                    type="number"
-                    value={simStateRebate}
-                    onChange={e => setSimStateRebate(Number(e.target.value) || 0)}
-                    className="w-full font-bold text-emerald-700 bg-white px-2 py-1 rounded border border-slate-200 mt-0.5"
-                  />
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block">Down Payment</span>
-                  <input
-                    type="number"
-                    value={simDownPayment}
-                    onChange={e => setSimDownPayment(Number(e.target.value) || 0)}
-                    className="w-full font-bold text-slate-900 bg-white px-2 py-1 rounded border border-slate-200 mt-0.5"
-                  />
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block">0% Payment (After Gas Saved)</span>
-                  <div className="font-bold text-sm text-[#18457c] mt-1">
-                    ${zeroAprMonthlyPayment}/mo <span className="text-emerald-700">(${trueNetOutOfPocketMonthly} net)</span>
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+              {/* Provider Selection */}
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                <span className="text-[10px] font-semibold text-slate-400 block mb-1">Insurance Provider</span>
+                <select
+                  value={autoInsurance.provider || 'State Farm'}
+                  onChange={e => handleAutoInsuranceChange({ provider: e.target.value })}
+                  className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                >
+                  {AUTO_INSURANCE_PROVIDERS.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {ZERO_APR_EV_MODELS.map((ev, i) => (
-                  <div key={i} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900">{ev.model}</span>
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">{ev.promoApr}</span>
+              {/* Policy Type Selection */}
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                <span className="text-[10px] font-semibold text-slate-400 block mb-1">Policy Coverage Type</span>
+                <select
+                  value={autoInsurance.policyType || 'full_coverage'}
+                  onChange={e => handleAutoInsuranceChange({ policyType: e.target.value })}
+                  className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                >
+                  {AUTO_INSURANCE_TYPES.map(t => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Deductible */}
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                <span className="text-[10px] font-semibold text-slate-400 block mb-1">Comprehensive & Collision Deductible</span>
+                <select
+                  value={autoInsurance.deductible || 500}
+                  onChange={e => handleAutoInsuranceChange({ deductible: Number(e.target.value) || 500 })}
+                  className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                >
+                  <option value="250">$250 Deductible (Low Out-Of-Pocket)</option>
+                  <option value="500">$500 Deductible (Standard)</option>
+                  <option value="1000">$1,000 Deductible (Lower Premium)</option>
+                  <option value="2000">$2,000 Deductible (High Deductible)</option>
+                </select>
+              </div>
+
+              {/* Monthly Premium Input */}
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                <span className="text-[10px] font-semibold text-slate-400 block mb-1">Monthly Insurance Premium</span>
+                <div className="flex items-center gap-1">
+                  <span className="font-bold text-slate-400">$</span>
+                  <input
+                    type="number"
+                    value={autoInsurance.monthlyPremium || ''}
+                    onChange={e => handleAutoInsuranceChange({ monthlyPremium: Number(e.target.value) || 0 })}
+                    placeholder="140"
+                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-400">/mo</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Endorsement Pills */}
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 cursor-pointer hover:bg-slate-100">
+                <input
+                  type="checkbox"
+                  checked={Boolean(autoInsurance.hasRoadside)}
+                  onChange={e => handleAutoInsuranceChange({ hasRoadside: e.target.checked })}
+                  className="rounded text-[#18457c] accent-[#18457c]"
+                />
+                <span>Roadside Assistance Included</span>
+              </label>
+
+              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 cursor-pointer hover:bg-slate-100">
+                <input
+                  type="checkbox"
+                  checked={Boolean(autoInsurance.hasGapCoverage)}
+                  onChange={e => handleAutoInsuranceChange({ hasGapCoverage: e.target.checked })}
+                  className="rounded text-[#18457c] accent-[#18457c]"
+                />
+                <span>GAP Insurance Protection (Lease / Loan)</span>
+              </label>
+
+              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 cursor-pointer hover:bg-slate-100">
+                <input
+                  type="checkbox"
+                  checked={Boolean(autoInsurance.hasRentalReimbursement)}
+                  onChange={e => handleAutoInsuranceChange({ hasRentalReimbursement: e.target.checked })}
+                  className="rounded text-[#18457c] accent-[#18457c]"
+                />
+                <span>Rental Car Reimbursement</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Free EV Chargers Modal (Triggered exclusively from EV car cards) */}
+          {selectedEvForChargers && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl p-5 flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
+                      <Zap className="w-4 h-4" />
                     </div>
-                    <span className="text-[11px] text-slate-500">{ev.msrpRange} • {ev.epaRange}</span>
-                    <span className="text-[11px] text-slate-700">{ev.federalAndDealerCash}</span>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-sm">
+                        Free EV Chargers for {selectedEvForChargers.name}
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Complimentary Level 2 and DC fast charging locations near you.
+                      </p>
+                    </div>
                   </div>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedEvForChargers(null)}
+                    className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {FREE_EV_CHARGING_GUIDE.map((item, idx) => (
+                    <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900">{item.category}</span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">{item.cost}</span>
+                      </div>
+                      <p className="text-slate-600 text-[11px] mt-0.5">{item.locations}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-end pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedEvForChargers(null)}
+                    className="px-4 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           )}

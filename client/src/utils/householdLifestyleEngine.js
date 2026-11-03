@@ -160,12 +160,28 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
     ],
     cards: []
   },
+  autoInsurance: {
+    provider: 'State Farm',
+    policyType: 'full_coverage',
+    deductible: 500,
+    hasRoadside: true,
+    hasGapCoverage: true,
+    monthlyPremium: 140,
+    policyNumber: ''
+  },
   vehicles: [
     {
       id: 'veh-1',
-      name: '2019 Toyota Camry SE',
-      type: 'gas', // 'gas' | 'hybrid' | 'phev' | 'ev'
-      mpgOrEfficiency: 32, // 32 MPG for gas/hybrid, or kWh/100mi for EV (e.g. 28 kWh/100mi)
+      year: 2024,
+      make: 'Toyota',
+      model: 'Camry Hybrid',
+      name: '2024 Toyota Camry Hybrid',
+      type: 'hybrid', // 'gas' | 'hybrid' | 'phev' | 'ev'
+      ownership: 'owned',
+      odometer: 14200,
+      threeYearMileLimit: 36000,
+      mpgOrEfficiency: 51,
+      fuelGrade: 'regular',
       monthlyMiles: 950,
       monthlyPayment: 0,
       apr: 0,
@@ -174,14 +190,22 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
     },
     {
       id: 'veh-2',
-      name: '2021 Honda CR-V Touring',
-      type: 'gas',
-      mpgOrEfficiency: 29,
-      monthlyMiles: 850,
-      monthlyPayment: 0,
+      year: 2024,
+      make: 'Tesla',
+      model: 'Model Y Long Range',
+      name: '2024 Tesla Model Y Long Range',
+      type: 'ev',
+      ownership: 'lease',
+      odometer: 8900,
+      threeYearMileLimit: 36000,
+      mpgOrEfficiency: 28,
+      batteryKwh: 75,
+      fuelGrade: 'electric',
+      monthlyMiles: 1000,
+      monthlyPayment: 429,
       apr: 0,
-      insuranceMonthly: 125,
-      freeChargingSharePercent: 0
+      insuranceMonthly: 145,
+      freeChargingSharePercent: 30
     }
   ]
 };
@@ -381,6 +405,7 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
       totalMonthlyCarPayments,
       totalMonthlyMaintenance,
       totalFleetMonthly,
+      autoInsurance: profile.autoInsurance || null,
       totalPotentialEvSwitchSavings: vehicleBreakdowns.reduce((sum, v) => sum + (v.potentialEvSwitchSavings || 0), 0)
     }
   };
@@ -987,4 +1012,53 @@ export const POPULAR_CAR_DATABASE = [
   { fullName: 'Jeep Wrangler 4xe (PHEV)', make: 'Jeep', model: 'Wrangler 4xe', type: 'phev', mpgOrEfficiency: 20, fuelGrade: 'regular', defaultInsurance: 150 },
   { fullName: 'Ram 1500 (V8 / Hurricane)', make: 'Ram', model: '1500', type: 'gas', mpgOrEfficiency: 19, fuelGrade: 'regular', defaultInsurance: 145 },
   { fullName: 'Dodge Durango', make: 'Dodge', model: 'Durango', type: 'gas', mpgOrEfficiency: 21, fuelGrade: 'regular', defaultInsurance: 145 }
+];
+
+export const POPULAR_CAR_MAKES = [
+  'Toyota',
+  'Honda',
+  'Tesla',
+  'Ford',
+  'Hyundai',
+  'Kia',
+  'Chevrolet',
+  'GMC',
+  'BMW',
+  'Mercedes-Benz',
+  'Audi',
+  'Porsche',
+  'Lexus',
+  'Subaru',
+  'Mazda',
+  'Nissan',
+  'Rivian',
+  'Polestar',
+  'Jeep',
+  'Ram',
+  'Dodge',
+  'Other'
+];
+
+export const AUTO_INSURANCE_PROVIDERS = [
+  'State Farm',
+  'GEICO',
+  'Progressive',
+  'Allstate',
+  'AAA (Auto Club)',
+  'Farmers Insurance',
+  'Liberty Mutual',
+  'USAA (Military & Family)',
+  'Travelers',
+  'Nationwide',
+  'American Family',
+  'Mercury Insurance',
+  'Other / Custom'
+];
+
+export const AUTO_INSURANCE_TYPES = [
+  { id: 'full_coverage', label: 'Full Coverage (Comprehensive + Collision)', desc: 'Standard protection required for all leases & financed vehicles. Covers collision, vandalism, weather, theft & hit-and-run.' },
+  { id: 'full_coverage_gap', label: 'Full Coverage + GAP Insurance', desc: 'Crucial for new leases & auto loans: pays the negative equity difference if the car is totaled before the lease/loan is paid off.' },
+  { id: 'standard_comp_coll', label: 'Collision & Comprehensive Only', desc: 'Standard physical damage protection with customizable collision/comprehensive deductibles.' },
+  { id: 'liability_only', label: 'Liability Only (State Minimum / Bodily Injury & Property)', desc: 'Only covers damages and injuries you cause to other drivers. Best suited for older, paid-off cars with lower cash value.' },
+  { id: 'rideshare', label: 'Personal + Rideshare / Delivery Endorsement', desc: 'Commercial rideshare rider covering Uber, Lyft, DoorDash, and delivery driving activities.' }
 ];
