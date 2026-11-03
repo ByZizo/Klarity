@@ -32,7 +32,8 @@ import {
   calculateHouseholdAndFleetMetrics,
   FREE_EV_CHARGING_GUIDE,
   ZERO_APR_EV_MODELS,
-  MAJOR_HEALTH_PLANS
+  MAJOR_HEALTH_PLANS,
+  POPULAR_CAR_DATABASE
 } from '../utils/householdLifestyleEngine';
 
 export default function HouseholdLifestyleHub({
@@ -116,12 +117,18 @@ export default function HouseholdLifestyleHub({
   const [newCar, setNewCar] = useState({
     name: '',
     type: 'gas',
+    ownership: 'owned', // 'owned' | 'lease' | 'financed'
+    fuelGrade: 'regular', // 'regular' | 'premium' | 'diesel' | 'electric'
     mpgOrEfficiency: 30,
+    batteryKwh: 0,
     monthlyMiles: 900,
     insuranceMonthly: 120,
     monthlyPayment: 0,
     freeChargingSharePercent: 30
   });
+
+  const [carSearchFocused, setCarSearchFocused] = useState(false);
+  const carDropdownRef = useRef(null);
 
   const [newDoc, setNewDoc] = useState({
     name: '',
@@ -161,10 +168,37 @@ export default function HouseholdLifestyleHub({
       if (planDropdownRef.current && !planDropdownRef.current.contains(event.target)) {
         setShowPlanDropdown(false);
       }
+      if (carDropdownRef.current && !carDropdownRef.current.contains(event.target)) {
+        setCarSearchFocused(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const filteredCars = useMemo(() => {
+    const q = (newCar.name || '').trim().toLowerCase();
+    if (!q) return POPULAR_CAR_DATABASE.slice(0, 15);
+    const terms = q.split(/\s+/).filter(Boolean);
+    return POPULAR_CAR_DATABASE.filter(c => {
+      const combined = `${c.fullName} ${c.make} ${c.model} ${c.type}`.toLowerCase();
+      return terms.every(t => combined.includes(t));
+    }).slice(0, 20);
+  }, [newCar.name]);
+
+  const handleSelectCarSuggestion = (car) => {
+    setNewCar(prev => ({
+      ...prev,
+      name: car.fullName,
+      type: car.type,
+      mpgOrEfficiency: car.mpgOrEfficiency,
+      batteryKwh: car.batteryKwh || (car.type === 'ev' ? 75 : 0),
+      fuelGrade: car.fuelGrade || (car.type === 'ev' ? 'electric' : 'regular'),
+      insuranceMonthly: car.defaultInsurance || 120,
+      monthlyPayment: prev.ownership === 'owned' ? 0 : prev.monthlyPayment
+    }));
+    setCarSearchFocused(false);
+  };
 
   const filteredPlans = useMemo(() => {
     const q = planSearchQuery.trim().toLowerCase();
@@ -263,16 +297,20 @@ export default function HouseholdLifestyleHub({
   };
 
   const handleAddVehicle = (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     if (!newCar.name.trim()) return;
+    const isOwned = newCar.ownership === 'owned';
     const item = {
       id: `veh-${Date.now()}`,
       name: newCar.name.trim(),
       type: newCar.type,
+      ownership: newCar.ownership || 'owned',
+      fuelGrade: newCar.fuelGrade || (newCar.type === 'ev' ? 'electric' : 'regular'),
+      batteryKwh: newCar.type === 'ev' ? (Number(newCar.batteryKwh) || 75) : null,
       mpgOrEfficiency: Number(newCar.mpgOrEfficiency) || (newCar.type === 'ev' ? 28 : 30),
       monthlyMiles: Number(newCar.monthlyMiles) || 900,
       insuranceMonthly: Number(newCar.insuranceMonthly) || 120,
-      monthlyPayment: Number(newCar.monthlyPayment) || 0,
+      monthlyPayment: isOwned ? 0 : (Number(newCar.monthlyPayment) || 0),
       freeChargingSharePercent: newCar.type === 'ev' ? Number(newCar.freeChargingSharePercent || 30) : 0
     };
     onUpdateProfile({
@@ -282,13 +320,17 @@ export default function HouseholdLifestyleHub({
     setNewCar({
       name: '',
       type: 'gas',
+      ownership: 'owned',
+      fuelGrade: 'regular',
       mpgOrEfficiency: 30,
+      batteryKwh: 0,
       monthlyMiles: 900,
       insuranceMonthly: 120,
       monthlyPayment: 0,
       freeChargingSharePercent: 30
     });
     setShowAddCar(false);
+    setCarSearchFocused(false);
   };
 
   const handleRemoveVehicle = (id) => {
@@ -686,45 +728,255 @@ export default function HouseholdLifestyleHub({
           {autoView === 'vehicles' && (
             <>
               {showAddCar && (
-                <form onSubmit={handleAddVehicle} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 text-xs">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Car (e.g. Toyota Camry)"
-                    value={newCar.name}
-                    onChange={e => setNewCar({ ...newCar, name: e.target.value })}
-                    className="px-3 py-2 rounded-lg bg-white border border-slate-200"
-                  />
-                  <select
-                    value={newCar.type}
-                    onChange={e => {
-                      const t = e.target.value;
-                      setNewCar({ ...newCar, type: t, mpgOrEfficiency: t === 'ev' ? 28 : t === 'hybrid' ? 48 : 28 });
-                    }}
-                    className="px-3 py-2 rounded-lg bg-white border border-slate-200 font-semibold"
-                  >
-                    <option value="gas">Gas</option>
-                    <option value="hybrid">Hybrid</option>
-                    <option value="phev">Plug-In Hybrid</option>
-                    <option value="ev">Electric (EV)</option>
-                  </select>
-                  <input
-                    type="number"
-                    placeholder={newCar.type === 'ev' ? 'kWh/100mi' : 'MPG'}
-                    value={newCar.mpgOrEfficiency}
-                    onChange={e => setNewCar({ ...newCar, mpgOrEfficiency: e.target.value })}
-                    className="px-3 py-2 rounded-lg bg-white border border-slate-200"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Miles/mo"
-                    value={newCar.monthlyMiles}
-                    onChange={e => setNewCar({ ...newCar, monthlyMiles: e.target.value })}
-                    className="px-3 py-2 rounded-lg bg-white border border-slate-200"
-                  />
-                  <button type="submit" className="py-2 px-3 rounded-lg bg-emerald-600 text-white font-bold cursor-pointer">
-                    Save
-                  </button>
+                <form
+                  onSubmit={handleAddVehicle}
+                  className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col gap-3 text-xs"
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                      <Car className="w-4 h-4 text-[#18457c]" />
+                      <span>Add Vehicle to Fleet</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCar(false)}
+                      className="text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Row 1: Search / Type Car with Suggestions Popup */}
+                  <div className="relative" ref={carDropdownRef}>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                      Car Make & Model (Type to Search Popular Options)
+                    </label>
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Type car name (e.g. Camry, Model Y, Civic, F-150, BMW 330i, Ioniq 5)..."
+                        value={newCar.name}
+                        onChange={e => {
+                          setNewCar({ ...newCar, name: e.target.value });
+                          setCarSearchFocused(true);
+                        }}
+                        onFocus={() => setCarSearchFocused(true)}
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#18457c] focus:outline-none text-slate-900 font-semibold"
+                      />
+                    </div>
+
+                    {/* Pop-up Suggestions Dropdown */}
+                    {carSearchFocused && filteredCars.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 max-h-64 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-30 py-1 divide-y divide-slate-100">
+                        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between bg-slate-50/70">
+                          <span>Suggested Vehicles & Auto-Specs ({filteredCars.length})</span>
+                          <span className="text-[9px] text-slate-400 font-normal">Click to auto-fill</span>
+                        </div>
+                        {filteredCars.map((car, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSelectCarSuggestion(car)}
+                            className="w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
+                          >
+                            <div>
+                              <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                                <span>{car.fullName}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2">
+                                {car.type === 'ev' ? (
+                                  <>
+                                    <span className="text-emerald-700 font-semibold">⚡ {car.mpgOrEfficiency} kWh/100mi</span>
+                                    <span>•</span>
+                                    <span>{car.batteryKwh} kWh Battery</span>
+                                    <span>•</span>
+                                    <span>Electric</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-blue-700 font-semibold">⛽ {car.mpgOrEfficiency} MPG</span>
+                                    <span>•</span>
+                                    <span className="capitalize">{car.fuelGrade === 'premium' ? 'Premium 91+' : car.fuelGrade === 'diesel' ? 'Diesel' : 'Regular 87'}</span>
+                                    <span>•</span>
+                                    <span className="uppercase">{car.type}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${
+                              car.type === 'ev'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : car.type === 'hybrid'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : car.type === 'phev'
+                                    ? 'bg-indigo-100 text-indigo-800'
+                                    : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {car.type}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Row 2: Ownership / Lease Status + Monthly Payment + Powertrain + Fuel Grade */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                        Ownership / Financing
+                      </label>
+                      <select
+                        value={newCar.ownership || 'owned'}
+                        onChange={e => {
+                          const own = e.target.value;
+                          setNewCar({
+                            ...newCar,
+                            ownership: own,
+                            monthlyPayment: own === 'owned' ? 0 : (newCar.monthlyPayment || 350)
+                          });
+                        }}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:bg-white focus:border-[#18457c] focus:outline-none cursor-pointer"
+                      >
+                        <option value="owned">Owned Outright (Paid Off)</option>
+                        <option value="lease">Lease</option>
+                        <option value="financed">Financed (Car Loan)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                        {newCar.ownership === 'lease' ? 'Monthly Lease Payment' : newCar.ownership === 'financed' ? 'Monthly Loan Payment' : 'Payment'}
+                      </label>
+                      <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus-within:bg-white focus-within:border-[#18457c]">
+                        <span className="text-slate-400 font-bold">$</span>
+                        <input
+                          type="number"
+                          disabled={newCar.ownership === 'owned'}
+                          value={newCar.ownership === 'owned' ? 0 : newCar.monthlyPayment}
+                          onChange={e => setNewCar({ ...newCar, monthlyPayment: Number(e.target.value) || 0 })}
+                          placeholder={newCar.ownership === 'owned' ? 'Paid Off ($0)' : 'e.g. 450'}
+                          className="w-full bg-transparent font-bold text-slate-900 focus:outline-none disabled:text-slate-400"
+                        />
+                        <span className="text-[10px] text-slate-400">/mo</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                        Powertrain Type
+                      </label>
+                      <select
+                        value={newCar.type}
+                        onChange={e => {
+                          const t = e.target.value;
+                          setNewCar({
+                            ...newCar,
+                            type: t,
+                            fuelGrade: t === 'ev' ? 'electric' : 'regular',
+                            mpgOrEfficiency: t === 'ev' ? 28 : t === 'hybrid' ? 48 : 28,
+                            batteryKwh: t === 'ev' ? 75 : 0
+                          });
+                        }}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:bg-white focus:border-[#18457c] focus:outline-none cursor-pointer capitalize"
+                      >
+                        <option value="gas">Gasoline (ICE)</option>
+                        <option value="hybrid">Standard Hybrid</option>
+                        <option value="phev">Plug-in Hybrid (PHEV)</option>
+                        <option value="ev">Electric (EV)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                        Fuel / Energy Type
+                      </label>
+                      {newCar.type === 'ev' ? (
+                        <div className="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-800 flex items-center justify-between">
+                          <span>⚡ Electricity</span>
+                          <span className="text-[10px] text-emerald-600">{newCar.batteryKwh ? `${newCar.batteryKwh} kWh` : 'EV Battery'}</span>
+                        </div>
+                      ) : (
+                        <select
+                          value={newCar.fuelGrade || 'regular'}
+                          onChange={e => setNewCar({ ...newCar, fuelGrade: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:bg-white focus:border-[#18457c] focus:outline-none cursor-pointer"
+                        >
+                          <option value="regular">Regular Unleaded (87)</option>
+                          <option value="premium">Premium Unleaded (91+)</option>
+                          <option value="diesel">Diesel</option>
+                        </select>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 3: Efficiency & Driving Mileage & Insurance */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                        {newCar.type === 'ev' ? 'Efficiency (kWh / 100 mi)' : 'Fuel Economy (MPG)'}
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={newCar.mpgOrEfficiency}
+                        onChange={e => setNewCar({ ...newCar, mpgOrEfficiency: Number(e.target.value) || 0 })}
+                        placeholder={newCar.type === 'ev' ? '28 kWh/100mi' : '30 MPG'}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:bg-white focus:border-[#18457c] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                        Est. Monthly Miles
+                      </label>
+                      <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus-within:bg-white focus-within:border-[#18457c]">
+                        <input
+                          type="number"
+                          value={newCar.monthlyMiles}
+                          onChange={e => setNewCar({ ...newCar, monthlyMiles: Number(e.target.value) || 0 })}
+                          placeholder="900"
+                          className="w-full bg-transparent font-bold text-slate-900 focus:outline-none"
+                        />
+                        <span className="text-[10px] text-slate-400">mi/mo</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                        Monthly Auto Insurance
+                      </label>
+                      <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus-within:bg-white focus-within:border-[#18457c]">
+                        <span className="text-slate-400 font-bold">$</span>
+                        <input
+                          type="number"
+                          value={newCar.insuranceMonthly}
+                          onChange={e => setNewCar({ ...newCar, insuranceMonthly: Number(e.target.value) || 0 })}
+                          placeholder="120"
+                          className="w-full bg-transparent font-bold text-slate-900 focus:outline-none"
+                        />
+                        <span className="text-[10px] text-slate-400">/mo</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCar(false)}
+                      className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer shadow-2xs"
+                    >
+                      Add Vehicle to Fleet
+                    </button>
+                  </div>
                 </form>
               )}
 
@@ -732,10 +984,24 @@ export default function HouseholdLifestyleHub({
                 {metrics.fleet.vehicles.map(v => (
                   <div key={v.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-3 text-xs">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-slate-900 text-sm">{v.name}</span>
                         <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-bold uppercase text-slate-700">
                           {v.type}
+                        </span>
+                        {v.ownership && (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            v.ownership === 'lease'
+                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                              : v.ownership === 'financed'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          }`}>
+                            {v.ownership === 'lease' ? 'Lease' : v.ownership === 'financed' ? 'Financed' : 'Owned'}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400">
+                          {v.type === 'ev' ? `${v.mpgOrEfficiency} kWh/100mi` : `${v.mpgOrEfficiency} MPG (${v.fuelGrade === 'premium' ? 'Premium 91+' : v.fuelGrade === 'diesel' ? 'Diesel' : 'Regular 87'})`}
                         </span>
                       </div>
                       <button
@@ -747,15 +1013,21 @@ export default function HouseholdLifestyleHub({
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 bg-white p-2.5 rounded-lg border border-slate-200/70">
+                    <div className={`grid ${v.monthlyPayment > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 bg-white p-2.5 rounded-lg border border-slate-200/70`}>
                       <div>
-                        <span className="text-[10px] text-slate-400 block">{v.type === 'ev' ? 'Charging' : 'Gas'}</span>
+                        <span className="text-[10px] text-slate-400 block">{v.type === 'ev' ? 'Charging' : 'Fuel'}</span>
                         <span className="font-bold text-slate-900">${v.monthlyFuelOrChargeCost}/mo</span>
                       </div>
                       <div>
                         <span className="text-[10px] text-slate-400 block">Insurance</span>
                         <span className="font-bold text-slate-900">${v.insuranceMonthly}/mo</span>
                       </div>
+                      {v.monthlyPayment > 0 && (
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">{v.ownership === 'lease' ? 'Lease' : 'Payment'}</span>
+                          <span className="font-bold text-slate-900">${v.monthlyPayment}/mo</span>
+                        </div>
+                      )}
                       <div>
                         <span className="text-[10px] text-slate-400 block">Total</span>
                         <span className="font-bold text-[#18457c]">${v.totalMonthlyVehicleCost}/mo</span>

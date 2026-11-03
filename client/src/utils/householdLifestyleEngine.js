@@ -268,6 +268,8 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
 
       return {
         ...v,
+        fuelGrade: 'electric',
+        ownership: v.ownership || (payment > 0 ? 'financed' : 'owned'),
         monthlyFuelOrChargeCost: chargingCost,
         paidHomeKwh,
         freeKwh,
@@ -282,7 +284,12 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
       const gasMiles = miles * 0.5;
       const evMiles = miles * 0.5;
       const gallons = gasMiles / mpg;
-      const gasCost = Math.round(gallons * region.avgGasPricePerGal);
+      const gasPrice = v.fuelGrade === 'premium'
+        ? region.avgGasPricePerGal + 0.50
+        : v.fuelGrade === 'diesel'
+          ? region.avgGasPricePerGal + 0.35
+          : region.avgGasPricePerGal;
+      const gasCost = Math.round(gallons * gasPrice);
       const homeKwh = Math.round((evMiles / 100) * 30);
       const evCost = Math.round(homeKwh * effectiveEvRate);
       const maintenance = Math.round(miles * 0.055);
@@ -294,6 +301,8 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
 
       return {
         ...v,
+        fuelGrade: v.fuelGrade || 'regular',
+        ownership: v.ownership || (payment > 0 ? 'financed' : 'owned'),
         monthlyFuelOrChargeCost: gasCost + evCost,
         gallonsUsed: Math.round(gallons * 10) / 10,
         paidHomeKwh: homeKwh,
@@ -305,7 +314,12 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
       const defaultMpg = v.type === 'hybrid' ? 48 : 28;
       const mpg = Math.max(10, Number(v.mpgOrEfficiency) || defaultMpg);
       const gallons = miles / mpg;
-      const gasCost = Math.round(gallons * region.avgGasPricePerGal);
+      const gasPrice = v.fuelGrade === 'premium'
+        ? region.avgGasPricePerGal + 0.50
+        : v.fuelGrade === 'diesel'
+          ? region.avgGasPricePerGal + 0.35
+          : region.avgGasPricePerGal;
+      const gasCost = Math.round(gallons * gasPrice);
       const maintenance = Math.round(miles * (v.type === 'hybrid' ? 0.05 : 0.075)); // Oil changes, brakes, belts, smog
 
       // Calculate how much they would save switching this car to an EV (with 35% free charging + off-peak home rate)
@@ -318,6 +332,8 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
 
       return {
         ...v,
+        fuelGrade: v.fuelGrade || (v.type === 'hybrid' ? 'regular' : 'regular'),
+        ownership: v.ownership || (payment > 0 ? 'financed' : 'owned'),
         monthlyFuelOrChargeCost: gasCost,
         gallonsUsed: Math.round(gallons * 10) / 10,
         maintenance,
@@ -814,4 +830,161 @@ export const MAJOR_HEALTH_PLANS = [
     network: 'Veterans Affairs',
     copays: { primaryCare: 0, specialist: 0, urgentCare: 0, er: 0, rxGeneric: 0 }
   }
+];
+
+// Comprehensive database of popular vehicles with pre-filled specs (Fuel, MPG, kWh/100mi, Battery kWh)
+export const POPULAR_CAR_DATABASE = [
+  // Toyota
+  { fullName: 'Toyota Camry (Gas)', make: 'Toyota', model: 'Camry', type: 'gas', mpgOrEfficiency: 32, fuelGrade: 'regular', defaultInsurance: 125 },
+  { fullName: 'Toyota Camry Hybrid', make: 'Toyota', model: 'Camry Hybrid', type: 'hybrid', mpgOrEfficiency: 51, fuelGrade: 'regular', defaultInsurance: 125 },
+  { fullName: 'Toyota RAV4 (Gas)', make: 'Toyota', model: 'RAV4', type: 'gas', mpgOrEfficiency: 30, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Toyota RAV4 Hybrid', make: 'Toyota', model: 'RAV4 Hybrid', type: 'hybrid', mpgOrEfficiency: 40, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Toyota RAV4 Prime (PHEV)', make: 'Toyota', model: 'RAV4 Prime', type: 'phev', mpgOrEfficiency: 38, fuelGrade: 'regular', defaultInsurance: 130 },
+  { fullName: 'Toyota Prius Hybrid', make: 'Toyota', model: 'Prius', type: 'hybrid', mpgOrEfficiency: 57, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'Toyota Prius Prime (PHEV)', make: 'Toyota', model: 'Prius Prime', type: 'phev', mpgOrEfficiency: 52, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Toyota Corolla (Gas)', make: 'Toyota', model: 'Corolla', type: 'gas', mpgOrEfficiency: 35, fuelGrade: 'regular', defaultInsurance: 110 },
+  { fullName: 'Toyota Corolla Hybrid', make: 'Toyota', model: 'Corolla Hybrid', type: 'hybrid', mpgOrEfficiency: 50, fuelGrade: 'regular', defaultInsurance: 110 },
+  { fullName: 'Toyota Highlander (Gas)', make: 'Toyota', model: 'Highlander', type: 'gas', mpgOrEfficiency: 25, fuelGrade: 'regular', defaultInsurance: 135 },
+  { fullName: 'Toyota Highlander Hybrid', make: 'Toyota', model: 'Highlander Hybrid', type: 'hybrid', mpgOrEfficiency: 36, fuelGrade: 'regular', defaultInsurance: 135 },
+  { fullName: 'Toyota Grand Highlander Hybrid', make: 'Toyota', model: 'Grand Highlander Hybrid', type: 'hybrid', mpgOrEfficiency: 36, fuelGrade: 'regular', defaultInsurance: 140 },
+  { fullName: 'Toyota Tacoma', make: 'Toyota', model: 'Tacoma', type: 'gas', mpgOrEfficiency: 23, fuelGrade: 'regular', defaultInsurance: 130 },
+  { fullName: 'Toyota Tundra i-FORCE MAX', make: 'Toyota', model: 'Tundra', type: 'hybrid', mpgOrEfficiency: 20, fuelGrade: 'regular', defaultInsurance: 145 },
+  { fullName: 'Toyota Sienna Hybrid', make: 'Toyota', model: 'Sienna', type: 'hybrid', mpgOrEfficiency: 36, fuelGrade: 'regular', defaultInsurance: 125 },
+  { fullName: 'Toyota bZ4X (EV)', make: 'Toyota', model: 'bZ4X', type: 'ev', mpgOrEfficiency: 28, batteryKwh: 71.4, fuelGrade: 'electric', defaultInsurance: 135 },
+
+  // Honda
+  { fullName: 'Honda Civic Sedan', make: 'Honda', model: 'Civic', type: 'gas', mpgOrEfficiency: 36, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Honda Civic Hybrid', make: 'Honda', model: 'Civic Hybrid', type: 'hybrid', mpgOrEfficiency: 50, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Honda Accord (Gas)', make: 'Honda', model: 'Accord', type: 'gas', mpgOrEfficiency: 32, fuelGrade: 'regular', defaultInsurance: 125 },
+  { fullName: 'Honda Accord Hybrid', make: 'Honda', model: 'Accord Hybrid', type: 'hybrid', mpgOrEfficiency: 48, fuelGrade: 'regular', defaultInsurance: 125 },
+  { fullName: 'Honda CR-V (Gas)', make: 'Honda', model: 'CR-V', type: 'gas', mpgOrEfficiency: 30, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Honda CR-V Hybrid', make: 'Honda', model: 'CR-V Hybrid', type: 'hybrid', mpgOrEfficiency: 40, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Honda Pilot', make: 'Honda', model: 'Pilot', type: 'gas', mpgOrEfficiency: 22, fuelGrade: 'regular', defaultInsurance: 135 },
+  { fullName: 'Honda Odyssey', make: 'Honda', model: 'Odyssey', type: 'gas', mpgOrEfficiency: 22, fuelGrade: 'regular', defaultInsurance: 125 },
+  { fullName: 'Honda HR-V', make: 'Honda', model: 'HR-V', type: 'gas', mpgOrEfficiency: 28, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'Honda Prologue (EV)', make: 'Honda', model: 'Prologue', type: 'ev', mpgOrEfficiency: 32, batteryKwh: 85, fuelGrade: 'electric', defaultInsurance: 140 },
+
+  // Tesla
+  { fullName: 'Tesla Model Y Long Range AWD (EV)', make: 'Tesla', model: 'Model Y Long Range', type: 'ev', mpgOrEfficiency: 28, batteryKwh: 75, fuelGrade: 'electric', defaultInsurance: 165 },
+  { fullName: 'Tesla Model Y Standard RWD (EV)', make: 'Tesla', model: 'Model Y RWD', type: 'ev', mpgOrEfficiency: 26, batteryKwh: 60, fuelGrade: 'electric', defaultInsurance: 155 },
+  { fullName: 'Tesla Model Y Performance (EV)', make: 'Tesla', model: 'Model Y Performance', type: 'ev', mpgOrEfficiency: 30, batteryKwh: 75, fuelGrade: 'electric', defaultInsurance: 175 },
+  { fullName: 'Tesla Model 3 Standard RWD (EV)', make: 'Tesla', model: 'Model 3 RWD', type: 'ev', mpgOrEfficiency: 23, batteryKwh: 60, fuelGrade: 'electric', defaultInsurance: 145 },
+  { fullName: 'Tesla Model 3 Long Range AWD (EV)', make: 'Tesla', model: 'Model 3 Long Range', type: 'ev', mpgOrEfficiency: 24, batteryKwh: 75, fuelGrade: 'electric', defaultInsurance: 150 },
+  { fullName: 'Tesla Model 3 Performance (EV)', make: 'Tesla', model: 'Model 3 Performance', type: 'ev', mpgOrEfficiency: 27, batteryKwh: 75, fuelGrade: 'electric', defaultInsurance: 165 },
+  { fullName: 'Tesla Model X AWD (EV)', make: 'Tesla', model: 'Model X', type: 'ev', mpgOrEfficiency: 34, batteryKwh: 100, fuelGrade: 'electric', defaultInsurance: 195 },
+  { fullName: 'Tesla Model S AWD (EV)', make: 'Tesla', model: 'Model S', type: 'ev', mpgOrEfficiency: 28, batteryKwh: 100, fuelGrade: 'electric', defaultInsurance: 190 },
+  { fullName: 'Tesla Cybertruck Dual Motor AWD (EV)', make: 'Tesla', model: 'Cybertruck', type: 'ev', mpgOrEfficiency: 42, batteryKwh: 123, fuelGrade: 'electric', defaultInsurance: 195 },
+
+  // Ford
+  { fullName: 'Ford F-150 SuperCrew (Gas)', make: 'Ford', model: 'F-150', type: 'gas', mpgOrEfficiency: 21, fuelGrade: 'regular', defaultInsurance: 140 },
+  { fullName: 'Ford F-150 PowerBoost Hybrid', make: 'Ford', model: 'F-150 Hybrid', type: 'hybrid', mpgOrEfficiency: 24, fuelGrade: 'regular', defaultInsurance: 145 },
+  { fullName: 'Ford F-150 Lightning (EV)', make: 'Ford', model: 'F-150 Lightning', type: 'ev', mpgOrEfficiency: 48, batteryKwh: 98, fuelGrade: 'electric', defaultInsurance: 160 },
+  { fullName: 'Ford Mustang Mach-E (EV)', make: 'Ford', model: 'Mustang Mach-E', type: 'ev', mpgOrEfficiency: 33, batteryKwh: 72, fuelGrade: 'electric', defaultInsurance: 145 },
+  { fullName: 'Ford Explorer', make: 'Ford', model: 'Explorer', type: 'gas', mpgOrEfficiency: 24, fuelGrade: 'regular', defaultInsurance: 135 },
+  { fullName: 'Ford Maverick Hybrid', make: 'Ford', model: 'Maverick Hybrid', type: 'hybrid', mpgOrEfficiency: 42, fuelGrade: 'regular', defaultInsurance: 110 },
+  { fullName: 'Ford Escape Hybrid', make: 'Ford', model: 'Escape Hybrid', type: 'hybrid', mpgOrEfficiency: 42, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'Ford Bronco (4-Door)', make: 'Ford', model: 'Bronco', type: 'gas', mpgOrEfficiency: 20, fuelGrade: 'regular', defaultInsurance: 135 },
+  { fullName: 'Ford Mustang GT (5.0L V8)', make: 'Ford', model: 'Mustang GT', type: 'gas', mpgOrEfficiency: 18, fuelGrade: 'premium', defaultInsurance: 165 },
+
+  // Hyundai & Genesis
+  { fullName: 'Hyundai Ioniq 5 (EV)', make: 'Hyundai', model: 'Ioniq 5', type: 'ev', mpgOrEfficiency: 29, batteryKwh: 77.4, fuelGrade: 'electric', defaultInsurance: 135 },
+  { fullName: 'Hyundai Ioniq 6 (EV)', make: 'Hyundai', model: 'Ioniq 6', type: 'ev', mpgOrEfficiency: 26, batteryKwh: 77.4, fuelGrade: 'electric', defaultInsurance: 135 },
+  { fullName: 'Hyundai Tucson Hybrid', make: 'Hyundai', model: 'Tucson Hybrid', type: 'hybrid', mpgOrEfficiency: 38, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Hyundai Santa Fe Hybrid', make: 'Hyundai', model: 'Santa Fe Hybrid', type: 'hybrid', mpgOrEfficiency: 36, fuelGrade: 'regular', defaultInsurance: 130 },
+  { fullName: 'Hyundai Elantra', make: 'Hyundai', model: 'Elantra', type: 'gas', mpgOrEfficiency: 36, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'Hyundai Elantra Hybrid', make: 'Hyundai', model: 'Elantra Hybrid', type: 'hybrid', mpgOrEfficiency: 54, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'Hyundai Kona Electric (EV)', make: 'Hyundai', model: 'Kona Electric', type: 'ev', mpgOrEfficiency: 27, batteryKwh: 64.8, fuelGrade: 'electric', defaultInsurance: 125 },
+  { fullName: 'Hyundai Palisade', make: 'Hyundai', model: 'Palisade', type: 'gas', mpgOrEfficiency: 21, fuelGrade: 'regular', defaultInsurance: 135 },
+  { fullName: 'Genesis GV70 Electrified (EV)', make: 'Genesis', model: 'GV70 Electrified', type: 'ev', mpgOrEfficiency: 35, batteryKwh: 77.4, fuelGrade: 'electric', defaultInsurance: 165 },
+
+  // Kia
+  { fullName: 'Kia EV6 (EV)', make: 'Kia', model: 'EV6', type: 'ev', mpgOrEfficiency: 29, batteryKwh: 77.4, fuelGrade: 'electric', defaultInsurance: 135 },
+  { fullName: 'Kia EV9 3-Row (EV)', make: 'Kia', model: 'EV9', type: 'ev', mpgOrEfficiency: 38, batteryKwh: 99.8, fuelGrade: 'electric', defaultInsurance: 155 },
+  { fullName: 'Kia Sportage Hybrid', make: 'Kia', model: 'Sportage Hybrid', type: 'hybrid', mpgOrEfficiency: 43, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Kia Telluride', make: 'Kia', model: 'Telluride', type: 'gas', mpgOrEfficiency: 21, fuelGrade: 'regular', defaultInsurance: 135 },
+  { fullName: 'Kia Sorento Hybrid', make: 'Kia', model: 'Sorento Hybrid', type: 'hybrid', mpgOrEfficiency: 37, fuelGrade: 'regular', defaultInsurance: 130 },
+  { fullName: 'Kia Forte / K4', make: 'Kia', model: 'K4', type: 'gas', mpgOrEfficiency: 34, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'Kia Niro EV', make: 'Kia', model: 'Niro EV', type: 'ev', mpgOrEfficiency: 28, batteryKwh: 64.8, fuelGrade: 'electric', defaultInsurance: 125 },
+  { fullName: 'Kia Carnival Hybrid', make: 'Kia', model: 'Carnival Hybrid', type: 'hybrid', mpgOrEfficiency: 33, fuelGrade: 'regular', defaultInsurance: 130 },
+
+  // Chevrolet & GMC
+  { fullName: 'Chevrolet Equinox EV', make: 'Chevrolet', model: 'Equinox EV', type: 'ev', mpgOrEfficiency: 30, batteryKwh: 85, fuelGrade: 'electric', defaultInsurance: 130 },
+  { fullName: 'Chevrolet Silverado 1500 (Gas)', make: 'Chevrolet', model: 'Silverado 1500', type: 'gas', mpgOrEfficiency: 19, fuelGrade: 'regular', defaultInsurance: 140 },
+  { fullName: 'Chevrolet Silverado EV', make: 'Chevrolet', model: 'Silverado EV', type: 'ev', mpgOrEfficiency: 48, batteryKwh: 131, fuelGrade: 'electric', defaultInsurance: 170 },
+  { fullName: 'Chevrolet Blazer EV', make: 'Chevrolet', model: 'Blazer EV', type: 'ev', mpgOrEfficiency: 34, batteryKwh: 85, fuelGrade: 'electric', defaultInsurance: 145 },
+  { fullName: 'Chevrolet Bolt EV / EUV', make: 'Chevrolet', model: 'Bolt EV', type: 'ev', mpgOrEfficiency: 28, batteryKwh: 65, fuelGrade: 'electric', defaultInsurance: 115 },
+  { fullName: 'Chevrolet Tahoe (V8)', make: 'Chevrolet', model: 'Tahoe', type: 'gas', mpgOrEfficiency: 17, fuelGrade: 'regular', defaultInsurance: 160 },
+  { fullName: 'Chevrolet Trax', make: 'Chevrolet', model: 'Trax', type: 'gas', mpgOrEfficiency: 30, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'GMC Sierra 1500', make: 'GMC', model: 'Sierra 1500', type: 'gas', mpgOrEfficiency: 19, fuelGrade: 'regular', defaultInsurance: 145 },
+  { fullName: 'GMC Yukon', make: 'GMC', model: 'Yukon', type: 'gas', mpgOrEfficiency: 17, fuelGrade: 'regular', defaultInsurance: 160 },
+
+  // BMW
+  { fullName: 'BMW 330i Sedan', make: 'BMW', model: '330i', type: 'gas', mpgOrEfficiency: 29, fuelGrade: 'premium', defaultInsurance: 160 },
+  { fullName: 'BMW 330e (PHEV)', make: 'BMW', model: '330e', type: 'phev', mpgOrEfficiency: 28, fuelGrade: 'premium', defaultInsurance: 160 },
+  { fullName: 'BMW M340i', make: 'BMW', model: 'M340i', type: 'gas', mpgOrEfficiency: 26, fuelGrade: 'premium', defaultInsurance: 175 },
+  { fullName: 'BMW X3 xDrive30i', make: 'BMW', model: 'X3', type: 'gas', mpgOrEfficiency: 25, fuelGrade: 'premium', defaultInsurance: 155 },
+  { fullName: 'BMW X5 xDrive40i', make: 'BMW', model: 'X5', type: 'gas', mpgOrEfficiency: 25, fuelGrade: 'premium', defaultInsurance: 175 },
+  { fullName: 'BMW X5 xDrive50e (PHEV)', make: 'BMW', model: 'X5 PHEV', type: 'phev', mpgOrEfficiency: 22, fuelGrade: 'premium', defaultInsurance: 180 },
+  { fullName: 'BMW i4 eDrive40 / M50 (EV)', make: 'BMW', model: 'i4', type: 'ev', mpgOrEfficiency: 31, batteryKwh: 81.2, fuelGrade: 'electric', defaultInsurance: 170 },
+  { fullName: 'BMW iX xDrive50 (EV)', make: 'BMW', model: 'iX', type: 'ev', mpgOrEfficiency: 36, batteryKwh: 105.2, fuelGrade: 'electric', defaultInsurance: 195 },
+
+  // Mercedes-Benz
+  { fullName: 'Mercedes-Benz C300 Sedan', make: 'Mercedes-Benz', model: 'C300', type: 'gas', mpgOrEfficiency: 29, fuelGrade: 'premium', defaultInsurance: 165 },
+  { fullName: 'Mercedes-Benz E350 Sedan', make: 'Mercedes-Benz', model: 'E350', type: 'gas', mpgOrEfficiency: 26, fuelGrade: 'premium', defaultInsurance: 175 },
+  { fullName: 'Mercedes-Benz GLC 300 SUV', make: 'Mercedes-Benz', model: 'GLC 300', type: 'gas', mpgOrEfficiency: 26, fuelGrade: 'premium', defaultInsurance: 160 },
+  { fullName: 'Mercedes-Benz GLE 350 / 450', make: 'Mercedes-Benz', model: 'GLE', type: 'gas', mpgOrEfficiency: 22, fuelGrade: 'premium', defaultInsurance: 180 },
+  { fullName: 'Mercedes-Benz EQE SUV (EV)', make: 'Mercedes-Benz', model: 'EQE SUV', type: 'ev', mpgOrEfficiency: 37, batteryKwh: 90.6, fuelGrade: 'electric', defaultInsurance: 185 },
+  { fullName: 'Mercedes-Benz EQS Sedan (EV)', make: 'Mercedes-Benz', model: 'EQS', type: 'ev', mpgOrEfficiency: 33, batteryKwh: 108.4, fuelGrade: 'electric', defaultInsurance: 210 },
+
+  // Audi & Porsche
+  { fullName: 'Audi A4 45 TFSI', make: 'Audi', model: 'A4', type: 'gas', mpgOrEfficiency: 27, fuelGrade: 'premium', defaultInsurance: 160 },
+  { fullName: 'Audi Q5 45 TFSI', make: 'Audi', model: 'Q5', type: 'gas', mpgOrEfficiency: 25, fuelGrade: 'premium', defaultInsurance: 160 },
+  { fullName: 'Audi Q5 55 TFSI e (PHEV)', make: 'Audi', model: 'Q5 PHEV', type: 'phev', mpgOrEfficiency: 27, fuelGrade: 'premium', defaultInsurance: 165 },
+  { fullName: 'Audi Q4 e-tron (EV)', make: 'Audi', model: 'Q4 e-tron', type: 'ev', mpgOrEfficiency: 33, batteryKwh: 82, fuelGrade: 'electric', defaultInsurance: 155 },
+  { fullName: 'Porsche Macan (Gas)', make: 'Porsche', model: 'Macan', type: 'gas', mpgOrEfficiency: 21, fuelGrade: 'premium', defaultInsurance: 185 },
+  { fullName: 'Porsche Macan EV', make: 'Porsche', model: 'Macan EV', type: 'ev', mpgOrEfficiency: 35, batteryKwh: 100, fuelGrade: 'electric', defaultInsurance: 200 },
+  { fullName: 'Porsche Cayenne', make: 'Porsche', model: 'Cayenne', type: 'gas', mpgOrEfficiency: 19, fuelGrade: 'premium', defaultInsurance: 200 },
+  { fullName: 'Porsche Taycan (EV)', make: 'Porsche', model: 'Taycan', type: 'ev', mpgOrEfficiency: 36, batteryKwh: 93.4, fuelGrade: 'electric', defaultInsurance: 225 },
+
+  // Lexus
+  { fullName: 'Lexus RX 350 (Gas)', make: 'Lexus', model: 'RX 350', type: 'gas', mpgOrEfficiency: 25, fuelGrade: 'regular', defaultInsurance: 145 },
+  { fullName: 'Lexus RX 350h Hybrid', make: 'Lexus', model: 'RX 350h', type: 'hybrid', mpgOrEfficiency: 36, fuelGrade: 'regular', defaultInsurance: 145 },
+  { fullName: 'Lexus NX 350h Hybrid', make: 'Lexus', model: 'NX 350h', type: 'hybrid', mpgOrEfficiency: 39, fuelGrade: 'regular', defaultInsurance: 135 },
+  { fullName: 'Lexus ES 350', make: 'Lexus', model: 'ES 350', type: 'gas', mpgOrEfficiency: 26, fuelGrade: 'regular', defaultInsurance: 135 },
+  { fullName: 'Lexus ES 300h Hybrid', make: 'Lexus', model: 'ES 300h', type: 'hybrid', mpgOrEfficiency: 44, fuelGrade: 'regular', defaultInsurance: 135 },
+  { fullName: 'Lexus TX 350 / 500h', make: 'Lexus', model: 'TX', type: 'hybrid', mpgOrEfficiency: 23, fuelGrade: 'regular', defaultInsurance: 150 },
+  { fullName: 'Lexus RZ 450e (EV)', make: 'Lexus', model: 'RZ 450e', type: 'ev', mpgOrEfficiency: 34, batteryKwh: 71.4, fuelGrade: 'electric', defaultInsurance: 155 },
+
+  // Subaru
+  { fullName: 'Subaru Outback', make: 'Subaru', model: 'Outback', type: 'gas', mpgOrEfficiency: 28, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'Subaru Forester', make: 'Subaru', model: 'Forester', type: 'gas', mpgOrEfficiency: 29, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'Subaru Crosstrek', make: 'Subaru', model: 'Crosstrek', type: 'gas', mpgOrEfficiency: 30, fuelGrade: 'regular', defaultInsurance: 110 },
+  { fullName: 'Subaru Ascent (3-Row)', make: 'Subaru', model: 'Ascent', type: 'gas', mpgOrEfficiency: 22, fuelGrade: 'regular', defaultInsurance: 130 },
+  { fullName: 'Subaru Solterra (EV)', make: 'Subaru', model: 'Solterra', type: 'ev', mpgOrEfficiency: 31, batteryKwh: 72.8, fuelGrade: 'electric', defaultInsurance: 130 },
+
+  // Mazda
+  { fullName: 'Mazda CX-5', make: 'Mazda', model: 'CX-5', type: 'gas', mpgOrEfficiency: 28, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'Mazda CX-50', make: 'Mazda', model: 'CX-50', type: 'gas', mpgOrEfficiency: 27, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Mazda CX-90 PHEV', make: 'Mazda', model: 'CX-90 PHEV', type: 'phev', mpgOrEfficiency: 25, fuelGrade: 'regular', defaultInsurance: 140 },
+  { fullName: 'Mazda 3 Sedan / Hatch', make: 'Mazda', model: 'Mazda 3', type: 'gas', mpgOrEfficiency: 31, fuelGrade: 'regular', defaultInsurance: 115 },
+
+  // Nissan
+  { fullName: 'Nissan Rogue', make: 'Nissan', model: 'Rogue', type: 'gas', mpgOrEfficiency: 33, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Nissan Altima', make: 'Nissan', model: 'Altima', type: 'gas', mpgOrEfficiency: 32, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Nissan Sentra', make: 'Nissan', model: 'Sentra', type: 'gas', mpgOrEfficiency: 34, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'Nissan Pathfinder', make: 'Nissan', model: 'Pathfinder', type: 'gas', mpgOrEfficiency: 23, fuelGrade: 'regular', defaultInsurance: 130 },
+  { fullName: 'Nissan Ariya (EV)', make: 'Nissan', model: 'Ariya', type: 'ev', mpgOrEfficiency: 32, batteryKwh: 87, fuelGrade: 'electric', defaultInsurance: 140 },
+  { fullName: 'Nissan Leaf (EV)', make: 'Nissan', model: 'Leaf', type: 'ev', mpgOrEfficiency: 30, batteryKwh: 60, fuelGrade: 'electric', defaultInsurance: 115 },
+
+  // Rivian & Polestar
+  { fullName: 'Rivian R1S 3-Row SUV (EV)', make: 'Rivian', model: 'R1S', type: 'ev', mpgOrEfficiency: 44, batteryKwh: 135, fuelGrade: 'electric', defaultInsurance: 195 },
+  { fullName: 'Rivian R1T Pickup (EV)', make: 'Rivian', model: 'R1T', type: 'ev', mpgOrEfficiency: 45, batteryKwh: 135, fuelGrade: 'electric', defaultInsurance: 195 },
+  { fullName: 'Polestar 2 (EV)', make: 'Polestar', model: 'Polestar 2', type: 'ev', mpgOrEfficiency: 31, batteryKwh: 78, fuelGrade: 'electric', defaultInsurance: 150 },
+  { fullName: 'Polestar 3 SUV (EV)', make: 'Polestar', model: 'Polestar 3', type: 'ev', mpgOrEfficiency: 35, batteryKwh: 111, fuelGrade: 'electric', defaultInsurance: 175 },
+
+  // Jeep, Dodge & Ram
+  { fullName: 'Jeep Grand Cherokee 4xe (PHEV)', make: 'Jeep', model: 'Grand Cherokee 4xe', type: 'phev', mpgOrEfficiency: 23, fuelGrade: 'regular', defaultInsurance: 155 },
+  { fullName: 'Jeep Wrangler 4xe (PHEV)', make: 'Jeep', model: 'Wrangler 4xe', type: 'phev', mpgOrEfficiency: 20, fuelGrade: 'regular', defaultInsurance: 150 },
+  { fullName: 'Ram 1500 (V8 / Hurricane)', make: 'Ram', model: '1500', type: 'gas', mpgOrEfficiency: 19, fuelGrade: 'regular', defaultInsurance: 145 },
+  { fullName: 'Dodge Durango', make: 'Dodge', model: 'Durango', type: 'gas', mpgOrEfficiency: 21, fuelGrade: 'regular', defaultInsurance: 145 }
 ];
