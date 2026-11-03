@@ -1235,7 +1235,7 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
       const balanceNum = Math.abs(Number(acc.balances?.current || 0));
       const limitNum = Number(acc.balances?.limit) || (isCredit ? 5000 : 0);
 
-      const instName = metadata?.institution?.name || (acc.name && acc.name.toLowerCase().includes('plaid') ? 'First Platypus Bank (Plaid Sandbox)' : 'Connected Bank');
+      const instName = metadata?.institution?.name || acc.institution || 'Connected Bank';
       const newAcc = {
         id: `acc-${acc.account_id}`,
         itemId,
@@ -1324,140 +1324,7 @@ app.get('/api/plaid/items', async (req, res) => {
   res.json({ items });
 });
 
-// Plaid Sandbox Direct Test Bank Connector
-app.post('/api/plaid/sandbox-test-connect', async (req, res) => {
-  const userId = req.userId || 'u-ziyad';
-  const data = await readData(req.userId);
 
-  const sandboxItemId = `item-sandbox-platypus-${Date.now()}`;
-  const sandboxInstitution = 'First Platypus Bank (Plaid Sandbox)';
-
-  const sandboxAccounts = [
-    {
-      id: `acc-sandbox-checking-${Date.now()}`,
-      itemId: sandboxItemId,
-      ownerId: userId,
-      userId: userId,
-      institution: sandboxInstitution,
-      name: 'Plaid Checking',
-      officialName: 'Plaid Gold Standard Checking',
-      type: 'depository',
-      subtype: 'checking',
-      balance: 110.00,
-      limit: 0,
-      apr: 0,
-      mask: '0000',
-      minPayment: 0
-    },
-    {
-      id: `acc-sandbox-saving-${Date.now()}`,
-      itemId: sandboxItemId,
-      ownerId: userId,
-      userId: userId,
-      institution: sandboxInstitution,
-      name: 'Plaid Saving',
-      officialName: 'Plaid Silver High-Yield Savings',
-      type: 'depository',
-      subtype: 'savings',
-      balance: 200.00,
-      limit: 0,
-      apr: 0,
-      mask: '1111',
-      minPayment: 0
-    },
-    {
-      id: `acc-sandbox-cd-${Date.now()}`,
-      itemId: sandboxItemId,
-      ownerId: userId,
-      userId: userId,
-      institution: sandboxInstitution,
-      name: 'Plaid CD',
-      officialName: 'Plaid 12-Month Certificate of Deposit',
-      type: 'depository',
-      subtype: 'cd',
-      balance: 1000.00,
-      limit: 0,
-      apr: 0,
-      mask: '2222',
-      minPayment: 0
-    },
-    {
-      id: `acc-sandbox-credit-${Date.now()}`,
-      itemId: sandboxItemId,
-      ownerId: userId,
-      userId: userId,
-      institution: sandboxInstitution,
-      name: 'Plaid Credit Card',
-      officialName: 'Plaid Diamond Cash Back Card',
-      type: 'credit',
-      subtype: 'credit card',
-      balance: 410.00,
-      limit: 2000.00,
-      apr: 19.9,
-      mask: '3333',
-      minPayment: 35
-    }
-  ];
-
-  // Replace any existing sandbox accounts with fresh set
-  data.accounts = (data.accounts || []).filter(a => a.institution !== sandboxInstitution).concat(sandboxAccounts);
-  data.plaidItems = (data.plaidItems || []).filter(p => p.institution !== sandboxInstitution);
-  data.plaidItems.push({
-    itemId: sandboxItemId,
-    userId: userId,
-    ownerId: userId,
-    accessToken: 'access-sandbox-platypus',
-    institution: sandboxInstitution,
-    institutionId: 'ins_109508',
-    accountsCount: sandboxAccounts.length,
-    connectedAt: new Date().toISOString()
-  });
-
-  const sandboxTransactions = [
-    {
-      id: `tx-sandbox-1-${Date.now()}`,
-      ownerId: userId,
-      userId: userId,
-      name: 'Uber',
-      amount: -18.50,
-      category: 'Transportation',
-      date: new Date().toISOString().split('T')[0],
-      account: 'Plaid Credit Card •••• 3333',
-      cardId: sandboxAccounts[3].id,
-      notes: 'Sandbox testing transaction'
-    },
-    {
-      id: `tx-sandbox-2-${Date.now()}`,
-      ownerId: userId,
-      userId: userId,
-      name: 'United Airlines',
-      amount: -320.00,
-      category: 'Travel',
-      date: new Date(Date.now() - 86400000 * 2).toISOString().split('T')[0],
-      account: 'Plaid Credit Card •••• 3333',
-      cardId: sandboxAccounts[3].id,
-      notes: 'Flight booking test'
-    },
-    {
-      id: `tx-sandbox-3-${Date.now()}`,
-      ownerId: userId,
-      userId: userId,
-      name: 'Starbucks',
-      amount: -6.45,
-      category: 'Dining',
-      date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-      account: 'Plaid Checking •••• 0000',
-      cardId: sandboxAccounts[0].id,
-      notes: 'Morning coffee test'
-    }
-  ];
-  data.transactions = (data.transactions || []).concat(sandboxTransactions);
-
-  await writeData(data, req.userId);
-
-  const userPlaidItems = data.plaidItems.filter(item => !item.userId || item.userId === userId || item.ownerId === userId);
-  res.json({ success: true, accounts: sandboxAccounts, plaidItems: userPlaidItems });
-});
 
 app.delete('/api/plaid/items/:itemId', async (req, res) => {
   const { itemId } = req.params;
