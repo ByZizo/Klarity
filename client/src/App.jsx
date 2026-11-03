@@ -83,6 +83,7 @@ import {
   setMasterPin,
   removeMasterPin,
   verifyMasterPin,
+  reencryptLegacyStorage,
   sanitizeHtmlAgainstInjection
 } from './utils/securityCrypto';
 
@@ -98,7 +99,7 @@ if (typeof window !== 'undefined' && !window.__klarityFetchPatched) {
     if (isApi) {
       let token = null;
       try {
-        const sess = secureStorage.getItem('klarity_auth_session', null);
+        const sess = await secureStorage.getItem('klarity_auth_session', null);
         if (sess && sess.token && (!sess.expiresAt || Date.now() < sess.expiresAt)) {
           token = sess.token;
         }
@@ -475,30 +476,32 @@ export default function App() {
 }
 
 function KlarityApp() {
-  // Current user state (Encrypted in localStorage; 7-day session validity)
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const sess = secureStorage.getItem('klarity_auth_session', null);
-      if (sess && sess.user && sess.expiresAt && Date.now() < sess.expiresAt) {
-        return sess.user;
-      }
-      const saved = secureStorage.getItem('klarity_user', null);
-      if (saved && typeof saved === 'object' && saved.email) return saved;
-      return null;
-    } catch {
-      return null;
-    }
-  });
+  // Current user state (Encrypted in localStorage with Web Crypto AES-256-GCM; 7-day session validity)
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authSession, setAuthSession] = useState(null);
 
-  const [authSession, setAuthSession] = useState(() => {
-    try {
-      const sess = secureStorage.getItem('klarity_auth_session', null);
-      if (sess && sess.expiresAt && Date.now() < sess.expiresAt) return sess;
-      return null;
-    } catch {
-      return null;
+  // Load authenticated session asynchronously from secureStorage on initial mount
+  useEffect(() => {
+    let active = true;
+    async function loadInitialSession() {
+      try {
+        const sess = await secureStorage.getItem('klarity_auth_session', null);
+        if (active && sess && sess.user && sess.expiresAt && Date.now() < sess.expiresAt) {
+          setCurrentUser(sess.user);
+          setAuthSession(sess);
+          return;
+        }
+        const user = await secureStorage.getItem('klarity_user', null);
+        if (active && user && typeof user === 'object' && user.email) {
+          setCurrentUser(user);
+        }
+      } catch (err) {
+        console.warn('Initial session load notice:', err);
+      }
     }
-  });
+    loadInitialSession();
+    return () => { active = false; };
+  }, []);
 
   // App-Wide Security Lock & Inactivity Auto-Lock State
   const [isSessionLocked, setIsSessionLocked] = useState(() => {
@@ -592,8 +595,8 @@ function KlarityApp() {
               if (isMounted) {
                 setCurrentUser(diskSession.user);
                 setAuthSession(diskSession);
-                secureStorage.setItem('klarity_auth_session', diskSession);
-                secureStorage.setItem('klarity_user', diskSession.user);
+                await secureStorage.setItem('klarity_auth_session', diskSession);
+                await secureStorage.setItem('klarity_user', diskSession.user);
               }
               return;
             } else {
@@ -612,8 +615,8 @@ function KlarityApp() {
               if (isMounted) {
                 setCurrentUser(json.session.user);
                 setAuthSession(json.session);
-                secureStorage.setItem('klarity_auth_session', json.session);
-                secureStorage.setItem('klarity_user', json.session.user);
+                await secureStorage.setItem('klarity_auth_session', json.session);
+                await secureStorage.setItem('klarity_user', json.session.user);
                 if (typeof window !== 'undefined' && window.klarityDesktop?.saveSession) {
                   window.klarityDesktop.saveSession(json.session);
                 }
@@ -623,7 +626,7 @@ function KlarityApp() {
           }
         }
 
-        const localSess = secureStorage.getItem('klarity_auth_session', null);
+        const localSess = await secureStorage.getItem('klarity_auth_session', null);
         if (localSess && localSess.expiresAt && Date.now() >= localSess.expiresAt) {
           secureStorage.removeItem('klarity_auth_session');
           secureStorage.removeItem('klarity_user');
@@ -650,8 +653,8 @@ function KlarityApp() {
     };
     setCurrentUser(user);
     setAuthSession(session);
-    secureStorage.setItem('klarity_auth_session', session);
-    secureStorage.setItem('klarity_user', user);
+    await secureStorage.setItem('klarity_auth_session', session);
+    await secureStorage.setItem('klarity_user', user);
 
     try {
       await fetch('/api/auth/session', {
@@ -698,15 +701,17 @@ function KlarityApp() {
     try { sessionStorage.setItem('klarity_session_locked', 'true'); } catch {}
   };
 
-  const handleUnlockSession = (e) => {
+  const handleUnlockSession = async (e) => {
     e.preventDefault();
     if (hasMasterPinSet()) {
-      const res = verifyMasterPin(lockPinInput);
+      const res = await verifyMasterPin(lockPinInput);
       if (res.valid) {
         setIsSessionLocked(false);
         setLockPinInput('');
         setLockError('');
         try { sessionStorage.removeItem('klarity_session_locked'); } catch {}
+        // Re-encrypt old ENCv2 values in modern Web Crypto format
+        await reencryptLegacyStorage(lockPinInput);
       } else {
         setLockError(res.error || 'Incorrect PIN.');
       }
@@ -716,6 +721,7 @@ function KlarityApp() {
         setLockPinInput('');
         setLockError('');
         try { sessionStorage.removeItem('klarity_session_locked'); } catch {}
+        await reencryptLegacyStorage(lockPinInput);
       } else {
         setLockError('Enter your PIN or password to unlock.');
       }
@@ -2183,7 +2189,6 @@ function KlarityApp() {
   };
 
   const handleLogout = async () => {
-    window.__triggerKlaritySignOut = null;
     window.__triggerKlaritySignOut = null;
     setCurrentUser(null);
     setAuthSession(null);

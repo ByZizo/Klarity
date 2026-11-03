@@ -32,7 +32,7 @@ It also includes a built-in AI financial advisor that analyzes your real numbers
 - **Debt Payoff Engine** — Compare payoff methods like Avalanche vs. Snowball with clear timelines, interest savings, and payoff dates.
 - **AI Financial Assistant** — Ask questions about your money, get debt payoff recommendations, or analyze your spending. Works with Google Gemini, OpenAI, or Claude.
 - **Password & Account Vault** — A secure, client-side encrypted vault to keep financial logins, account numbers, and notes safe.
-- **100% Private** — Your financial data is AES-256 encrypted on your machine. You own your data.
+- **100% Private & Bank-Grade Security** — Your financial data is encrypted locally using the standard browser **Web Crypto API (AES-256-GCM)**. Encryption keys and master PINs are derived with **PBKDF2 (SHA-256, 600,000 iterations)** with cryptographically random salts (`crypto.getRandomValues`). You own your data.
 
 ---
 
@@ -64,14 +64,20 @@ If you prefer to run or build from source code:
 
 ---
 
-## Tech Stack
+## Tech Stack & Security
 
 - **Frontend:** React, Vite, Tailwind CSS, Lucide Icons
 - **Desktop:** Electron, Electron Builder
 - **Backend:** Node.js, Express
 - **AI Integration:** Google Gemini, OpenAI, Anthropic Claude
 - **Bank Connectivity:** Plaid API
-- **Security:** AES-256-GCM client-side encryption
+- **Cryptography Engine:** Browser Web Crypto API (`window.crypto.subtle`)
+  - **Symmetric Cipher:** Authenticated AES-256-GCM (12-byte IV, 128-bit authentication tag)
+  - **Key Derivation & Hashing:** PBKDF2 with SHA-256 and 600,000 iterations (NIST SP 800-132)
+  - **Randomness:** Hardware-backed `crypto.getRandomValues` exclusively (zero `Math.random` fallbacks)
+  - **Master PIN Protection:** PBKDF2 hash verification with brute-force lockout (5 attempts -> 60s cooldown)
+  - **Data Migration:** Backward-compatible decryption for legacy `ENCv2:` values with automatic upgrade to `ENCv3:` AES-256-GCM
+  - **Data Injection Shield:** Active anti-XSS and CSV/Excel formula injection (DDE) sanitization
 
 ---
 
