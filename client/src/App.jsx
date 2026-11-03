@@ -53,6 +53,10 @@ import {
   LayoutDashboard,
   Filter,
   Download,
+  Home,
+  ArrowUp,
+  ArrowDown,
+  RotateCcw,
   Upload,
   PieChart,
   Target,
@@ -816,7 +820,7 @@ function KlarityApp() {
       metrics: { totalChecking: 0, totalCreditDebt: 0, totalMonthlyBills: 0, netWorthEstimate: 0 }
     };
   });
-  const VALID_TABS = ['dashboard', 'cards', 'bills', 'subscriptions', 'transactions', 'budgets', 'retirement', 'vault', 'advisor', 'more'];
+  const VALID_TABS = ['dashboard', 'cards', 'bills', 'subscriptions', 'transactions', 'budgets', 'household', 'retirement', 'vault', 'advisor', 'more'];
 
   const getInitialTab = () => {
     try {
@@ -1099,7 +1103,8 @@ function KlarityApp() {
     retirement: true,
     budgets: true,
     savingsGoals: true,
-    vault: true
+    vault: true,
+    household: true
   };
 
   const [featureFlags, setFeatureFlags] = useState(() => {
@@ -1195,6 +1200,8 @@ function KlarityApp() {
     } else if (activeTab === 'budgets' && featureFlags.budgets === false) {
       setActiveTab('dashboard');
     } else if (activeTab === 'vault' && featureFlags.vault === false) {
+      setActiveTab('dashboard');
+    } else if (activeTab === 'household' && featureFlags.household === false) {
       setActiveTab('dashboard');
     }
   }, [activeTab, featureFlags]);
@@ -1387,10 +1394,127 @@ function KlarityApp() {
   const [isSidebarCompact, setIsSidebarCompact] = useState(() => {
     try {
       return localStorage.getItem('klarity_sidebar_compact') === 'true';
-    } catch (e) {
+    } catch {
       return false;
     }
   });
+
+  const DEFAULT_SIDEBAR_NAV_ORDER = [
+    'dashboard',
+    'cards',
+    'transactions',
+    'bills',
+    'subscriptions',
+    'budgets',
+    'household',
+    'retirement',
+    'vault'
+  ];
+
+  const [sidebarNavOrder, setSidebarNavOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_sidebar_order');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const merged = [...parsed];
+          DEFAULT_SIDEBAR_NAV_ORDER.forEach(id => {
+            if (!merged.includes(id)) merged.push(id);
+          });
+          return merged;
+        }
+      }
+    } catch {}
+    return DEFAULT_SIDEBAR_NAV_ORDER;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_sidebar_order', JSON.stringify(sidebarNavOrder));
+    } catch {}
+  }, [sidebarNavOrder]);
+
+  const [vaultPinTimeout, setVaultPinTimeout] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_vault_pin_timeout') || '15m';
+    } catch {
+      return '15m';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_vault_pin_timeout', vaultPinTimeout);
+    } catch {}
+  }, [vaultPinTimeout]);
+
+  const [clipboardClearSeconds, setClipboardClearSeconds] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem('klarity_clipboard_timeout'));
+      return !Number.isNaN(v) && v > 0 ? v : 30;
+    } catch {
+      return 30;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_clipboard_timeout', String(clipboardClearSeconds));
+    } catch {}
+  }, [clipboardClearSeconds]);
+
+  const [changePinCurrent, setChangePinCurrent] = useState('');
+  const [changePinNew, setChangePinNew] = useState('');
+  const [changePinConfirm, setChangePinConfirm] = useState('');
+  const [changePinMsg, setChangePinMsg] = useState('');
+  const [isChangingPin, setIsChangingPin] = useState(false);
+
+  const SIDEBAR_ITEMS_CONFIG = {
+    dashboard: { id: 'dashboard', label: 'Overview', icon: LayoutDashboard, flag: null },
+    cards: { id: 'cards', label: 'Cards', icon: CreditCard, flag: null },
+    transactions: { id: 'transactions', label: 'Transactions', icon: History, flag: null },
+    bills: { id: 'bills', label: 'Bills', icon: Receipt, flag: null },
+    subscriptions: { id: 'subscriptions', label: 'Subscriptions', icon: Zap, flag: null },
+    budgets: { id: 'budgets', label: 'Budgets', icon: PieChart, flag: 'budgets' },
+    household: { id: 'household', label: 'Household', icon: Home, flag: 'household' },
+    retirement: { id: 'retirement', label: 'Retirement', icon: Landmark, flag: 'retirement' },
+    vault: { id: 'vault', label: 'Passwords', icon: KeyRound, flag: 'vault' }
+  };
+
+  const handleSendPayoffPlanToAi = (plan) => {
+    const planSummary = `Active Payoff Strategy: ${plan.title} (${plan.monthlyPayment}/mo, debt-free in ~${plan.monthsToFreedom} months, saves ${Math.round(plan.interestSaved).toLocaleString()} in interest on ${Math.round(plan.totalBalance).toLocaleString()} total debt).`;
+    handleAddMemory(planSummary);
+    setIsAiDrawerOpen(true);
+    const prompt = `I am choosing payoff strategy "${plan.title}" for my cards with ${plan.monthlyPayment}/mo payment. My total card debt is ${Math.round(plan.totalBalance).toLocaleString()} at ~${plan.weightedApr.toFixed(1)}% APR, aiming for debt-freedom in ~${plan.monthsToFreedom} months. Can you help me optimize my budget and create an execution checklist for this plan?`;
+    handleSendChatMessage(prompt);
+  };
+
+  const handleMoveSidebarItem = (id, direction) => {
+    setSidebarNavOrder(prev => {
+      const idx = prev.indexOf(id);
+      if (idx === -1) return prev;
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+      const copy = [...prev];
+      const temp = copy[idx];
+      copy[idx] = copy[targetIdx];
+      copy[targetIdx] = temp;
+      return copy;
+    });
+  };
+
+  const handleResetSidebarOrder = () => {
+    setSidebarNavOrder(DEFAULT_SIDEBAR_NAV_ORDER);
+    handleUpdateFeatureFlags({
+      retirement: true,
+      budgets: true,
+      savingsGoals: true,
+      vault: true,
+      household: true
+    });
+    setNotificationToast('Sidebar layout reset to default.');
+    setTimeout(() => setNotificationToast(''), 3000);
+  };
 
   useEffect(() => {
     try {
@@ -4240,52 +4364,46 @@ function KlarityApp() {
 
           {/* Navigation Links */}
           <nav className={`flex flex-col ${isSidebarCompact ? 'items-center gap-1.5 mt-5' : 'gap-1.5 mt-6'}`}>
-            {[
-              { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
-              { id: 'cards', label: 'Cards', icon: CreditCard },
-              { id: 'transactions', label: 'Transactions', icon: History },
-              { id: 'bills', label: 'Bills', icon: Receipt },
-              { id: 'subscriptions', label: 'Subscriptions', icon: Zap },
-              { id: 'budgets', label: 'Budgets', icon: PieChart, flag: 'budgets' },
-              { id: 'retirement', label: 'Retirement', icon: Landmark, flag: 'retirement' },
-              { id: 'vault', label: 'Passwords', icon: KeyRound, flag: 'vault' }
-            ].filter(item => !item.flag || featureFlags[item.flag] !== false).map(item => {
-              const isActive = activeTab === item.id;
-              const Icon = item.icon;
-              return !isSidebarCompact ? (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveTab(item.id)}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all cursor-pointer flex items-center gap-3 ${
-                    isActive
-                      ? 'bg-[#e8edf5] text-[#1e3a8a] font-semibold shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 font-medium'
-                  }`}
-                >
-                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
-                  <span className="leading-none">{item.label}</span>
-                </button>
-              ) : (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveTab(item.id)}
-                  title={item.label}
-                  className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all cursor-pointer relative group ${
-                    isActive
-                      ? 'bg-[#e8edf5] text-[#1e3a8a] shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
-                  }`}
-                >
-                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
-                  {/* Tooltip on hover */}
-                  <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
-                    {item.label}
-                  </span>
-                </button>
-              );
-            })}
+            {sidebarNavOrder
+              .map(id => SIDEBAR_ITEMS_CONFIG[id])
+              .filter(item => Boolean(item) && (!item.flag || featureFlags[item.flag] !== false))
+              .map(item => {
+                const isActive = activeTab === item.id;
+                const Icon = item.icon;
+                return !isSidebarCompact ? (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all cursor-pointer flex items-center gap-3 ${
+                      isActive
+                        ? 'bg-[#e8edf5] text-[#1e3a8a] font-semibold shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 font-medium'
+                    }`}
+                  >
+                    <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
+                    <span className="leading-none">{item.label}</span>
+                  </button>
+                ) : (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveTab(item.id)}
+                    title={item.label}
+                    className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all cursor-pointer relative group ${
+                      isActive
+                        ? 'bg-[#e8edf5] text-[#1e3a8a] shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
+                    {/* Tooltip on hover */}
+                    <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
           </nav>
         </div>
 
@@ -4843,6 +4961,7 @@ function KlarityApp() {
                       { label: 'Bills', onClick: () => setActiveTab('bills') },
                       { label: 'Subscriptions', onClick: () => setActiveTab('subscriptions') },
                       { label: 'Cards', onClick: () => setActiveTab('cards') },
+                      ...(featureFlags.household !== false ? [{ label: 'Household & Auto', onClick: () => setActiveTab('household') }] : []),
                       ...(featureFlags.retirement !== false ? [{ label: 'Retirement & Pensions', onClick: () => setActiveTab('retirement') }] : []),
                       ...(featureFlags.vault !== false ? [{ label: 'Passwords & Accounts', onClick: () => setActiveTab('vault') }] : []),
                       { label: 'Settings', onClick: () => setIsSettingsOpen(true) }
@@ -5010,11 +5129,35 @@ function KlarityApp() {
               )}
 
               {activeTab === 'vault' && featureFlags.vault !== false && (
-                <div className="p-5 flex flex-col gap-4">
+                <div className="p-3">
                   <PasswordVaultPage
                     vaultItems={vaultItems}
                     onUpdateVaultItems={setVaultItems}
-                    onBack={() => setActiveTab('dashboard')}
+                    onBack={() => setActiveTab('more')}
+                  />
+                </div>
+              )}
+
+              {activeTab === 'household' && featureFlags.household !== false && (
+                <div className="p-5 flex flex-col gap-4">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('more')}
+                      className="p-1.5 rounded-lg hover:bg-slate-200/60 text-slate-600 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+                    <h1 className="font-serif-title text-[24px] font-bold text-slate-900">Household & Auto</h1>
+                  </div>
+                  <HouseholdLifestyleHub
+                    householdProfile={householdProfile}
+                    onUpdateProfile={setHouseholdProfile}
+                    onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
+                    onAskAiAdvisor={(promptText) => {
+                      setIsAiDrawerOpen(true);
+                      handleSendChatMessage(promptText);
+                    }}
                   />
                 </div>
               )}
@@ -5029,7 +5172,7 @@ function KlarityApp() {
             { id: 'transactions', label: 'Activity', matchIds: ['transactions'] },
             ...(featureFlags.budgets !== false ? [{ id: 'budgets', label: 'Budgets', matchIds: ['budgets'] }] : []),
             { id: 'advisor', label: 'Advisor', matchIds: ['advisor'] },
-            { id: 'more', label: 'More', matchIds: ['more', 'bills', 'subscriptions', 'cards', 'vault', 'retirement'] }
+            { id: 'more', label: 'More', matchIds: ['more', 'bills', 'subscriptions', 'cards', 'vault', 'retirement', 'household'] }
           ];
           const gridColClass = mobileTabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4';
           return (
@@ -5920,16 +6063,7 @@ function KlarityApp() {
               </div>
             </div>
 
-            {/* Household, Utility (PG&E / Water / Gas) & EV Fleet Estimator */}
-            <HouseholdLifestyleHub
-              householdProfile={householdProfile}
-              onUpdateProfile={setHouseholdProfile}
-              onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
-              onAskAiAdvisor={(promptText) => {
-                setIsAiDrawerOpen(true);
-                handleSendChatMessage(promptText);
-              }}
-            />
+
 
             {/* Filter & Search Bar + Multi-Card Filter Dropdown */}
             <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
@@ -6363,17 +6497,7 @@ function KlarityApp() {
             <InteractivePayoffComparison 
               cards={allFilterableCards.filter(c => c.type === 'credit')} 
               onOpenHardshipPlaybook={() => setIsHardshipModalOpen(true)} 
-            />
-
-            {/* Household, Auto & Health Sections */}
-            <HouseholdLifestyleHub
-              householdProfile={householdProfile}
-              onUpdateProfile={setHouseholdProfile}
-              onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
-              onAskAiAdvisor={(promptText) => {
-                setIsAiDrawerOpen(true);
-                handleSendChatMessage(promptText);
-              }}
+              onSendPlanToAi={(plan) => handleSendPayoffPlanToAi(plan)}
             />
 
             {/* Connected Bank Checking, Savings & Manual Accounts */}
@@ -6443,6 +6567,37 @@ function KlarityApp() {
             onUpdateVaultItems={setVaultItems}
             onBack={() => setActiveTab('dashboard')}
           />
+        )}
+
+        {/* --------------------------------------------------------------------- */}
+        {/* TAB: HOUSEHOLD, AUTO & LIFESTYLE */}
+        {activeTab === 'household' && featureFlags.household !== false && (
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('dashboard')}
+                  className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1.5 mb-1 font-semibold cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Overview</span>
+                </button>
+                <h1 className="font-serif-title text-2xl font-bold text-slate-900 tracking-tight">Household, Auto & Lifestyle</h1>
+                <p className="text-xs text-slate-500 mt-0.5">Manage utility bills, vehicle expenses, health coverage, and smart efficiency recommendations.</p>
+              </div>
+            </div>
+
+            <HouseholdLifestyleHub
+              householdProfile={householdProfile}
+              onUpdateProfile={setHouseholdProfile}
+              onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
+              onAskAiAdvisor={(promptText) => {
+                setIsAiDrawerOpen(true);
+                handleSendChatMessage(promptText);
+              }}
+            />
+          </div>
         )}
 
         {/* TAB: TRANSACTIONS (Dedicated Purchases Page with Multi-Card Filter) */}
@@ -8135,10 +8290,11 @@ function KlarityApp() {
                   <nav className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
                     {[
                       { id: 'profile', label: 'Profile', dot: false },
-                      { id: 'features', label: 'Features', dot: false },
+                      { id: 'sidebar', label: 'Sidebar', dot: false },
                       { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' },
                       { id: 'plaid', label: 'Bank connection', dot: settingsPlaidStatus !== 'connected' },
-                      { id: 'session', label: 'Security & Session', dot: false }
+                      { id: 'security', label: 'Security', dot: false },
+                      { id: 'session', label: 'Session', dot: false }
                     ].map(tab => {
                       const isActive = settingsActiveTab === tab.id;
                       return (
@@ -8168,71 +8324,128 @@ function KlarityApp() {
               {/* Right Content Panel */}
               <div className="flex-1 p-6 sm:p-8 flex flex-col justify-between overflow-y-auto bg-white">
                 <div>
-                  {/* TAB: FEATURES */}
-                  {settingsActiveTab === 'features' && (
-                    <div key="settings-tab-features" className="flex flex-col gap-6">
-                      <div>
-                        <h3 className="font-serif-title text-xl font-bold text-slate-900">Features & Navigation</h3>
-                        <p className="text-xs text-slate-500 mt-1">
-                          Customize your workspace by showing or hiding optional features. Hiding keeps your data safe—turning a feature back on restores it immediately.
-                        </p>
+                  {/* TAB: SIDEBAR & NAVIGATION */}
+                  {settingsActiveTab === 'sidebar' && (
+                    <div key="settings-tab-sidebar" className="flex flex-col gap-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h3 className="font-serif-title text-xl font-bold text-slate-900">Sidebar & Navigation</h3>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Customize your navigation order with Move Up / Move Down, or toggle optional sections to show or hide them.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleResetSidebarOrder}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 self-start sm:self-auto cursor-pointer shadow-2xs transition-colors"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Reset Layout</span>
+                        </button>
                       </div>
 
+                      {/* Reorderable and Toggleable List of Navigation Items */}
                       <div className="border border-slate-200/90 rounded-2xl divide-y divide-slate-100 overflow-hidden bg-white shadow-2xs">
-                        {[
-                          {
-                            id: 'retirement',
-                            title: 'Retirement & Pensions',
-                            description: 'Public pensions (CalPERS, CalSTRS, FERS), 401(k), IRAs, and Social Security forecasts.',
-                            enabled: featureFlags.retirement !== false
-                          },
-                          {
-                            id: 'budgets',
-                            title: 'Monthly Budgets',
-                            description: 'Category spending limits, card-level tracking, and budget alerts.',
-                            enabled: featureFlags.budgets !== false
-                          },
-                          {
-                            id: 'savingsGoals',
-                            title: 'Savings Goals',
-                            description: 'Target amounts and projected timelines for emergency funds and milestones.',
-                            enabled: featureFlags.savingsGoals !== false
-                          },
-                          {
-                            id: 'vault',
-                            title: 'Password & Account Vault',
-                            description: 'Client-side AES-GCM encrypted vault for credentials and account PINs.',
-                            enabled: featureFlags.vault !== false
-                          }
-                        ].map(feature => (
-                          <div key={feature.id} className="p-4 sm:p-5 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-bold text-slate-900">{feature.title}</p>
-                              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{feature.description}</p>
-                            </div>
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={feature.enabled}
-                              onClick={() => handleUpdateFeatureFlags({ [feature.id]: !feature.enabled })}
-                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                                feature.enabled ? 'bg-[#18457c]' : 'bg-slate-200'
+                        {sidebarNavOrder.map((itemId, idx) => {
+                          const config = SIDEBAR_ITEMS_CONFIG[itemId];
+                          if (!config) return null;
+                          const Icon = config.icon;
+                          const isOptional = Boolean(config.flag);
+                          const isEnabled = isOptional ? featureFlags[config.flag] !== false : true;
+
+                          const descriptions = {
+                            dashboard: 'Main financial overview, net worth, cash flow & health score.',
+                            cards: 'Credit cards, utilization, weighted APR & interactive payoff engine.',
+                            transactions: 'Purchases, transaction history, categories & card filters.',
+                            bills: 'Upcoming bills, recurring due dates & payment schedules.',
+                            subscriptions: 'Monthly & annual active software and entertainment subs.',
+                            budgets: 'Spending budgets and category progress limits.',
+                            household: 'Utility bills (PG&E / water), fleet vehicles, and healthcare.',
+                            retirement: 'Public pensions (CalPERS, CalSTRS), 401(k), IRAs & Social Security.',
+                            vault: 'Encrypted password & account credentials vault.'
+                          };
+
+                          return (
+                            <div
+                              key={itemId}
+                              className={`p-4 sm:p-5 flex items-center justify-between gap-4 transition-colors ${
+                                !isEnabled ? 'bg-slate-50/50 opacity-60' : 'hover:bg-slate-50/40'
                               }`}
                             >
-                              <span
-                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                                  feature.enabled ? 'translate-x-5' : 'translate-x-0'
-                                }`}
-                              />
-                            </button>
-                          </div>
-                        ))}
+                              <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                                <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-700 shrink-0">
+                                  <Icon className="w-4 h-4 text-[#18457c]" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-bold text-slate-900">{config.label}</p>
+                                    <span className="text-[10px] font-mono text-slate-400">#{idx + 1}</span>
+                                    {!isOptional && (
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500">
+                                        Core
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{descriptions[itemId] || ''}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                {/* Up / Down Order Buttons */}
+                                <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200/80">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveSidebarItem(itemId, 'up')}
+                                    disabled={idx === 0}
+                                    title="Move section up"
+                                    className="p-1.5 rounded-md hover:bg-white text-slate-600 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveSidebarItem(itemId, 'down')}
+                                    disabled={idx === sidebarNavOrder.length - 1}
+                                    title="Move section down"
+                                    className="p-1.5 rounded-md hover:bg-white text-slate-600 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+
+                                {/* Visibility Toggle (only for optional sections) */}
+                                {isOptional ? (
+                                  <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={isEnabled}
+                                    title={isEnabled ? `Hide ${config.label}` : `Show ${config.label}`}
+                                    onClick={() => handleUpdateFeatureFlags({ [config.flag]: !isEnabled })}
+                                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                                      isEnabled ? 'bg-[#18457c]' : 'bg-slate-200'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                        isEnabled ? 'translate-x-5' : 'translate-x-0'
+                                      }`}
+                                    />
+                                  </button>
+                                ) : (
+                                  <div className="w-11 text-center">
+                                    <span className="text-[11px] text-slate-400 font-medium">Always</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
 
                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-500 flex items-start gap-2.5">
                         <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                         <p className="leading-relaxed">
-                          Your feature settings are securely synced across your sessions. Disabling a feature will never delete your accounts, plans, or stored goals.
+                          Your sidebar arrangement and feature visibility are saved in real-time. Hiding an item removes its button from the left navigation and mobile menu while preserving all of your underlying accounts and data.
                         </p>
                       </div>
                     </div>
@@ -8280,28 +8493,7 @@ function KlarityApp() {
                           </div>
                         </div>
 
-                        {/* Retirement Section Option */}
-                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-bold text-slate-900">Retirement Planning Section</p>
-                            <p className="text-[11px] text-slate-500">Hide the Retirement tab and calculators if you don't need retirement tracking.</p>
-                          </div>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={featureFlags.retirement !== false}
-                            onClick={() => handleUpdateFeatureFlags({ retirement: featureFlags.retirement === false })}
-                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                              featureFlags.retirement !== false ? 'bg-[#18457c]' : 'bg-slate-200'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                                featureFlags.retirement !== false ? 'translate-x-5' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
+
 
                         <div className="flex justify-end pt-2 border-t border-slate-100">
                           <button
@@ -8535,9 +8727,13 @@ function KlarityApp() {
                             <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                               bankTab === 'connected' ? 'bg-blue-100 text-[#18457c]' : 'bg-slate-200 text-slate-600'
                             }`}>
-                              {(data?.accounts || []).filter(a => a.institution).length > 0
-                                ? new Set((data?.accounts || []).map(a => a.institution)).size
-                                : 0}
+                              {(() => {
+                                const names = new Set();
+                                (data?.accounts || []).forEach(a => { if (a && a.institution) names.add(a.institution); });
+                                (settings?.plaidItems || []).forEach(pi => { if (pi && pi.institution) names.add(pi.institution); });
+                                if (names.size === 0 && (data?.accounts || []).length > 0) names.add('Connected Bank');
+                                return names.size;
+                              })()}
                             </span>
                           </button>
                         </div>
@@ -8548,15 +8744,43 @@ function KlarityApp() {
                         <div className="flex flex-col gap-4">
                           {/* List of distinct connected institutions */}
                           {(() => {
-                            const accounts = data?.accounts || [];
+                            const getLocalAccounts = () => {
+                              try {
+                                const raw = localStorage.getItem('klarity_accounts');
+                                return raw ? JSON.parse(raw) : [];
+                              } catch { return []; }
+                            };
+
+                            const allBankAccounts = (() => {
+                              const map = new Map();
+                              (data?.accounts || []).forEach(a => { if (a && a.id) map.set(a.id, a); });
+                              (settings?.plaidItems || []).forEach(pi => {
+                                (pi.accounts || []).forEach(a => {
+                                  if (a && a.id && !map.has(a.id)) {
+                                    map.set(a.id, { ...a, institution: a.institution || pi.institution });
+                                  }
+                                });
+                              });
+                              getLocalAccounts().forEach(a => { if (a && a.id && !map.has(a.id)) map.set(a.id, a); });
+                              return Array.from(map.values());
+                            })();
+
                             const institutionsMap = {};
-                            accounts.forEach(acc => {
-                              const inst = acc.institution || 'Connected Bank';
+                            allBankAccounts.forEach(acc => {
+                              const inst = acc.institution || (acc.name && acc.name.toLowerCase().includes('chase') ? 'Chase' : acc.name && acc.name.toLowerCase().includes('capital one') ? 'Capital One' : 'Connected Bank');
                               if (!institutionsMap[inst]) {
                                 institutionsMap[inst] = [];
                               }
                               institutionsMap[inst].push(acc);
                             });
+
+                            (settings?.plaidItems || []).forEach(pi => {
+                              const inst = pi.institution || 'Connected Bank';
+                              if (!institutionsMap[inst]) {
+                                institutionsMap[inst] = [];
+                              }
+                            });
+
                             const instList = Object.entries(institutionsMap);
 
                             if (instList.length === 0) {
@@ -8816,17 +9040,177 @@ function KlarityApp() {
                     </div>
                   )}
 
-                  {/* TAB 4: SECURITY & SESSION */}
-                  {settingsActiveTab === 'session' && (
-                    <div key="settings-tab-session" className="flex flex-col gap-5">
+                  {/* TAB 4: SECURITY & PASSWORDS */}
+                  {settingsActiveTab === 'security' && (
+                    <div key="settings-tab-security" className="flex flex-col gap-6">
                       <div>
-                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Security & Session</h2>
-                        <p className="text-xs text-slate-500 mt-1">Background encryption, anti-injection firewall, app updates, and active session.</p>
+                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Security & Passwords</h2>
+                        <p className="text-xs text-slate-500 mt-1">Configure PIN lock timers, master passwords PIN, and clipboard privacy safeguards.</p>
                       </div>
 
+                      {/* Passwords Section Security Settings */}
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col gap-5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#18457c] shrink-0">
+                            <KeyRound className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-900">Password Vault Security PIN</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Manage session timeout and update your 4-digit vault master access PIN.</p>
+                          </div>
+                        </div>
 
+                        {/* PIN Timeout Setting */}
+                        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-800">PIN Timeout Duration</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">How long the vault stays unlocked before requiring your PIN again.</p>
+                          </div>
+                          <select
+                            value={vaultPinTimeout}
+                            onChange={e => setVaultPinTimeout(e.target.value)}
+                            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs cursor-pointer"
+                          >
+                            <option value="immediate">Immediate (every visit)</option>
+                            <option value="5m">5 minutes</option>
+                            <option value="15m">15 minutes (default)</option>
+                            <option value="1h">1 hour</option>
+                            <option value="session">Until app closes</option>
+                          </select>
+                        </div>
 
-                      {/* Card 1B: Desktop App Engine & GitHub Auto-Updater */}
+                        {/* Clipboard Auto-Clear */}
+                        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-800">Clipboard Auto-Clear</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">Wipe copied passwords from your clipboard automatically.</p>
+                          </div>
+                          <select
+                            value={clipboardClearSeconds}
+                            onChange={e => setClipboardClearSeconds(Number(e.target.value))}
+                            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs cursor-pointer"
+                          >
+                            <option value={15}>15 seconds</option>
+                            <option value={30}>30 seconds (recommended)</option>
+                            <option value={60}>60 seconds</option>
+                            <option value={0}>Never clear</option>
+                          </select>
+                        </div>
+
+                        {/* Change PIN Form */}
+                        <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold text-slate-900">Change Master PIN</p>
+                            {changePinMsg && (
+                              <span className={`text-[11px] font-semibold ${
+                                changePinMsg.includes('success') ? 'text-emerald-600' : 'text-rose-600'
+                              }`}>
+                                {changePinMsg}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="text-[11px] font-medium text-slate-600 block mb-1">Current PIN</label>
+                              <input
+                                type="password"
+                                maxLength={6}
+                                value={changePinCurrent}
+                                onChange={e => setChangePinCurrent(e.target.value.replace(/\D/g, ''))}
+                                placeholder="••••"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-medium text-slate-600 block mb-1">New PIN</label>
+                              <input
+                                type="password"
+                                maxLength={6}
+                                value={changePinNew}
+                                onChange={e => setChangePinNew(e.target.value.replace(/\D/g, ''))}
+                                placeholder="••••"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-medium text-slate-600 block mb-1">Confirm New PIN</label>
+                              <input
+                                type="password"
+                                maxLength={6}
+                                value={changePinConfirm}
+                                onChange={e => setChangePinConfirm(e.target.value.replace(/\D/g, ''))}
+                                placeholder="••••"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end mt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentSavedPin = localStorage.getItem('klarity_vault_pin') || '1234';
+                                if (changePinCurrent !== currentSavedPin) {
+                                  setChangePinMsg('Incorrect current PIN.');
+                                  return;
+                                }
+                                if (changePinNew.length < 4) {
+                                  setChangePinMsg('New PIN must be at least 4 digits.');
+                                  return;
+                                }
+                                if (changePinNew !== changePinConfirm) {
+                                  setChangePinMsg('New PIN confirmation does not match.');
+                                  return;
+                                }
+                                localStorage.setItem('klarity_vault_pin', changePinNew);
+                                setChangePinMsg('PIN updated successfully!');
+                                setChangePinCurrent('');
+                                setChangePinNew('');
+                                setChangePinConfirm('');
+                                setTimeout(() => setChangePinMsg(''), 4000);
+                              }}
+                              className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
+                            >
+                              Update Security PIN
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Hardware / Biometric & Vault Reset */}
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div>
+                          <p className="font-bold text-slate-900">Reset Vault PIN</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">Reset your master security PIN back to the initial default (1234).</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('Reset your Passwords Vault PIN to default (1234)?')) {
+                              localStorage.setItem('klarity_vault_pin', '1234');
+                              sessionStorage.removeItem('klarity_vault_unlocked_until');
+                              setNotificationToast('Vault PIN reset to 1234');
+                              setTimeout(() => setNotificationToast(''), 3000);
+                            }
+                          }}
+                          className="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer shrink-0 transition-colors"
+                        >
+                          Reset to 1234
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 5: SESSION & UPDATES */}
+                  {settingsActiveTab === 'session' && (
+                    <div key="settings-tab-session" className="flex flex-col gap-6">
+                      <div>
+                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Session & Updates</h2>
+                        <p className="text-xs text-slate-500 mt-1">Manage active logins, inspect software versions, and check for desktop updates.</p>
+                      </div>
+
+                      {/* Card 1: Desktop App Engine & GitHub Auto-Updater */}
                       <div className="border border-slate-200 rounded-2xl p-4 bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                         <div>
                           <div className="flex items-center gap-2">
@@ -8872,7 +9256,7 @@ function KlarityApp() {
                         </div>
                       </div>
 
-                      {/* Card 3: Active Session & Sign Out */}
+                      {/* Card 2: Active Session & Sign Out */}
                       <div className="border border-slate-200 rounded-2xl p-5 flex flex-col gap-4 bg-white shadow-2xs">
                         <div className="flex items-center justify-between">
                           <div>

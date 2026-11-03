@@ -914,7 +914,8 @@ app.get('/api/settings', async (req, res) => {
       retirement: true,
       budgets: true,
       savingsGoals: true,
-      vault: true
+      vault: true,
+      household: true
     }
   });
 });
@@ -929,7 +930,8 @@ app.get(['/api/feature-flags', '/api/settings/feature-flags'], async (req, res) 
       retirement: true,
       budgets: true,
       savingsGoals: true,
-      vault: true
+      vault: true,
+      household: true
     }
   });
 });
@@ -1476,6 +1478,7 @@ app.get('/api/data', async (req, res) => {
 
   const isUserOwner = (item) => {
     if (!item) return false;
+    if (!item.ownerId && !item.userId) return true;
     return item.ownerId === userId || item.userId === userId;
   };
 
@@ -1515,7 +1518,8 @@ app.get('/api/data', async (req, res) => {
       retirement: true,
       budgets: true,
       savingsGoals: true,
-      vault: true
+      vault: true,
+      household: true
     },
     metrics: {
       totalChecking,

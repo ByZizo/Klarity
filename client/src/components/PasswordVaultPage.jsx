@@ -57,13 +57,39 @@ export default function PasswordVaultPage({
   onUpdateVaultItems,
   onBack
 }) {
-  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(() => {
+    try {
+      const timeoutMode = localStorage.getItem('klarity_vault_pin_timeout') || '15m';
+      if (timeoutMode === 'immediate') return false;
+      const until = Number(sessionStorage.getItem('klarity_vault_unlocked_until') || 0);
+      return Date.now() < until;
+    } catch {
+      return false;
+    }
+  });
   const [hasPin, setHasPin] = useState(() => hasMasterPinSet());
   const [pinInput, setPinInput] = useState('');
   const [pinConfirmInput, setPinConfirmInput] = useState('');
   const [pinError, setPinError] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [isSubmittingPin, setIsSubmittingPin] = useState(false);
+
+  const setUnlockSession = () => {
+    try {
+      const timeoutMode = localStorage.getItem('klarity_vault_pin_timeout') || '15m';
+      let durationMs = 15 * 60 * 1000;
+      if (timeoutMode === '5m') durationMs = 5 * 60 * 1000;
+      else if (timeoutMode === '30m') durationMs = 30 * 60 * 1000;
+      else if (timeoutMode === 'session') durationMs = 24 * 60 * 60 * 1000;
+      else if (timeoutMode === 'immediate') durationMs = 0;
+
+      if (durationMs > 0) {
+        sessionStorage.setItem('klarity_vault_unlocked_until', String(Date.now() + durationMs));
+      } else {
+        sessionStorage.removeItem('klarity_vault_unlocked_until');
+      }
+    } catch {}
+  };
 
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -311,6 +337,7 @@ export default function PasswordVaultPage({
     try {
       const result = await verifyMasterPin(pinInput);
       if (result.valid) {
+        setUnlockSession();
         setIsUnlocked(true);
         setPinInput('');
         setPinError('');
@@ -343,6 +370,7 @@ export default function PasswordVaultPage({
     try {
       await setMasterPin(cleanPin);
       setHasPin(true);
+      setUnlockSession();
       setIsUnlocked(true);
       setPinInput('');
       setPinConfirmInput('');
@@ -491,6 +519,7 @@ export default function PasswordVaultPage({
           <button
             type="button"
             onClick={() => {
+              try { sessionStorage.removeItem('klarity_vault_unlocked_until'); } catch {}
               setIsUnlocked(false);
               setPinInput('');
               setPinConfirmInput('');
