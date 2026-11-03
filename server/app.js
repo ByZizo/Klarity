@@ -2523,13 +2523,21 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
 
   const fullUserPrompt = `${message || (fileAttachments.length > 0 ? `Please read and analyze the attached ${fileAttachments.length} file(s) (${fileAttachments.map(f => f.name).join(', ')}) and automatically extract and add all bills, subscriptions, and store purchases.` : 'Please analyze this.')}${extractedFilesText}`;
 
-  // Concise financial snapshot for embedded local model context window efficiency
+  // Complete app data snapshot for the embedded local model (strictly respecting user permission toggles)
   const compactFinancialContext = [
-    `User: ${currentUser.name} | Location: ${fullAddress}${neighborhoodDesc} | Net Worth: $${Number(netWorth || 0).toLocaleString()}`,
-    `Checking: ${userChecking.length > 0 ? userChecking.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)}`).join(' | ') : 'None'}`,
-    `Credit Cards: ${userCards.length > 0 ? userCards.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)} @ ${c.apr}% APR`).join(' | ') : 'None'}`,
-    `Upcoming Bills: ${userBills.length > 0 ? userBills.map(b => `${b.name}: $${Number(b.expectedAmount).toFixed(2)}`).join(' | ') : 'None'}`,
-    `Subscriptions: ${userSubscriptions.length > 0 ? userSubscriptions.map(s => `${s.name}: $${Number(s.amount).toFixed(2)}/mo`).join(' | ') : 'None'}`
+    `User: ${currentUser.name} | Residence: ${fullAddress}${neighborhoodDesc} | Net Worth: $${Number(netWorth || 0).toLocaleString()}`,
+    `- Checking Accounts (${permissions.cards ? 'Permitted' : 'Restricted'}): ${userChecking.length > 0 ? userChecking.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)}`).join(' | ') : 'None connected'}`,
+    `- Credit Cards (${permissions.cards ? 'Permitted' : 'Restricted'}): ${userCards.length > 0 ? userCards.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)} @ ${c.apr}% APR (Min: $${c.minPayment || 0})`).join(' | ') : 'None connected'}`,
+    `- Upcoming Bills (${permissions.bills ? 'Permitted' : 'Restricted'}): ${userBills.length > 0 ? userBills.map(b => `${b.name}: $${Number(b.expectedAmount).toFixed(2)} due ${b.nextDueDate || b.dueDate || 'Day ' + b.dueDay}`).join(' | ') : 'None scheduled'}`,
+    `- Subscriptions (${permissions.subscriptions ? 'Permitted' : 'Restricted'}): ${userSubscriptions.length > 0 ? userSubscriptions.map(s => `${s.name}: $${Number(s.amount).toFixed(2)}/mo`).join(' | ') : 'None added'}`,
+    `- Recent Purchases (${permissions.purchases ? 'Permitted' : 'Restricted'}): ${userTransactions.length > 0 ? userTransactions.map(t => `${t.name}: $${Math.abs(Number(t.amount)).toFixed(2)} on ${t.date}`).join(' | ') : 'None recorded'}`,
+    `- Monthly Budgets: ${budgets && budgets.length > 0 ? budgets.map(b => `${b.category}: $${b.limit}/mo`).join(' | ') : 'None set'}`,
+    `- Savings Goals: ${savingsGoals && savingsGoals.length > 0 ? savingsGoals.map(g => `${g.name}: $${g.currentAmount} of $${g.targetAmount} ($${g.monthlyContribution || 0}/mo)`).join(' | ') : 'None created'}`,
+    `- Manual Assets & Investments: ${manualAssets && manualAssets.length > 0 ? manualAssets.map(a => `${a.name}: $${Number(a.balance || 0).toLocaleString()} (${a.type})`).join(' | ') : 'None'}${retirementSection}`,
+    `- Household & Utilities: ${residence ? `${residence.dwellingType || 'Single-Family'} (${residence.sqFt || 2100} sq ft, ${residence.bedrooms || 3} bd, ${residence.bathrooms || 2} ba) at ${fullAddress} | Est. Value: ${residence.estimatedValue || 'N/A'} | Household Size: ${residence.householdSize || 4} | PG&E CARE: ${residence.hasCareDiscount ? 'Yes' : 'No'} | Solar: ${residence.hasSolar ? 'Yes' : 'No'}` : 'Standard Household'}`,
+    `- Monthly Utility Breakdown: ${householdMetrics?.utilities ? `PG&E Combined: $${householdMetrics.utilities.totalPgeCombinedBill}/mo (Electric: ${householdMetrics.utilities.homeKwh} kWh / $${householdMetrics.utilities.homeElectricCost}, EV Charging: $${householdMetrics.utilities.evHomeChargingCost}, Gas: ${householdMetrics.utilities.monthlyTherms} Therms / $${householdMetrics.utilities.naturalGasCost}) | Water & Trash: $${householdMetrics.utilities.waterTrashTotalCost}/mo` : 'N/A'}`,
+    `- Vehicle Fleet (${householdMetrics?.fleet?.vehicles?.length || 0} Cars): ${householdMetrics?.fleet?.vehicles?.length > 0 ? householdMetrics.fleet.vehicles.map(v => `${v.name} (${v.type.toUpperCase()}): ${v.monthlyMiles} mi/mo, Fuel/Charge: $${v.monthlyFuelOrChargeCost}/mo, Ins: $${v.insuranceMonthly}/mo`).join(' | ') : 'None listed'}${memoryContext}`,
+    `- Action & Navigation Support: When asked to add/delete items or open a page, append tags like [ACTION:ADD_SUBSCRIPTION:{"name":"Netflix","amount":22.99,"billingCycle":"monthly"}], [ACTION:ADD_BILL:{"name":"PG&E","expectedAmount":150,"dueDay":15}], [ACTION:ADD_TRANSACTION:{"name":"Costco","amount":85,"category":"Groceries"}], or [NAVIGATE:bills|subscriptions|cards|transactions|budgets|dashboard|settings|vault|retirement].`
   ].join('\n');
 
   try {
