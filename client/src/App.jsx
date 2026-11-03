@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   CreditCard,
   Building2,
@@ -3848,16 +3848,15 @@ function KlarityApp() {
     : 0;
 
   // Projected Monthly Retirement Income (Pensions + Social Security + 4% safe draw on accounts)
-  const projectedRetirementMonthlyIncome = useMemo(() => {
-    if (!featureFlags.retirement || retirementPlans.length === 0) return 0;
-    return retirementPlans.reduce((sum, p) => {
-      if (p.planType === 'pension' || p.planType === 'social_security') {
-        return sum + Number(p.estimatedMonthlyBenefit || 0);
-      } else {
-        return sum + ((Number(p.balance || 0) * 0.04) / 12);
-      }
-    }, 0);
-  }, [featureFlags.retirement, retirementPlans]);
+  const projectedRetirementMonthlyIncome = (!featureFlags.retirement || retirementPlans.length === 0)
+    ? 0
+    : retirementPlans.reduce((sum, p) => {
+        if (p.planType === 'pension' || p.planType === 'social_security') {
+          return sum + Number(p.estimatedMonthlyBenefit || 0);
+        } else {
+          return sum + ((Number(p.balance || 0) * 0.04) / 12);
+        }
+      }, 0);
   const totalNetWorth = displayCash + manualPositiveAssets + retirementAccountBalances - displayCardBalances - manualLoans;
   const netWorthHistory = [
     { month: 'May', value: Math.round(totalNetWorth * 0.78) },
