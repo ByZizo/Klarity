@@ -912,7 +912,7 @@ function KlarityApp() {
   const [settingsAiProvider, setSettingsAiProvider] = useState(() => getInitialUserStorage('ai_provider', 'gemini'));
   const [settingsAiModel, setSettingsAiModel] = useState(() => {
     const saved = getInitialUserStorage('ai_model', 'gemini-2.0-flash');
-    if (saved && !saved.includes('tts') && !saved.includes('audio') && saved !== 'gemini-3.8-flash') return saved;
+    if (saved && !saved.includes('tts') && !saved.includes('audio') && !saved.includes('deep-research') && saved !== 'gemini-3.8-flash') return saved;
     return 'gemini-2.0-flash';
   });
   const [settingsAiApiKey, setSettingsAiApiKey] = useState('');
@@ -2146,7 +2146,7 @@ function KlarityApp() {
 
           let prov = json.ai.provider || storedProv || 'gemini';
           let mod = json.ai.model || storedMod || 'gemini-2.0-flash';
-          if (mod.includes('tts') || mod.includes('audio') || mod === 'gemini-3.8-flash') mod = 'gemini-2.0-flash';
+          if (mod.includes('tts') || mod.includes('audio') || mod.includes('deep-research') || mod === 'gemini-3.8-flash') mod = 'gemini-2.0-flash';
 
           const finalMasked = json.ai.maskedKey || storedMasked || '';
           const finalStatus = (json.ai.status === 'connected' || Boolean(json.ai.maskedKey) || storedStatus === 'connected' || Boolean(storedMasked)) ? 'connected' : 'not_connected';
@@ -3325,7 +3325,7 @@ function KlarityApp() {
       const uid = currentUser?.id || 'default';
       const cachedProvider = settingsAiProvider || localStorage.getItem(`klarity_${uid}_ai_provider`) || 'gemini';
       let cachedModel = settingsAiModel || localStorage.getItem(`klarity_${uid}_ai_model`) || 'gemini-2.0-flash';
-      if (cachedModel.includes('tts') || cachedModel.includes('audio') || cachedModel === 'gemini-3.8-flash') {
+      if (cachedModel.includes('tts') || cachedModel.includes('audio') || cachedModel.includes('deep-research') || cachedModel === 'gemini-3.8-flash') {
         cachedModel = 'gemini-2.0-flash';
         try {
           localStorage.setItem(`klarity_${uid}_ai_model`, 'gemini-2.0-flash');

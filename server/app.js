@@ -2469,43 +2469,20 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
         reply = `OpenAI API error: ${errJson?.error?.message || aiRes.statusText}`;
       }
     } else if (provider === 'gemini') {
-      // Query the API for all active available text/multimodal models for this user's key dynamically (15-min cache)
-      const cacheKey = rawApiKey.slice(-8);
-      let activeGeminiModels = [];
-      const cached = geminiModelsCache.get(cacheKey);
-      if (cached && cached.expires > Date.now()) {
-        activeGeminiModels = cached.models;
-      } else {
-        try {
-          const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${rawApiKey}`);
-          if (listRes.ok) {
-            const listJson = await listRes.json();
-            const supported = (listJson.models || [])
-              .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
-              .filter(m => {
-                const n = (m.name || '').toLowerCase();
-                return !n.includes('tts') && !n.includes('audio') && !n.includes('image') &&
-                       !n.includes('transcribe') && !n.includes('translate') &&
-                       !n.includes('embedding') && !n.includes('aqa') && !n.includes('robotics');
-              })
-              .map(m => m.name.replace(/^models\//, ''));
-            if (supported.length > 0) {
-              activeGeminiModels = supported;
-              geminiModelsCache.set(cacheKey, { models: supported, expires: Date.now() + 15 * 60 * 1000 });
-            }
-          }
-        } catch (e) {
-          console.warn('Could not dynamically fetch models list:', e.message);
-        }
-      }
-
       // Candidate models:
-      // 1. User's explicitly chosen model first (if not deprecated/empty)
-      // 2. High-availability standard production models (Gemini 2.0 Flash guaranteed free tier quota 15 RPM / 1500 RPD)
-      // 3. Fallback reliable models (Gemini 1.5 Flash, 2.0 Flash-Lite, 2.5 Flash, 1.5 Pro)
-      // 4. Any other active models reported by the user's project
+      // Strictly vetted high-availability chat models for production.
+      // We do NOT append unvetted models from the API catalog (such as deep-research-pro-preview
+      // or image generation models which have 0 quota on free tier keys).
       let requestedModel = (model || '').trim();
-      if (requestedModel === 'gemini-3.8-flash' || requestedModel.includes('tts') || requestedModel.includes('audio')) {
+      if (
+        requestedModel === 'gemini-3.8-flash' ||
+        requestedModel.includes('tts') ||
+        requestedModel.includes('audio') ||
+        requestedModel.includes('deep-research') ||
+        requestedModel.includes('image') ||
+        requestedModel.includes('embedding') ||
+        requestedModel.includes('aqa')
+      ) {
         requestedModel = 'gemini-2.0-flash';
       }
 
@@ -2521,10 +2498,9 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
       const candidateModels = [
         ...new Set([
           ...(requestedModel ? [requestedModel] : []),
-          ...standardFlashModels,
-          ...activeGeminiModels
+          ...standardFlashModels
         ])
-      ].filter(m => m && !m.includes('tts') && !m.includes('audio') && !m.includes('image') && !m.includes('embedding') && !m.includes('aqa') && m !== 'gemini-3.8-flash');
+      ].filter(m => m && !m.includes('deep-research') && !m.includes('tts') && !m.includes('audio') && !m.includes('image') && !m.includes('embedding') && m !== 'gemini-3.8-flash');
 
       let lastGeminiError = '';
       let isRateLimited = false;
@@ -2566,23 +2542,19 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
         maxOutputTokens: responseLength === 'concise' ? 1024 : (responseLength === 'detailed' ? 4096 : 2500)
       };
 
-      // Only attach Google Search tools if webSearch is enabled AND no file attachments
-      // (Gemini generateContent returns 400 when tools are combined with file/multimodal inlineData)
-      const allowGoogleSearch = webSearchEnabled !== false && fileAttachments.length === 0;
-
       for (let i = 0; i < candidateModels.length; i++) {
         const curModel = candidateModels[i];
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${rawApiKey}`;
 
+        // Note: Do NOT attach tools: [{ googleSearch: {} }] here because Google Search grounding
+        // is strictly paid-tier only in Gemini API and immediately throws 429 RESOURCE_EXHAUSTED
+        // (quota limit: 0) on free-tier keys. Real-time web findings are already fetched via
+        // performWebSearch() and embedded into systemContext above!
         let geminiPayload = {
           contents: [{ role: 'user', parts }],
           safetySettings: standardSafetySettings,
           generationConfig: standardGenConfig
         };
-
-        if (allowGoogleSearch) {
-          geminiPayload.tools = [{ googleSearch: {} }];
-        }
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 22000);
@@ -2595,7 +2567,7 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
         }).catch(err => ({ ok: false, status: 504, errorText: err.message }));
         clearTimeout(timeoutId);
 
-        // Fallback retry: If tools or safety settings are rejected (400 or 404),
+        // Fallback retry: If safety settings or optional fields are rejected (400 or 404),
         // retry immediately with a clean minimal payload (contents + genConfig only)
         if (!aiRes.ok && (aiRes.status === 400 || aiRes.status === 404)) {
           const retryController = new AbortController();
@@ -2642,7 +2614,7 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
           console.warn(`[Gemini Advisor] Model ${curModel} error (${aiRes.status}): ${lastGeminiError}`);
 
           // Detect true active rate limits (429) vs zero-quota model limit
-          const isZeroQuota = errMsg?.includes("limit '0'") || errMsg?.includes('quota_limit: 0');
+          const isZeroQuota = errMsg?.includes("limit: 0") || errMsg?.includes("limit '0'") || errMsg?.includes('quota_limit: 0');
           if (!isZeroQuota && (aiRes.status === 429 || errMsg?.includes('RESOURCE_EXHAUSTED'))) {
             // Only flag rate-limited if a guaranteed free-tier model (2.0-flash or 1.5-flash) was throttled
             if (curModel === 'gemini-2.0-flash' || curModel === 'gemini-1.5-flash' || curModel === requestedModel) {
@@ -2665,6 +2637,8 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
             reply = "Your Google Gemini API key appears to be invalid. Please verify and update your key in Settings > AI Advisor.";
           } else if (lastGeminiError.includes('overloaded') || lastGeminiError.includes('high demand')) {
             reply = "Google Gemini is currently experiencing heavy server demand. Please try sending your message again in a moment.";
+          } else if (lastGeminiError.includes('limit: 0') || lastGeminiError.includes('quota') || lastGeminiError.includes('RESOURCE_EXHAUSTED')) {
+            reply = "Google Gemini reported a temporary quota limitation. Please verify in Settings > AI Advisor that your model is set to 'gemini-2.0-flash' (which has a generous free allowance of 15 requests/min and 1,500 requests/day).";
           } else {
             reply = `Gemini connection notice: ${lastGeminiError}. Please try sending your question again.`;
           }
