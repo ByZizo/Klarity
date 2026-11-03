@@ -16,5 +16,11 @@ contextBridge.exposeInMainWorld('klarityDesktop', {
     const handler = (_event, status) => callback(status);
     ipcRenderer.on('klarity:update-status', handler);
     return () => ipcRenderer.removeListener('klarity:update-status', handler);
+  },
+  onLocalAiStatus: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const handler = (_event, status) => callback(status);
+    ipcRenderer.on('klarity:local-ai-status', handler);
+    return () => ipcRenderer.removeListener('klarity:local-ai-status', handler);
   }
 });

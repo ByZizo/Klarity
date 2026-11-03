@@ -112,13 +112,27 @@ function setupAutoUpdater() {
   autoUpdater.on('error', () => {});
 }
 
-// Start the embedded Express backend
+// Start the embedded Express backend & Local AI Engine (node-llama-cpp)
 async function startEmbeddedBackend() {
   const userDataDir = app.getPath('userData');
   process.env.KLARITY_USER_DATA_DIR = userDataDir;
   process.env.KLARITY_DESKTOP_APP = 'true';
 
   const expressApp = require('../server/index.js');
+  const { localModelEngine } = require('../server/services/localModelService');
+
+  // Broadcast real-time GGUF download & initialization progress to the desktop UI
+  localModelEngine.on('status', (status) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('klarity:local-ai-status', status);
+    }
+  });
+
+  // Automatically verify/download default local GGUF model on launch
+  localModelEngine.ensureInitialized({ autoDownload: true }).catch(err => {
+    console.warn('[Klarity Local AI] Desktop background init notice:', err.message);
+  });
+
   const preferredPorts = [5173, 5000, 3000, 0];
 
   for (const candidatePort of preferredPorts) {

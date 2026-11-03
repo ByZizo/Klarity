@@ -5,6 +5,15 @@ const path = require('path');
 const crypto = require('crypto');
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 require('dotenv').config();
+const {
+  localModelEngine,
+  SUPPORTED_MODELS,
+  DEFAULT_MODEL_ID
+} = require('./services/localModelService');
+const {
+  shouldTriggerWebSearch,
+  retrieveWebContext
+} = require('./services/webSearchService');
 
 const app = express();
 
@@ -887,11 +896,13 @@ app.get('/api/settings', async (req, res) => {
       email: user.email || ''
     },
     ai: {
-      provider: ai.provider || 'gemini',
-      model: ai.model || 'gemini-2.0-flash',
+      provider: ai.provider || (ai.encryptedKey ? 'gemini' : 'local'),
+      model: ai.model || (ai.encryptedKey ? 'gemini-2.0-flash' : DEFAULT_MODEL_ID),
       hasKey: Boolean(ai.encryptedKey),
       maskedKey: ai.encryptedKey ? maskSecret(decrypt(ai.encryptedKey)) : '',
-      status: ai.encryptedKey ? (ai.status || 'connected') : 'not_connected',
+      status: (ai.encryptedKey || (ai.provider || 'local') === 'local') ? 'connected' : 'not_connected',
+      localEngine: localModelEngine.status,
+      supportedLocalModels: Object.values(SUPPORTED_MODELS),
       responseLength: ai.responseLength || 'balanced',
       webSearchEnabled: ai.webSearchEnabled !== undefined ? ai.webSearchEnabled : true,
       dataPermissions: ai.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true },
@@ -967,8 +978,44 @@ app.post('/api/settings/profile', async (req, res) => {
 
 // Test and save AI API key server-side (User-scoped)
 app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
-  const { provider = 'anthropic', model, apiKey, dataPermissions } = req.body;
+  const { provider = 'local', model, apiKey, dataPermissions } = req.body;
   const uid = req.userId;
+
+  // Built-in Local AI (node-llama-cpp) requires zero external API keys
+  if (provider === 'local') {
+    const selectedLocalModel = model && SUPPORTED_MODELS[model] ? model : DEFAULT_MODEL_ID;
+    const data = await readData(req.userId);
+    const userSettings = getUserSettings(data, uid);
+    userSettings.ai = {
+      ...userSettings.ai,
+      provider: 'local',
+      model: selectedLocalModel,
+      status: 'connected',
+      dataPermissions: dataPermissions || userSettings.ai?.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
+    };
+    data.settings = data.settings || {};
+    data.settings.ai = JSON.parse(JSON.stringify(userSettings.ai));
+    for (const otherUid of Object.keys(data.userSettings || {})) {
+      data.userSettings[otherUid].ai = JSON.parse(JSON.stringify(userSettings.ai));
+    }
+    await writeData(data, req.userId);
+
+    // Trigger model verification/download & initialization in background
+    localModelEngine.ensureInitialized({ modelId: selectedLocalModel, autoDownload: true }).catch(err => {
+      console.warn('[Klarity Local AI] Background init notice:', err.message);
+    });
+
+    return res.json({
+      success: true,
+      status: 'connected',
+      maskedKey: 'Built-in Local GGUF Engine',
+      provider: 'local',
+      model: selectedLocalModel,
+      localEngine: localModelEngine.status,
+      dataPermissions: userSettings.ai.dataPermissions
+    });
+  }
+
   if (!apiKey || !apiKey.trim()) {
     return res.status(400).json({ success: false, error: 'API key is required' });
   }
@@ -1860,96 +1907,20 @@ app.post('/api/bills/scan', async (req, res) => {
 
 
 // Live Web Search Helper for Market Research, Live Internet Browsing & Real-Time Card/Bank Offers
-async function performWebSearch(query) {
+async function performWebSearch(query, options = {}) {
   if (!query || query.trim().length === 0) return '';
-  const cleanQuery = query.replace(/[^\w\s\$\%\.\,\-\+]/gi, ' ').replace(/\s+/g, ' ').trim();
-
-  // Try 1: DuckDuckGo HTML Lite search
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
-    const res = await fetch('https://lite.duckduckgo.com/lite/', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-      },
-      body: `q=${encodeURIComponent(cleanQuery)}`
-    });
-    clearTimeout(timeoutId);
-    if (res.ok) {
-      const html = await res.text();
-      const tdRe = /<td[^>]*class=['"]result-snippet['"][^>]*>([\s\S]*?)<\/td>/gi;
-      let matches = [];
-      let m;
-      while ((m = tdRe.exec(html)) !== null && matches.length < 8) {
-        const text = m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-        if (text.length > 30 && !text.includes('DuckDuckGo') && !text.includes('Sponsored')) {
-          matches.push(text);
-        }
-      }
-      if (matches.length === 0) {
-        const genTdRe = /<td[^>]*>([\s\S]*?)<\/td>/g;
-        while ((m = genTdRe.exec(html)) !== null && matches.length < 8) {
-          const text = m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-          if (text.length > 35 && !text.includes('DuckDuckGo') && !text.includes('Sponsored')) {
-            matches.push(text);
-          }
-        }
-      }
-      if (matches.length > 0) {
-        return matches.slice(0, 6).map(item => `- ${item}`).join('\n');
-      }
-    }
-  } catch (err) {
-    console.warn('Web search (Lite) error:', err.message);
+  const result = await retrieveWebContext(query, {
+    maxResults: options.maxResults || 5,
+    locationHint: options.locationHint || ''
+  });
+  if (result && Array.isArray(result.results) && result.results.length > 0) {
+    return result.formattedContext;
   }
-
-  // Try 2: DuckDuckGo Instant Answer API (JSON)
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(cleanQuery)}&format=json&no_html=1&skip_disambig=1`, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
-    clearTimeout(timeoutId);
-    if (res.ok) {
-      const data = await res.json();
-      const snippets = [];
-      if (data.AbstractText) snippets.push(`- ${data.Heading ? data.Heading + ': ' : ''}${data.AbstractText} (Source: ${data.AbstractSource || 'Web'})`);
-      if (Array.isArray(data.RelatedTopics)) {
-        for (const topic of data.RelatedTopics.slice(0, 4)) {
-          if (topic.Text) snippets.push(`- ${topic.Text}`);
-        }
-      }
-      if (snippets.length > 0) return snippets.join('\n');
-    }
-  } catch (err) {
-    console.warn('Web search (API) error:', err.message);
-  }
-
   return '';
 }
 
 function shouldPerformWebSearch(message) {
-  if (!message || message.trim().length === 0) return false;
-  const m = message.toLowerCase().trim();
-  if (['hi', 'hello', 'hey', 'clear', 'reset', 'help'].includes(m)) return false;
-
-  const searchKeywords = [
-    'card', 'offer', 'apr', 'transfer', 'rate', 'recommend', 'compare', 'deal', 
-    'best', 'zero', '0%', '0 apr', 'signup', 'bonus', 'bank', 'savings', 
-    'high yield', 'hysa', 'loan', 'promo', 'current', 'today', 'market', 
-    'utility', 'rebate', 'tax', 'cost', 'alternative', 'cheaper', 'funds',
-    'search', 'internet', 'online', 'google', 'look up', 'find', 'price', 
-    'what is', 'who is', 'how much', 'inflation', 'fed', 'interest', 'yield',
-    'stock', 'crypto', 'sub', 'subscription', 'plan', 'phone', 'electric', 'gas', 'ev', 'charger', 'charging', 'pge', 'pg&e', 'water', 'car', 'tesla', 'ioniq', 'equinox', 'dealer', 'lease', 'rebate',
-    'grocery', 'groceries', 'cheapest gas', 'near me', 'nearby', 'local', 'store', 'costco', 'supermarket', 'dealership'
-  ];
-  return searchKeywords.some(k => m.includes(k)) || m.includes('?') || m.startsWith('how') || m.startsWith('what') || m.startsWith('where');
+  return shouldTriggerWebSearch(message);
 }
 
 // Property / Zillow Details Extraction & Neighborhood Intelligence Helper
@@ -2150,10 +2121,172 @@ app.post('/api/household/zillow-lookup', async (req, res) => {
   }
 });
 
+// ============================================================================
+// EMBEDDED LOCAL AI ENGINE ROUTES (node-llama-cpp + Live Web RAG)
+// ============================================================================
+
+// Get current status of the local GGUF engine & download progress
+app.get('/api/ai/local/status', (_req, res) => {
+  res.json({
+    ok: true,
+    status: localModelEngine.status,
+    supportedModels: Object.values(SUPPORTED_MODELS),
+    defaultModelId: DEFAULT_MODEL_ID
+  });
+});
+
+// Server-Sent Events (SSE) stream for live GGUF download & initialization progress
+app.get('/api/ai/local/stream-status', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  const sendStatus = (st) => {
+    try {
+      res.write(`data: ${JSON.stringify(st)}\n\n`);
+    } catch {}
+  };
+
+  sendStatus(localModelEngine.status);
+  localModelEngine.on('status', sendStatus);
+
+  req.on('close', () => {
+    localModelEngine.removeListener('status', sendStatus);
+  });
+});
+
+// Trigger model verification, Hugging Face download, and persistent context initialization
+app.post(['/api/ai/local/init', '/api/ai/local/download'], async (req, res) => {
+  const { modelId, wait = false } = req.body || {};
+  const targetModel = modelId && SUPPORTED_MODELS[modelId] ? modelId : DEFAULT_MODEL_ID;
+
+  if (wait) {
+    try {
+      const status = await localModelEngine.ensureInitialized({
+        modelId: targetModel,
+        autoDownload: true
+      });
+      return res.json({ ok: true, status });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message, status: localModelEngine.status });
+    }
+  }
+
+  localModelEngine
+    .ensureInitialized({ modelId: targetModel, autoDownload: true })
+    .catch(err => console.warn('[Klarity Local AI] Background init error:', err.message));
+
+  return res.json({
+    ok: true,
+    status: localModelEngine.status,
+    supportedModels: Object.values(SUPPORTED_MODELS)
+  });
+});
+
+// Dedicated internal RAG + Local GGUF generation route (supports both streamed SSE and resolved JSON)
+app.post(['/api/ai/local/query', '/api/ai/local/chat'], async (req, res) => {
+  const {
+    query,
+    message,
+    stream = false,
+    enableWebSearch = true,
+    locationHint = '',
+    financialContext = '',
+    maxTokens = 1024,
+    temperature = 0.7
+  } = req.body || {};
+
+  const userInput = (query || message || '').trim();
+  if (!userInput) {
+    return res.status(400).json({ ok: false, error: 'Query or message is required.' });
+  }
+
+  const wantsStream =
+    Boolean(stream) ||
+    String(req.headers.accept || '').includes('text/event-stream');
+
+  if (wantsStream) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    const statusHandler = (st) => {
+      if (st.state === 'downloading' || st.state === 'loading') {
+        try {
+          res.write(`data: ${JSON.stringify({ type: 'status', status: st })}\n\n`);
+        } catch {}
+      }
+    };
+    localModelEngine.on('status', statusHandler);
+
+    try {
+      const result = await localModelEngine.query({
+        query: userInput,
+        enableWebSearch,
+        locationHint,
+        financialContext,
+        maxTokens,
+        temperature,
+        onToken: (token) => {
+          try {
+            res.write(`data: ${JSON.stringify({ type: 'token', token })}\n\n`);
+          } catch {}
+        }
+      });
+
+      res.write(
+        `data: ${JSON.stringify({
+          type: 'done',
+          ok: true,
+          reply: result.reply,
+          model: result.model,
+          modelName: result.modelName,
+          webSearch: result.webSearch
+        })}\n\n`
+      );
+      res.end();
+    } catch (err) {
+      res.write(`data: ${JSON.stringify({ type: 'error', ok: false, error: err.message })}\n\n`);
+      res.end();
+    } finally {
+      localModelEngine.removeListener('status', statusHandler);
+    }
+    return;
+  }
+
+  try {
+    const result = await localModelEngine.query({
+      query: userInput,
+      enableWebSearch,
+      locationHint,
+      financialContext,
+      maxTokens,
+      temperature
+    });
+
+    return res.json({
+      ok: true,
+      reply: result.reply,
+      model: result.model,
+      modelName: result.modelName,
+      webSearch: result.webSearch,
+      formattedPrompt: result.formattedPrompt
+    });
+  } catch (err) {
+    return res.status(500).json({
+      ok: false,
+      error: err.message,
+      status: localModelEngine.status
+    });
+  }
+});
+
 // In-memory cache for dynamically fetched Gemini models (15-min TTL per API key)
 const geminiModelsCache = new Map();
 
-// 10. AI Advisor Chat with Navigation Capabilities & User Key Encryption
+// 10. AI Advisor Chat with Navigation Capabilities, Embedded Local GGUF Engine & Optional Cloud Key
 app.post('/api/ai/chat', async (req, res) => {
   const userId = req.userId;
   const {
@@ -2179,14 +2312,6 @@ app.post('/api/ai/chat', async (req, res) => {
   const userSettings = getUserSettings(data, userId);
   const aiConfig = userSettings.ai || {};
   let rawApiKey = aiConfig.encryptedKey ? decrypt(aiConfig.encryptedKey) : '';
-
-  if (!rawApiKey) {
-    return res.json({
-      needsKey: true,
-      apiKeyUrl: 'https://aistudio.google.com/api-keys',
-      reply: "AI Advisor is not connected. Please connect your Google Gemini API key in Settings > AI advisor to activate financial intelligence.\n\nYou can generate an API key here: https://aistudio.google.com/api-keys"
-    });
-  }
 
   // Normalize attachments list (supports multiple files of any format + legacy single imageBase64)
   const fileAttachments = Array.isArray(attachments) && attachments.length > 0
@@ -2214,10 +2339,12 @@ app.post('/api/ai/chat', async (req, res) => {
   }
 
   const permissions = aiConfig.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true };
-  const provider = clientProvider || aiConfig.provider || 'gemini';
-  let model = clientModel || aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.0-flash');
+  // Use embedded local AI engine when 'local' is selected OR when no external API key is configured
+  const requestedProvider = clientProvider || aiConfig.provider || (rawApiKey ? 'gemini' : 'local');
+  const provider = (!rawApiKey || requestedProvider === 'local') ? 'local' : requestedProvider;
+  let model = clientModel || aiConfig.model || (provider === 'local' ? DEFAULT_MODEL_ID : provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.0-flash');
   // Clean up any audio/tts/non-chat model names
-  if (model.includes('tts') || model.includes('audio') || model.includes('image') || model.includes('embedding') || model.includes('aqa')) {
+  if (provider !== 'local' && (model.includes('tts') || model.includes('audio') || model.includes('image') || model.includes('embedding') || model.includes('aqa'))) {
     model = 'gemini-2.0-flash';
   }
 
@@ -2396,10 +2523,29 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
 
   const fullUserPrompt = `${message || (fileAttachments.length > 0 ? `Please read and analyze the attached ${fileAttachments.length} file(s) (${fileAttachments.map(f => f.name).join(', ')}) and automatically extract and add all bills, subscriptions, and store purchases.` : 'Please analyze this.')}${extractedFilesText}`;
 
+  // Concise financial snapshot for embedded local model context window efficiency
+  const compactFinancialContext = [
+    `User: ${currentUser.name} | Location: ${fullAddress}${neighborhoodDesc} | Net Worth: $${Number(netWorth || 0).toLocaleString()}`,
+    `Checking: ${userChecking.length > 0 ? userChecking.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)}`).join(' | ') : 'None'}`,
+    `Credit Cards: ${userCards.length > 0 ? userCards.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)} @ ${c.apr}% APR`).join(' | ') : 'None'}`,
+    `Upcoming Bills: ${userBills.length > 0 ? userBills.map(b => `${b.name}: $${Number(b.expectedAmount).toFixed(2)}`).join(' | ') : 'None'}`,
+    `Subscriptions: ${userSubscriptions.length > 0 ? userSubscriptions.map(s => `${s.name}: $${Number(s.amount).toFixed(2)}/mo`).join(' | ') : 'None'}`
+  ].join('\n');
+
   try {
     let reply = '';
 
-    if (provider === 'anthropic') {
+    if (provider === 'local') {
+      const localResult = await localModelEngine.query({
+        query: fullUserPrompt,
+        enableWebSearch: webSearchEnabled !== false && fileAttachments.length === 0,
+        locationHint: userCityOrZip,
+        financialContext: compactFinancialContext,
+        maxTokens: responseLength === 'concise' ? 512 : responseLength === 'detailed' ? 1536 : 1024,
+        temperature: 0.7
+      });
+      reply = localResult.reply;
+    } else if (provider === 'anthropic') {
       const anthropicContent = [{ type: 'text', text: fullUserPrompt }];
       for (const att of fileAttachments) {
         const mime = (att.mimeType || '').toLowerCase();
