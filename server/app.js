@@ -436,13 +436,15 @@ async function requireAuth(req, res, next) {
     '/auth/google/callback',
     '/auth/google/check-session',
     '/auth/session',
+    '/household/zillow-lookup',
     '/api/auth/register',
     '/api/auth/login',
     '/api/auth/setup-owner',
     '/api/auth/google',
     '/api/auth/google/callback',
     '/api/auth/google/check-session',
-    '/api/auth/session'
+    '/api/auth/session',
+    '/api/household/zillow-lookup'
   ]);
 
   const reqPath = (req.path || '').split('?')[0];
@@ -1944,10 +1946,209 @@ function shouldPerformWebSearch(message) {
     'utility', 'rebate', 'tax', 'cost', 'alternative', 'cheaper', 'funds',
     'search', 'internet', 'online', 'google', 'look up', 'find', 'price', 
     'what is', 'who is', 'how much', 'inflation', 'fed', 'interest', 'yield',
-    'stock', 'crypto', 'sub', 'subscription', 'plan', 'phone', 'electric', 'gas', 'ev', 'charger', 'charging', 'pge', 'pg&e', 'water', 'car', 'tesla', 'ioniq', 'equinox', 'dealer', 'lease', 'rebate'
+    'stock', 'crypto', 'sub', 'subscription', 'plan', 'phone', 'electric', 'gas', 'ev', 'charger', 'charging', 'pge', 'pg&e', 'water', 'car', 'tesla', 'ioniq', 'equinox', 'dealer', 'lease', 'rebate',
+    'grocery', 'groceries', 'cheapest gas', 'near me', 'nearby', 'local', 'store', 'costco', 'supermarket', 'dealership'
   ];
   return searchKeywords.some(k => m.includes(k)) || m.includes('?') || m.startsWith('how') || m.startsWith('what') || m.startsWith('where');
 }
+
+// Property / Zillow Details Extraction & Neighborhood Intelligence Helper
+async function resolvePropertyDetails(rawInput) {
+  let raw = (rawInput || '').trim();
+  let street = '', city = '', state = 'CA', zip = '', zpid = '';
+  let dwellingType = 'single_family';
+  let sqFt = 2100;
+  let bedrooms = 3;
+  let bathrooms = 2;
+  let estimatedValue = '';
+
+  // 1. Check for Zillow URL format: /homedetails/<slug>/<zpid>_zpid/
+  const zillowMatch = raw.match(/homedetails\/([^\/]+)\/(\d+)_zpid/i);
+  if (zillowMatch) {
+    zpid = zillowMatch[2];
+    const slug = zillowMatch[1];
+    const parts = slug.split('-');
+    if (parts.length > 0 && /^\d{5}$/.test(parts[parts.length - 1])) {
+      zip = parts.pop();
+    }
+    if (parts.length > 0 && /^[A-Za-z]{2}$/.test(parts[parts.length - 1])) {
+      state = parts.pop().toUpperCase();
+    }
+    const streetSuffixes = new Set(['st', 'ave', 'blvd', 'rd', 'way', 'dr', 'ln', 'ct', 'cir', 'pl', 'pkwy', 'ter', 'loop', 'trl', 'hwy', 'path', 'walk']);
+    let splitIdx = -1;
+    for (let i = 0; i < parts.length; i++) {
+      if (streetSuffixes.has(parts[i].toLowerCase())) {
+        splitIdx = i;
+        break;
+      }
+    }
+    if (splitIdx !== -1 && splitIdx < parts.length - 1) {
+      street = parts.slice(0, splitIdx + 1).join(' ');
+      city = parts.slice(splitIdx + 1).join(' ');
+    } else {
+      if (parts.length > 2) {
+        city = parts.slice(-2).join(' ');
+        street = parts.slice(0, -2).join(' ');
+      } else {
+        street = parts.join(' ');
+      }
+    }
+  } else {
+    // 2. Check for Redfin URL or Realtor URL or standard address
+    const redfinMatch = raw.match(/redfin\.com\/([A-Za-z]{2})\/([^\/]+)\/([^\/]+)\/home\/(\d+)/i);
+    if (redfinMatch) {
+      state = redfinMatch[1].toUpperCase();
+      city = decodeURIComponent(redfinMatch[2]).replace(/-/g, ' ');
+      street = decodeURIComponent(redfinMatch[3]).replace(/-/g, ' ');
+    } else {
+      // Standard comma separated address
+      const addrMatch = raw.match(/^([^,]+),\s*([^,]+),\s*([A-Za-z]{2})\s*(\d{5})?/);
+      if (addrMatch) {
+        street = addrMatch[1].trim();
+        city = addrMatch[2].trim();
+        state = addrMatch[3].toUpperCase().trim();
+        zip = addrMatch[4] || '';
+      } else if (raw.length > 0 && !raw.startsWith('http')) {
+        street = raw;
+      }
+    }
+  }
+
+  // Capitalize properly
+  const formatWords = (s) => (s || '').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  street = formatWords(street);
+  city = formatWords(city);
+
+  const formattedAddress = street ? `${street}, ${city || 'California'}, ${state} ${zip}`.trim() : (raw.startsWith('http') ? raw : 'California Home');
+
+  // Perform targeted live web search to pull the real listing snippet / beds / baths / sqft / zestimate
+  try {
+    const searchQuery = zpid 
+      ? `zillow ${zpid} ${street} ${city} ${state}`
+      : `${street} ${city} ${state} ${zip} zillow redfin beds baths sq ft`;
+    const searchResults = await performWebSearch(searchQuery);
+    if (searchResults) {
+      // Extract bedrooms: e.g. "3 beds", "4 bd", "3 bds"
+      const bedMatch = searchResults.match(/(\d+)\s*(?:beds?|bd|bds|bedrooms?)/i);
+      if (bedMatch) bedrooms = parseInt(bedMatch[1], 10);
+
+      // Extract bathrooms: e.g. "2 baths", "2.5 ba", "3 bathrooms"
+      const bathMatch = searchResults.match(/(\d+(?:\.\d+)?)\s*(?:baths?|ba|bathrooms?)/i);
+      if (bathMatch) bathrooms = parseFloat(bathMatch[1]);
+
+      // Extract square footage: e.g. "1,850 sq ft", "2,100 sqft", "1850 sq ft"
+      const sqftMatch = searchResults.match(/([\d,]{3,6})\s*(?:sq\s*ft|sqft|square\s*feet)/i);
+      if (sqftMatch) {
+        const parsedSqft = parseInt(sqftMatch[1].replace(/,/g, ''), 10);
+        if (parsedSqft > 300 && parsedSqft < 25000) sqFt = parsedSqft;
+      }
+
+      // Extract Zestimate or price: e.g. "$1,150,000" or "Zestimate: $950,000"
+      const priceMatch = searchResults.match(/\$([1-9]\d{2,3}(?:,\d{3})+)/);
+      if (priceMatch) {
+        estimatedValue = `$${priceMatch[1]}`;
+      }
+
+      // Extract dwelling type
+      const lower = searchResults.toLowerCase();
+      if (lower.includes('townhouse') || lower.includes('townhome')) {
+        dwellingType = 'townhouse';
+      } else if (lower.includes('condo') || lower.includes('condominium') || lower.includes('apartment')) {
+        dwellingType = 'apartment';
+      } else if (lower.includes('multi-family') || lower.includes('duplex') || lower.includes('triplex') || sqFt > 3200) {
+        dwellingType = 'large_estate';
+      } else if (lower.includes('single family') || lower.includes('single-family')) {
+        dwellingType = 'single_family';
+      }
+    }
+  } catch (err) {
+    console.warn('Property live search lookup failed:', err.message);
+  }
+
+  // Auto-detect Utility Region
+  let utilityRegionId = 'pge_norcal';
+  let utilityName = 'PG&E (Northern & Central CA)';
+  const numZip = parseInt(zip, 10);
+  if (state === 'CA') {
+    if (numZip >= 95800 && numZip <= 95899) {
+      utilityRegionId = 'smud_sac';
+      utilityName = 'SMUD + PG&E Gas (Sacramento)';
+    } else if (numZip >= 90001 && numZip <= 90089) {
+      utilityRegionId = 'ladwp_la';
+      utilityName = 'LADWP + SoCalGas (Los Angeles)';
+    } else if (numZip >= 91900 && numZip <= 92199) {
+      utilityRegionId = 'sdge_sandiego';
+      utilityName = 'SDG&E (San Diego)';
+    } else if (numZip >= 90000 && numZip <= 93599) {
+      utilityRegionId = 'sce_socal';
+      utilityName = 'SoCal Edison + SoCalGas (Southern CA)';
+    } else {
+      utilityRegionId = 'pge_norcal';
+      utilityName = 'PG&E (Northern & Central CA)';
+    }
+  } else {
+    utilityRegionId = 'national_avg';
+    utilityName = 'U.S. National Average Utility';
+  }
+
+  // Neighborhood and local shopping hub intelligence
+  let neighborhood = `${city || 'Local Area'}, ${state}`;
+  let localHubs = 'Costco Wholesale, Trader Joe\'s, Safeway, Target, Local EV Superchargers';
+  const cLower = city.toLowerCase();
+  if (cLower.includes('san jose') || cLower.includes('santa clara') || cLower.includes('sunnyvale') || cLower.includes('cupertino') || cLower.includes('campbell') || cLower.includes('milpitas')) {
+    neighborhood = 'Silicon Valley / South Bay Area, Santa Clara County';
+    localHubs = 'Costco (Coleman Ave & Senter Rd), Trader Joe\'s, Safeway, Whole Foods, Arco, Rotten Robbie, Tesla Superchargers & Electrify America';
+  } else if (cLower.includes('san francisco') || cLower.includes('oakland') || cLower.includes('berkeley') || cLower.includes('fremont') || cLower.includes('hayward')) {
+    neighborhood = 'San Francisco Bay Area / East Bay';
+    localHubs = 'Costco (SF / Richmond / San Leandro), Trader Joe\'s, Safeway, Target, EVgo & ChargePoint stations';
+  } else if (cLower.includes('sacramento') || cLower.includes('roseville') || cLower.includes('folsom') || cLower.includes('elk grove')) {
+    neighborhood = 'Greater Sacramento Capital Region';
+    localHubs = 'Costco (Expo Pkwy & Calvine), WinCo Foods, Trader Joe\'s, Bel Air, Arco, SMUD EV charging hubs';
+  } else if (cLower.includes('los angeles') || cLower.includes('long beach') || cLower.includes('glendale') || cLower.includes('pasadena') || cLower.includes('burbank')) {
+    neighborhood = 'Greater Los Angeles Metropolitan Area';
+    localHubs = 'Costco, ALDI, Trader Joe\'s, Ralphs, Arco, Electrify America fast chargers';
+  } else if (cLower.includes('san diego') || cLower.includes('chula vista') || cLower.includes('oceanside') || cLower.includes('escondido')) {
+    neighborhood = 'San Diego County / Coastal Southern California';
+    localHubs = 'Costco (Morena Blvd & Gateway Center), Trader Joe\'s, Vons, Arco, SDG&E Power Your Drive EV hubs';
+  }
+
+  return {
+    success: true,
+    address: formattedAddress,
+    street,
+    city,
+    state,
+    zip,
+    zpid,
+    cityOrZip: city && state ? `${city}, ${state}${zip ? ' ' + zip : ''}` : (zip || formattedAddress),
+    bedrooms,
+    bathrooms,
+    sqFt,
+    dwellingType,
+    estimatedValue: estimatedValue || (sqFt ? `$${Math.round(sqFt * 495).toLocaleString()}` : ''),
+    utilityRegionId,
+    utilityName,
+    neighborhood,
+    localHubs,
+    zillowUrl: raw.startsWith('http') ? raw : ''
+  };
+}
+
+// Endpoint to resolve Zillow URL or property address into verified specs and neighborhood intelligence
+app.post('/api/household/zillow-lookup', async (req, res) => {
+  const { url, address } = req.body || {};
+  const query = (url || address || '').trim();
+  if (!query) {
+    return res.status(400).json({ error: 'Please provide a valid Zillow URL or property address.' });
+  }
+  try {
+    const details = await resolvePropertyDetails(query);
+    res.json(details);
+  } catch (err) {
+    console.error('Zillow lookup error:', err);
+    res.status(500).json({ error: 'Failed to look up property details.' });
+  }
+});
 
 // 10. AI Advisor Chat with Navigation Capabilities & User Key Encryption
 app.post('/api/ai/chat', async (req, res) => {
@@ -2048,12 +2249,25 @@ app.post('/api/ai/chat', async (req, res) => {
     ? `\n\nUser Financial Preferences & Memory:\n${userMemory.map(m => `- ${m}`).join('\n')}`
     : '';
 
-  // Perform real-time web search if the user asks about credit card offers, 0% APR, balance transfers, or market rates
+  // Extract user location from householdProfile or userSettings
+  const residence = householdProfile || {};
+  const userCityOrZip = residence.cityOrZip || (residence.city ? `${residence.city}, ${residence.state || 'CA'}` : '') || userSettings.profile?.location || 'California';
+  const fullAddress = residence.address || (residence.street ? `${residence.street}, ${userCityOrZip}` : userCityOrZip);
+  const neighborhoodDesc = residence.neighborhood ? ` (${residence.neighborhood})` : '';
+  const localHubsDesc = residence.localHubs ? ` | Nearby Shopping & Retail Hubs: ${residence.localHubs}` : '';
+
+  // Perform real-time web search if the user asks about credit card offers, 0% APR, balance transfers, or market rates / local queries
   let liveWebSearchContext = '';
   if (shouldPerformWebSearch(message) && fileAttachments.length === 0) {
-    const webResults = await performWebSearch(message);
+    let enrichedQuery = message;
+    const lowerMsg = message.toLowerCase();
+    const isLocalQuery = ['near me', 'nearby', 'in my city', 'in my area', 'around here', 'gas', 'cheapest gas', 'grocery', 'groceries', 'deals', 'ev deals', '0 apr', '0% apr', 'costco', 'supermarket', 'dealer'].some(k => lowerMsg.includes(k));
+    if (isLocalQuery && userCityOrZip && !lowerMsg.includes(userCityOrZip.toLowerCase())) {
+      enrichedQuery = `${message} ${userCityOrZip}`;
+    }
+    const webResults = await performWebSearch(enrichedQuery);
     if (webResults) {
-      liveWebSearchContext = `\n\nLive Web Search Results (Real-Time Market Data):\n${webResults}\nUse these live web findings to recommend specific current cards (e.g. Citi Simplicity, Wells Fargo Reflect, Chase Freedom, Discover it, etc.), exact 0% APR intro periods (e.g. 18-21 months), transfer fee percentages, and requirements.`;
+      liveWebSearchContext = `\n\nLive Web Search Results (Real-Time Market & Local Data for ${userCityOrZip}):\n${webResults}\nUse these live web findings to provide specific local recommendations (gas prices, dealership promotions, 0% APR EV inventory, grocery deals, and current card promotions).`;
     }
   }
 
@@ -2070,7 +2284,8 @@ Actual Connected Finances for ${currentUser.name} (strictly respecting permissio
 - Savings Goals: ${savingsGoals && savingsGoals.length > 0 ? savingsGoals.map(g => `${g.name}: ${g.currentAmount} of ${g.targetAmount} (${g.monthlyContribution || 0}/mo)`).join(' | ') : 'None created'}
 - Manual Assets & Investments: ${manualAssets && manualAssets.length > 0 ? manualAssets.map(a => `${a.name}: ${Number(a.balance || 0).toLocaleString()} (${a.type})`).join(' | ') : 'None'}${retirementSection}
 - Net Worth: ${Number(netWorth || 0).toLocaleString()}
-- Household & Residence Profile: ${householdProfile ? `${householdProfile.dwellingType} (${householdProfile.sqFt || 2000} sq ft) in ${householdProfile.cityOrZip || 'California'} | Household Size: ${householdProfile.householdSize || 4} people | PG&E CARE Discount: ${householdProfile.hasCareDiscount ? 'Enrolled (~32% Off)' : 'Not Enrolled'} | Solar: ${householdProfile.hasSolar ? 'Yes' : 'No'}` : 'Standard Single-Family Household'}
+- Household & Residence Profile: ${residence ? `${residence.dwellingType || 'Single-Family'} (${residence.sqFt || 2100} sq ft, ${residence.bedrooms || 3} beds, ${residence.bathrooms || 2} baths) at ${fullAddress}${neighborhoodDesc} | Est. Home Value: ${residence.estimatedValue || 'N/A'} | Household Size: ${residence.householdSize || 4} people | PG&E CARE Discount: ${residence.hasCareDiscount ? 'Enrolled (~32% Off)' : 'Not Enrolled'} | Solar: ${residence.hasSolar ? 'Yes' : 'No'}${localHubsDesc}` : 'Standard Single-Family Household'}
+- Connected Credit Cards for Cash Back & Rewards: ${userCards.length > 0 ? userCards.map(c => `[Card: ${c.institution} ${c.name} (APR ${c.apr}%, Bal $${Number(c.balance || 0).toFixed(2)})]`).join(' | ') : 'None connected'}
 - Calculated Real-Life Monthly Utilities: ${householdMetrics?.utilities ? `Combined PG&E (Electric + Gas): ${householdMetrics.utilities.totalPgeCombinedBill}/mo [Home Electric: ${householdMetrics.utilities.homeKwh} kWh (${householdMetrics.utilities.homeElectricCost}), EV Home Charging: ${householdMetrics.utilities.evHomeKwh} kWh (${householdMetrics.utilities.evHomeChargingCost}), Natural Gas: ${householdMetrics.utilities.monthlyTherms} Therms (${householdMetrics.utilities.naturalGasCost})] | Water, Sewer & Trash: ${householdMetrics.utilities.waterTrashTotalCost}/mo (${householdMetrics.utilities.monthlyWaterGallons} gal/mo) | Total Utilities: ${householdMetrics.utilities.totalUtilitiesMonthly}/mo` : 'Not calculated yet'}
 - Household Vehicle Fleet (${householdMetrics?.fleet?.vehicles?.length || 0} Cars): ${householdMetrics?.fleet?.vehicles?.length > 0 ? householdMetrics.fleet.vehicles.map(v => `${v.name} (${v.type.toUpperCase()}): ${v.monthlyMiles} mi/mo, Fuel/Charge: ${v.monthlyFuelOrChargeCost}/mo, Ins: ${v.insuranceMonthly}/mo, Maint: ${v.maintenance}/mo${v.potentialEvSwitchSavings ? ` [Saves ${v.potentialEvSwitchSavings}/mo if switched to EV]` : ''}`).join(' | ') : 'None listed'}${memoryContext}${liveWebSearchContext}
 
@@ -2157,6 +2372,23 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
    - When discussing retirement plans, pensions (CalPERS, CalSTRS, FERS), 401(k), 403(b), 457, IRAs, or Social Security, always state your assumptions explicitly (such as assumed investment return, inflation rate, years of service, retirement age).
    - State clearly that all benefit projections, monthly pension estimates, and account growth figures are for educational guidance only and are not official pension, tax, or fiduciary calculations.
    - Treat retirement contributions as paycheck / payroll deductions, not as consumer spending or discretionary expenses.
+
+9. LOCATION-AWARE LOCAL ADVISORY & CREDIT CARD CASHBACK MAXIMIZATION:
+   - USER'S HOME & CITY: The user resides at ${fullAddress}${neighborhoodDesc}. Whenever they ask about local matters ("where is the cheapest gas near me", "cheapest groceries", "stores in my city", "0% APR car deals near me", "where can I buy X"):
+     * PROVIDE REAL LOCAL RECOMMENDATIONS: Name specific stores, gas stations, and dealerships located in or near ${userCityOrZip} (e.g., in the Bay Area / San Jose: Costco Wholesale on Coleman Ave or Senter Rd, Arco, Rotten Robbie, Safeway, Trader Joe's, WinCo Foods, Grocery Outlet, ALDI, Walmart, Target, and local high-volume dealership networks).
+     * CROSS-REFERENCE CONNECTED CREDIT CARDS (CRITICAL): Always check the user's connected cards (${userCards.length > 0 ? userCards.map(c => `${c.institution} ${c.name}`).join(', ') : 'None connected'}). Tell them EXACTLY which card in their portfolio to use at that specific merchant to maximize cash back and rewards:
+       - Gas Stations: Match gas purchases with their card that yields the highest cash back on gas (e.g. 3-5% cash back, rotating 5% quarterly cards, or Costco Anywhere Visa). Note payment rules (e.g. Costco gas requires a Visa credit card; Arco often has debit/cash pricing vs a credit card processing fee).
+       - Groceries / Supermarkets: Select their card earning the highest grocery category multiplier (e.g. 3-6% cash back on groceries).
+       - Wholesale Clubs (Costco & Sam's Club): Remind them of network acceptance rules (Costco only accepts Visa credit cards; Sam's Club accepts Visa/Mastercard/Amex/Discover) and recommend their best-earning Visa card.
+       - Dining / Coffee / Takeout: Select their card with dining multipliers (3-4%+).
+       - Large Purchases / Vehicle Down Payments: If buying an appliance or putting a down payment on a vehicle, advise on cards with active 0% intro purchase APR or using the spend toward a welcome bonus.
+     * SHOW THE SAVINGS MATH: Calculate the net effective price after cash back (e.g., "Regular gas at Costco is ~$4.39/gal. Using your [Card Name] for 3% cash back saves you $0.13/gal, bringing your net effective price to $4.26/gal!").
+   - 0% APR ELECTRIC CARS & LOCAL DEAL FINDER:
+     * When asked about 0% APR electric cars or local EV deals in their city:
+       - Recommend active 0% APR EV promotions (Hyundai Ioniq 5/6 0% for 60-72 mos, Chevy Equinox EV 0-0.9% APR + $7,500 Instant Point-of-Sale IRS credit, Ford Mustang Mach-E 0% for 72 mos + free home charger, Tesla Model Y/3 promotional APR).
+       - Provide local dealer shopping strategy: Email the Internet Fleet Directors at high-volume dealerships in ${userCityOrZip} to get an Out-The-Door (OTD) quote with $0 dealer markups.
+       - Stack with state & utility incentives: Combine 0% financing with the $7,500 IRS credit, California Clean Cars 4 All ($9,500-$12,000 for scrapping an older gas car), and local utility rebates (PG&E EV Pre-Owned / New Rebate of $1,000-$4,000).
+       - Calculate exact fuel savings: Compare their home EV charging cost at off-peak rates (e.g. PG&E EV2-A off-peak after midnight, especially with CARE discount at ~$0.21/kWh, equivalent to ~$0.95/gal) against their current gas vehicles.
 `.trim();
 
   const fullUserPrompt = `${message || (fileAttachments.length > 0 ? `Please read and analyze the attached ${fileAttachments.length} file(s) (${fileAttachments.map(f => f.name).join(', ')}) and automatically extract and add all bills, subscriptions, and store purchases.` : 'Please analyze this.')}${extractedFilesText}`;

@@ -18,7 +18,14 @@ import {
   Upload,
   Phone,
   ShoppingBag,
-  X
+  X,
+  Search,
+  ExternalLink,
+  Fuel,
+  Building,
+  Navigation,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import {
   DWELLING_TYPES,
@@ -39,6 +46,70 @@ export default function HouseholdLifestyleHub({
   const [showAddCar, setShowAddCar] = useState(false);
   const [showAddDoctor, setShowAddDoctor] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState('');
+
+  // Zillow & Address Property Lookup State
+  const [propertyUrlInput, setPropertyUrlInput] = useState('');
+  const [isFetchingProperty, setIsFetchingProperty] = useState(false);
+  const [propertyLookupError, setPropertyLookupError] = useState('');
+  const [propertyLookupSuccess, setPropertyLookupSuccess] = useState('');
+
+  const handleFetchProperty = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const query = propertyUrlInput.trim();
+    if (!query) {
+      setPropertyLookupError('Please enter a Zillow link or property address.');
+      return;
+    }
+    setIsFetchingProperty(true);
+    setPropertyLookupError('');
+    setPropertyLookupSuccess('');
+
+    try {
+      const token = localStorage.getItem('klarity_token') || sessionStorage.getItem('klarity_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/household/zillow-lookup', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ url: query })
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to fetch house details.');
+      }
+
+      // Auto-populate householdProfile
+      const updatedProfile = {
+        ...householdProfile,
+        address: data.address || householdProfile.address || '',
+        street: data.street || householdProfile.street || '',
+        city: data.city || householdProfile.city || '',
+        state: data.state || householdProfile.state || '',
+        zip: data.zip || householdProfile.zip || '',
+        cityOrZip: data.cityOrZip || householdProfile.cityOrZip || '',
+        sqFt: data.sqFt || householdProfile.sqFt || 2100,
+        bedrooms: data.bedrooms || householdProfile.bedrooms || 3,
+        bathrooms: data.bathrooms || householdProfile.bathrooms || 2,
+        dwellingType: data.dwellingType || householdProfile.dwellingType || 'single_family',
+        estimatedValue: data.estimatedValue || householdProfile.estimatedValue || '',
+        utilityRegionId: data.utilityRegionId || householdProfile.utilityRegionId || 'pge_norcal',
+        neighborhood: data.neighborhood || householdProfile.neighborhood || '',
+        localHubs: data.localHubs || householdProfile.localHubs || '',
+        zillowUrl: data.zillowUrl || query
+      };
+
+      onUpdateProfile(updatedProfile);
+      setPropertyLookupSuccess(`Imported specs for ${data.address || 'Property'} (${data.bedrooms || 3} bd, ${data.bathrooms || 2} ba, ${data.sqFt || 2100} sq ft)!`);
+      setPropertyUrlInput('');
+    } catch (err) {
+      console.error('Property fetch error:', err);
+      setPropertyLookupError(err.message || 'Could not fetch house details. You can enter details manually.');
+    } finally {
+      setIsFetchingProperty(false);
+    }
+  };
 
   const [newCar, setNewCar] = useState({
     name: '',
@@ -288,8 +359,172 @@ export default function HouseholdLifestyleHub({
       {/* ================================================================= */}
       {section === 'household' && (
         <div className="p-5 flex flex-col gap-4">
+          {/* Zillow & Address Property Importer */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/70 via-indigo-50/50 to-slate-50 border border-blue-200/80 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                  <Building className="w-4 h-4 text-[#18457c]" />
+                  <span>Import Property from Zillow or Street Address</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Auto-fetches square footage, bedrooms, bathrooms, estimated home value, local utility rate region, and surrounding shopping intelligence.
+                </p>
+              </div>
+              {householdProfile.zillowUrl && (
+                <a
+                  href={householdProfile.zillowUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-[#18457c] hover:underline"
+                >
+                  <span>View on Zillow</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </div>
+
+            <form onSubmit={handleFetchProperty} className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={propertyUrlInput}
+                  onChange={e => setPropertyUrlInput(e.target.value)}
+                  placeholder="Paste Zillow URL (zillow.com/homedetails/...) or street address (e.g. 485 N 1st St, San Jose, CA)..."
+                  className="w-full text-xs font-medium pl-9 pr-3 py-2 rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#18457c]/20 text-slate-900 placeholder:text-slate-400"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isFetchingProperty || !propertyUrlInput.trim()}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#12345e] disabled:opacity-50 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
+              >
+                {isFetchingProperty ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Fetching Specs...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Fetch House Specs</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            {propertyLookupError && (
+              <div className="mt-2.5 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{propertyLookupError}</span>
+              </div>
+            )}
+
+            {propertyLookupSuccess && (
+              <div className="mt-2.5 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                <span>{propertyLookupSuccess}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Residence & Location-Aware Intelligence Card */}
+          <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Verified Residence & Utility Region</span>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <MapPin className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span className="text-sm font-bold text-slate-900">
+                    {householdProfile.address || householdProfile.cityOrZip || 'Bay Area, California'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-bold text-slate-700">
+                  {DWELLING_TYPES.find(d => d.id === householdProfile.dwellingType)?.label || 'Single-Family'}
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-blue-50 font-bold text-[#18457c]">
+                  {householdProfile.bedrooms || 3} Beds • {householdProfile.bathrooms || 2} Baths • {householdProfile.sqFt || 2100} sq ft
+                </span>
+                {householdProfile.estimatedValue && (
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-50 font-bold text-emerald-800">
+                    Est. Value {householdProfile.estimatedValue}
+                  </span>
+                )}
+                <span className="px-2.5 py-1 rounded-lg bg-amber-50 font-bold text-amber-800">
+                  {UTILITY_REGIONS.find(r => r.id === householdProfile.utilityRegionId)?.electricProvider || 'PG&E'}
+                </span>
+              </div>
+            </div>
+
+            {/* Neighborhood & Surrounding Hubs */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs bg-slate-50/70 p-3 rounded-xl border border-slate-200/70">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Neighborhood / Metro Area</span>
+                <p className="font-semibold text-slate-800 mt-0.5">
+                  {householdProfile.neighborhood || (householdProfile.cityOrZip ? `${householdProfile.cityOrZip} Area` : 'Silicon Valley / Northern California')}
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Nearby Shopping & Energy Hubs</span>
+                <p className="text-slate-700 mt-0.5">
+                  {householdProfile.localHubs || "Costco Wholesale, Trader Joe's, Safeway, Whole Foods, Arco, Rotten Robbie, Tesla Superchargers & Electrify America"}
+                </p>
+              </div>
+            </div>
+
+            {/* Location-Aware AI Quick Action Pills */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1">
+              <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-[#18457c]" />
+                <span>Ask AI About Your Area:</span>
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const loc = householdProfile.address || householdProfile.cityOrZip || 'my area';
+                    onAskAiAdvisor(`Where is the cheapest gas near my home at ${loc}, and which of my connected credit cards should I use to get the highest cash back?`);
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <Fuel className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Cheapest Gas & Best Card</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const city = householdProfile.cityOrZip || 'my city';
+                    const util = UTILITY_REGIONS.find(r => r.id === householdProfile.utilityRegionId)?.name || 'local utility';
+                    onAskAiAdvisor(`What electric cars have 0% APR deals right now near ${city}, and how much will I save on monthly fuel vs charging at home on ${util}?`);
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <Car className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>0% APR Electric Cars Near Me</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const city = householdProfile.cityOrZip || 'my area';
+                    onAskAiAdvisor(`Where are the cheapest groceries near ${city} and which of my cards gets the highest cash back on groceries?`);
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#18457c] border border-blue-200 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5 text-[#18457c]" />
+                  <span>Cheap Groceries & Cash Back</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Quick Inputs Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
               <span className="text-[10px] font-semibold text-slate-400 block">Home Type</span>
               <select
@@ -344,6 +579,16 @@ export default function HouseholdLifestyleHub({
                 value={householdProfile.cityOrZip || ''}
                 onChange={e => handleFieldChange('cityOrZip', e.target.value)}
                 placeholder="City or ZIP"
+                className="w-full font-bold text-slate-900 bg-transparent mt-0.5 focus:outline-none"
+              />
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <span className="text-[10px] font-semibold text-slate-400 block">Home Sq Ft</span>
+              <input
+                type="number"
+                value={householdProfile.sqFt || 2100}
+                onChange={e => handleFieldChange('sqFt', Number(e.target.value) || 2000)}
                 className="w-full font-bold text-slate-900 bg-transparent mt-0.5 focus:outline-none"
               />
             </div>
