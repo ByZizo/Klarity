@@ -1,5 +1,8 @@
 @echo off
-title Klarity Desktop Suite Launcher
+title Klarity Desktop Suite
 cd /d "%~dp0"
-echo Starting Klarity Native Desktop App...
-npx electron .
+if exist "node_modules\electron\dist\electron.exe" (
+  start "" "node_modules\electron\dist\electron.exe" .
+) else (
+  call npx electron .
+)

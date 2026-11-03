@@ -1,6 +1,16 @@
 const { app, BrowserWindow, shell, ipcMain, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
+
+// Ensure App name and userData path are set immediately before any lock checks
+app.setName('Klarity');
+const userDataDir = path.join(app.getPath('appData'), 'Klarity');
+if (!fs.existsSync(userDataDir)) {
+  try { fs.mkdirSync(userDataDir, { recursive: true }); } catch {}
+}
+app.setPath('userData', userDataDir);
+process.env.KLARITY_USER_DATA_DIR = userDataDir;
+process.env.KLARITY_DESKTOP_APP = 'true';
 const http = require('http');
 const { exec } = require('child_process');
 
@@ -341,7 +351,8 @@ ipcMain.handle('klarity:install-update-now', async () => {
   }
 });
 
-const gotTheLock = app.requestSingleInstanceLock();
+const isDev = !app.isPackaged;
+const gotTheLock = isDev ? true : app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
   app.quit();
