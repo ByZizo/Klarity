@@ -160,7 +160,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   ai_provider TEXT DEFAULT 'gemini',
   ai_model TEXT DEFAULT 'gemini-3.8-flash',
   encrypted_ai_key TEXT DEFAULT '',
-  data_permissions JSONB DEFAULT '{"bills": true, "subscriptions": true, "cards": true, "purchases": true}'::jsonb,
+  data_permissions JSONB DEFAULT '{"bills": true, "subscriptions": true, "cards": true, "purchases": true, "retirement": true}'::jsonb,
   encrypted_plaid_client_id TEXT DEFAULT '',
   encrypted_plaid_secret TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -181,6 +181,31 @@ CREATE TABLE IF NOT EXISTS plaid_items (
 
 CREATE INDEX IF NOT EXISTS idx_plaid_items_user_id ON plaid_items(user_id);
 
+-- 12. Retirement Plans Table (Pensions, 401k, 403b, 457, IRA, Roth IRA, Social Security)
+CREATE TABLE IF NOT EXISTS retirement_plans (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_type TEXT NOT NULL, -- 'pension', '401k', '403b', '457', 'ira', 'roth_ira', 'social_security'
+  name TEXT NOT NULL,
+  provider TEXT DEFAULT '',
+  tier TEXT DEFAULT '',
+  years_of_service NUMERIC(6, 2) DEFAULT 0,
+  benefit_factor_pct NUMERIC(6, 3) DEFAULT 0,
+  highest_average_salary NUMERIC(14, 2) DEFAULT 0,
+  retirement_age INT DEFAULT 62,
+  employee_contribution_pct NUMERIC(6, 3) DEFAULT 0,
+  estimated_monthly_benefit NUMERIC(14, 2) DEFAULT 0,
+  balance NUMERIC(14, 2) DEFAULT 0,
+  employee_contribution NUMERIC(14, 2) DEFAULT 0,
+  employer_match NUMERIC(14, 2) DEFAULT 0,
+  target_retirement_age INT DEFAULT 65,
+  notes TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_retirement_plans_user_id ON retirement_plans(user_id);
+
 -- ============================================================================
 -- ROW LEVEL SECURITY (RLS) ENFORCEMENT
 -- All public/anonymous access is DENIED. Only service-role backend access is authorized.
@@ -194,5 +219,6 @@ ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE budgets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE savings_goals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE manual_assets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE retirement_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plaid_items ENABLE ROW LEVEL SECURITY;

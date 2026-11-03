@@ -75,6 +75,7 @@ import HardshipPlaybookModal from './components/HardshipPlaybookModal';
 import { DEFAULT_INCOME_STREAMS, calculateJudgmentProofRatio } from './utils/statutoryDebtEngine';
 import HouseholdLifestyleHub from './components/HouseholdLifestyleHub';
 import PasswordVaultPage, { DEFAULT_VAULT_ITEMS } from './components/PasswordVaultPage';
+import RetirementPage from './components/RetirementPage';
 import { DEFAULT_HOUSEHOLD_PROFILE, calculateHouseholdAndFleetMetrics } from './utils/householdLifestyleEngine';
 import {
   secureStorage,
@@ -754,7 +755,7 @@ function KlarityApp() {
       metrics: { totalChecking: 0, totalCreditDebt: 0, totalMonthlyBills: 0, netWorthEstimate: 0 }
     };
   });
-  const VALID_TABS = ['dashboard', 'cards', 'bills', 'subscriptions', 'transactions', 'budgets', 'vault', 'advisor', 'more'];
+  const VALID_TABS = ['dashboard', 'cards', 'bills', 'subscriptions', 'transactions', 'budgets', 'retirement', 'vault', 'advisor', 'more'];
 
   const getInitialTab = () => {
     try {
@@ -813,7 +814,8 @@ function KlarityApp() {
     bills: true,
     subscriptions: true,
     cards: true,
-    purchases: true
+    purchases: true,
+    retirement: true
   });
   const [settingsPlaidClientId, setSettingsPlaidClientId] = useState(() => getInitialUserStorage('plaid_client_id', ''));
   const [settingsPlaidSecret, setSettingsPlaidSecret] = useState('');
@@ -1019,6 +1021,51 @@ function KlarityApp() {
       localStorage.setItem('klarity_income_streams', JSON.stringify(incomeStreams));
     } catch (e) {}
   }, [incomeStreams]);
+
+  // Retirement & Pension Plans (CalPERS, CalSTRS, FERS, 401k, 403b, 457, IRA, Roth IRA, Social Security)
+  const [retirementPlans, setRetirementPlans] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_retirement_plans');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [
+      {
+        id: 'ret-1',
+        name: 'California Public Employees Pension',
+        planType: 'pension',
+        provider: 'CalPERS',
+        tier: '2% at 62',
+        yearsOfService: 15,
+        benefitFactorPct: 2.0,
+        highestAverageSalary: 95000,
+        retirementAge: 62,
+        employeeContributionPct: 7.0,
+        estimatedMonthlyBenefit: 2375,
+        notes: 'Vested member'
+      },
+      {
+        id: 'ret-2',
+        name: 'Workplace 401(k)',
+        planType: '401k',
+        provider: 'Fidelity',
+        balance: 48500,
+        employeeContribution: 500,
+        employerMatch: 250,
+        targetRetirementAge: 65,
+        notes: 'Pre-tax payroll deduction'
+      }
+    ];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_retirement_plans', JSON.stringify(retirementPlans));
+    } catch (e) {}
+  }, [retirementPlans]);
+
 
   // Household, Utility (PG&E / Water / Gas) & Vehicle Fleet Profile
   const [householdProfile, setHouseholdProfile] = useState(() => {
@@ -2012,6 +2059,12 @@ function KlarityApp() {
           }
         };
 
+        if (Array.isArray(json.retirementPlans) && json.retirementPlans.length > 0) {
+          setRetirementPlans(json.retirementPlans);
+          try {
+            localStorage.setItem('klarity_retirement_plans', JSON.stringify(json.retirementPlans));
+          } catch (e) {}
+        }
         setData(finalData);
         try {
           localStorage.setItem('klarity_finance_data', JSON.stringify(finalData));
@@ -2029,7 +2082,8 @@ function KlarityApp() {
               accounts: mergedAccounts,
               bills: mergedBills,
               subscriptions: mergedSubs,
-              transactions: mergedTxs
+              transactions: mergedTxs,
+              retirementPlans: retirementPlans
             })
           }).catch(() => {});
         }
@@ -2945,6 +2999,7 @@ function KlarityApp() {
           budgets: budgets,
           savingsGoals: savingsGoals,
           manualAssets: manualAssets,
+          retirementPlans: retirementPlans,
           netWorth: totalNetWorth || 0,
           householdProfile: householdProfile,
           householdMetrics: calculateHouseholdAndFleetMetrics(householdProfile)
@@ -3070,6 +3125,16 @@ function KlarityApp() {
               },
               ...(prev || [])
             ]);
+          } else if (act.type === 'retirement' && act.item?.name) {
+            setRetirementPlans(prev => {
+              const updated = [...(prev || [])];
+              const idx = updated.findIndex(p => p.id === act.item.id || (p.name || '').toLowerCase() === act.item.name.toLowerCase());
+              if (idx >= 0) updated[idx] = { ...updated[idx], ...act.item };
+              else updated.push(act.item);
+              return updated;
+            });
+          } else if (act.type === 'delete_retirement' && (act.item?.id || act.item?.name)) {
+            setRetirementPlans(prev => (prev || []).filter(p => (!act.item.id || p.id !== act.item.id) && (!act.item.name || (p.name || '').toLowerCase() !== act.item.name.toLowerCase())));
           } else if (act.type === 'goal' && act.item?.name && act.item?.targetAmount) {
             setSavingsGoals(prev => [
               ...prev,
@@ -3102,8 +3167,8 @@ function KlarityApp() {
         if (dest === 'settings') {
           setSettingsActiveTab('ai');
           setIsSettingsOpen(true);
-        } else if (['dashboard', 'bills', 'subscriptions', 'cards', 'transactions', 'budgets', 'overview', 'vault', 'passwords'].includes(dest)) {
-          setActiveTab(dest === 'overview' ? 'dashboard' : dest === 'passwords' ? 'vault' : dest);
+        } else if (['dashboard', 'bills', 'subscriptions', 'cards', 'transactions', 'budgets', 'overview', 'vault', 'passwords', 'retirement', 'pension', 'pensions'].includes(dest)) {
+          setActiveTab(dest === 'overview' ? 'dashboard' : dest === 'passwords' ? 'vault' : ['retirement', 'pension', 'pensions'].includes(dest) ? 'retirement' : dest);
         }
         replyText = replyText.replace(/\[NAVIGATE:[a-zA-Z0-9_-]+\]/gi, '').trim();
       }
@@ -3690,7 +3755,11 @@ function KlarityApp() {
   const manualLoans = manualAssets
     .filter(a => a.type === 'loan')
     .reduce((s, a) => s + Number(a.balance || 0), 0);
-  const totalNetWorth = displayCash + manualPositiveAssets - displayCardBalances - manualLoans;
+  // Retirement Account Balances (401k, 403b, 457, IRA, Roth IRA - strictly excluding pensions and Social Security)
+  const retirementAccountBalances = retirementPlans
+    .filter(p => p.planType !== 'pension' && p.planType !== 'social_security')
+    .reduce((s, p) => s + Number(p.balance || 0), 0);
+  const totalNetWorth = displayCash + manualPositiveAssets + retirementAccountBalances - displayCardBalances - manualLoans;
   const netWorthHistory = [
     { month: 'May', value: Math.round(totalNetWorth * 0.78) },
     { month: 'Jun', value: Math.round(totalNetWorth * 0.83) },

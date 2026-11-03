@@ -64,6 +64,7 @@ const initialSeedData = {
   budgets: [],
   savingsGoals: [],
   manualAssets: [],
+  retirementPlans: [],
   userSettings: {},
   plaidItems: []
 };
@@ -301,6 +302,52 @@ function mapTxToSql(t, userId) {
   };
 }
 
+function mapRetirementPlanFromSql(r) {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    ownerId: r.user_id,
+    planType: r.plan_type,
+    name: r.name,
+    provider: r.provider || '',
+    tier: r.tier || '',
+    yearsOfService: Number(r.years_of_service || 0),
+    benefitFactorPct: Number(r.benefit_factor_pct || 0),
+    highestAverageSalary: Number(r.highest_average_salary || 0),
+    retirementAge: Number(r.retirement_age || 62),
+    employeeContributionPct: Number(r.employee_contribution_pct || 0),
+    estimatedMonthlyBenefit: Number(r.estimated_monthly_benefit || 0),
+    balance: Number(r.balance || 0),
+    employeeContribution: Number(r.employee_contribution || 0),
+    employerMatch: Number(r.employer_match || 0),
+    targetRetirementAge: Number(r.target_retirement_age || 65),
+    notes: r.notes || ''
+  };
+}
+
+function mapRetirementPlanToSql(p, userId) {
+  return {
+    id: p.id || `ret-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    user_id: userId,
+    plan_type: p.planType || p.plan_type || '401k',
+    name: p.name || 'Retirement Plan',
+    provider: p.provider || '',
+    tier: p.tier || '',
+    years_of_service: Number(p.yearsOfService || 0),
+    benefit_factor_pct: Number(p.benefitFactorPct || 0),
+    highest_average_salary: Number(p.highestAverageSalary || 0),
+    retirement_age: Number(p.retirementAge || 62),
+    employee_contribution_pct: Number(p.employeeContributionPct || 0),
+    estimated_monthly_benefit: Number(p.estimatedMonthlyBenefit || 0),
+    balance: Number(p.balance || 0),
+    employee_contribution: Number(p.employeeContribution || 0),
+    employer_match: Number(p.employerMatch || 0),
+    target_retirement_age: Number(p.targetRetirementAge || 65),
+    notes: p.notes || '',
+    updated_at: new Date().toISOString()
+  };
+}
+
 // ----------------------------------------------------------------------------
 // Unified Database Interface
 // ----------------------------------------------------------------------------
@@ -525,6 +572,7 @@ const db = {
         budgetRes,
         savingsRes,
         assetRes,
+        retirementRes,
         settingsRes,
         plaidRes
       ] = await Promise.all([
@@ -536,6 +584,7 @@ const db = {
         supabase.from('budgets').select('*').eq('user_id', uid),
         supabase.from('savings_goals').select('*').eq('user_id', uid),
         supabase.from('manual_assets').select('*').eq('user_id', uid),
+        supabase.from('retirement_plans').select('*').eq('user_id', uid),
         supabase.from('user_settings').select('*').eq('user_id', uid).maybeSingle(),
         supabase.from('plaid_items').select('*').eq('user_id', uid)
       ]);
@@ -556,7 +605,7 @@ const db = {
             provider: settingsRes.data.ai_provider || 'gemini',
             model: settingsRes.data.ai_model || 'gemini-3.8-flash',
             encryptedKey: settingsRes.data.encrypted_ai_key || '',
-            permissions: settingsRes.data.data_permissions || { bills: true, subscriptions: true, cards: true, purchases: true }
+            permissions: settingsRes.data.data_permissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
           },
           plaid: {
             encryptedClientId: settingsRes.data.encrypted_plaid_client_id || '',
@@ -594,6 +643,7 @@ const db = {
           type: a.type,
           value: Number(a.value || 0)
         })),
+        retirementPlans: (retirementRes?.data || []).map(mapRetirementPlanFromSql),
         userSettings: userSettingsObj,
         plaidItems: (plaidRes.data || []).map(p => ({
           id: p.id,
@@ -708,7 +758,17 @@ const db = {
         }
       }
 
-      // 8. Sync user settings
+      // 8. Sync retirement plans
+      if (Array.isArray(data.retirementPlans)) {
+        const userPlans = data.retirementPlans
+          .filter(p => p.userId === uid || p.ownerId === uid)
+          .map(p => mapRetirementPlanToSql(p, uid));
+        if (userPlans.length > 0) {
+          promises.push(supabase.from('retirement_plans').upsert(userPlans, { onConflict: 'id' }));
+        }
+      }
+
+      // 9. Sync user settings
       if (data.userSettings && data.userSettings[uid]) {
         const st = data.userSettings[uid];
         promises.push(supabase.from('user_settings').upsert({
@@ -716,14 +776,14 @@ const db = {
           ai_provider: st.ai?.provider || 'gemini',
           ai_model: st.ai?.model || 'gemini-3.8-flash',
           encrypted_ai_key: st.ai?.encryptedKey || '',
-          data_permissions: st.ai?.permissions || { bills: true, subscriptions: true, cards: true, purchases: true },
+          data_permissions: st.ai?.permissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true },
           encrypted_plaid_client_id: st.plaid?.encryptedClientId || '',
           encrypted_plaid_secret: st.plaid?.encryptedSecret || '',
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' }));
       }
 
-      // 9. Sync plaid items
+      // 10. Sync plaid items
       if (Array.isArray(data.plaidItems)) {
         const userPlaids = data.plaidItems
           .filter(p => p.userId === uid)

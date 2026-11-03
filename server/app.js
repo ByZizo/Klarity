@@ -1083,13 +1083,51 @@ app.post('/api/budgets', async (req, res) => {
     data.budgets[existingIdx] = {
       ...data.budgets[existingIdx],
       limit: limitNum,
-      category
+      category,
+      lastMonthSpent: lastMonthSpent !== undefined ? Number(lastMonthSpent) : data.budgets[existingIdx].lastMonthSpent
     };
     item = data.budgets[existingIdx];
   } else {
     item = {
+      id: id || `bgt-${Date.now()}`,
+      ownerId: req.userId,
+      userId: req.userId,
+      category,
+      limit: limitNum,
+      lastMonthSpent: Number(lastMonthSpent || 0)
+    };
+    data.budgets.push(item);
+  }
+  await writeData(data, req.userId);
+  res.json({ success: true, budget: item, budgets: (data.budgets || []).filter(b => b.ownerId === req.userId || b.userId === req.userId) });
+});
+
+// ==================== MANUAL ASSETS CRUD ====================
+app.get('/api/manual-assets', async (req, res) => {
+  const data = await readData(req.userId);
+  res.json({ manualAssets: (data.manualAssets || []).filter(a => a.ownerId === req.userId || a.userId === req.userId) });
+});
+
+app.post('/api/manual-assets', async (req, res) => {
+  const { id, name, type, balance } = req.body;
+  if (!name) return res.status(400).json({ error: 'Missing asset name' });
+  const data = await readData(req.userId);
+  data.manualAssets = data.manualAssets || [];
+  const existingIdx = data.manualAssets.findIndex(a => a.id === id && (a.ownerId === req.userId || a.userId === req.userId));
+  let item;
+  if (existingIdx >= 0) {
+    data.manualAssets[existingIdx] = {
+      ...data.manualAssets[existingIdx],
+      name,
+      type: type || 'savings',
+      balance: Number(balance || 0)
+    };
+    item = data.manualAssets[existingIdx];
+  } else {
+    item = {
       id: id || `ma-${Date.now()}`,
       ownerId: req.userId,
+      userId: req.userId,
       name,
       type: type || 'savings',
       balance: Number(balance || 0)
@@ -1097,14 +1135,71 @@ app.post('/api/budgets', async (req, res) => {
     data.manualAssets.push(item);
   }
   await writeData(data, req.userId);
-  res.json({ success: true, asset: item, manualAssets: data.manualAssets });
+  res.json({ success: true, asset: item, manualAssets: (data.manualAssets || []).filter(a => a.ownerId === req.userId || a.userId === req.userId) });
 });
 
 app.delete('/api/manual-assets/:id', async (req, res) => {
   const data = await readData(req.userId);
   data.manualAssets = (data.manualAssets || []).filter(a => a.id !== req.params.id || (a.ownerId && a.ownerId !== req.userId));
   await writeData(data, req.userId);
-  res.json({ success: true, manualAssets: data.manualAssets });
+  res.json({ success: true, manualAssets: (data.manualAssets || []).filter(a => a.ownerId === req.userId || a.userId === req.userId) });
+});
+
+// ==================== RETIREMENT PLANS CRUD ====================
+app.get('/api/retirement', async (req, res) => {
+  const data = await readData(req.userId);
+  const userPlans = (data.retirementPlans || []).filter(p => p.ownerId === req.userId || p.userId === req.userId);
+  res.json({ success: true, retirementPlans: userPlans });
+});
+
+app.post('/api/retirement', async (req, res) => {
+  const plan = req.body;
+  if (!plan || !plan.name) return res.status(400).json({ error: 'Missing retirement plan name' });
+
+  const data = await readData(req.userId);
+  data.retirementPlans = data.retirementPlans || [];
+
+  const existingIdx = data.retirementPlans.findIndex(p => p.id === plan.id && (p.ownerId === req.userId || p.userId === req.userId));
+
+  const planItem = {
+    ...plan,
+    id: plan.id || `ret-${Date.now()}`,
+    ownerId: req.userId,
+    userId: req.userId,
+    planType: plan.planType || '401k',
+    name: plan.name,
+    provider: plan.provider || '',
+    tier: plan.tier || '',
+    yearsOfService: Number(plan.yearsOfService || 0),
+    benefitFactorPct: Number(plan.benefitFactorPct || 0),
+    highestAverageSalary: Number(plan.highestAverageSalary || 0),
+    retirementAge: Number(plan.retirementAge || 62),
+    employeeContributionPct: Number(plan.employeeContributionPct || 0),
+    estimatedMonthlyBenefit: Number(plan.estimatedMonthlyBenefit || 0),
+    balance: Number(plan.balance || 0),
+    employeeContribution: Number(plan.employeeContribution || 0),
+    employerMatch: Number(plan.employerMatch || 0),
+    targetRetirementAge: Number(plan.targetRetirementAge || 65),
+    notes: plan.notes || ''
+  };
+
+  if (existingIdx >= 0) {
+    data.retirementPlans[existingIdx] = planItem;
+  } else {
+    data.retirementPlans.push(planItem);
+  }
+
+  await writeData(data, req.userId);
+  const userPlans = (data.retirementPlans || []).filter(p => p.ownerId === req.userId || p.userId === req.userId);
+  res.json({ success: true, plan: planItem, retirementPlans: userPlans });
+});
+
+app.delete('/api/retirement/:id', async (req, res) => {
+  const data = await readData(req.userId);
+  data.retirementPlans = (data.retirementPlans || []).filter(p => p.id !== req.params.id || (p.ownerId && p.ownerId !== req.userId));
+  await writeData(data, req.userId);
+  const userPlans = (data.retirementPlans || []).filter(p => p.ownerId === req.userId || p.userId === req.userId);
+  res.json({ success: true, retirementPlans: userPlans });
 });
 
 // 4. Financial Data Overview
@@ -1134,6 +1229,7 @@ app.get('/api/data', async (req, res) => {
   const userBudgets = (data.budgets || []).filter(isUserOwner);
   const userSavingsGoals = (data.savingsGoals || []).filter(isUserOwner);
   const userManualAssets = (data.manualAssets || []).filter(isUserOwner);
+  const userRetirementPlans = (data.retirementPlans || []).filter(isUserOwner);
 
   const currentUser = (data.users || []).find(u => u.id === userId);
 
@@ -1146,6 +1242,7 @@ app.get('/api/data', async (req, res) => {
     budgets: userBudgets,
     savingsGoals: userSavingsGoals,
     manualAssets: userManualAssets,
+    retirementPlans: userRetirementPlans,
     metrics: {
       totalChecking,
       totalCreditDebt,
@@ -1160,7 +1257,7 @@ app.get('/api/data', async (req, res) => {
 // Batch sync accounts, bills, subscriptions, and transactions from client cache if server cold started
 app.post('/api/accounts/batch-sync', async (req, res) => {
   const userId = req.userId;
-  const { accounts, bills, subscriptions, transactions, budgets, savingsGoals, manualAssets } = req.body;
+  const { accounts, bills, subscriptions, transactions, budgets, savingsGoals, manualAssets, retirementPlans } = req.body;
   const data = await readData(req.userId);
   if (Array.isArray(budgets)) {
     data.budgets = budgets;
@@ -1170,6 +1267,9 @@ app.post('/api/accounts/batch-sync', async (req, res) => {
   }
   if (Array.isArray(manualAssets)) {
     data.manualAssets = manualAssets;
+  }
+  if (Array.isArray(retirementPlans)) {
+    data.retirementPlans = retirementPlans.map(p => ({ ...p, userId: req.userId, ownerId: req.userId }));
   }
   if (Array.isArray(accounts) && accounts.length > 0) {
     data.accounts = data.accounts || [];
@@ -1386,6 +1486,7 @@ app.post('/api/ai/chat', async (req, res) => {
     budgets = [],
     savingsGoals = [],
     manualAssets = [],
+    retirementPlans = [],
     netWorth,
     householdProfile,
     householdMetrics,
@@ -1404,7 +1505,7 @@ app.post('/api/ai/chat', async (req, res) => {
       model: clientModel || 'gemini-3.8-flash',
       encryptedKey: encrypt(clientApiKey),
       status: 'connected',
-      dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true }
+      dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
     };
     await writeData(data, req.userId);
   }
@@ -1442,7 +1543,7 @@ app.post('/api/ai/chat', async (req, res) => {
     }
   }
 
-  const permissions = aiConfig.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true };
+  const permissions = aiConfig.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true };
   const provider = clientProvider || aiConfig.provider || 'gemini';
   let model = clientModel || aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-3.8-flash');
   // Auto-upgrade any old/preview/tts/deprecated gemini names
@@ -1462,6 +1563,9 @@ app.post('/api/ai/chat', async (req, res) => {
   const userBills = permissions.bills ? (data.bills || []) : [];
   const userSubscriptions = permissions.subscriptions ? (data.subscriptions || []) : [];
   const userTransactions = permissions.purchases ? (data.transactions || []).slice(0, 10) : [];
+  const userRetirementPlans = permissions.retirement !== false
+    ? (Array.isArray(retirementPlans) && retirementPlans.length > 0 ? retirementPlans : (data.retirementPlans || []).filter(p => p.ownerId === userId || p.userId === userId))
+    : [];
 
   const memoryContext = (userMemory && userMemory.length > 0)
     ? `\n\nUser Financial Preferences & Memory:\n${userMemory.map(m => `- ${m}`).join('\n')}`
@@ -1488,6 +1592,13 @@ Actual Connected Finances for ${currentUser.name} (strictly respecting permissio
 - Monthly Category Budgets: ${budgets && budgets.length > 0 ? budgets.map(b => `${b.category}: ${b.limit}/mo`).join(' | ') : 'None set'}
 - Savings Goals: ${savingsGoals && savingsGoals.length > 0 ? savingsGoals.map(g => `${g.name}: ${g.currentAmount} of ${g.targetAmount} (${g.monthlyContribution || 0}/mo)`).join(' | ') : 'None created'}
 - Manual Assets & Investments: ${manualAssets && manualAssets.length > 0 ? manualAssets.map(a => `${a.name}: ${Number(a.balance || 0).toLocaleString()} (${a.type})`).join(' | ') : 'None'}
+- Retirement Plans & Pensions (${permissions.retirement !== false ? 'Permitted' : 'Access Restricted'}): ${userRetirementPlans.length > 0 ? userRetirementPlans.map(p => {
+    if (p.planType === 'pension') {
+      return `[Pension] ${p.name || p.provider || 'Pension'}: Est. $${Number(p.estimatedMonthlyBenefit || 0).toLocaleString()}/mo (Provider: ${p.provider || 'N/A'}, Tier: ${p.tier || 'N/A'}, Service: ${p.yearsOfService || 0} yrs, Factor: ${p.benefitFactorPct || 0}%, Highest Avg Salary: $${Number(p.highestAverageSalary || 0).toLocaleString()}, Normal Retire Age: ${p.retirementAge || 62}, Employee Contribution: ${p.employeeContributionPct || 0}%)`;
+    } else {
+      return `[${(p.planType || 'Account').toUpperCase()}] ${p.name}: Balance $${Number(p.balance || 0).toLocaleString()} (Employee Contribution: $${Number(p.employeeContribution || 0).toLocaleString()}/mo, Employer Match: $${Number(p.employerMatch || 0).toLocaleString()}/mo, Target Age: ${p.targetRetirementAge || 65})`;
+    }
+  }).join(' | ') : 'None configured'}
 - Net Worth: ${Number(netWorth || 0).toLocaleString()}
 - Household & Residence Profile: ${householdProfile ? `${householdProfile.dwellingType} (${householdProfile.sqFt || 2000} sq ft) in ${householdProfile.cityOrZip || 'California'} | Household Size: ${householdProfile.householdSize || 4} people | PG&E CARE Discount: ${householdProfile.hasCareDiscount ? 'Enrolled (~32% Off)' : 'Not Enrolled'} | Solar: ${householdProfile.hasSolar ? 'Yes' : 'No'}` : 'Standard Single-Family Household'}
 - Calculated Real-Life Monthly Utilities: ${householdMetrics?.utilities ? `Combined PG&E (Electric + Gas): ${householdMetrics.utilities.totalPgeCombinedBill}/mo [Home Electric: ${householdMetrics.utilities.homeKwh} kWh (${householdMetrics.utilities.homeElectricCost}), EV Home Charging: ${householdMetrics.utilities.evHomeKwh} kWh (${householdMetrics.utilities.evHomeChargingCost}), Natural Gas: ${householdMetrics.utilities.monthlyTherms} Therms (${householdMetrics.utilities.naturalGasCost})] | Water, Sewer & Trash: ${householdMetrics.utilities.waterTrashTotalCost}/mo (${householdMetrics.utilities.monthlyWaterGallons} gal/mo) | Total Utilities: ${householdMetrics.utilities.totalUtilitiesMonthly}/mo` : 'Not calculated yet'}
@@ -1511,6 +1622,8 @@ ${webSearchEnabled === false ? '- INTERNET ACCESS: Strictly offline/local mode. 
    - For Savings Goals: [ACTION:ADD_GOAL:{"name":"Emergency Fund","targetAmount":3000,"currentAmount":500,"monthlyContribution":250}]
    - For Deleting Savings Goals: [ACTION:DELETE_GOAL:{"name":"Emergency Fund"}]
    - For Setting / Verifying Retirement Inflow: [ACTION:SET_INCOME:{"type":"social_security","amount":2185,"label":"Social Security"}] or [ACTION:SET_INCOME:{"type":"calpers","amount":3450,"label":"CalPERS Pension"}]
+   - For Adding / Updating Retirement Plan: [ACTION:ADD_RETIREMENT:{"name":"California State Pension","planType":"pension","provider":"CalPERS","tier":"2% at 62","yearsOfService":15,"benefitFactorPct":2.0,"highestAverageSalary":95000,"retirementAge":62,"estimatedMonthlyBenefit":2375}] or [ACTION:ADD_RETIREMENT:{"name":"Workplace 401(k)","planType":"401k","provider":"Fidelity","balance":48500,"employeeContribution":500,"employerMatch":250,"targetRetirementAge":65}]
+   - For Deleting Retirement Plan: [ACTION:DELETE_RETIREMENT:{"id":"ret-1"}]
    - For Deleting Income Stream: [ACTION:DELETE_INCOME:{"type":"social_security"}]
    - For Updating Home / Household Size / City / PG&E CARE: [ACTION:SET_HOUSEHOLD:{"dwellingType":"single_family","householdSize":4,"sqFt":2100,"cityOrZip":"San Jose, CA","hasCareDiscount":true}]
    - For Adding a Household Car (gas, hybrid, phev, ev): [ACTION:ADD_VEHICLE:{"name":"2024 Hyundai Ioniq 5","type":"ev","mpgOrEfficiency":28,"monthlyMiles":1000,"freeChargingSharePercent":40}]
@@ -1532,6 +1645,7 @@ ${webSearchEnabled === false ? '- INTERNET ACCESS: Strictly offline/local mode. 
    - For Overview / Dashboard: [NAVIGATE:dashboard]
    - For Settings: [NAVIGATE:settings]
    - For Passwords & Accounts Vault: [NAVIGATE:vault]
+   - For Retirement Plans & Pensions: [NAVIGATE:retirement]
 6. RETIREMENT, SOCIAL SECURITY, CALPERS & SENIOR DEBT PROTECTION EXPERTISE:
 ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
    * Total Monthly Income: ${statutoryShield.totalMonthlyIncome || 0}/mo
@@ -1568,6 +1682,11 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
      * WHEN TO BUY: Shop during the last 5 days of a quarter (March 25-31, June 25-30, September 25-30, December 20-31) when automakers and dealerships face quarterly volume quota bonuses, or during model-year clearance (August-November).
      * WHERE TO BUY: Contact the Internet Fleet Manager at 3 high-volume EV-certified dealerships in their region (or Costco Auto Program dealers) via email only, requesting an itemized Out-The-Door (OTD) worksheet with zero dealer markups/add-ons.
      * STACKING REBATES + GAS OFFSET MATH: Show how combining 0% APR ($0 interest) + $7,500 IRS Point-of-Sale credit upfront + California Clean Cars 4 All / Replace Your Ride ($9,500-$12,000 for scrapping an older gas car) + PG&E EV Rebate ($1,000-$4,000) + subtracting their current monthly gas & oil change expenses ($180-$300/mo) makes the true net monthly cost remarkably low!
+
+8. RETIREMENT PLANNING & ESTIMATE ASSUMPTIONS:
+   - When discussing retirement plans, pensions (CalPERS, CalSTRS, FERS), 401(k), 403(b), 457, IRAs, or Social Security, always state your assumptions explicitly (such as assumed investment return, inflation rate, years of service, retirement age).
+   - State clearly that all benefit projections, monthly pension estimates, and account growth figures are for educational guidance only and are not official pension, tax, or fiduciary calculations.
+   - Treat retirement contributions as paycheck / payroll deductions, not as consumer spending or discretionary expenses.
 `.trim();
 
   const fullUserPrompt = `${message || (fileAttachments.length > 0 ? `Please read and analyze the attached ${fileAttachments.length} file(s) (${fileAttachments.map(f => f.name).join(', ')}) and automatically extract and add all bills, subscriptions, and store purchases.` : 'Please analyze this.')}${extractedFilesText}`;
@@ -1946,6 +2065,7 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
         const vData = JSON.parse(dvMatch[1]);
         actionsExecuted.push({ type: 'delete_vehicle', item: vData });
       } catch (e) {}
+    }
 
     const addVaultRegex = /\[ACTION:ADD_VAULT_ITEM:([\s\S]*?)\]/gi;
     let avtMatch;
@@ -1955,6 +2075,55 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
         actionsExecuted.push({ type: 'add_vault_item', item: vtData });
       } catch (e) {}
     }
+
+    const addRetirementRegex = /\[ACTION:ADD_RETIREMENT:([\s\S]*?)\]/gi;
+    let arMatch;
+    while ((arMatch = addRetirementRegex.exec(reply)) !== null) {
+      try {
+        const retData = JSON.parse(arMatch[1]);
+        if (retData && retData.name) {
+          data.retirementPlans = data.retirementPlans || [];
+          const newPlan = {
+            id: retData.id || `ret-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            ownerId: req.userId,
+            userId: req.userId,
+            planType: retData.planType || '401k',
+            name: retData.name,
+            provider: retData.provider || '',
+            tier: retData.tier || '',
+            yearsOfService: Number(retData.yearsOfService || 0),
+            benefitFactorPct: Number(retData.benefitFactorPct || 0),
+            highestAverageSalary: Number(retData.highestAverageSalary || 0),
+            retirementAge: Number(retData.retirementAge || 62),
+            employeeContributionPct: Number(retData.employeeContributionPct || 0),
+            estimatedMonthlyBenefit: Number(retData.estimatedMonthlyBenefit || 0),
+            balance: Number(retData.balance || 0),
+            employeeContribution: Number(retData.employeeContribution || 0),
+            employerMatch: Number(retData.employerMatch || 0),
+            targetRetirementAge: Number(retData.targetRetirementAge || 65),
+            notes: retData.notes || ''
+          };
+          const existingIdx = data.retirementPlans.findIndex(p => p.id === newPlan.id || (p.name || '').toLowerCase() === newPlan.name.toLowerCase());
+          if (existingIdx >= 0) {
+            data.retirementPlans[existingIdx] = newPlan;
+          } else {
+            data.retirementPlans.push(newPlan);
+          }
+          actionsExecuted.push({ type: 'retirement', item: newPlan });
+        }
+      } catch (e) {}
+    }
+
+    const delRetirementRegex = /\[ACTION:DELETE_RETIREMENT:([\s\S]*?)\]/gi;
+    let drMatch;
+    while ((drMatch = delRetirementRegex.exec(reply)) !== null) {
+      try {
+        const retData = JSON.parse(drMatch[1]);
+        if (retData.id || retData.name) {
+          data.retirementPlans = (data.retirementPlans || []).filter(p => (!retData.id || p.id !== retData.id) && (!retData.name || (p.name || '').toLowerCase() !== retData.name.toLowerCase()));
+          actionsExecuted.push({ type: 'delete_retirement', item: retData });
+        }
+      } catch (e) {}
     }
 
     // 4. Smart Fallback Comprehension for Uploaded Statements & Pasted Natural-Language Sentences
@@ -2231,7 +2400,8 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
       updatedData: {
         bills: (data.bills || []).filter(b => b.status !== 'archived'),
         subscriptions: data.subscriptions || [],
-        transactions: (data.transactions || []).slice(0, 50)
+        transactions: (data.transactions || []).slice(0, 50),
+        retirementPlans: data.retirementPlans || []
       }
     });
   } catch (err) {
