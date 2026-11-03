@@ -204,7 +204,7 @@ function getUserSettings(data, userId) {
     data.userSettings[uid] = {
       ai: existingAi ? JSON.parse(JSON.stringify(existingAi)) : {
         provider: 'gemini',
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.0-flash',
         encryptedKey: '',
         status: 'not_connected',
         dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
@@ -888,7 +888,7 @@ app.get('/api/settings', async (req, res) => {
     },
     ai: {
       provider: ai.provider || 'gemini',
-      model: ai.model || 'gemini-2.5-flash',
+      model: ai.model || 'gemini-2.0-flash',
       hasKey: Boolean(ai.encryptedKey),
       maskedKey: ai.encryptedKey ? maskSecret(decrypt(ai.encryptedKey)) : '',
       status: ai.encryptedKey ? (ai.status || 'connected') : 'not_connected',
@@ -1057,7 +1057,7 @@ app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
   const userSettings = getUserSettings(data, uid);
   userSettings.ai = {
     provider,
-    model: model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.5-flash'),
+    model: model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.0-flash'),
     encryptedKey: encrypt(keyToTest),
     status: 'connected',
     dataPermissions: dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
@@ -1086,7 +1086,7 @@ app.post('/api/settings/ai-key/remove', async (req, res) => {
   const userSettings = getUserSettings(data, uid);
   userSettings.ai = {
     provider: userSettings.ai?.provider || 'gemini',
-    model: userSettings.ai?.model || 'gemini-2.5-flash',
+    model: userSettings.ai?.model || 'gemini-2.0-flash',
     encryptedKey: '',
     status: 'not_connected',
     dataPermissions: userSettings.ai?.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true }
@@ -2215,10 +2215,10 @@ app.post('/api/ai/chat', async (req, res) => {
 
   const permissions = aiConfig.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true };
   const provider = clientProvider || aiConfig.provider || 'gemini';
-  let model = clientModel || aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.5-flash');
+  let model = clientModel || aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.0-flash');
   // Clean up any audio/tts/non-chat model names
   if (model.includes('tts') || model.includes('audio') || model.includes('image') || model.includes('embedding') || model.includes('aqa')) {
-    model = 'gemini-2.5-flash';
+    model = 'gemini-2.0-flash';
   }
 
   const currentUser = (data.users || []).find(u => u.id === userId) || req.user || { name: 'User' };
@@ -2500,18 +2500,21 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
       }
 
       // Candidate models:
-      // 1. User's explicitly chosen model first
-      // 2. High-availability standard production models (Gemini 2.5 Flash, 2.0 Flash, 1.5 Flash)
-      // 3. Fallback lite models (2.5 Flash-Lite, 2.0 Flash-Lite) for rate-limit tolerance
-      // 4. Any other active models from the user's Google Cloud project
-      const requestedModel = (model || '').trim();
+      // 1. User's explicitly chosen model first (if not deprecated/empty)
+      // 2. High-availability standard production models (Gemini 2.0 Flash guaranteed free tier quota 15 RPM / 1500 RPD)
+      // 3. Fallback reliable models (Gemini 1.5 Flash, 2.0 Flash-Lite, 2.5 Flash, 1.5 Pro)
+      // 4. Any other active models reported by the user's project
+      let requestedModel = (model || '').trim();
+      if (requestedModel === 'gemini-3.8-flash' || requestedModel.includes('tts') || requestedModel.includes('audio')) {
+        requestedModel = 'gemini-2.0-flash';
+      }
+
       const standardFlashModels = [
-        'gemini-2.5-flash',
         'gemini-2.0-flash',
         'gemini-1.5-flash',
-        'gemini-2.5-flash-lite',
         'gemini-2.0-flash-lite',
-        'gemini-3.8-flash',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
         'gemini-1.5-pro'
       ];
 
@@ -2521,7 +2524,7 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
           ...standardFlashModels,
           ...activeGeminiModels
         ])
-      ].filter(m => m && !m.includes('tts') && !m.includes('audio') && !m.includes('image') && !m.includes('embedding') && !m.includes('aqa'));
+      ].filter(m => m && !m.includes('tts') && !m.includes('audio') && !m.includes('image') && !m.includes('embedding') && !m.includes('aqa') && m !== 'gemini-3.8-flash');
 
       let lastGeminiError = '';
       let isRateLimited = false;
@@ -2549,12 +2552,13 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
         }
       }
 
+      // Safe, standard Google AI Studio safety settings compatible with free tier
+      // Note: BLOCK_NONE is rejected with 400 on free tier API keys, and CIVIC_INTEGRITY is deprecated
       const standardSafetySettings = [
-        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' }
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' }
       ];
 
       const standardGenConfig = {
@@ -2591,27 +2595,37 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
         }).catch(err => ({ ok: false, status: 504, errorText: err.message }));
         clearTimeout(timeoutId);
 
-        // If tools is not supported or returns 400, retry that same model immediately without tools
-        if (!aiRes.ok && (aiRes.status === 400 || aiRes.status === 404) && geminiPayload.tools) {
+        // Fallback retry: If tools or safety settings are rejected (400 or 404),
+        // retry immediately with a clean minimal payload (contents + genConfig only)
+        if (!aiRes.ok && (aiRes.status === 400 || aiRes.status === 404)) {
           const retryController = new AbortController();
           const retryTimeoutId = setTimeout(() => retryController.abort(), 20000);
-          const noToolsPayload = { ...geminiPayload };
-          delete noToolsPayload.tools;
+          const cleanMinimalPayload = {
+            contents: [{ role: 'user', parts }],
+            generationConfig: standardGenConfig
+          };
 
-          aiRes = await fetch(geminiUrl, {
+          const retryRes = await fetch(geminiUrl, {
             method: 'POST',
             signal: retryController.signal,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(noToolsPayload)
+            body: JSON.stringify(cleanMinimalPayload)
           }).catch(err => ({ ok: false, status: 504, errorText: err.message }));
           clearTimeout(retryTimeoutId);
+
+          if (retryRes && retryRes.ok) {
+            aiRes = retryRes;
+          }
         }
 
         if (aiRes && aiRes.ok) {
           const aiJson = await aiRes.json().catch(() => null);
           const candidate = aiJson?.candidates?.[0];
           reply = candidate?.content?.parts?.map(p => p.text || '').join('\n').trim();
-          if (reply) break;
+          if (reply) {
+            console.log(`[Gemini Advisor] Successfully generated response with model: ${curModel}`);
+            break;
+          }
 
           // If safety filtered or no text returned
           if (candidate?.finishReason === 'SAFETY') {
@@ -2625,15 +2639,20 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
             errMsg = errJson?.error?.message || `HTTP ${aiRes.status}`;
           }
           lastGeminiError = errMsg || `HTTP ${aiRes.status}`;
+          console.warn(`[Gemini Advisor] Model ${curModel} error (${aiRes.status}): ${lastGeminiError}`);
 
-          // Detect rate limits (429) and short backoff
-          if (aiRes.status === 429 || errMsg?.includes('quota') || errMsg?.includes('RESOURCE_EXHAUSTED')) {
-            isRateLimited = true;
-            await new Promise(r => setTimeout(r, 1000));
+          // Detect true active rate limits (429) vs zero-quota model limit
+          const isZeroQuota = errMsg?.includes("limit '0'") || errMsg?.includes('quota_limit: 0');
+          if (!isZeroQuota && (aiRes.status === 429 || errMsg?.includes('RESOURCE_EXHAUSTED'))) {
+            // Only flag rate-limited if a guaranteed free-tier model (2.0-flash or 1.5-flash) was throttled
+            if (curModel === 'gemini-2.0-flash' || curModel === 'gemini-1.5-flash' || curModel === requestedModel) {
+              isRateLimited = true;
+            }
+            await new Promise(r => setTimeout(r, 600));
             continue;
           }
 
-          // If 404 (model unavailable), 503/500 (overloaded), or 400, continue to next fallback model
+          // If 404 (model unavailable), 503/500 (overloaded), or zero-quota, continue to next fallback model
           continue;
         }
       }

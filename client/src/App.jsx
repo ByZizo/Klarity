@@ -911,9 +911,9 @@ function KlarityApp() {
 
   const [settingsAiProvider, setSettingsAiProvider] = useState(() => getInitialUserStorage('ai_provider', 'gemini'));
   const [settingsAiModel, setSettingsAiModel] = useState(() => {
-    const saved = getInitialUserStorage('ai_model', 'gemini-2.5-flash');
-    if (saved && !saved.includes('tts') && !saved.includes('audio')) return saved;
-    return 'gemini-2.5-flash';
+    const saved = getInitialUserStorage('ai_model', 'gemini-2.0-flash');
+    if (saved && !saved.includes('tts') && !saved.includes('audio') && saved !== 'gemini-3.8-flash') return saved;
+    return 'gemini-2.0-flash';
   });
   const [settingsAiApiKey, setSettingsAiApiKey] = useState('');
   const [settingsAiMaskedKey, setSettingsAiMaskedKey] = useState(() => getInitialUserStorage('ai_masked_key', ''));
@@ -2145,8 +2145,8 @@ function KlarityApp() {
           const storedStatus = localStorage.getItem(`klarity_${uid}_ai_status`) || localStorage.getItem('klarity_ai_status') || localStorage.getItem('klarity_u-ziyad_ai_status');
 
           let prov = json.ai.provider || storedProv || 'gemini';
-          let mod = json.ai.model || storedMod || 'gemini-2.5-flash';
-          if (mod.includes('tts') || mod.includes('audio')) mod = 'gemini-2.5-flash';
+          let mod = json.ai.model || storedMod || 'gemini-2.0-flash';
+          if (mod.includes('tts') || mod.includes('audio') || mod === 'gemini-3.8-flash') mod = 'gemini-2.0-flash';
 
           const finalMasked = json.ai.maskedKey || storedMasked || '';
           const finalStatus = (json.ai.status === 'connected' || Boolean(json.ai.maskedKey) || storedStatus === 'connected' || Boolean(storedMasked)) ? 'connected' : 'not_connected';
@@ -2197,7 +2197,7 @@ function KlarityApp() {
     setSettingsAiProvider(newProvider);
     if (newProvider === 'anthropic') setSettingsAiModel('claude-3-7-sonnet-20250219');
     else if (newProvider === 'openai') setSettingsAiModel('gpt-4o');
-    else if (newProvider === 'gemini') setSettingsAiModel('gemini-2.5-flash');
+    else if (newProvider === 'gemini') setSettingsAiModel('gemini-2.0-flash');
   };
 
   const handleSaveProfile = async () => {
@@ -3324,11 +3324,11 @@ function KlarityApp() {
     try {
       const uid = currentUser?.id || 'default';
       const cachedProvider = settingsAiProvider || localStorage.getItem(`klarity_${uid}_ai_provider`) || 'gemini';
-      let cachedModel = settingsAiModel || localStorage.getItem(`klarity_${uid}_ai_model`) || 'gemini-2.5-flash';
-      if (cachedModel.includes('tts') || cachedModel.includes('audio')) {
-        cachedModel = 'gemini-2.5-flash';
+      let cachedModel = settingsAiModel || localStorage.getItem(`klarity_${uid}_ai_model`) || 'gemini-2.0-flash';
+      if (cachedModel.includes('tts') || cachedModel.includes('audio') || cachedModel === 'gemini-3.8-flash') {
+        cachedModel = 'gemini-2.0-flash';
         try {
-          localStorage.setItem(`klarity_${uid}_ai_model`, 'gemini-2.5-flash');
+          localStorage.setItem(`klarity_${uid}_ai_model`, 'gemini-2.0-flash');
         } catch {}
       }
 
@@ -8671,15 +8671,15 @@ function KlarityApp() {
                               list={settingsAiProvider === 'gemini' ? 'gemini-model-suggestions' : undefined}
                               value={settingsAiModel}
                               onChange={e => setSettingsAiModel(e.target.value)}
-                              placeholder={settingsAiProvider === 'gemini' ? 'e.g. gemini-2.5-flash' : 'e.g. claude-3-7-sonnet-20250219'}
+                              placeholder={settingsAiProvider === 'gemini' ? 'e.g. gemini-2.0-flash' : 'e.g. claude-3-7-sonnet-20250219'}
                               className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
                             />
                             {settingsAiProvider === 'gemini' && (
                               <datalist id="gemini-model-suggestions">
-                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recommended)</option>
-                                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (High Quota)</option>
+                                <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recommended - 15 RPM Free Tier)</option>
+                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Ultra Reliable)</option>
+                                <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite (High Speed)</option>
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                                 <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
                               </datalist>
                             )}
