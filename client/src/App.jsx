@@ -2662,18 +2662,66 @@ function KlarityApp() {
           return newData;
         });
         setSettingsPlaidStatus('connected');
+        setBankTab('connected');
         setNotificationToast(`Connected ${resData.accounts.length} account(s) from ${metadata?.institution?.name || 'bank'}!`);
       } else if (!res.ok) {
         setPlaidError(resData.error || 'Failed to exchange Plaid token.');
       }
       setLinkToken(null);
       await fetchData();
+      await fetchSettings();
     } catch (err) {
       console.error('Plaid link exchange error:', err);
       setPlaidError('Could not complete bank linking: ' + err.message);
     } finally {
       setIsConnectingPlaid(false);
       setTimeout(() => setNotificationToast(''), 5000);
+    }
+  };
+
+  // Quick Connect Plaid Sandbox Test Accounts
+  const handleConnectSandboxTestBank = async () => {
+    setIsConnectingPlaid(true);
+    try {
+      const res = await fetch('/api/plaid/sandbox-test-connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setData(prev => {
+          const existing = prev.accounts || [];
+          const updatedAccounts = existing.filter(a => !json.accounts.some(na => na.id === a.id)).concat(json.accounts);
+          const newData = {
+            ...prev,
+            accounts: updatedAccounts,
+            metrics: {
+              ...prev.metrics,
+              totalCreditDebt: updatedAccounts.filter(a => a.type === 'credit').reduce((s, a) => s + Number(a.balance || 0), 0),
+              totalChecking: updatedAccounts.filter(a => a.type === 'depository').reduce((s, a) => s + Number(a.balance || 0), 0)
+            }
+          };
+          try {
+            localStorage.setItem('klarity_finance_data', JSON.stringify(newData));
+            localStorage.setItem('klarity_accounts', JSON.stringify(updatedAccounts));
+            localStorage.setItem('klarity_plaid_status', 'connected');
+          } catch (e) {}
+          return newData;
+        });
+        setSettingsPlaidStatus('connected');
+        setBankTab('connected');
+        setNotificationToast('Connected 4 sandbox accounts from First Platypus Bank!');
+        await fetchData();
+        await fetchSettings();
+      } else {
+        setPlaidError(json.error || 'Failed to connect sandbox accounts');
+      }
+    } catch (err) {
+      console.error('Sandbox connection error:', err);
+      setPlaidError('Could not connect sandbox bank: ' + err.message);
+    } finally {
+      setIsConnectingPlaid(false);
+      setTimeout(() => setNotificationToast(''), 4000);
     }
   };
 
@@ -8767,7 +8815,10 @@ function KlarityApp() {
 
                             const institutionsMap = {};
                             allBankAccounts.forEach(acc => {
-                              const inst = acc.institution || (acc.name && acc.name.toLowerCase().includes('chase') ? 'Chase' : acc.name && acc.name.toLowerCase().includes('capital one') ? 'Capital One' : 'Connected Bank');
+                              const isPlaidSandbox = (acc.name && acc.name.toLowerCase().includes('plaid')) ||
+                                                     (acc.officialName && acc.officialName.toLowerCase().includes('plaid')) ||
+                                                     (acc.institution && acc.institution.toLowerCase().includes('platypus'));
+                              const inst = acc.institution || (isPlaidSandbox ? 'First Platypus Bank (Plaid Sandbox)' : (acc.name && acc.name.toLowerCase().includes('chase') ? 'Chase' : acc.name && acc.name.toLowerCase().includes('capital one') ? 'Capital One' : 'Connected Bank'));
                               if (!institutionsMap[inst]) {
                                 institutionsMap[inst] = [];
                               }
@@ -8793,14 +8844,23 @@ function KlarityApp() {
                                   <p className="text-xs text-slate-500 mt-1 max-w-sm">
                                     Link your bank via Plaid or add cards manually to start tracking balances and cash flow in real time.
                                   </p>
-                                  <div className="flex items-center gap-2 mt-4">
+                                  <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
                                     <button
                                       type="button"
                                       onClick={() => setBankTab('connect')}
                                       className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
                                     >
                                       <Plus className="w-3.5 h-3.5" />
-                                      <span>Connect a bank</span>
+                                      <span>Connect live bank (Plaid)</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleConnectSandboxTestBank}
+                                      className="px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                                      title="Load 4 sandbox test accounts from First Platypus Bank"
+                                    >
+                                      <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                                      <span>Load Plaid Sandbox Accounts</span>
                                     </button>
                                     <button
                                       type="button"
@@ -8940,6 +9000,30 @@ function KlarityApp() {
                             >
                               <span>Add bank with Plaid</span>
                               <ExternalLink className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Plaid Sandbox Quick Test Banner */}
+                          <div className="p-4 rounded-xl bg-blue-50/80 border border-blue-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-lg bg-[#18457c] text-white flex items-center justify-center shrink-0 shadow-2xs">
+                                <Sparkles className="w-4 h-4 text-blue-200" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs font-bold text-slate-900">Plaid Sandbox Test Mode</p>
+                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-100 text-[#18457c]">Testing</span>
+                                </div>
+                                <p className="text-[11px] text-slate-500">Load test checking, savings, CD, and card accounts from First Platypus Bank instantly.</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleConnectSandboxTestBank}
+                              className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                            >
+                              <Building2 className="w-3.5 h-3.5" />
+                              <span>Connect Sandbox Bank</span>
                             </button>
                           </div>
 
