@@ -7,7 +7,35 @@ const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
+// Configurable CORS Allowlist
+const defaultAllowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5000',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5000',
+  'http://127.0.0.1:3000'
+];
+const allowedOriginsList = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  : defaultAllowedOrigins;
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const norm = origin.toLowerCase().trim();
+    if (
+      allowedOriginsList.includes(norm) ||
+      process.env.KLARITY_DESKTOP_APP === 'true' ||
+      norm.startsWith('http://localhost:') ||
+      norm.startsWith('http://127.0.0.1:')
+    ) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS blocked: Origin ${origin} not permitted`));
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -52,34 +80,69 @@ const DATA_FILE = process.env.KLARITY_USER_DATA_DIR
   : (process.env.VERCEL ? '/tmp/klarity_data.json' : path.join(__dirname, '../server/data.json'));
 
 // Encryption utilities for storing API keys & secrets securely server-side
-const ENCRYPTION_SECRET = process.env.SETTINGS_ENCRYPTION_KEY || 'klarity-aes-secure-encryption-key-32-chars!!';
-const IV_LENGTH = 16;
+let ENCRYPTION_SECRET = process.env.SETTINGS_ENCRYPTION_KEY;
+if (!ENCRYPTION_SECRET) {
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+    console.error('FATAL: SETTINGS_ENCRYPTION_KEY environment variable is missing in production. Refusing to start.');
+    process.exit(1);
+  }
+  ENCRYPTION_SECRET = 'klarity-dev-only-secret-do-not-use-in-prod-32bytes';
+}
 
 function encrypt(text) {
   if (!text) return '';
-  const iv = crypto.randomBytes(IV_LENGTH);
+  const iv = crypto.randomBytes(12);
   const key = crypto.createHash('sha256').update(String(ENCRYPTION_SECRET)).digest();
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-  let encrypted = cipher.update(text);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  let encrypted = cipher.update(String(text), 'utf8');
   encrypted = Buffer.concat([encrypted, cipher.final()]);
-  return iv.toString('hex') + ':' + encrypted.toString('hex');
+  const authTag = cipher.getAuthTag();
+  return `GCM:${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
 }
 
 function decrypt(text) {
-  if (!text || !text.includes(':')) return '';
-  try {
-    const textParts = text.split(':');
-    const iv = Buffer.from(textParts.shift(), 'hex');
-    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-    const key = crypto.createHash('sha256').update(String(ENCRYPTION_SECRET)).digest();
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-  } catch (err) {
-    console.error('Decryption error:', err.message);
-    return '';
+  if (!text || typeof text !== 'string') return '';
+  const key = crypto.createHash('sha256').update(String(ENCRYPTION_SECRET)).digest();
+
+  // 1. AES-256-GCM format
+  if (text.startsWith('GCM:')) {
+    try {
+      const parts = text.split(':');
+      if (parts.length !== 4) return '';
+      const iv = Buffer.from(parts[1], 'hex');
+      const authTag = Buffer.from(parts[2], 'hex');
+      const encryptedText = Buffer.from(parts[3], 'hex');
+
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(authTag);
+      let decrypted = decipher.update(encryptedText);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      return decrypted.toString('utf8');
+    } catch (err) {
+      console.error('AES-GCM Decryption error:', err.message);
+      return '';
+    }
   }
+
+  // 2. Backward compatibility: Legacy AES-256-CBC format
+  if (text.includes(':')) {
+    try {
+      const textParts = text.split(':');
+      if (textParts.length === 2) {
+        const iv = Buffer.from(textParts[0], 'hex');
+        const encryptedText = Buffer.from(textParts[1], 'hex');
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        let decrypted = decipher.update(encryptedText);
+        decrypted = Buffer.concat([decrypted, decipher.final()]);
+        return decrypted.toString('utf8');
+      }
+    } catch (err) {
+      console.error('Legacy AES-CBC Decryption error:', err.message);
+      return '';
+    }
+  }
+
+  return '';
 }
 
 function maskSecret(val) {
@@ -484,6 +547,124 @@ function sanitizeUser(u) {
   return safeUser;
 }
 
+// ============================================================================
+// PER-USER HASHED SESSION TOKEN AUTHENTICATION & SECURITY MIDDLEWARE
+// ============================================================================
+const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days (1 week)
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+function createUserSession(data, userId) {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = Date.now() + SESSION_DURATION_MS;
+
+  data.sessions = data.sessions || [];
+  // Prune expired sessions
+  data.sessions = data.sessions.filter(s => s.expiresAt > Date.now());
+
+  data.sessions.push({
+    tokenHash,
+    userId,
+    createdAt: Date.now(),
+    expiresAt
+  });
+
+  // Remove single global activeSession
+  delete data.activeSession;
+
+  writeData(data);
+
+  return {
+    token: rawToken,
+    expiresAt
+  };
+}
+
+// Global authentication gate for /api routes
+function requireAuth(req, res, next) {
+  const publicPaths = [
+    '/api/auth/register',
+    '/api/auth/login',
+    '/api/auth/google',
+    '/api/auth/google/callback',
+    '/api/auth/google/check-session',
+    '/api/auth/session'
+  ];
+
+  const fullPath = (req.originalUrl || req.url || '').split('?')[0];
+  const reqPath = (req.path || '').split('?')[0];
+  if (
+    publicPaths.some(p => fullPath === p || fullPath.endsWith(p) || reqPath === p || ('/api' + (reqPath.startsWith('/') ? reqPath : '/' + reqPath)) === p)
+  ) {
+    return next();
+  }
+
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Missing or invalid Authorization header' });
+  }
+
+  const token = authHeader.slice(7).trim();
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized: Session token required' });
+  }
+
+  const tokenHash = hashToken(token);
+  const data = readData();
+  const now = Date.now();
+  data.sessions = (data.sessions || []).filter(s => s.expiresAt > now);
+
+  const session = data.sessions.find(s => s.tokenHash === tokenHash);
+  if (!session) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid or expired session token' });
+  }
+
+  req.userId = session.userId;
+  req.user = (data.users || []).find(u => u.id === session.userId);
+  next();
+}
+
+app.use('/api', requireAuth);
+
+app.get('/api/auth/session', (req, res) => {
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.json({ authenticated: false, session: null });
+  }
+  const token = authHeader.slice(7).trim();
+  const tokenHash = hashToken(token);
+  const data = readData();
+  const now = Date.now();
+  const session = (data.sessions || []).find(s => s.tokenHash === tokenHash && s.expiresAt > now);
+  if (!session) {
+    return res.json({ authenticated: false, session: null });
+  }
+  const user = (data.users || []).find(u => u.id === session.userId);
+  res.json({
+    authenticated: true,
+    session: {
+      token,
+      expiresAt: session.expiresAt,
+      user: sanitizeUser(user)
+    }
+  });
+});
+
+app.delete('/api/auth/session', (req, res) => {
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    const tokenHash = hashToken(token);
+    const data = readData();
+    data.sessions = (data.sessions || []).filter(s => s.tokenHash !== tokenHash);
+    writeData(data);
+  }
+  res.json({ ok: true });
+});
+
 // 1. Authentication Routes
 app.post('/api/auth/register', (req, res) => {
   const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'local';
@@ -563,7 +744,9 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   authRateMap.delete(clientIp);
-  res.json({ user: sanitizeUser(user) });
+  const safeUser = sanitizeUser(user);
+  const session = createUserSession(data, safeUser.id);
+  res.json({ user: safeUser, session });
 });
 
 
@@ -643,10 +826,11 @@ app.get('/api/auth/google/callback', async (req, res) => {
     }
 
     const safeUser = sanitizeUser(user);
+    const session = createUserSession(data, safeUser.id);
 
     // Save for desktop app poller
     if (state) {
-      global.completedDesktopAuths.set(state, safeUser);
+      global.completedDesktopAuths.set(state, { user: safeUser, session });
     }
 
     res.send(`
@@ -687,9 +871,9 @@ app.get('/api/auth/google/check-session', (req, res) => {
   const { sid } = req.query;
   if (!sid) return res.status(400).json({ error: 'Missing sid' });
   if (global.completedDesktopAuths && global.completedDesktopAuths.has(sid)) {
-    const user = global.completedDesktopAuths.get(sid);
+    const authItem = global.completedDesktopAuths.get(sid);
     global.completedDesktopAuths.delete(sid);
-    return res.json({ ok: true, user });
+    return res.json({ ok: true, user: authItem.user, session: authItem.session });
   }
   return res.json({ ok: false, pending: true });
 });
@@ -752,7 +936,7 @@ app.post('/api/auth/google', async (req, res) => {
 
 // 2. Settings Endpoints (Encrypted Server Storage per User)
 app.get('/api/settings', (req, res) => {
-  const userId = req.query.userId || req.headers['x-user-id'] || 'default';
+  const userId = req.userId;
   const data = readData();
   const user = (data.users || []).find(u => u.id === userId) || data.users?.[0] || { name: 'Ziyad Elmahi', email: 'byzizo@protonmail.com' };
   const userSettings = getUserSettings(data, userId);
@@ -794,19 +978,18 @@ app.post('/api/settings/profile', (req, res) => {
   const { name } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
   const data = readData();
-  if (!data.users || data.users.length === 0) {
-    data.users = [{ id: 'u-ziyad', name: name.trim(), email: 'byzizo@protonmail.com' }];
-  } else {
-    data.users[0].name = name.trim();
+  const user = (data.users || []).find(u => u.id === req.userId);
+  if (user) {
+    user.name = name.trim();
+    writeData(data);
   }
-  writeData(data);
   res.json({ success: true, name: name.trim() });
 });
 
 // Test and save AI API key server-side (User-scoped)
 app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
-  const { provider = 'anthropic', model, apiKey, dataPermissions, userId } = req.body;
-  const uid = userId || req.headers['x-user-id'] || 'default';
+  const { provider = 'anthropic', model, apiKey, dataPermissions } = req.body;
+  const uid = req.userId;
   if (!apiKey || !apiKey.trim()) {
     return res.status(400).json({ success: false, error: 'API key is required' });
   }
@@ -843,22 +1026,19 @@ app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${rawApiKey || process.env.AI_GATEWAY_API_KEY}`
+          'Authorization': `Bearer ${keyToTest}`
         },
         body: JSON.stringify({
-          model: model || 'openai/gpt-4o',
-          messages: [
-            { role: 'system', content: systemContext },
-            { role: 'user', content: fullUserPrompt }
-          ]
+          model: model || 'openai/gpt-4o-mini',
+          max_tokens: 1,
+          messages: [{ role: 'user', content: 'hi' }]
         })
       });
-      if (gwRes.ok) {
-        const gwJson = await gwRes.json();
-        reply = gwJson.choices?.[0]?.message?.content;
+      if (gwRes.ok || gwRes.status === 200) {
+        isValid = true;
       } else {
         const errJson = await gwRes.json().catch(() => ({}));
-        reply = `Vercel AI Gateway error: ${errJson?.error?.message || gwRes.statusText}`;
+        testError = errJson?.error?.message || `Vercel AI Gateway error: HTTP ${gwRes.status}`;
       }
     } else if (provider === 'openai') {
       const testRes = await fetch('https://api.openai.com/v1/models', {
@@ -916,7 +1096,7 @@ app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
 });
 
 app.post('/api/settings/ai-key/remove', (req, res) => {
-  const uid = req.body?.userId || req.headers['x-user-id'] || 'default';
+  const uid = req.userId;
   const data = readData();
   const userSettings = getUserSettings(data, uid);
   userSettings.ai = {
@@ -931,8 +1111,8 @@ app.post('/api/settings/ai-key/remove', (req, res) => {
 });
 
 app.post('/api/settings/ai-permissions', (req, res) => {
-  const { dataPermissions, userId } = req.body;
-  const uid = userId || req.headers['x-user-id'] || 'default';
+  const { dataPermissions } = req.body;
+  const uid = req.userId;
   const data = readData();
   const userSettings = getUserSettings(data, uid);
   if (!userSettings.ai) userSettings.ai = {};
@@ -942,8 +1122,8 @@ app.post('/api/settings/ai-permissions', (req, res) => {
 });
 
 app.post('/api/settings/plaid', (req, res) => {
-  const { clientId, secret, userId } = req.body;
-  const uid = userId || req.headers['x-user-id'] || 'default';
+  const { clientId, secret } = req.body;
+  const uid = req.userId;
   const data = readData();
   const userSettings = getUserSettings(data, uid);
   const currentPlaid = userSettings.plaid || {};
@@ -965,7 +1145,8 @@ app.post('/api/settings/plaid', (req, res) => {
 
 // 3. Plaid Link & Webhook Endpoints (User-scoped)
 app.post('/api/plaid/create-link-token', async (req, res) => {
-  const { userId, clientPlaidId, clientPlaidSecret } = req.body;
+  const userId = req.userId;
+  const { clientPlaidId, clientPlaidSecret } = req.body;
   const plaidClient = getPlaidClient(clientPlaidId, clientPlaidSecret, userId);
 
   if (!plaidClient) {
@@ -978,7 +1159,7 @@ app.post('/api/plaid/create-link-token', async (req, res) => {
 
   try {
     const response = await plaidClient.linkTokenCreate({
-      user: { client_user_id: userId || 'user-1' },
+      user: { client_user_id: userId },
       client_name: 'Klarity',
       products: ['transactions'],
       country_codes: ['US'],
@@ -992,7 +1173,8 @@ app.post('/api/plaid/create-link-token', async (req, res) => {
 });
 
 app.post('/api/plaid/exchange-public-token', async (req, res) => {
-  const { public_token, metadata, userId, clientPlaidId, clientPlaidSecret } = req.body;
+  const userId = req.userId;
+  const { public_token, metadata, clientPlaidId, clientPlaidSecret } = req.body;
   const plaidClient = getPlaidClient(clientPlaidId, clientPlaidSecret, userId);
 
   if (!plaidClient) {
@@ -1094,7 +1276,7 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
 
 // Plaid Items Management (List & Disconnect Bank)
 app.get('/api/plaid/items', (req, res) => {
-  const userId = req.query.userId || req.headers['x-user-id'];
+  const userId = req.userId;
   const data = readData();
   const userItems = (data.plaidItems || []).filter(item => !userId || !item.userId || item.userId === userId);
   const items = userItems.map(item => ({
@@ -1123,7 +1305,7 @@ app.delete('/api/plaid/items/:itemId', (req, res) => {
 // ==================== BUDGETS CRUD ====================
 app.get('/api/budgets', (req, res) => {
   const data = readData();
-  res.json({ budgets: data.budgets || [] });
+  res.json({ budgets: (data.budgets || []).filter(b => b.ownerId === req.userId || b.userId === req.userId) });
 });
 
 app.post('/api/budgets', (req, res) => {
@@ -1132,7 +1314,7 @@ app.post('/api/budgets', (req, res) => {
   const data = readData();
   data.budgets = data.budgets || [];
   const limitNum = parseFloat(limit);
-  const existingIdx = data.budgets.findIndex(b => b.id === id || (b.category || '').toLowerCase() === category.toLowerCase());
+  const existingIdx = data.budgets.findIndex(b => (b.id === id || (b.category || '').toLowerCase() === category.toLowerCase()) && (b.ownerId === req.userId || b.userId === req.userId));
   let item;
   if (existingIdx >= 0) {
     data.budgets[existingIdx] = {
@@ -1143,91 +1325,8 @@ app.post('/api/budgets', (req, res) => {
     item = data.budgets[existingIdx];
   } else {
     item = {
-      id: id || `b-${Date.now()}`,
-      category,
-      limit: limitNum,
-      lastMonthSpent: Number(lastMonthSpent) || Math.round(limitNum * 0.8)
-    };
-    data.budgets.push(item);
-  }
-  writeData(data);
-  res.json({ success: true, budget: item, budgets: data.budgets });
-});
-
-app.delete('/api/budgets/:id', (req, res) => {
-  const data = readData();
-  data.budgets = (data.budgets || []).filter(b => b.id !== req.params.id);
-  writeData(data);
-  res.json({ success: true, budgets: data.budgets });
-});
-
-// ==================== SAVINGS GOALS CRUD ====================
-app.get('/api/savings-goals', (req, res) => {
-  const data = readData();
-  res.json({ goals: data.savingsGoals || [] });
-});
-
-app.post('/api/savings-goals', (req, res) => {
-  const { id, name, targetAmount, currentAmount, monthlyContribution } = req.body;
-  if (!name || targetAmount == null) return res.status(400).json({ error: 'Missing goal name or target' });
-  const data = readData();
-  data.savingsGoals = data.savingsGoals || [];
-  const existingIdx = data.savingsGoals.findIndex(g => g.id === id || (g.name || '').toLowerCase() === name.toLowerCase());
-  let item;
-  if (existingIdx >= 0) {
-    data.savingsGoals[existingIdx] = {
-      ...data.savingsGoals[existingIdx],
-      name,
-      targetAmount: Number(targetAmount),
-      currentAmount: currentAmount !== undefined ? Number(currentAmount) : data.savingsGoals[existingIdx].currentAmount,
-      monthlyContribution: Number(monthlyContribution) || 200
-    };
-    item = data.savingsGoals[existingIdx];
-  } else {
-    item = {
-      id: id || `goal-${Date.now()}`,
-      name,
-      targetAmount: Number(targetAmount),
-      currentAmount: Number(currentAmount || 0),
-      monthlyContribution: Number(monthlyContribution || 200)
-    };
-    data.savingsGoals.push(item);
-  }
-  writeData(data);
-  res.json({ success: true, goal: item, savingsGoals: data.savingsGoals });
-});
-
-app.delete('/api/savings-goals/:id', (req, res) => {
-  const data = readData();
-  data.savingsGoals = (data.savingsGoals || []).filter(g => g.id !== req.params.id);
-  writeData(data);
-  res.json({ success: true, savingsGoals: data.savingsGoals });
-});
-
-// ==================== MANUAL ASSETS CRUD ====================
-app.get('/api/manual-assets', (req, res) => {
-  const data = readData();
-  res.json({ manualAssets: data.manualAssets || [] });
-});
-
-app.post('/api/manual-assets', (req, res) => {
-  const { id, name, type, balance } = req.body;
-  if (!name) return res.status(400).json({ error: 'Missing asset name' });
-  const data = readData();
-  data.manualAssets = data.manualAssets || [];
-  const existingIdx = data.manualAssets.findIndex(a => a.id === id);
-  let item;
-  if (existingIdx >= 0) {
-    data.manualAssets[existingIdx] = {
-      ...data.manualAssets[existingIdx],
-      name,
-      type: type || 'savings',
-      balance: Number(balance || 0)
-    };
-    item = data.manualAssets[existingIdx];
-  } else {
-    item = {
       id: id || `ma-${Date.now()}`,
+      ownerId: req.userId,
       name,
       type: type || 'savings',
       balance: Number(balance || 0)
@@ -1240,22 +1339,22 @@ app.post('/api/manual-assets', (req, res) => {
 
 app.delete('/api/manual-assets/:id', (req, res) => {
   const data = readData();
-  data.manualAssets = (data.manualAssets || []).filter(a => a.id !== req.params.id);
+  data.manualAssets = (data.manualAssets || []).filter(a => a.id !== req.params.id || (a.ownerId && a.ownerId !== req.userId));
   writeData(data);
   res.json({ success: true, manualAssets: data.manualAssets });
 });
 
 // 4. Financial Data Overview
 app.get('/api/data', (req, res) => {
-  const { userId, household } = req.query;
+  const userId = req.userId;
   const data = readData();
 
-  const userAccounts = (data.accounts || []).filter(a => {
-    if (household === 'true') return true;
-    if (!userId) return true;
-    if (userId === 'u-ziyad') return a.ownerId === 'u-ziyad' || !a.ownerId;
-    return a.ownerId === userId;
-  });
+  const isUserOwner = (item) => {
+    if (!item) return false;
+    return item.ownerId === userId || item.userId === userId;
+  };
+
+  const userAccounts = (data.accounts || []).filter(isUserOwner);
   const userChecking = userAccounts.filter(a => a.type === 'depository');
   const userCards = userAccounts.filter(a => a.type === 'credit');
 
@@ -1263,20 +1362,27 @@ app.get('/api/data', (req, res) => {
   const totalCreditDebt = userCards.reduce((sum, a) => sum + Number(a.balance || 0), 0);
   const totalCreditLimit = userCards.reduce((sum, a) => sum + Number(a.limit || 0), 0);
 
-  const activeBills = (data.bills || []).filter(b => b.status !== 'archived');
+  const activeBills = (data.bills || []).filter(b => isUserOwner(b) && b.status !== 'archived');
   const totalMonthlyBills = activeBills.reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0);
-  const subscriptions = data.subscriptions || [];
-  const totalSubscriptions = subscriptions.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+  const userSubscriptions = (data.subscriptions || []).filter(isUserOwner);
+  const totalSubscriptions = userSubscriptions.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+
+  const userTransactions = (data.transactions || []).filter(isUserOwner).slice(0, 50);
+  const userBudgets = (data.budgets || []).filter(isUserOwner);
+  const userSavingsGoals = (data.savingsGoals || []).filter(isUserOwner);
+  const userManualAssets = (data.manualAssets || []).filter(isUserOwner);
+
+  const currentUser = (data.users || []).find(u => u.id === userId);
 
   res.json({
-    users: data.users || [],
+    users: currentUser ? [sanitizeUser(currentUser)] : [],
     accounts: userAccounts,
     bills: activeBills,
-    subscriptions,
-    transactions: (data.transactions || []).slice(0, 50),
-    budgets: data.budgets || [],
-    savingsGoals: data.savingsGoals || [],
-    manualAssets: data.manualAssets || [],
+    subscriptions: userSubscriptions,
+    transactions: userTransactions,
+    budgets: userBudgets,
+    savingsGoals: userSavingsGoals,
+    manualAssets: userManualAssets,
     metrics: {
       totalChecking,
       totalCreditDebt,
@@ -1290,7 +1396,8 @@ app.get('/api/data', (req, res) => {
 
 // Batch sync accounts, bills, subscriptions, and transactions from client cache if server cold started
 app.post('/api/accounts/batch-sync', (req, res) => {
-  const { accounts, bills, subscriptions, transactions, budgets, savingsGoals, manualAssets, userId } = req.body;
+  const userId = req.userId;
+  const { accounts, bills, subscriptions, transactions, budgets, savingsGoals, manualAssets } = req.body;
   const data = readData();
   if (Array.isArray(budgets)) {
     data.budgets = budgets;
@@ -1307,7 +1414,7 @@ app.post('/api/accounts/batch-sync', (req, res) => {
       if (!data.accounts.some(a => a.id === acc.id)) {
         data.accounts.push({
           ...acc,
-          ownerId: acc.ownerId || userId || 'u-ziyad'
+          ownerId: req.userId
         });
       }
     }
@@ -1342,12 +1449,12 @@ app.post('/api/accounts/batch-sync', (req, res) => {
 
 // 5. Account Management
 app.post('/api/accounts', (req, res) => {
-  const { name, institution, type, balance, limit, apr, minPayment, mask, ownerId } = req.body;
+  const { name, institution, type, balance, limit, apr, minPayment, mask } = req.body;
   const data = readData();
 
   const newAccount = {
     id: `acc-${Date.now()}`,
-    ownerId: ownerId || 'u-ziyad',
+    ownerId: req.userId,
     name: name || 'Account',
     institution: institution || 'Manual Bank',
     type: type || 'credit',
@@ -1368,7 +1475,7 @@ app.post('/api/accounts', (req, res) => {
 app.delete('/api/accounts/:id', (req, res) => {
   const { id } = req.params;
   const data = readData();
-  data.accounts = (data.accounts || []).filter(a => a.id !== id);
+  data.accounts = (data.accounts || []).filter(a => a.id !== id || (a.ownerId && a.ownerId !== req.userId));
   writeData(data);
   res.json({ success: true });
 });
@@ -1379,182 +1486,8 @@ app.post('/api/bills', (req, res) => {
   const data = readData();
 
   const newBill = {
-    id: `bill-${Date.now()}`,
-    name: name || 'Utility Bill',
-    category: category || 'Utilities',
-    expectedAmount: parseFloat(expectedAmount || 0),
-    dueDay: parseInt(dueDay || 15),
-    nextDueDate: nextDueDate || calculateNextDueDate(parseInt(dueDay || 15)),
-    autopay: Boolean(autopay),
-    status: 'pending',
-    recurrence: recurrence || 'monthly',
-    account: account || 'Checking •••• 4821',
-    cardId: cardId || ''
-  };
-
-  data.bills = data.bills || [];
-  data.bills.push(newBill);
-  writeData(data);
-
-  res.json({ success: true, bill: newBill });
-});
-
-app.patch('/api/bills/:id', (req, res) => {
-  const { id } = req.params;
-  const data = readData();
-  const bill = (data.bills || []).find(b => b.id === id);
-  if (!bill) return res.status(404).json({ error: 'Bill not found' });
-  Object.assign(bill, req.body);
-  writeData(data);
-  res.json({ success: true, bill });
-});
-
-app.delete('/api/bills/:id', (req, res) => {
-  const { id } = req.params;
-  const data = readData();
-  data.bills = (data.bills || []).filter(b => b.id !== id);
-  writeData(data);
-  res.json({ success: true });
-});
-
-app.post('/api/bills/:id/pay', (req, res) => {
-  const { id } = req.params;
-  const data = readData();
-  const bill = (data.bills || []).find(b => b.id === id);
-  if (!bill) return res.status(404).json({ error: 'Bill not found' });
-
-  bill.status = 'paid';
-  bill.lastPaidDate = new Date().toISOString().split('T')[0];
-
-  // Add recorded transaction
-  data.transactions = data.transactions || [];
-  data.transactions.unshift({
-    id: `tx-bill-${Date.now()}`,
-    name: `Payment: ${bill.name}`,
-    category: bill.category || 'Utilities',
-    amount: bill.expectedAmount,
-    date: new Date().toISOString().split('T')[0],
-    account: bill.account || 'Checking •••• 4821',
-    cardId: bill.cardId || ''
-  });
-
-  writeData(data);
-  res.json({ success: true, bill });
-});
-
-// 7. Transactions Management
-app.post('/api/transactions', (req, res) => {
-  const { name, amount, category, date, account, cardId, notes } = req.body;
-  const data = readData();
-
-  const newTx = {
-    id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    name: name || 'Purchase',
-    amount: parseFloat(amount || 0),
-    category: category || categorizeTransaction(name),
-    date: date || new Date().toISOString().split('T')[0],
-    account: account || 'Everyday Rewards •••• 4417',
-    cardId: cardId || '',
-    notes: notes || ''
-  };
-
-  data.transactions = data.transactions || [];
-  data.transactions.unshift(newTx);
-  writeData(data);
-
-  res.json({ success: true, transaction: newTx });
-});
-
-app.patch('/api/transactions/:id', (req, res) => {
-  const { id } = req.params;
-  const data = readData();
-  const tx = (data.transactions || []).find(t => t.id === id);
-  if (!tx) return res.status(404).json({ error: 'Transaction not found' });
-  Object.assign(tx, req.body);
-  writeData(data);
-  res.json({ success: true, transaction: tx });
-});
-
-app.delete('/api/transactions/:id', (req, res) => {
-  const { id } = req.params;
-  const data = readData();
-  data.transactions = (data.transactions || []).filter(t => t.id !== id);
-  writeData(data);
-  res.json({ success: true });
-});
-
-// 8. Subscriptions Management
-app.get('/api/subscriptions', (req, res) => {
-  const data = readData();
-  res.json(data.subscriptions || []);
-});
-
-app.post('/api/subscriptions', (req, res) => {
-  const { name, amount, renewDay, renewalDate, billingCycle, category, account, cardId } = req.body;
-  const data = readData();
-
-  const newSub = {
-    id: `sub-${Date.now()}`,
-    name: name || 'Subscription',
-    amount: parseFloat(amount || 0),
-    renewDay: parseInt(renewDay || 1),
-    renewalDate: renewalDate || 'Renews monthly',
-    billingCycle: billingCycle || 'monthly',
-    category: category || 'Entertainment',
-    account: account || 'Everyday Rewards •••• 4417',
-    cardId: cardId || '',
-    active: true
-  };
-
-  data.subscriptions = data.subscriptions || [];
-  data.subscriptions.push(newSub);
-  writeData(data);
-
-  res.json({ success: true, subscription: newSub });
-});
-
-app.patch('/api/subscriptions/:id', (req, res) => {
-  const { id } = req.params;
-  const data = readData();
-  const sub = (data.subscriptions || []).find(s => s.id === id);
-  if (!sub) return res.status(404).json({ error: 'Subscription not found' });
-  Object.assign(sub, req.body);
-  writeData(data);
-  res.json({ success: true, subscription: sub });
-});
-
-app.delete('/api/subscriptions/:id', (req, res) => {
-  const { id } = req.params;
-  const data = readData();
-  data.subscriptions = (data.subscriptions || []).filter(s => s.id !== id);
-  writeData(data);
-  res.json({ success: true });
-});
-
-// 9. Document & Bill Scanning Endpoint
-app.post('/api/bills/scan', async (req, res) => {
-  const { text, fileData } = req.body;
-  const content = text || '';
-
-  // Extract utility bill patterns
-  let amount = 0;
-  let biller = 'Utility Provider';
-  let dueDate = calculateNextDueDate(15);
-
-  const amountMatch = content.match(/\$\s?([0-9]+(?:\.[0-9]{2})?)/);
-  if (amountMatch) amount = parseFloat(amountMatch[1]);
-
-  if (/pge|pacific gas|electric/i.test(content)) biller = 'PG&E Electric';
-  else if (/water|fresno/i.test(content)) biller = 'Fresno City Water';
-  else if (/rent|lease|mortgage/i.test(content)) biller = 'Apartment Rent';
-  else if (/at&t|verizon|t-mobile|comcast|xfinity/i.test(content)) biller = 'Telecom & Internet';
-
-  const dateMatch = content.match(/(?:due|by|date)[:\s]+([A-Za-z0-9\/\-\, ]{6,15})/i);
-  if (dateMatch) dueDate = dateMatch[1].trim();
-
-  const data = readData();
-  const newBill = {
     id: `bill-scanned-${Date.now()}`,
+    ownerId: req.userId,
     name: biller,
     category: 'Utilities',
     expectedAmount: amount || 85.00,
@@ -1676,9 +1609,9 @@ function shouldPerformWebSearch(message) {
 
 // 10. AI Advisor Chat with Navigation Capabilities & User Key Encryption
 app.post('/api/ai/chat', async (req, res) => {
+  const userId = req.userId;
   const {
     message,
-    userId,
     userMemory = [],
     clientApiKey,
     clientProvider,
@@ -1754,7 +1687,7 @@ app.post('/api/ai/chat', async (req, res) => {
     model = 'gemini-3.8-flash';
   }
 
-  const currentUser = (data.users || []).find(u => u.id === userId) || data.users?.[0] || { name: 'Ziyad' };
+  const currentUser = (data.users || []).find(u => u.id === userId) || req.user || { name: 'User' };
 
   // Data restricted by user toggles and account ownership
   const userAccounts = (data.accounts || []).filter(a => {

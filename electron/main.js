@@ -224,7 +224,7 @@ ipcMain.handle('klarity:google-sign-in', async () => {
               mainWindow.setAlwaysOnTop(false);
               mainWindow.flashFrame(true);
             }
-            resolve({ ok: true, user: json.user });
+            resolve({ ok: true, user: json.user, session: json.session });
           }
         }
       } catch {}

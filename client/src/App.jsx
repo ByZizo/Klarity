@@ -86,6 +86,60 @@ import {
   sanitizeHtmlAgainstInjection
 } from './utils/securityCrypto';
 
+// ============================================================================
+// SECURITY: Global /api fetch interceptor with Bearer token & 401 auto-signout
+// ============================================================================
+if (typeof window !== 'undefined' && !window.__klarityFetchPatched) {
+  const originalFetch = window.fetch;
+  window.fetch = async function (resource, options = {}) {
+    let url = typeof resource === 'string' ? resource : resource?.url || '';
+    const isApi = typeof url === 'string' && (url.startsWith('/api') || url.includes('/api/'));
+
+    if (isApi) {
+      let token = null;
+      try {
+        const sess = secureStorage.getItem('klarity_auth_session', null);
+        if (sess && sess.token && (!sess.expiresAt || Date.now() < sess.expiresAt)) {
+          token = sess.token;
+        }
+      } catch {}
+
+      const opts = { ...options };
+      opts.headers = new Headers(opts.headers || {});
+
+      if (token && !opts.headers.has('Authorization')) {
+        opts.headers.set('Authorization', `Bearer ${token}`);
+      }
+
+      const response = await originalFetch(resource, opts);
+
+      if (response.status === 401) {
+        const cleanUrl = url.split('?')[0];
+        const isAuthRoute = cleanUrl.endsWith('/api/auth/login') || cleanUrl.endsWith('/api/auth/register');
+        if (!isAuthRoute) {
+          try {
+            secureStorage.removeItem('klarity_auth_session');
+            secureStorage.removeItem('klarity_user');
+            localStorage.removeItem('klarity_user');
+            if (window.klarityDesktop?.clearSession) {
+              window.klarityDesktop.clearSession();
+            }
+          } catch {}
+          if (typeof window.__triggerKlaritySignOut === 'function') {
+            window.__triggerKlaritySignOut();
+          }
+        }
+      }
+
+      return response;
+    }
+
+    return originalFetch(resource, options);
+  };
+  window.__klarityFetchPatched = true;
+}
+
+
 // Configure marked with GitHub-flavored markdown and automatic line breaks
 marked.setOptions({
   breaks: true,
@@ -351,7 +405,7 @@ function GoogleSignInButton({ onAuthSuccess, onError, setIsAuthenticating, isAut
       try {
         const res = await window.klarityDesktop.signInWithGoogle();
         if (res?.ok && res?.user) {
-          await onAuthSuccess(res.user);
+          await onAuthSuccess(res.user, res.session);
         } else if (res?.error) {
           onError(res.error);
         }
@@ -1650,9 +1704,7 @@ function KlarityApp() {
   const fetchSettings = async (targetUser = currentUser) => {
     const uid = targetUser?.id || 'u-default';
     try {
-      const res = await fetch(`/api/settings?userId=${encodeURIComponent(uid)}`, {
-        headers: { 'x-user-id': uid }
-      });
+      const res = await fetch('/api/settings');
       if (res.ok) {
         const json = await res.json();
         setSettings(json);
@@ -1740,9 +1792,8 @@ function KlarityApp() {
     try {
       const res = await fetch('/api/settings/ai-key/test-and-save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: uid,
           provider: settingsAiProvider,
           model: settingsAiModel,
           apiKey: rawKey,
@@ -1786,8 +1837,8 @@ function KlarityApp() {
     try {
       const res = await fetch('/api/settings/ai-key/remove', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
-        body: JSON.stringify({ userId: uid })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
       });
       if (res.ok) {
         setSettingsAiStatus('not_connected');
@@ -1818,8 +1869,8 @@ function KlarityApp() {
     try {
       await fetch('/api/settings/ai-permissions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
-        body: JSON.stringify({ userId: uid, dataPermissions: updated })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataPermissions: updated })
       });
     } catch (e) {
       console.error(e);
@@ -1838,9 +1889,8 @@ function KlarityApp() {
       }
       const res = await fetch('/api/settings/plaid', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: uid,
           clientId: settingsPlaidClientId,
           secret: settingsPlaidSecret
         })
@@ -1927,7 +1977,7 @@ function KlarityApp() {
       const localCachedSubs = getLocalList('klarity_subscriptions');
       const localCachedTxs = getLocalList('klarity_transactions');
 
-      const res = await fetch(`/api/data?userId=${user.id}&household=${household}`);
+      const res = await fetch(`/api/data?household=${household}`);
       if (res.ok) {
         const json = await res.json();
         const mergedAccounts = (json.accounts && json.accounts.length > 0) ? json.accounts : localCachedAccounts;
@@ -1973,8 +2023,7 @@ function KlarityApp() {
               accounts: mergedAccounts,
               bills: mergedBills,
               subscriptions: mergedSubs,
-              transactions: mergedTxs,
-              userId: user.id
+              transactions: mergedTxs
             })
           }).catch(() => {});
         }
@@ -1998,10 +2047,10 @@ function KlarityApp() {
   }, [chatMessages, isAiTyping, activeTab]);
 
   // ================= GOOGLE AUTHENTICATION HANDLERS =================
-  const handleGoogleProfileSuccess = async (profile) => {
+  const handleGoogleProfileSuccess = async (profile, sessionData = null) => {
     try {
-      if (profile?.id && profile?.email) {
-        await handleAuthSessionSuccess(profile);
+      if (sessionData && sessionData.token) {
+        await handleAuthSessionSuccess(profile, sessionData);
         setNotificationToast('Signed in with Google as ' + (profile.name || profile.email));
         setTimeout(() => setNotificationToast(''), 4000);
         return;
@@ -2134,6 +2183,8 @@ function KlarityApp() {
   };
 
   const handleLogout = async () => {
+    window.__triggerKlaritySignOut = null;
+    window.__triggerKlaritySignOut = null;
     setCurrentUser(null);
     setAuthSession(null);
     secureStorage.removeItem('klarity_auth_session');
@@ -2167,9 +2218,8 @@ function KlarityApp() {
 
       const res = await fetch('/api/plaid/create-link-token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: uid,
           clientPlaidId: storedClientId,
           clientPlaidSecret: storedSecret
         })
@@ -2206,11 +2256,10 @@ function KlarityApp() {
 
       const res = await fetch('/api/plaid/exchange-public-token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           public_token,
           metadata,
-          userId: uid,
           clientPlaidId: storedClientId,
           clientPlaidSecret: storedSecret
         })
@@ -2877,7 +2926,6 @@ function KlarityApp() {
         signal: controller.signal,
         body: JSON.stringify({
           message: userMsg,
-          userId: currentUser?.id,
           userMemory: aiMemory,
           clientApiKey: cachedApiKey,
           clientProvider: cachedProvider,

@@ -18,3 +18,6 @@ klarity_session.json
 
 review-files/
 tree.txt
+
+dist/
+client/dist/
