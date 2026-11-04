@@ -158,6 +158,9 @@ export default function HouseholdLifestyleHub({
 
   const [selectedEvForChargers, setSelectedEvForChargers] = useState(null);
   const [viewingCardPhoto, setViewingCardPhoto] = useState(null);
+  const [viewingCardTitle, setViewingCardTitle] = useState('Insurance Card');
+  const [isScanningCard, setIsScanningCard] = useState(false);
+  const [scanFeedback, setScanFeedback] = useState(null);
   const [carModelSearch, setCarModelSearch] = useState('');
   const [carSearchFocused, setCarSearchFocused] = useState(false);
   const carDropdownRef = useRef(null);
@@ -441,15 +444,98 @@ export default function HouseholdLifestyleHub({
   const handleUploadInsuranceCard = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setIsScanningCard(true);
+    setScanFeedback(null);
+
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       const dataUrl = evt.target.result;
-      handleHealthChange({
-        cards: [
-          ...(health.cards || []),
-          { id: `ic-${Date.now()}`, name: file.name, dataUrl }
-        ]
-      });
+      const cardId = `ic-${Date.now()}`;
+      const newCard = { id: cardId, name: file.name, dataUrl };
+      const updatedCards = [...(health.cards || []), newCard];
+
+      let extractedDetails = null;
+
+      try {
+        const token = localStorage.getItem('klarity_token') || sessionStorage.getItem('klarity_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch('/api/household/scan-insurance-card', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            image: dataUrl,
+            fileName: file.name
+          })
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          if (json.extracted) {
+            extractedDetails = json.extracted;
+          }
+        }
+      } catch (err) {
+        console.warn('Card scan network notice:', err);
+      }
+
+      const nextHealth = {
+        ...health,
+        cards: updatedCards
+      };
+
+      if (extractedDetails) {
+        if (extractedDetails.provider) nextHealth.provider = extractedDetails.provider;
+        if (extractedDetails.planName) nextHealth.planName = extractedDetails.planName;
+        if (extractedDetails.memberId) nextHealth.memberId = extractedDetails.memberId;
+        if (extractedDetails.groupNumber) nextHealth.groupNumber = extractedDetails.groupNumber;
+        if (extractedDetails.rxBin) nextHealth.rxBin = extractedDetails.rxBin;
+        if (extractedDetails.rxPcn) nextHealth.rxPcn = extractedDetails.rxPcn;
+        if (extractedDetails.rxGrp) nextHealth.rxGrp = extractedDetails.rxGrp;
+
+        if (extractedDetails.copays) {
+          nextHealth.copays = {
+            ...(health.copays || {}),
+            ...(typeof extractedDetails.copays.primaryCare === 'number' ? { primaryCare: extractedDetails.copays.primaryCare } : {}),
+            ...(typeof extractedDetails.copays.specialist === 'number' ? { specialist: extractedDetails.copays.specialist } : {}),
+            ...(typeof extractedDetails.copays.urgentCare === 'number' ? { urgentCare: extractedDetails.copays.urgentCare } : {}),
+            ...(typeof extractedDetails.copays.er === 'number' ? { er: extractedDetails.copays.er } : {}),
+            ...(typeof extractedDetails.copays.rxGeneric === 'number' ? { rxGeneric: extractedDetails.copays.rxGeneric } : {})
+          };
+        }
+
+        setScanFeedback(
+          `Card auto-scanned: Filled in ${nextHealth.provider || 'Provider'}${nextHealth.planName ? ` • ${nextHealth.planName}` : ''}${nextHealth.memberId ? ` (ID: ${nextHealth.memberId})` : ''} and copays.`
+        );
+      } else {
+        setScanFeedback(`Card uploaded and added to your saved cards gallery.`);
+      }
+
+      const nextProfile = {
+        ...householdProfile,
+        health: nextHealth
+      };
+
+      onUpdateProfile(nextProfile);
+
+      try {
+        localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
+        localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
+        const token = localStorage.getItem('klarity_token') || sessionStorage.getItem('klarity_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        fetch('/api/household', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(nextProfile)
+        }).catch(err => console.warn('Sync notice:', err));
+      } catch (e) {
+        console.warn('Card profile sync notice:', e);
+      }
+
+      setIsScanningCard(false);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -1468,40 +1554,6 @@ export default function HouseholdLifestyleHub({
             ))}
           </div>
 
-          {/* Full-Size Auto Insurance Card Photo Lightbox Modal */}
-          {viewingCardPhoto && (
-            <div
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
-              onClick={() => setViewingCardPhoto(null)}
-            >
-              <div
-                className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl p-4 flex flex-col gap-3"
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-[#18457c]" />
-                    <span>Auto Insurance Card Photo</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setViewingCardPhoto(null)}
-                    className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="max-h-[75vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-xl p-2 border border-slate-200/60">
-                  <img
-                    src={viewingCardPhoto}
-                    alt="Auto Insurance Card Full Size"
-                    className="max-h-[70vh] w-auto object-contain rounded-lg shadow-sm"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Free EV Chargers Modal (Triggered exclusively from EV car cards) */}
           {selectedEvForChargers && (
             <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
@@ -1561,6 +1613,34 @@ export default function HouseholdLifestyleHub({
       {/* ================================================================= */}
       {section === 'health' && (
         <div className="p-5 flex flex-col gap-5 text-xs">
+          {/* Scanning Progress Notice */}
+          {isScanningCard && (
+            <div className="p-3.5 bg-sky-50 border border-sky-200/80 rounded-xl flex items-center gap-3 text-sky-800 text-xs animate-pulse">
+              <Loader2 className="w-4 h-4 animate-spin text-[#18457c] shrink-0" />
+              <div>
+                <span className="font-bold text-slate-900 block">Scanning health insurance card...</span>
+                <span className="text-[11px] text-sky-700 block">Reading carrier name, plan name, member ID, group number, and copays...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Scan Result Feedback Banner */}
+          {scanFeedback && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200/80 rounded-xl flex items-center justify-between gap-2 text-emerald-800 text-xs shadow-2xs">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="font-semibold">{scanFeedback}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScanFeedback(null)}
+                className="text-emerald-600 hover:text-emerald-800 p-0.5 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Search Major Health Insurances & Select Exact Plan */}
           <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-2 relative">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1725,6 +1805,40 @@ export default function HouseholdLifestyleHub({
             </div>
           </div>
 
+          {/* Rx Pharmacy Details (Auto-extracted from Card or Manually Editable) */}
+          <div className="grid grid-cols-3 gap-2.5">
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <span className="text-[10px] font-semibold text-slate-400 block">RxBIN</span>
+              <input
+                type="text"
+                value={health.rxBin || ''}
+                onChange={e => handleHealthChange({ rxBin: e.target.value })}
+                placeholder="RxBIN (e.g. 004336)"
+                className="w-full font-mono font-bold text-slate-900 bg-transparent mt-0.5 focus:outline-none"
+              />
+            </div>
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <span className="text-[10px] font-semibold text-slate-400 block">RxPCN</span>
+              <input
+                type="text"
+                value={health.rxPcn || ''}
+                onChange={e => handleHealthChange({ rxPcn: e.target.value })}
+                placeholder="RxPCN (e.g. ADV)"
+                className="w-full font-mono font-bold text-slate-900 bg-transparent mt-0.5 focus:outline-none"
+              />
+            </div>
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <span className="text-[10px] font-semibold text-slate-400 block">RxGRP</span>
+              <input
+                type="text"
+                value={health.rxGrp || ''}
+                onChange={e => handleHealthChange({ rxGrp: e.target.value })}
+                placeholder="RxGRP"
+                className="w-full font-mono font-bold text-slate-900 bg-transparent mt-0.5 focus:outline-none"
+              />
+            </div>
+          </div>
+
           {/* Copays Row */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
@@ -1873,16 +1987,29 @@ export default function HouseholdLifestyleHub({
             {/* Insurance Cards */}
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                  <CreditCard className="w-4 h-4 text-emerald-600" />
-                  <span>Insurance Cards</span>
-                </span>
-                <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] cursor-pointer">
-                  <Upload className="w-3 h-3" />
-                  <span>Upload Card</span>
+                <div>
+                  <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <CreditCard className="w-4 h-4 text-emerald-600" />
+                    <span>Insurance Cards</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 block">Upload card front/back to auto-scan & write details</span>
+                </div>
+                <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white font-semibold text-[11px] transition-colors ${isScanningCard ? 'bg-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer shadow-xs'}`}>
+                  {isScanningCard ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Scanning Card...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload & Auto-Scan Card</span>
+                    </>
+                  )}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,application/pdf"
+                    disabled={isScanningCard}
                     onChange={handleUploadInsuranceCard}
                     className="hidden"
                   />
@@ -1891,19 +2018,38 @@ export default function HouseholdLifestyleHub({
 
               {(health.cards || []).length === 0 ? (
                 <div className="p-6 bg-white rounded-lg border border-dashed border-slate-200 text-center text-slate-400 text-[11px]">
-                  Upload front/back photos of your Health, Medicare, Medi-Cal, or Dental cards.
+                  Upload front or back photos of your Health, Medicare, Medi-Cal, or Dental cards to automatically scan and write down your information.
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2.5">
                   {(health.cards || []).map(c => (
-                    <div key={c.id} className="relative bg-white p-2 rounded-lg border border-slate-200">
-                      <img src={c.dataUrl} alt={c.name} className="w-full h-24 object-cover rounded" />
+                    <div key={c.id} className="relative bg-white p-2 rounded-lg border border-slate-200 group">
+                      <img
+                        src={c.dataUrl}
+                        alt={c.name}
+                        onClick={() => {
+                          setViewingCardPhoto(c.dataUrl);
+                          setViewingCardTitle(`${c.name} - Health Insurance Card`);
+                        }}
+                        className="w-full h-24 object-cover rounded cursor-pointer hover:opacity-90 transition-opacity"
+                        title="Click to view full size"
+                      />
                       <div className="flex items-center justify-between mt-1.5">
-                        <span className="text-[10px] font-semibold text-slate-700 truncate">{c.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewingCardPhoto(c.dataUrl);
+                            setViewingCardTitle(`${c.name} - Health Insurance Card`);
+                          }}
+                          className="text-[10px] font-semibold text-slate-700 truncate hover:text-[#18457c] text-left cursor-pointer"
+                        >
+                          {c.name}
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleRemoveInsuranceCard(c.id)}
-                          className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                          className="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5"
+                          title="Remove card"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -1912,6 +2058,40 @@ export default function HouseholdLifestyleHub({
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full-Size Insurance Card Photo Lightbox Modal (Auto & Health) */}
+      {viewingCardPhoto && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setViewingCardPhoto(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl p-4 flex flex-col gap-3"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                <CreditCard className="w-4 h-4 text-[#18457c]" />
+                <span>{viewingCardTitle || 'Insurance Card Photo'}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewingCardPhoto(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="max-h-[75vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-xl p-2 border border-slate-200/60">
+              <img
+                src={viewingCardPhoto}
+                alt={viewingCardTitle || 'Insurance Card Full Size'}
+                className="max-h-[70vh] w-auto object-contain rounded-lg shadow-sm"
+              />
             </div>
           </div>
         </div>
