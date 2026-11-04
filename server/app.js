@@ -2298,6 +2298,9 @@ app.post(['/api/household/scan-insurance-card', '/household/scan-insurance-card'
         base64Data = match[2];
       }
     }
+    if (fileName && fileName.toLowerCase().endsWith('.pdf')) {
+      mimeType = 'application/pdf';
+    }
 
     const uid = req.userId || 'default';
     const data = await readData(uid);
@@ -2335,8 +2338,8 @@ app.post(['/api/household/scan-insurance-card', '/household/scan-insurance-card'
 
     if (rawApiKey && aiProvider === 'gemini') {
       try {
-        const prompt = `You are an expert optical character recognition (OCR) scanner for medical and health insurance cards. Analyze the provided image of a health insurance card (front or back).
-Extract all visible insurance carrier details, plan name, subscriber/member ID, group number, and copays.
+        const prompt = `You are an expert optical character recognition (OCR) and document scanner for health insurance cards and insurance policy documents (PDF or image). Analyze the provided document (front, back, or policy summary).
+Extract all visible insurance carrier details, plan name, subscriber/member ID, group number, prescription Rx numbers, and copays.
 Return strictly a valid JSON object with these exact keys:
 {
   "provider": "Insurance Carrier Name (e.g. UnitedHealthcare, Kaiser Permanente, Anthem Blue Cross, Blue Shield of California, Aetna, Cigna, Humana, Medi-Cal, Medicare, etc.)",
