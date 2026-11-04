@@ -68,7 +68,9 @@ const initialSeedData = {
   manualAssets: [],
   retirementPlans: [],
   userSettings: {},
-  plaidItems: []
+  plaidItems: [],
+  householdProfiles: {},
+  householdProfile: null
 };
 
 let memoryData = JSON.parse(JSON.stringify(initialSeedData));

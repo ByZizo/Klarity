@@ -1272,19 +1272,84 @@ function KlarityApp() {
   // Household, Utility (PG&E / Water / Gas) & Vehicle Fleet Profile
   const [householdProfile, setHouseholdProfile] = useState(() => {
     try {
+      // 1. Check plaintext backup key first (never corrupted or broken by encryption audit)
+      const plain = localStorage.getItem('klarity_household_profile_plain');
+      if (plain) {
+        const p = JSON.parse(plain);
+        if (p && typeof p === 'object' && (p.dwellingType || p.zillowUrl || p.address)) return p;
+      }
+      // 2. Check main key if it's valid unencrypted JSON
       const saved = localStorage.getItem('klarity_household_profile');
-      if (saved) {
+      if (saved && !saved.startsWith('ENCv3:') && !saved.startsWith('ENCv2:')) {
         const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object' && parsed.dwellingType) return parsed;
+        if (parsed && typeof parsed === 'object' && (parsed.dwellingType || parsed.zillowUrl || parsed.address)) return parsed;
       }
     } catch (e) {}
     return DEFAULT_HOUSEHOLD_PROFILE;
   });
 
+  // Decrypt and sync householdProfile from secureStorage and backend on mount
   useEffect(() => {
+    let active = true;
+    async function loadHouseholdProfile() {
+      try {
+        const stored = await secureStorage.getItem('klarity_household_profile', null);
+        if (active && stored && typeof stored === 'object' && (stored.dwellingType || stored.zillowUrl || stored.address)) {
+          setHouseholdProfile(prev => {
+            if (stored.zillowUrl || stored.address || !prev.zillowUrl) {
+              try {
+                localStorage.setItem('klarity_household_profile_plain', JSON.stringify(stored));
+              } catch {}
+              return { ...prev, ...stored };
+            }
+            return prev;
+          });
+        }
+      } catch (e) {}
+
+      try {
+        const res = await fetch('/api/household');
+        if (res.ok) {
+          const json = await res.json();
+          if (active && json.householdProfile && typeof json.householdProfile === 'object' && (json.householdProfile.dwellingType || json.householdProfile.zillowUrl || json.householdProfile.address)) {
+            setHouseholdProfile(prev => {
+              if (json.householdProfile.zillowUrl || json.householdProfile.address || !prev.zillowUrl) {
+                try {
+                  localStorage.setItem('klarity_household_profile_plain', JSON.stringify(json.householdProfile));
+                  localStorage.setItem('klarity_household_profile', JSON.stringify(json.householdProfile));
+                  secureStorage.setItem('klarity_household_profile', json.householdProfile).catch(() => {});
+                } catch {}
+                return { ...prev, ...json.householdProfile };
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (e) {}
+    }
+    loadHouseholdProfile();
+    return () => { active = false; };
+  }, []);
+
+  // Persist householdProfile changes to localStorage, plaintext backup, secureStorage, and server
+  useEffect(() => {
+    if (!householdProfile) return;
     try {
+      localStorage.setItem('klarity_household_profile_plain', JSON.stringify(householdProfile));
       localStorage.setItem('klarity_household_profile', JSON.stringify(householdProfile));
+      secureStorage.setItem('klarity_household_profile', householdProfile).catch(() => {});
     } catch (e) {}
+
+    // Debounced persist to server database
+    const timer = setTimeout(() => {
+      fetch('/api/household', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(householdProfile)
+      }).catch(err => console.warn('Could not persist household profile to server:', err.message));
+    }, 600);
+
+    return () => clearTimeout(timer);
   }, [householdProfile]);
 
   // Password & Account Vault state (persisted to localStorage)
@@ -2483,6 +2548,19 @@ function KlarityApp() {
         if (Array.isArray(json.retirementPlans)) {
           setRetirementPlans(json.retirementPlans);
           secureStorage.setItem('klarity_retirement_plans', json.retirementPlans).catch(() => {});
+        }
+        if (json.householdProfile && typeof json.householdProfile === 'object' && (json.householdProfile.dwellingType || json.householdProfile.zillowUrl || json.householdProfile.address)) {
+          setHouseholdProfile(prev => {
+            if (json.householdProfile.zillowUrl || json.householdProfile.address || !prev.zillowUrl) {
+              try {
+                localStorage.setItem('klarity_household_profile_plain', JSON.stringify(json.householdProfile));
+                localStorage.setItem('klarity_household_profile', JSON.stringify(json.householdProfile));
+                secureStorage.setItem('klarity_household_profile', json.householdProfile).catch(() => {});
+              } catch {}
+              return { ...prev, ...json.householdProfile };
+            }
+            return prev;
+          });
         }
         if (json.featureFlags && typeof json.featureFlags === 'object') {
           setFeatureFlags(prev => ({ ...prev, ...json.featureFlags }));

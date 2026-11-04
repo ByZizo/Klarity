@@ -446,6 +446,7 @@ async function requireAuth(req, res, next) {
     '/auth/google/check-session',
     '/auth/session',
     '/household/zillow-lookup',
+    '/household',
     '/api/auth/register',
     '/api/auth/login',
     '/api/auth/setup-owner',
@@ -453,7 +454,8 @@ async function requireAuth(req, res, next) {
     '/api/auth/google/callback',
     '/api/auth/google/check-session',
     '/api/auth/session',
-    '/api/household/zillow-lookup'
+    '/api/household/zillow-lookup',
+    '/api/household'
   ]);
 
   const reqPath = (req.path || '').split('?')[0];
@@ -1577,6 +1579,7 @@ app.get('/api/data', async (req, res) => {
     savingsGoals: userSavingsGoals,
     manualAssets: userManualAssets,
     retirementPlans: userRetirementPlans,
+    householdProfile: data.householdProfiles?.[userId] || data.householdProfile || null,
     featureFlags: userSettings.featureFlags || {
       retirement: true,
       budgets: true,
@@ -2118,6 +2121,40 @@ app.post('/api/household/zillow-lookup', async (req, res) => {
   } catch (err) {
     console.error('Zillow lookup error:', err);
     res.status(500).json({ error: 'Failed to look up property details.' });
+  }
+});
+
+// ============================================================================
+// HOUSEHOLD, LIFESTYLE & PROPERTY PERSISTENCE
+// ============================================================================
+app.get(['/api/household', '/household'], async (req, res) => {
+  try {
+    const uid = req.userId || 'default';
+    const data = await readData(uid);
+    const profile = data.householdProfiles?.[uid] || data.householdProfile || null;
+    res.json({ success: true, householdProfile: profile });
+  } catch (err) {
+    console.warn('Household read notice:', err.message);
+    res.status(500).json({ error: 'Failed to load household profile' });
+  }
+});
+
+app.post(['/api/household', '/household'], async (req, res) => {
+  const profile = req.body;
+  if (!profile || typeof profile !== 'object') {
+    return res.status(400).json({ error: 'Invalid household profile payload' });
+  }
+  try {
+    const uid = req.userId || 'default';
+    const data = await readData(uid);
+    if (!data.householdProfiles) data.householdProfiles = {};
+    data.householdProfiles[uid] = profile;
+    data.householdProfile = profile;
+    await writeData(data, uid);
+    res.json({ success: true, householdProfile: profile });
+  } catch (err) {
+    console.warn('Household save notice:', err.message);
+    res.status(500).json({ error: 'Failed to persist household profile' });
   }
 });
 

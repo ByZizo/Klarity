@@ -111,6 +111,17 @@ export default function HouseholdLifestyleHub({
       };
 
       onUpdateProfile(updatedProfile);
+      try {
+        localStorage.setItem('klarity_household_profile_plain', JSON.stringify(updatedProfile));
+        localStorage.setItem('klarity_household_profile', JSON.stringify(updatedProfile));
+      } catch {}
+      // Immediately persist to backend
+      fetch('/api/household', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(updatedProfile)
+      }).catch(err => console.warn('Could not persist property to server:', err));
+
       setPropertyLookupSuccess(`Imported specs for ${data.address || 'Property'} (${data.bedrooms || 3} bd, ${data.bathrooms || 2} ba, ${data.sqFt || 2100} sq ft)!`);
       setPropertyUrlInput('');
       setIsEditingPropertyLink(false);
@@ -615,7 +626,7 @@ export default function HouseholdLifestyleHub({
       {section === 'household' && (
         <div className="p-5 flex flex-col gap-4">
           {/* Zillow & Address Property Connection Status / Importer */}
-          {householdProfile.zillowUrl && !isEditingPropertyLink ? (
+          {((householdProfile.zillowUrl && householdProfile.zillowUrl.trim()) || (householdProfile.address && householdProfile.address.trim())) && !isEditingPropertyLink ? (
             <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-slate-50 border border-emerald-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
@@ -648,15 +659,17 @@ export default function HouseholdLifestyleHub({
               </div>
 
               <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-                <a
-                  href={householdProfile.zillowUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-[11px] font-bold text-[#18457c] transition-colors shadow-2xs"
-                >
-                  <span>View on Zillow</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                {householdProfile.zillowUrl && householdProfile.zillowUrl.startsWith('http') && (
+                  <a
+                    href={householdProfile.zillowUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-[11px] font-bold text-[#18457c] transition-colors shadow-2xs"
+                  >
+                    <span>View on Zillow</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -682,7 +695,7 @@ export default function HouseholdLifestyleHub({
                     Auto-fetches square footage, bedrooms, bathrooms, estimated home value, local utility rate region, and surrounding shopping intelligence.
                   </p>
                 </div>
-                {householdProfile.zillowUrl && (
+                {(householdProfile.zillowUrl || householdProfile.address) && (
                   <button
                     type="button"
                     onClick={() => {
