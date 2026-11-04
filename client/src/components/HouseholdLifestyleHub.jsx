@@ -128,12 +128,15 @@ export default function HouseholdLifestyleHub({
     name: '',
     type: 'gas',
     ownership: 'lease', // 'lease' | 'financed' | 'owned'
+    insuranceProvider: 'State Farm', // Each car has its own individual insurance
     insuranceCoverage: 'full_coverage', // 'full_coverage' | 'liability_only' | 'full_coverage_gap'
+    insuranceMonthly: 120,
+    insurancePolicyNumber: '',
+    insuranceCardPhoto: null,
     odometer: '',
     estimatedValue: '',
     threeYearMileLimit: 36000,
     monthlyMiles: 1000,
-    insuranceMonthly: 120,
     monthlyPayment: 399,
     fuelGrade: 'regular',
     mpgOrEfficiency: 32,
@@ -142,28 +145,36 @@ export default function HouseholdLifestyleHub({
   });
 
   const [selectedEvForChargers, setSelectedEvForChargers] = useState(null);
+  const [viewingCardPhoto, setViewingCardPhoto] = useState(null);
   const [carModelSearch, setCarModelSearch] = useState('');
   const [carSearchFocused, setCarSearchFocused] = useState(false);
   const carDropdownRef = useRef(null);
 
-  const autoInsurance = householdProfile.autoInsurance || {
-    provider: 'State Farm',
-    policyType: 'full_coverage',
-    deductible: 500,
-    hasRoadside: true,
-    hasGapCoverage: true,
-    monthlyPremium: 140,
-    policyNumber: ''
+  const handleNewCarCardPhotoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      setNewCar(prev => ({
+        ...prev,
+        insuranceCardPhoto: evt.target.result
+      }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
-  const handleAutoInsuranceChange = (patch) => {
-    onUpdateProfile({
-      ...householdProfile,
-      autoInsurance: {
-        ...autoInsurance,
-        ...patch
-      }
-    });
+  const handleUploadVehicleCardPhoto = (vehicleId, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      handleUpdateVehicle(vehicleId, {
+        insuranceCardPhoto: evt.target.result
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleYearChange = (yr) => {
@@ -461,6 +472,10 @@ export default function HouseholdLifestyleHub({
       monthlyMiles: Number(newCar.monthlyMiles) || monthlyAllowance || 1000,
       fuelGrade: newCar.fuelGrade || (newCar.type === 'ev' ? 'electric' : 'regular'),
       batteryKwh: newCar.type === 'ev' ? (Number(newCar.batteryKwh) || 75) : null,
+      insuranceProvider: newCar.insuranceProvider || 'State Farm',
+      insuranceCoverage: newCar.insuranceCoverage || 'full_coverage',
+      insurancePolicyNumber: newCar.insurancePolicyNumber || '',
+      insuranceCardPhoto: newCar.insuranceCardPhoto || null,
       mpgOrEfficiency: Number(newCar.mpgOrEfficiency) || (newCar.type === 'ev' ? 28 : 30),
       insuranceMonthly: Number(newCar.insuranceMonthly) || (newCar.insuranceCoverage === 'liability_only' ? 65 : 120),
       monthlyPayment: isOwned ? 0 : (Number(newCar.monthlyPayment) || 0),
@@ -477,12 +492,15 @@ export default function HouseholdLifestyleHub({
       name: '',
       type: 'gas',
       ownership: 'lease',
+      insuranceProvider: 'State Farm',
       insuranceCoverage: 'full_coverage',
+      insuranceMonthly: 120,
+      insurancePolicyNumber: '',
+      insuranceCardPhoto: null,
       odometer: '',
       estimatedValue: '',
       threeYearMileLimit: 36000,
       monthlyMiles: 1000,
-      insuranceMonthly: 120,
       monthlyPayment: 399,
       fuelGrade: 'regular',
       mpgOrEfficiency: 32,
@@ -994,7 +1012,7 @@ export default function HouseholdLifestyleHub({
                 </div>
               </div>
 
-              {/* Row 2: Ownership, Insurance Coverage, Odometer, Lease Limit / Est. Value, Monthly Payment */}
+              {/* Row 2: Ownership, Odometer, Lease Limit / Est. Market Value, Monthly Payment */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                 {/* Box 4: Ownership / Lease */}
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
@@ -1020,23 +1038,7 @@ export default function HouseholdLifestyleHub({
                   </select>
                 </div>
 
-                {/* Box 5: Insurance Coverage (Liability vs Full Coverage) */}
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                    Insurance Coverage
-                  </label>
-                  <select
-                    value={newCar.insuranceCoverage || 'full_coverage'}
-                    onChange={e => handleInsuranceCoverageChange(e.target.value)}
-                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
-                  >
-                    <option value="full_coverage">Full Coverage (Comp + Collision)</option>
-                    <option value="liability_only">Liability Only</option>
-                    <option value="full_coverage_gap">Full Coverage + GAP</option>
-                  </select>
-                </div>
-
-                {/* Box 6: Current Odometer (with automatic comma formatting) */}
+                {/* Box 5: Current Odometer (with automatic comma formatting) */}
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                     Current Odometer
@@ -1054,7 +1056,7 @@ export default function HouseholdLifestyleHub({
                   </div>
                 </div>
 
-                {/* Box 7: Conditional — 3-Year Mile Limit ONLY for Lease; Estimated Value for Financed/Owned */}
+                {/* Box 6: Conditional — 3-Year Mile Limit ONLY for Lease; Estimated Value for Financed/Owned */}
                 {newCar.ownership === 'lease' ? (
                   <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80">
                     <div className="flex items-center justify-between mb-1">
@@ -1093,11 +1095,8 @@ export default function HouseholdLifestyleHub({
                     </div>
                   </div>
                 )}
-              </div>
 
-              {/* Row 3: Monthly Payment & Auto-filled Specs Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-                {/* Monthly Payment */}
+                {/* Box 7: Monthly Payment */}
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                     {newCar.ownership === 'lease' ? 'Monthly Lease Payment' : newCar.ownership === 'financed' ? 'Monthly Loan Payment' : 'Payment Status'}
@@ -1115,42 +1114,150 @@ export default function HouseholdLifestyleHub({
                     <span className="text-[10px] text-slate-400">/mo</span>
                   </div>
                 </div>
+              </div>
 
-                {/* Powertrain */}
-                <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                  <span className="text-[10px] font-semibold text-slate-400 block">Powertrain</span>
-                  <span className="font-bold text-slate-900 uppercase text-xs mt-1 block">{newCar.type}</span>
+              {/* Row 3: Dedicated Insurance Policy & Digital Card for THIS Vehicle */}
+              <div className="p-3.5 rounded-xl bg-slate-50/90 border border-slate-200 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200/70">
+                  <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-[#18457c]" />
+                    <span>Insurance Policy & Digital Card</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-medium">Individual coverage for this car</span>
                 </div>
 
-                {/* Fuel Grade / Energy */}
-                <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  {/* Insurance Carrier */}
+                  <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                      Insurance Carrier
+                    </label>
+                    <select
+                      value={newCar.insuranceProvider || 'State Farm'}
+                      onChange={e => setNewCar({ ...newCar, insuranceProvider: e.target.value })}
+                      className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                    >
+                      {AUTO_INSURANCE_PROVIDERS.map(p => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Coverage Tier */}
+                  <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                      Coverage Tier
+                    </label>
+                    <select
+                      value={newCar.insuranceCoverage || 'full_coverage'}
+                      onChange={e => handleInsuranceCoverageChange(e.target.value)}
+                      className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                    >
+                      <option value="full_coverage">Full Coverage (Comp + Collision)</option>
+                      <option value="liability_only">Liability Only</option>
+                      <option value="full_coverage_gap">Full Coverage + GAP</option>
+                    </select>
+                  </div>
+
+                  {/* Policy Number */}
+                  <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                      Policy Number
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 9482103-PA"
+                      value={newCar.insurancePolicyNumber || ''}
+                      onChange={e => setNewCar({ ...newCar, insurancePolicyNumber: e.target.value })}
+                      className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Monthly Insurance Premium */}
+                  <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                      Monthly Premium
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-slate-400">$</span>
+                      <input
+                        type="number"
+                        value={newCar.insuranceMonthly}
+                        onChange={e => setNewCar({ ...newCar, insuranceMonthly: Number(e.target.value) || 0 })}
+                        className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
+                      />
+                      <span className="text-[10px] text-slate-400">/mo</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Insurance Card Photo Upload Box */}
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">
+                      Insurance Card Photo
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Snap or upload this car's insurance card photo for proof & quick reference
+                    </span>
+                  </div>
+
+                  {newCar.insuranceCardPhoto ? (
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={newCar.insuranceCardPhoto}
+                        alt="Insurance Card"
+                        onClick={() => setViewingCardPhoto(newCar.insuranceCardPhoto)}
+                        className="h-9 w-14 object-cover rounded-md border border-slate-300 shadow-2xs cursor-pointer hover:opacity-90"
+                        title="Click to view full size"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setViewingCardPhoto(newCar.insuranceCardPhoto)}
+                        className="text-xs text-[#18457c] hover:underline font-bold cursor-pointer"
+                      >
+                        View Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewCar(prev => ({ ...prev, insuranceCardPhoto: null }))}
+                        className="text-xs text-rose-600 hover:text-rose-700 font-semibold cursor-pointer ml-1"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold cursor-pointer shrink-0 transition-colors">
+                      <Upload className="w-3.5 h-3.5 text-[#18457c]" />
+                      <span>Upload Card Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleNewCarCardPhotoUpload}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* Row 4: Auto-filled Specs Row */}
+              <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <span className="text-[10px] font-semibold text-slate-400 block">Powertrain</span>
+                  <span className="font-bold text-slate-900 uppercase text-xs mt-0.5 block">{newCar.type}</span>
+                </div>
+                <div>
                   <span className="text-[10px] font-semibold text-slate-400 block">Fuel / Energy</span>
-                  <span className="font-bold text-slate-900 text-xs mt-1 block capitalize">
+                  <span className="font-bold text-slate-900 text-xs mt-0.5 block capitalize">
                     {newCar.type === 'ev' ? `⚡ Electric (${newCar.batteryKwh || 75} kWh)` : newCar.fuelGrade === 'premium' ? 'Premium 91+' : 'Regular 87'}
                   </span>
                 </div>
-
-                {/* Efficiency */}
-                <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                <div>
                   <span className="text-[10px] font-semibold text-slate-400 block">Rated Efficiency</span>
-                  <span className="font-bold text-slate-900 text-xs mt-1 block">
+                  <span className="font-bold text-slate-900 text-xs mt-0.5 block">
                     {newCar.type === 'ev' ? `${newCar.mpgOrEfficiency} kWh/100mi` : `${newCar.mpgOrEfficiency} MPG`}
                   </span>
-                </div>
-
-                {/* Insurance Monthly Estimate */}
-                <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                  <span className="text-[10px] font-semibold text-slate-400 block">Est. Insurance</span>
-                  <div className="flex items-center gap-0.5 mt-1">
-                    <span className="font-bold text-slate-400 text-xs">$</span>
-                    <input
-                      type="number"
-                      value={newCar.insuranceMonthly}
-                      onChange={e => setNewCar({ ...newCar, insuranceMonthly: Number(e.target.value) || 0 })}
-                      className="w-full font-bold text-slate-900 bg-transparent text-xs focus:outline-none"
-                    />
-                    <span className="text-[10px] text-slate-400">/mo</span>
-                  </div>
                 </div>
               </div>
 
@@ -1196,17 +1303,6 @@ export default function HouseholdLifestyleHub({
                         {v.ownership === 'lease' ? 'Lease' : v.ownership === 'financed' ? 'Financed' : 'Owned'}
                       </span>
                     )}
-                    {v.insuranceCoverage && (
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        v.insuranceCoverage === 'liability_only'
-                          ? 'bg-slate-200/80 text-slate-700 border border-slate-300'
-                          : v.insuranceCoverage === 'full_coverage_gap'
-                            ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                            : 'bg-emerald-100/70 text-emerald-800 border border-emerald-200'
-                      }`}>
-                        {v.insuranceCoverage === 'liability_only' ? 'Liability Only' : v.insuranceCoverage === 'full_coverage_gap' ? 'Full Coverage + GAP' : 'Full Coverage'}
-                      </span>
-                    )}
                     <span className="text-[10px] text-slate-400">
                       {v.type === 'ev' ? `${v.mpgOrEfficiency} kWh/100mi` : `${v.mpgOrEfficiency} MPG (${v.fuelGrade === 'premium' ? 'Premium 91+' : v.fuelGrade === 'diesel' ? 'Diesel' : 'Regular 87'})`}
                     </span>
@@ -1238,6 +1334,71 @@ export default function HouseholdLifestyleHub({
                     ) : null}
                   </div>
                 )}
+
+                {/* Individual Vehicle Insurance & Card Photo Bar */}
+                <div className="p-2.5 rounded-lg bg-white border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <ShieldCheck className="w-4 h-4 text-[#18457c] shrink-0" />
+                    <span className="font-bold text-slate-900 text-xs">
+                      {v.insuranceProvider || 'Insurance'}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                      v.insuranceCoverage === 'liability_only'
+                        ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                        : v.insuranceCoverage === 'full_coverage_gap'
+                          ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                          : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    }`}>
+                      {v.insuranceCoverage === 'liability_only' ? 'Liability Only' : v.insuranceCoverage === 'full_coverage_gap' ? 'Full Coverage + GAP' : 'Full Coverage'}
+                    </span>
+                    {v.insurancePolicyNumber && (
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        Pol: {v.insurancePolicyNumber}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Digital Insurance Card Photo */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {v.insuranceCardPhoto ? (
+                      <div className="flex items-center gap-1.5">
+                        <img
+                          src={v.insuranceCardPhoto}
+                          alt="Insurance Card"
+                          onClick={() => setViewingCardPhoto(v.insuranceCardPhoto)}
+                          className="h-7 w-11 object-cover rounded border border-slate-300 shadow-2xs cursor-pointer hover:opacity-90"
+                          title="Click to view card full size"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setViewingCardPhoto(v.insuranceCardPhoto)}
+                          className="text-[11px] text-[#18457c] hover:underline font-bold cursor-pointer"
+                        >
+                          View Card
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateVehicle(v.id, { insuranceCardPhoto: null })}
+                          className="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5 ml-0.5"
+                          title="Remove card photo"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-semibold cursor-pointer transition-colors">
+                        <Upload className="w-3 h-3 text-[#18457c]" />
+                        <span>Upload Card</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleUploadVehicleCardPhoto(v.id, e)}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
 
                 {/* Costs Breakdown Grid */}
                 <div className={`grid ${v.monthlyPayment > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 bg-white p-2.5 rounded-lg border border-slate-200/70`}>
@@ -1290,124 +1451,39 @@ export default function HouseholdLifestyleHub({
             ))}
           </div>
 
-          {/* ================================================================= */}
-          {/* AUTO INSURANCE POLICY & COVERAGE SECTION                          */}
-          {/* ================================================================= */}
-          <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-[#18457c] text-white flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-4 h-4" />
+          {/* Full-Size Auto Insurance Card Photo Lightbox Modal */}
+          {viewingCardPhoto && (
+            <div
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+              onClick={() => setViewingCardPhoto(null)}
+            >
+              <div
+                className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl p-4 flex flex-col gap-3"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-[#18457c]" />
+                    <span>Auto Insurance Card Photo</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setViewingCardPhoto(null)}
+                    className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">Auto Insurance & Coverage Policy</h4>
-                  <p className="text-[10px] text-slate-500">
-                    Select your active auto insurance carrier, policy coverage type, and deductibles across your vehicles.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-[10px] text-slate-400 font-semibold">Total Premium:</span>
-                <span className="font-bold text-[#18457c] text-sm">
-                  ${autoInsurance.monthlyPremium || 140}/mo
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
-              {/* Provider Selection */}
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                <span className="text-[10px] font-semibold text-slate-400 block mb-1">Insurance Provider</span>
-                <select
-                  value={autoInsurance.provider || 'State Farm'}
-                  onChange={e => handleAutoInsuranceChange({ provider: e.target.value })}
-                  className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
-                >
-                  {AUTO_INSURANCE_PROVIDERS.map(p => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Policy Type Selection */}
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                <span className="text-[10px] font-semibold text-slate-400 block mb-1">Policy Coverage Type</span>
-                <select
-                  value={autoInsurance.policyType || 'full_coverage'}
-                  onChange={e => handleAutoInsuranceChange({ policyType: e.target.value })}
-                  className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
-                >
-                  {AUTO_INSURANCE_TYPES.map(t => (
-                    <option key={t.id} value={t.id}>{t.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Deductible */}
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                <span className="text-[10px] font-semibold text-slate-400 block mb-1">Comprehensive & Collision Deductible</span>
-                <select
-                  value={autoInsurance.deductible || 500}
-                  onChange={e => handleAutoInsuranceChange({ deductible: Number(e.target.value) || 500 })}
-                  className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
-                >
-                  <option value="250">$250 Deductible (Low Out-Of-Pocket)</option>
-                  <option value="500">$500 Deductible (Standard)</option>
-                  <option value="1000">$1,000 Deductible (Lower Premium)</option>
-                  <option value="2000">$2,000 Deductible (High Deductible)</option>
-                </select>
-              </div>
-
-              {/* Monthly Premium Input */}
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                <span className="text-[10px] font-semibold text-slate-400 block mb-1">Monthly Insurance Premium</span>
-                <div className="flex items-center gap-1">
-                  <span className="font-bold text-slate-400">$</span>
-                  <input
-                    type="number"
-                    value={autoInsurance.monthlyPremium || ''}
-                    onChange={e => handleAutoInsuranceChange({ monthlyPremium: Number(e.target.value) || 0 })}
-                    placeholder="140"
-                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
+                <div className="max-h-[75vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-xl p-2 border border-slate-200/60">
+                  <img
+                    src={viewingCardPhoto}
+                    alt="Auto Insurance Card Full Size"
+                    className="max-h-[70vh] w-auto object-contain rounded-lg shadow-sm"
                   />
-                  <span className="text-[10px] text-slate-400">/mo</span>
                 </div>
               </div>
             </div>
-
-            {/* Endorsement Pills */}
-            <div className="flex items-center gap-2 flex-wrap pt-1">
-              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 cursor-pointer hover:bg-slate-100">
-                <input
-                  type="checkbox"
-                  checked={Boolean(autoInsurance.hasRoadside)}
-                  onChange={e => handleAutoInsuranceChange({ hasRoadside: e.target.checked })}
-                  className="rounded text-[#18457c] accent-[#18457c]"
-                />
-                <span>Roadside Assistance Included</span>
-              </label>
-
-              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 cursor-pointer hover:bg-slate-100">
-                <input
-                  type="checkbox"
-                  checked={Boolean(autoInsurance.hasGapCoverage)}
-                  onChange={e => handleAutoInsuranceChange({ hasGapCoverage: e.target.checked })}
-                  className="rounded text-[#18457c] accent-[#18457c]"
-                />
-                <span>GAP Insurance Protection (Lease / Loan)</span>
-              </label>
-
-              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 cursor-pointer hover:bg-slate-100">
-                <input
-                  type="checkbox"
-                  checked={Boolean(autoInsurance.hasRentalReimbursement)}
-                  onChange={e => handleAutoInsuranceChange({ hasRentalReimbursement: e.target.checked })}
-                  className="rounded text-[#18457c] accent-[#18457c]"
-                />
-                <span>Rental Car Reimbursement</span>
-              </label>
-            </div>
-          </div>
+          )}
 
           {/* Free EV Chargers Modal (Triggered exclusively from EV car cards) */}
           {selectedEvForChargers && (

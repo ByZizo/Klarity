@@ -160,15 +160,6 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
     ],
     cards: []
   },
-  autoInsurance: {
-    provider: 'State Farm',
-    policyType: 'full_coverage',
-    deductible: 500,
-    hasRoadside: true,
-    hasGapCoverage: true,
-    monthlyPremium: 140,
-    policyNumber: ''
-  },
   vehicles: [
     {
       id: 'veh-1',
@@ -178,7 +169,11 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
       name: '2024 Toyota Camry Hybrid',
       type: 'hybrid', // 'gas' | 'hybrid' | 'phev' | 'ev'
       ownership: 'owned',
-      insuranceCoverage: 'full_coverage',
+      insuranceProvider: 'GEICO',
+      insuranceCoverage: 'liability_only',
+      insuranceMonthly: 65,
+      insurancePolicyNumber: 'G-8821943',
+      insuranceCardPhoto: null,
       estimatedValue: 26500,
       odometer: 14200,
       threeYearMileLimit: null,
@@ -187,7 +182,6 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
       monthlyMiles: 950,
       monthlyPayment: 0,
       apr: 0,
-      insuranceMonthly: 115,
       freeChargingSharePercent: 0
     },
     {
@@ -198,7 +192,11 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
       name: '2024 Tesla Model Y Long Range',
       type: 'ev',
       ownership: 'lease',
+      insuranceProvider: 'State Farm',
       insuranceCoverage: 'full_coverage_gap',
+      insuranceMonthly: 145,
+      insurancePolicyNumber: 'SF-4401923',
+      insuranceCardPhoto: null,
       estimatedValue: 38000,
       odometer: 8900,
       threeYearMileLimit: 36000,
@@ -208,7 +206,6 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
       monthlyMiles: 1000,
       monthlyPayment: 429,
       apr: 0,
-      insuranceMonthly: 145,
       freeChargingSharePercent: 30
     }
   ]
@@ -409,7 +406,6 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
       totalMonthlyCarPayments,
       totalMonthlyMaintenance,
       totalFleetMonthly,
-      autoInsurance: profile.autoInsurance || null,
       totalPotentialEvSwitchSavings: vehicleBreakdowns.reduce((sum, v) => sum + (v.potentialEvSwitchSavings || 0), 0)
     }
   };
