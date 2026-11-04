@@ -2269,14 +2269,21 @@ function heuristicInsuranceExtraction(fileName = '', textHint = '', base64Data =
   if (rxGrpMatch) rxGrp = rxGrpMatch[1].toUpperCase();
   else rxGrp = 'RXCUSTOM';
 
+  const network = planName.includes('HMO') ? 'HMO' : (planName.includes('EPO') ? 'EPO' : 'PPO');
+  const deductible = (provider === 'Kaiser Permanente' || provider === 'Medi-Cal') ? 0 : 1500;
+  const outOfPocketMax = provider === 'Medi-Cal' ? 0 : 6500;
+
   return {
     provider,
     planName,
+    network,
     memberId,
     groupNumber,
     rxBin,
     rxPcn,
     rxGrp,
+    deductible,
+    outOfPocketMax,
     copays
   };
 }
@@ -2346,9 +2353,12 @@ Return strictly a valid JSON object with these exact keys:
   "planName": "Plan Name or Network Type (e.g. Choice Plus PPO, Select HMO, Gold HMO, Platinum 90, Medicare Advantage, etc.)",
   "memberId": "Member ID / Subscriber ID / Policy # / MRN",
   "groupNumber": "Group Number / GRP",
+  "network": "PPO, HMO, EPO, or POS",
   "rxBin": "RxBIN # (if visible)",
   "rxPcn": "RxPCN (if visible)",
   "rxGrp": "RxGRP (if visible)",
+  "deductible": number (Individual annual deductible in dollars, or null),
+  "outOfPocketMax": number (Annual out-of-pocket maximum in dollars, or null),
   "copays": {
     "primaryCare": number (Primary Care / Office Visit / PCP copay in dollars, or null if not listed),
     "specialist": number (Specialist / SPEC copay in dollars, or null if not listed),

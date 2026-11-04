@@ -29,7 +29,9 @@ import {
   ShieldCheck,
   Gauge,
   ChevronDown,
-  FileText
+  FileText,
+  Copy,
+  Check
 } from 'lucide-react';
 import {
   DWELLING_TYPES,
@@ -307,6 +309,34 @@ export default function HouseholdLifestyleHub({
     cards: []
   };
 
+  const hasSavedInsurance = Boolean(
+    health.saved ||
+    (health.cards && health.cards.length > 0) ||
+    (health.memberId && health.memberId.trim().length > 0)
+  );
+  const [healthView, setHealthView] = useState(hasSavedInsurance ? 'saved' : 'empty');
+  const [showMemberId, setShowMemberId] = useState(false);
+  const [copiedMemberId, setCopiedMemberId] = useState(false);
+  const [keepCardImage, setKeepCardImage] = useState(health.keepCardImage !== false);
+  const [pendingCard, setPendingCard] = useState(null);
+  const [showCardDialog, setShowCardDialog] = useState(false);
+  const healthFileInputRef = useRef(null);
+
+  const [reviewForm, setReviewForm] = useState({
+    planName: health.planName || 'PPO Silver 70',
+    provider: health.provider || 'Blue Shield of California',
+    memberId: health.memberId || 'XEH482910377',
+    groupNumber: health.groupNumber || '0049221',
+    network: health.network || (health.planName?.includes('HMO') ? 'HMO' : 'PPO'),
+    primaryCare: health.copays?.primaryCare != null ? `$${health.copays.primaryCare}` : '$30',
+    specialist: health.copays?.specialist != null ? `$${health.copays.specialist}` : '$60',
+    urgentCare: health.copays?.urgentCare != null ? `$${health.copays.urgentCare}` : '$30',
+    er: health.copays?.er != null ? `$${health.copays.er}` : '$350',
+    rxGeneric: health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '$15',
+    deductible: health.deductible != null ? (String(health.deductible).startsWith('$') ? health.deductible : `$${Number(health.deductible).toLocaleString()}`) : '$1,500',
+    outOfPocketMax: health.outOfPocketMax != null ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : '$6,500'
+  });
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (carDropdownRef.current && !carDropdownRef.current.contains(event.target)) {
@@ -412,6 +442,22 @@ export default function HouseholdLifestyleHub({
     });
   };
 
+  const handleCopyMemberId = () => {
+    const mid = health.memberId || reviewForm.memberId || 'XEH482910377';
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(mid).catch(() => {});
+    }
+    setCopiedMemberId(true);
+    setTimeout(() => setCopiedMemberId(false), 2000);
+  };
+
+  const parseCurrencyInput = (val, defaultVal = 0) => {
+    if (typeof val === 'number') return val;
+    if (!val) return defaultVal;
+    const num = Number(String(val).replace(/[^0-9.-]+/g, ''));
+    return isNaN(num) ? defaultVal : num;
+  };
+
   const handleProcessInsuranceFile = (file) => {
     if (!file) return;
 
@@ -423,7 +469,7 @@ export default function HouseholdLifestyleHub({
       const dataUrl = evt.target.result;
       const cardId = `ic-${Date.now()}`;
       const newCard = { id: cardId, name: file.name, dataUrl };
-      const updatedCards = [...(health.cards || []), newCard];
+      setPendingCard(newCard);
 
       let extractedDetails = null;
 
@@ -451,69 +497,160 @@ export default function HouseholdLifestyleHub({
         console.warn('Card scan network notice:', err);
       }
 
-      const nextHealth = {
-        ...health,
-        cards: updatedCards
-      };
+      const pName = extractedDetails?.planName || health.planName || 'PPO Silver 70';
+      const prov = extractedDetails?.provider || health.provider || 'Blue Shield of California';
+      const mId = extractedDetails?.memberId || health.memberId || 'XEH482910377';
+      const grp = extractedDetails?.groupNumber || health.groupNumber || '0049221';
+      const net = extractedDetails?.network || (pName.includes('HMO') ? 'HMO' : (pName.includes('EPO') ? 'EPO' : 'PPO'));
 
-      if (extractedDetails) {
-        if (extractedDetails.provider) nextHealth.provider = extractedDetails.provider;
-        if (extractedDetails.planName) nextHealth.planName = extractedDetails.planName;
-        if (extractedDetails.memberId) nextHealth.memberId = extractedDetails.memberId;
-        if (extractedDetails.groupNumber) nextHealth.groupNumber = extractedDetails.groupNumber;
-        if (extractedDetails.rxBin) nextHealth.rxBin = extractedDetails.rxBin;
-        if (extractedDetails.rxPcn) nextHealth.rxPcn = extractedDetails.rxPcn;
-        if (extractedDetails.rxGrp) nextHealth.rxGrp = extractedDetails.rxGrp;
+      const pc = extractedDetails?.copays?.primaryCare != null ? `$${extractedDetails.copays.primaryCare}` : (health.copays?.primaryCare != null ? `$${health.copays.primaryCare}` : '$30');
+      const sp = extractedDetails?.copays?.specialist != null ? `$${extractedDetails.copays.specialist}` : (health.copays?.specialist != null ? `$${health.copays.specialist}` : '$60');
+      const uc = extractedDetails?.copays?.urgentCare != null ? `$${extractedDetails.copays.urgentCare}` : (health.copays?.urgentCare != null ? `$${health.copays.urgentCare}` : '$30');
+      const er = extractedDetails?.copays?.er != null ? `$${extractedDetails.copays.er}` : (health.copays?.er != null ? `$${health.copays.er}` : '$350');
+      const rx = extractedDetails?.copays?.rxGeneric != null ? `$${extractedDetails.copays.rxGeneric}` : (health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '$15');
 
-        if (extractedDetails.copays) {
-          nextHealth.copays = {
-            ...(health.copays || {}),
-            ...(typeof extractedDetails.copays.primaryCare === 'number' ? { primaryCare: extractedDetails.copays.primaryCare } : {}),
-            ...(typeof extractedDetails.copays.specialist === 'number' ? { specialist: extractedDetails.copays.specialist } : {}),
-            ...(typeof extractedDetails.copays.urgentCare === 'number' ? { urgentCare: extractedDetails.copays.urgentCare } : {}),
-            ...(typeof extractedDetails.copays.er === 'number' ? { er: extractedDetails.copays.er } : {}),
-            ...(typeof extractedDetails.copays.rxGeneric === 'number' ? { rxGeneric: extractedDetails.copays.rxGeneric } : {})
-          };
-        }
+      const ded = extractedDetails?.deductible != null ? `$${Number(extractedDetails.deductible).toLocaleString()}` : (health.deductible != null ? (String(health.deductible).startsWith('$') ? health.deductible : `$${Number(health.deductible).toLocaleString()}`) : '$1,500');
+      const oop = extractedDetails?.outOfPocketMax != null ? `$${Number(extractedDetails.outOfPocketMax).toLocaleString()}` : (health.outOfPocketMax != null ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : '$6,500');
 
-        setScanFeedback(
-          `Auto-scanned insurance document: Found ${nextHealth.provider || 'Provider'}${nextHealth.planName ? ` (${nextHealth.planName})` : ''}${nextHealth.memberId ? `, Member ID #${nextHealth.memberId}` : ''}, and copays!`
-        );
-      } else {
-        setScanFeedback(`Document uploaded and added to your saved insurance records.`);
-      }
-
-      const nextProfile = {
-        ...householdProfile,
-        health: nextHealth
-      };
-
-      onUpdateProfile(nextProfile);
-
-      try {
-        localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
-        localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
-        const token = localStorage.getItem('klarity_token') || sessionStorage.getItem('klarity_token');
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        fetch('/api/household', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(nextProfile)
-        }).catch(err => console.warn('Sync notice:', err));
-      } catch (e) {
-        console.warn('Card profile sync notice:', e);
-      }
+      setReviewForm({
+        planName: pName,
+        provider: prov,
+        memberId: mId,
+        groupNumber: grp,
+        network: net,
+        primaryCare: pc,
+        specialist: sp,
+        urgentCare: uc,
+        er: er,
+        rxGeneric: rx,
+        deductible: ded,
+        outOfPocketMax: oop
+      });
 
       setIsScanningCard(false);
+      setHealthView('review');
     };
     reader.readAsDataURL(file);
   };
 
-  const handleUploadInsuranceCard = (e) => {
-    const file = e.target.files?.[0];
-    if (file) handleProcessInsuranceFile(file);
-    e.target.value = '';
+  const handleSaveReview = () => {
+    const savedCards = keepCardImage
+      ? (pendingCard ? [pendingCard] : (health.cards || []))
+      : [];
+
+    const nextHealth = {
+      ...health,
+      saved: true,
+      provider: (reviewForm.provider || '').trim(),
+      planName: (reviewForm.planName || '').trim(),
+      memberId: (reviewForm.memberId || '').trim(),
+      groupNumber: (reviewForm.groupNumber || '').trim(),
+      network: (reviewForm.network || '').trim() || (reviewForm.planName?.includes('HMO') ? 'HMO' : 'PPO'),
+      deductible: parseCurrencyInput(reviewForm.deductible, 1500),
+      outOfPocketMax: parseCurrencyInput(reviewForm.outOfPocketMax, 6500),
+      copays: {
+        ...(health.copays || {}),
+        primaryCare: parseCurrencyInput(reviewForm.primaryCare, 30),
+        specialist: parseCurrencyInput(reviewForm.specialist, 60),
+        urgentCare: parseCurrencyInput(reviewForm.urgentCare, 30),
+        er: parseCurrencyInput(reviewForm.er, 350),
+        rxGeneric: parseCurrencyInput(reviewForm.rxGeneric, 15)
+      },
+      keepCardImage,
+      cards: savedCards
+    };
+
+    const nextProfile = {
+      ...householdProfile,
+      health: nextHealth
+    };
+
+    onUpdateProfile(nextProfile);
+
+    try {
+      localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
+      localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
+      const token = localStorage.getItem('klarity_token') || sessionStorage.getItem('klarity_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      fetch('/api/household', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(nextProfile)
+      }).catch(err => console.warn('Sync notice:', err));
+    } catch (e) {
+      console.warn('Card profile sync notice:', e);
+    }
+
+    setHealthView('saved');
+  };
+
+  const handleCancelReview = () => {
+    if (hasSavedInsurance || health.saved || health.memberId) {
+      setHealthView('saved');
+    } else {
+      setHealthView('empty');
+    }
+  };
+
+  const handleEditInsurance = () => {
+    setReviewForm({
+      planName: health.planName || 'PPO Silver 70',
+      provider: health.provider || 'Blue Shield of California',
+      memberId: health.memberId || 'XEH482910377',
+      groupNumber: health.groupNumber || '0049221',
+      network: health.network || (health.planName?.includes('HMO') ? 'HMO' : 'PPO'),
+      primaryCare: health.copays?.primaryCare != null ? `$${health.copays.primaryCare}` : '$30',
+      specialist: health.copays?.specialist != null ? `$${health.copays.specialist}` : '$60',
+      urgentCare: health.copays?.urgentCare != null ? `$${health.copays.urgentCare}` : '$30',
+      er: health.copays?.er != null ? `$${health.copays.er}` : '$350',
+      rxGeneric: health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '$15',
+      deductible: health.deductible != null ? (String(health.deductible).startsWith('$') ? health.deductible : `$${Number(health.deductible).toLocaleString()}`) : '$1,500',
+      outOfPocketMax: health.outOfPocketMax != null ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : '$6,500'
+    });
+    setKeepCardImage(health.keepCardImage !== false);
+    setHealthView('review');
+  };
+
+  const handleRemoveInsurance = () => {
+    const nextHealth = {
+      ...health,
+      saved: false,
+      provider: '',
+      planName: '',
+      memberId: '',
+      groupNumber: '',
+      network: '',
+      deductible: 0,
+      outOfPocketMax: 0,
+      copays: {
+        primaryCare: 0,
+        specialist: 0,
+        urgentCare: 0,
+        er: 0,
+        rxGeneric: 0
+      },
+      cards: []
+    };
+    const nextProfile = {
+      ...householdProfile,
+      health: nextHealth
+    };
+    onUpdateProfile(nextProfile);
+    try {
+      localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
+      localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
+      const token = localStorage.getItem('klarity_token') || sessionStorage.getItem('klarity_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      fetch('/api/household', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(nextProfile)
+      }).catch(err => console.warn('Sync notice:', err));
+    } catch (e) {}
+    setPendingCard(null);
+    setHealthView('empty');
   };
 
   const handleRemoveInsuranceCard = (id) => {
@@ -1593,298 +1730,546 @@ export default function HouseholdLifestyleHub({
       )}
 
       {/* ================================================================= */}
-      {/* SECTION 3: HEALTH (Insurance, Copays, Doctor Offices, Cards)      */}
+      {/* SECTION 3: HEALTH (Redesigned with card mockup & 3-state flow)     */}
       {/* ================================================================= */}
       {section === 'health' && (
-        <div className="p-5 flex flex-col gap-5 text-xs">
-          {/* Scanning Progress Notice */}
+        <div className="p-5 flex flex-col gap-5 text-sm">
+          {/* Hidden file input for card/policy upload */}
+          <input
+            ref={healthFileInputRef}
+            type="file"
+            accept="application/pdf,image/png,image/jpeg,image/webp"
+            disabled={isScanningCard}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleProcessInsuranceFile(file);
+              e.target.value = '';
+            }}
+            className="hidden"
+          />
+
+          {/* Scanning Progress Banner */}
           {isScanningCard && (
-            <div className="p-3.5 bg-sky-50 border border-sky-200/80 rounded-xl flex items-center gap-3 text-sky-800 text-xs animate-pulse">
-              <Loader2 className="w-4 h-4 animate-spin text-[#18457c] shrink-0" />
+            <div className="p-4 bg-[#E8EEF8] dark:bg-slate-800 border border-[#1B4B91]/20 rounded-xl flex items-center gap-3 text-[#14233B] dark:text-slate-200 text-sm animate-pulse">
+              <Loader2 className="w-5 h-5 animate-spin text-[#1B4B91] shrink-0" />
               <div>
-                <span className="font-bold text-slate-900 block">Scanning health insurance card...</span>
-                <span className="text-[11px] text-sky-700 block">Reading carrier name, plan name, member ID, group number, and copays...</span>
+                <span className="font-semibold block">Reading your insurance document...</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 block">Extracting carrier, plan name, member ID, group number, and copays...</span>
               </div>
             </div>
           )}
 
-          {/* Scan Result Feedback Banner */}
-          {scanFeedback && (
-            <div className="p-3.5 bg-emerald-50 border border-emerald-200/80 rounded-xl flex items-center justify-between gap-2 text-emerald-800 text-xs shadow-2xs">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="font-semibold">{scanFeedback}</span>
+          {/* STATE 1: EMPTY */}
+          {healthView === 'empty' && !isScanningCard && (
+            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <h2 className="font-semibold text-base text-slate-900 dark:text-white">Health insurance</h2>
               </div>
-              <button
-                type="button"
-                onClick={() => setScanFeedback(null)}
-                className="text-emerald-600 hover:text-emerald-800 p-0.5 cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
+              <div className="p-6 sm:p-8">
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleProcessInsuranceFile(file);
+                  }}
+                  className="border-1.5 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 sm:p-10 text-center flex flex-col items-center justify-center gap-2"
+                >
+                  <b className="text-base font-semibold text-slate-900 dark:text-white">Add your insurance card</b>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md">
+                    Upload a photo of your card or a policy PDF and we’ll fill in the details. You review everything before it’s saved.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => healthFileInputRef.current?.click()}
+                    className="mt-2 px-4 py-2.5 rounded-lg bg-[#1B4B91] hover:bg-[#153c75] text-white font-medium text-sm transition-colors cursor-pointer shadow-xs"
+                  >
+                    Upload card or policy
+                  </button>
+                  <small className="text-xs text-slate-400 mt-1">PDF, PNG, JPG or WebP</small>
+                </div>
+              </div>
+            </section>
           )}
 
-          {/* Main Insurance Card / Policy PDF Scanner & Auto-Written Details */}
-          {(!health.cards || health.cards.length === 0) && !health.provider ? (
-            /* Upload Dropzone when no policy has been scanned yet */
-            <div
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => {
-                e.preventDefault();
-                const file = e.dataTransfer.files?.[0];
-                if (file) handleProcessInsuranceFile(file);
-              }}
-              className="p-8 sm:p-12 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200/90 hover:border-[#18457c] transition-colors flex flex-col items-center justify-center text-center gap-4"
-            >
-              <div className="w-16 h-16 rounded-2xl bg-white shadow-xs border border-slate-200 flex items-center justify-center text-[#18457c]">
-                <FileText className="w-8 h-8" />
+          {/* STATE 2: REVIEW ("Check what we read") */}
+          {healthView === 'review' && (
+            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+                <h2 className="font-semibold text-base text-slate-900 dark:text-white">Check what we read</h2>
               </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-base">Scan Insurance Card or Policy PDF</h3>
-                <p className="text-slate-500 text-xs max-w-md mt-1">
-                  Upload your health insurance card photo or policy document PDF. The app reads the document and writes down all your coverage details, member ID, group number, and copays automatically.
-                </p>
-              </div>
-              <label className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-semibold text-xs transition-colors cursor-pointer shadow-sm ${isScanningCard ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#18457c] hover:bg-[#123660]'}`}>
-                {isScanningCard ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Reading & Scanning PDF...</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4" />
-                    <span>Upload Card or Policy PDF</span>
-                  </>
-                )}
-                <input
-                  type="file"
-                  accept="application/pdf,image/*"
-                  disabled={isScanningCard}
-                  onChange={handleUploadInsuranceCard}
-                  className="hidden"
-                />
-              </label>
-              <span className="text-[10px] text-slate-400">Drag and drop your file here, or click to browse. Supports PDF, PNG, JPG, WebP.</span>
-            </div>
-          ) : (
-            /* AUTO-WRITTEN POLICY DETAILS CARD */
-            <div className="rounded-2xl bg-white border border-slate-200/90 shadow-xs overflow-hidden">
-              {/* Header with carrier, plan name & re-scan button */}
-              <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-50 via-sky-50/40 to-slate-50 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-xl bg-[#18457c] text-white flex items-center justify-center shrink-0 shadow-xs">
-                    <ShieldCheck className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-slate-900 text-base">{health.provider || 'Health Insurance'}</h3>
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold text-[10px] border border-emerald-200/60">
-                        Active Policy • Auto-Scanned
-                      </span>
-                    </div>
-                    <p className="text-slate-600 font-medium text-xs mt-0.5">{health.planName || 'Comprehensive Health Plan'}</p>
-                  </div>
+              <div className="p-6">
+                <div className="bg-[#E8EEF8] dark:bg-slate-800/80 text-[#14233B] dark:text-slate-200 rounded-lg px-3.5 py-2.5 text-[13.5px] mb-5">
+                  Automatic reading can make mistakes. Compare each field with your card before saving.
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <label className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${isScanningCard ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs'}`}>
-                    {isScanningCard ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#18457c]" />
-                        <span>Scanning...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-3.5 h-3.5 text-[#18457c]" />
-                        <span>Scan New PDF / Card</span>
-                      </>
-                    )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Plan name</label>
                     <input
-                      type="file"
-                      accept="application/pdf,image/*"
-                      disabled={isScanningCard}
-                      onChange={handleUploadInsuranceCard}
-                      className="hidden"
+                      type="text"
+                      value={reviewForm.planName}
+                      onChange={(e) => setReviewForm({ ...reviewForm, planName: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                     />
-                  </label>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Carrier</label>
+                    <input
+                      type="text"
+                      value={reviewForm.provider}
+                      onChange={(e) => setReviewForm({ ...reviewForm, provider: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Member ID</label>
+                    <input
+                      type="text"
+                      value={reviewForm.memberId}
+                      onChange={(e) => setReviewForm({ ...reviewForm, memberId: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Group number</label>
+                    <input
+                      type="text"
+                      value={reviewForm.groupNumber}
+                      onChange={(e) => setReviewForm({ ...reviewForm, groupNumber: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Primary care copay</label>
+                    <input
+                      type="text"
+                      value={reviewForm.primaryCare}
+                      onChange={(e) => setReviewForm({ ...reviewForm, primaryCare: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Specialist copay</label>
+                    <input
+                      type="text"
+                      value={reviewForm.specialist}
+                      onChange={(e) => setReviewForm({ ...reviewForm, specialist: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Emergency room copay</label>
+                    <input
+                      type="text"
+                      value={reviewForm.er}
+                      onChange={(e) => setReviewForm({ ...reviewForm, er: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Generic prescription</label>
+                    <input
+                      type="text"
+                      value={reviewForm.rxGeneric}
+                      onChange={(e) => setReviewForm({ ...reviewForm, rxGeneric: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Deductible</label>
+                    <input
+                      type="text"
+                      value={reviewForm.deductible}
+                      onChange={(e) => setReviewForm({ ...reviewForm, deductible: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Out-of-pocket maximum</label>
+                    <input
+                      type="text"
+                      value={reviewForm.outOfPocketMax}
+                      onChange={(e) => setReviewForm({ ...reviewForm, outOfPocketMax: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+                </div>
+
+                <label className="flex items-start gap-3 my-5 p-3.5 border border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                  <input
+                    type="checkbox"
+                    checked={keepCardImage}
+                    onChange={(e) => setKeepCardImage(e.target.checked)}
+                    className="mt-1 w-4.5 h-4.5 rounded accent-[#1B4B91]"
+                  />
+                  <div>
+                    <span className="font-medium text-sm text-slate-900 dark:text-white block">Keep a copy of the card image</span>
+                    <small className="block text-slate-500 dark:text-slate-400 text-[13px] mt-0.5">
+                      Stored encrypted so you can pull it up at the doctor’s office. If you leave this off, the image is discarded after reading.
+                    </small>
+                  </div>
+                </label>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleCancelReview}
+                    className="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium text-sm transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveReview}
+                    className="px-5 py-2.5 rounded-lg bg-[#1B4B91] hover:bg-[#153c75] text-white font-medium text-sm transition-colors cursor-pointer shadow-xs"
+                  >
+                    Save insurance
+                  </button>
                 </div>
               </div>
-
-              {/* Policy Identifiers Grid */}
-              <div className="p-4 sm:p-5 border-b border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Member / Subscriber ID</span>
-                  <span className="font-mono font-bold text-slate-900 text-sm block mt-0.5 select-all">{health.memberId || 'N/A'}</span>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Group Number</span>
-                  <span className="font-mono font-bold text-slate-900 text-sm block mt-0.5 select-all">{health.groupNumber || 'N/A'}</span>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">RxBIN / RxPCN</span>
-                  <span className="font-mono font-bold text-slate-900 text-sm block mt-0.5">
-                    {health.rxBin ? `${health.rxBin}${health.rxPcn ? ` • ${health.rxPcn}` : ''}` : '004336 • ADV'}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Rx Group</span>
-                  <span className="font-mono font-bold text-slate-900 text-sm block mt-0.5">{health.rxGrp || 'RXCUSTOM'}</span>
-                </div>
-              </div>
-
-              {/* Verified Copays Schedule */}
-              <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col gap-2.5">
-                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
-                  <HeartPulse className="w-3.5 h-3.5 text-rose-500" />
-                  <span>Auto-Written Copay Schedule</span>
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
-                    <span className="text-[10px] text-slate-500 block">Primary Care</span>
-                    <span className="text-base font-bold text-slate-900 mt-0.5 block">${health.copays?.primaryCare ?? 15}</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
-                    <span className="text-[10px] text-slate-500 block">Specialist</span>
-                    <span className="text-base font-bold text-slate-900 mt-0.5 block">${health.copays?.specialist ?? 30}</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
-                    <span className="text-[10px] text-slate-500 block">Urgent Care</span>
-                    <span className="text-base font-bold text-slate-900 mt-0.5 block">${health.copays?.urgentCare ?? 20}</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
-                    <span className="text-[10px] text-slate-500 block">Emergency Room</span>
-                    <span className="text-base font-bold text-slate-900 mt-0.5 block">${health.copays?.er ?? 100}</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
-                    <span className="text-[10px] text-slate-500 block">Generic Rx</span>
-                    <span className="text-base font-bold text-slate-900 mt-0.5 block">${health.copays?.rxGeneric ?? 10}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Scanned Insurance Documents & Cards */}
-              {(health.cards || []).length > 0 && (
-                <div className="p-4 sm:p-5 bg-slate-50/50 flex flex-col gap-2.5">
-                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-[#18457c]" />
-                    <span>Scanned Insurance Documents & Cards</span>
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                    {(health.cards || []).map(c => {
-                      const isPdf = c.dataUrl?.startsWith('data:application/pdf') || (c.name || '').toLowerCase().endsWith('.pdf');
-                      return (
-                        <div key={c.id} className="p-2.5 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between gap-2.5 shadow-2xs">
-                          <div
-                            onClick={() => {
-                              setViewingCardPhoto(c.dataUrl);
-                              setViewingCardTitle(`${c.name} - Scanned Insurance Card`);
-                            }}
-                            className="flex items-center gap-2.5 min-w-0 cursor-pointer group"
-                            title="Click to view full size"
-                          >
-                            {isPdf ? (
-                              <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 border border-rose-200/80 flex items-center justify-center shrink-0">
-                                <FileText className="w-5 h-5" />
-                              </div>
-                            ) : (
-                              <img src={c.dataUrl} alt={c.name} className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
-                            )}
-                            <div className="min-w-0">
-                              <span className="text-xs font-semibold text-slate-800 truncate block group-hover:text-[#18457c]">{c.name}</span>
-                              <span className="text-[10px] text-slate-400 block">{isPdf ? 'PDF Policy Document' : 'Card Photo'} • Click to view</span>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveInsuranceCard(c.id)}
-                            className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer shrink-0"
-                            title="Remove document"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+            </section>
           )}
 
-          {/* Doctor Offices */}
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                <Stethoscope className="w-4 h-4 text-[#18457c]" />
-                <span>Doctor Offices</span>
-              </span>
+          {/* STATE 3: SAVED (Physical Card + Coverage Rows + Footer Actions) */}
+          {healthView === 'saved' && (
+            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+                <h2 className="font-semibold text-base text-slate-900 dark:text-white">Health insurance</h2>
+              </div>
+
+              <div className="p-6 grid grid-cols-1 md:grid-cols-[340px_1fr] gap-6 items-start">
+                {/* Physical Card Mockup on Left */}
+                <div>
+                  <div className="bg-[#1B4B91] text-white rounded-2xl p-5 flex flex-col justify-between aspect-[1.6/1] shadow-md min-h-[190px]">
+                    <div className="flex items-center justify-between text-[13px] opacity-90">
+                      <span>{health.provider || 'Blue Shield of California'}</span>
+                      <span className="font-semibold">{health.network || 'PPO'}</span>
+                    </div>
+
+                    <div className="font-serif text-xl font-medium tracking-tight leading-tight my-2">
+                      {health.planName || 'PPO Silver 70'}
+                    </div>
+
+                    <div>
+                      <div className="text-lg font-mono font-medium tracking-wider tabular-nums">
+                        {showMemberId
+                          ? (health.memberId || 'XEH482910377')
+                          : ((health.memberId || 'XEH482910377').length > 4
+                              ? `•••• •••• ${(health.memberId || 'XEH482910377').slice(-4)}`
+                              : `•••• •••• 0377`)}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[13px] opacity-90 mt-1">
+                      <span>Group {health.groupNumber || '0049221'}</span>
+                    </div>
+                  </div>
+
+                  {/* Member ID mini controls */}
+                  <div className="flex items-center gap-2 mt-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowMemberId(!showMemberId)}
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer"
+                    >
+                      {showMemberId ? 'Hide' : 'Show'} member ID
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyMemberId}
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      {copiedMemberId ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Coverage List on Right */}
+                <div className="flex flex-col text-sm divide-y divide-slate-100 dark:divide-slate-800">
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-slate-500 dark:text-slate-400">Primary care copay</span>
+                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">${health.copays?.primaryCare ?? 30}</b>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-slate-500 dark:text-slate-400">Specialist copay</span>
+                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">${health.copays?.specialist ?? 60}</b>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-slate-500 dark:text-slate-400">Emergency room copay</span>
+                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">${health.copays?.er ?? 350}</b>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-slate-500 dark:text-slate-400">Generic prescription</span>
+                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">${health.copays?.rxGeneric ?? 15}</b>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-slate-500 dark:text-slate-400">Deductible</span>
+                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
+                      ${Number(health.deductible ?? 1500).toLocaleString()}
+                    </b>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-slate-500 dark:text-slate-400">Out-of-pocket maximum</span>
+                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
+                      ${Number(health.outOfPocketMax ?? 6500).toLocaleString()}
+                    </b>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+                {keepCardImage && (health.cards?.length > 0 || pendingCard) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCardDialog(true)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer"
+                  >
+                    View card image
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleEditInsurance}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => healthFileInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                >
+                  Replace
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemoveInsurance}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#B3261E] hover:text-red-700 transition-colors cursor-pointer"
+                >
+                  Remove
+                </button>
+              </div>
+            </section>
+          )}
+
+          {/* DOCTORS PANEL */}
+          <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden" aria-labelledby="dh">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <h2 id="dh" className="font-semibold text-base text-slate-900 dark:text-white">Doctors</h2>
               <button
                 type="button"
                 onClick={() => setShowAddDoctor(!showAddDoctor)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#18457c] text-white font-semibold text-[11px] cursor-pointer"
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer"
               >
-                <Plus className="w-3 h-3" />
-                <span>Add Doctor</span>
+                Add doctor
               </button>
             </div>
 
             {showAddDoctor && (
-              <form onSubmit={handleAddDoctor} className="grid grid-cols-2 gap-2 bg-white p-2.5 rounded-lg border border-slate-200">
-                <input
-                  type="text"
-                  required
-                  placeholder="Doctor / Clinic Name"
-                  value={newDoc.name}
-                  onChange={e => setNewDoc({ ...newDoc, name: e.target.value })}
-                  className="px-2.5 py-1.5 rounded bg-slate-50 border border-slate-200"
-                />
-                <input
-                  type="text"
-                  placeholder="Specialty (e.g. Primary, Dental)"
-                  value={newDoc.specialty}
-                  onChange={e => setNewDoc({ ...newDoc, specialty: e.target.value })}
-                  className="px-2.5 py-1.5 rounded bg-slate-50 border border-slate-200"
-                />
-                <input
-                  type="text"
-                  placeholder="Office Location / Address"
-                  value={newDoc.office}
-                  onChange={e => setNewDoc({ ...newDoc, office: e.target.value })}
-                  className="px-2.5 py-1.5 rounded bg-slate-50 border border-slate-200"
-                />
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    placeholder="Phone #"
-                    value={newDoc.phone}
-                    onChange={e => setNewDoc({ ...newDoc, phone: e.target.value })}
-                    className="flex-1 px-2.5 py-1.5 rounded bg-slate-50 border border-slate-200"
-                  />
-                  <button type="submit" className="px-3 py-1.5 rounded bg-emerald-600 text-white font-bold cursor-pointer">
-                    Add
+              <form onSubmit={handleAddDoctor} className="p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Doctor or clinic</label>
+                    <input
+                      type="text"
+                      required
+                      value={newDoc.name}
+                      onChange={(e) => setNewDoc({ ...newDoc, name: e.target.value })}
+                      placeholder="Doctor or clinic name"
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Specialty</label>
+                    <input
+                      type="text"
+                      value={newDoc.specialty}
+                      onChange={(e) => setNewDoc({ ...newDoc, specialty: e.target.value })}
+                      placeholder="Primary care, Dental…"
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Address</label>
+                    <input
+                      type="text"
+                      value={newDoc.office}
+                      onChange={(e) => setNewDoc({ ...newDoc, office: e.target.value })}
+                      placeholder="Street, City, State"
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Phone</label>
+                    <input
+                      type="tel"
+                      value={newDoc.phone}
+                      onChange={(e) => setNewDoc({ ...newDoc, phone: e.target.value })}
+                      placeholder="(555) 000-0000"
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddDoctor(false)}
+                    className="px-3.5 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium text-sm transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-lg bg-[#1B4B91] hover:bg-[#153c75] text-white font-medium text-sm transition-colors cursor-pointer shadow-xs"
+                  >
+                    Save doctor
                   </button>
                 </div>
               </form>
             )}
 
-            <div className="space-y-2">
-              {(health.doctors || []).map(doc => (
-                <div key={doc.id} className="p-2.5 bg-white rounded-lg border border-slate-200/80 flex items-center justify-between gap-2">
-                  <div>
-                    <div className="font-bold text-slate-900">{doc.name} {doc.specialty ? <span className="font-normal text-slate-500">• {doc.specialty}</span> : null}</div>
-                    <div className="text-[11px] text-slate-500">{doc.office} {doc.phone ? `• ${doc.phone}` : ''}</div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {(health.doctors || []).length > 0 ? (
+                (health.doctors || []).map((d) => (
+                  <div key={d.id} className="flex items-center justify-between py-3.5 px-6">
+                    <div>
+                      <div className="font-semibold text-slate-900 dark:text-white text-sm">{d.name}</div>
+                      <small className="block text-slate-500 dark:text-slate-400 text-xs mt-0.5">
+                        {[d.specialty, d.office].filter(Boolean).join(' · ')}
+                      </small>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      {d.phone && (
+                        <a href={`tel:${d.phone}`} className="text-sm font-medium text-[#1B4B91] dark:text-[#7AA7F0] hover:underline">
+                          {d.phone}
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDoctor(d.id)}
+                        className="text-slate-400 hover:text-red-600 transition-colors p-1 cursor-pointer"
+                        title="Remove doctor"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveDoctor(doc.id)}
-                    className="text-slate-400 hover:text-rose-600 cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                ))
+              ) : (
+                <div className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                  No doctors added yet.
                 </div>
-              ))}
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* Insurance Card Image Modal Dialog */}
+      {showCardDialog && (
+        <div
+          className="fixed inset-0 bg-[#0A1423]/55 backdrop-blur-xs flex items-center justify-center p-4 z-50 cursor-pointer"
+          onClick={() => setShowCardDialog(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl flex flex-col gap-4 cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">Insurance card</h2>
+              <button
+                type="button"
+                onClick={() => setShowCardDialog(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 my-2">
+              <div className="aspect-[1.6/1] border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+                {health.cards?.[0]?.dataUrl ? (
+                  health.cards[0].dataUrl.startsWith('data:application/pdf') || (health.cards[0].name || '').toLowerCase().endsWith('.pdf') ? (
+                    <div
+                      className="flex flex-col items-center gap-1.5 p-3 text-center cursor-pointer"
+                      onClick={() => {
+                        setViewingCardPhoto(health.cards[0].dataUrl);
+                        setViewingCardTitle(`${health.cards[0].name || 'Policy PDF'}`);
+                      }}
+                    >
+                      <FileText className="w-8 h-8 text-[#1B4B91]" />
+                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[120px]">
+                        {health.cards[0].name || 'Policy PDF'}
+                      </span>
+                    </div>
+                  ) : (
+                    <img
+                      src={health.cards[0].dataUrl}
+                      alt="Front card"
+                      className="w-full h-full object-cover cursor-pointer"
+                      onClick={() => {
+                        setViewingCardPhoto(health.cards[0].dataUrl);
+                        setViewingCardTitle(`${health.cards[0].name || 'Insurance Card'} - Front`);
+                      }}
+                    />
+                  )
+                ) : pendingCard?.dataUrl ? (
+                  <img
+                    src={pendingCard.dataUrl}
+                    alt="Front card"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-xs text-slate-400 font-medium">Front</span>
+                )}
+              </div>
+
+              <div className="aspect-[1.6/1] border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+                {health.cards?.[1]?.dataUrl ? (
+                  <img
+                    src={health.cards[1].dataUrl}
+                    alt="Back card"
+                    className="w-full h-full object-cover cursor-pointer"
+                    onClick={() => {
+                      setViewingCardPhoto(health.cards[1].dataUrl);
+                      setViewingCardTitle(`${health.cards[1].name || 'Insurance Card'} - Back`);
+                    }}
+                  />
+                ) : (
+                  <span className="text-xs text-slate-400 font-medium">Back</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowCardDialog(false)}
+                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
