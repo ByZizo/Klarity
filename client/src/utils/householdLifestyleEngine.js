@@ -178,8 +178,10 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
       name: '2024 Toyota Camry Hybrid',
       type: 'hybrid', // 'gas' | 'hybrid' | 'phev' | 'ev'
       ownership: 'owned',
+      insuranceCoverage: 'full_coverage',
+      estimatedValue: 26500,
       odometer: 14200,
-      threeYearMileLimit: 36000,
+      threeYearMileLimit: null,
       mpgOrEfficiency: 51,
       fuelGrade: 'regular',
       monthlyMiles: 950,
@@ -196,6 +198,8 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
       name: '2024 Tesla Model Y Long Range',
       type: 'ev',
       ownership: 'lease',
+      insuranceCoverage: 'full_coverage_gap',
+      estimatedValue: 38000,
       odometer: 8900,
       threeYearMileLimit: 36000,
       mpgOrEfficiency: 28,
@@ -860,13 +864,18 @@ export const MAJOR_HEALTH_PLANS = [
 // Comprehensive database of popular vehicles with pre-filled specs (Fuel, MPG, kWh/100mi, Battery kWh)
 export const POPULAR_CAR_DATABASE = [
   // Toyota
-  { fullName: 'Toyota Camry (Gas)', make: 'Toyota', model: 'Camry', type: 'gas', mpgOrEfficiency: 32, fuelGrade: 'regular', defaultInsurance: 125 },
-  { fullName: 'Toyota Camry Hybrid', make: 'Toyota', model: 'Camry Hybrid', type: 'hybrid', mpgOrEfficiency: 51, fuelGrade: 'regular', defaultInsurance: 125 },
+  { fullName: 'Toyota Camry SE', make: 'Toyota', model: 'Camry SE', type: 'gas', mpgOrEfficiency: 32, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Toyota Camry LE', make: 'Toyota', model: 'Camry LE', type: 'gas', mpgOrEfficiency: 34, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'Toyota Camry XLE', make: 'Toyota', model: 'Camry XLE', type: 'gas', mpgOrEfficiency: 31, fuelGrade: 'regular', defaultInsurance: 125 },
+  { fullName: 'Toyota Camry (Gas)', make: 'Toyota', model: 'Camry', type: 'gas', mpgOrEfficiency: 32, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Toyota Camry Hybrid SE', make: 'Toyota', model: 'Camry Hybrid SE', type: 'hybrid', mpgOrEfficiency: 47, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Toyota Camry Hybrid', make: 'Toyota', model: 'Camry Hybrid', type: 'hybrid', mpgOrEfficiency: 51, fuelGrade: 'regular', defaultInsurance: 120 },
   { fullName: 'Toyota RAV4 (Gas)', make: 'Toyota', model: 'RAV4', type: 'gas', mpgOrEfficiency: 30, fuelGrade: 'regular', defaultInsurance: 120 },
   { fullName: 'Toyota RAV4 Hybrid', make: 'Toyota', model: 'RAV4 Hybrid', type: 'hybrid', mpgOrEfficiency: 40, fuelGrade: 'regular', defaultInsurance: 120 },
   { fullName: 'Toyota RAV4 Prime (PHEV)', make: 'Toyota', model: 'RAV4 Prime', type: 'phev', mpgOrEfficiency: 38, fuelGrade: 'regular', defaultInsurance: 130 },
   { fullName: 'Toyota Prius Hybrid', make: 'Toyota', model: 'Prius', type: 'hybrid', mpgOrEfficiency: 57, fuelGrade: 'regular', defaultInsurance: 115 },
   { fullName: 'Toyota Prius Prime (PHEV)', make: 'Toyota', model: 'Prius Prime', type: 'phev', mpgOrEfficiency: 52, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Toyota Corolla LE / SE', make: 'Toyota', model: 'Corolla SE', type: 'gas', mpgOrEfficiency: 35, fuelGrade: 'regular', defaultInsurance: 110 },
   { fullName: 'Toyota Corolla (Gas)', make: 'Toyota', model: 'Corolla', type: 'gas', mpgOrEfficiency: 35, fuelGrade: 'regular', defaultInsurance: 110 },
   { fullName: 'Toyota Corolla Hybrid', make: 'Toyota', model: 'Corolla Hybrid', type: 'hybrid', mpgOrEfficiency: 50, fuelGrade: 'regular', defaultInsurance: 110 },
   { fullName: 'Toyota Highlander (Gas)', make: 'Toyota', model: 'Highlander', type: 'gas', mpgOrEfficiency: 25, fuelGrade: 'regular', defaultInsurance: 135 },
@@ -878,10 +887,14 @@ export const POPULAR_CAR_DATABASE = [
   { fullName: 'Toyota bZ4X (EV)', make: 'Toyota', model: 'bZ4X', type: 'ev', mpgOrEfficiency: 28, batteryKwh: 71.4, fuelGrade: 'electric', defaultInsurance: 135 },
 
   // Honda
+  { fullName: 'Honda Civic EX / LX', make: 'Honda', model: 'Civic EX', type: 'gas', mpgOrEfficiency: 36, fuelGrade: 'regular', defaultInsurance: 115 },
+  { fullName: 'Honda Civic Sport', make: 'Honda', model: 'Civic Sport', type: 'gas', mpgOrEfficiency: 35, fuelGrade: 'regular', defaultInsurance: 120 },
   { fullName: 'Honda Civic Sedan', make: 'Honda', model: 'Civic', type: 'gas', mpgOrEfficiency: 36, fuelGrade: 'regular', defaultInsurance: 120 },
   { fullName: 'Honda Civic Hybrid', make: 'Honda', model: 'Civic Hybrid', type: 'hybrid', mpgOrEfficiency: 50, fuelGrade: 'regular', defaultInsurance: 120 },
+  { fullName: 'Honda Accord Sport', make: 'Honda', model: 'Accord Sport', type: 'gas', mpgOrEfficiency: 32, fuelGrade: 'regular', defaultInsurance: 125 },
   { fullName: 'Honda Accord (Gas)', make: 'Honda', model: 'Accord', type: 'gas', mpgOrEfficiency: 32, fuelGrade: 'regular', defaultInsurance: 125 },
   { fullName: 'Honda Accord Hybrid', make: 'Honda', model: 'Accord Hybrid', type: 'hybrid', mpgOrEfficiency: 48, fuelGrade: 'regular', defaultInsurance: 125 },
+  { fullName: 'Honda CR-V EX / Touring', make: 'Honda', model: 'CR-V EX', type: 'gas', mpgOrEfficiency: 30, fuelGrade: 'regular', defaultInsurance: 120 },
   { fullName: 'Honda CR-V (Gas)', make: 'Honda', model: 'CR-V', type: 'gas', mpgOrEfficiency: 30, fuelGrade: 'regular', defaultInsurance: 120 },
   { fullName: 'Honda CR-V Hybrid', make: 'Honda', model: 'CR-V Hybrid', type: 'hybrid', mpgOrEfficiency: 40, fuelGrade: 'regular', defaultInsurance: 120 },
   { fullName: 'Honda Pilot', make: 'Honda', model: 'Pilot', type: 'gas', mpgOrEfficiency: 22, fuelGrade: 'regular', defaultInsurance: 135 },
@@ -1062,3 +1075,76 @@ export const AUTO_INSURANCE_TYPES = [
   { id: 'liability_only', label: 'Liability Only (State Minimum / Bodily Injury & Property)', desc: 'Only covers damages and injuries you cause to other drivers. Best suited for older, paid-off cars with lower cash value.' },
   { id: 'rideshare', label: 'Personal + Rideshare / Delivery Endorsement', desc: 'Commercial rideshare rider covering Uber, Lyft, DoorDash, and delivery driving activities.' }
 ];
+
+/**
+ * Intelligent spec detector that matches any user input (e.g. "2013 Toyota Camry SE", "Civic EX", "Model Y")
+ * and extracts powertrain, MPG/efficiency, fuel grade, and realistic insurance estimate based on coverage.
+ */
+export function detectCarSpecs(make = '', modelStr = '', coverage = 'full_coverage') {
+  const m = (modelStr || '').toLowerCase().trim();
+  const mk = (make || '').toLowerCase().trim();
+
+  const isLiability = coverage === 'liability_only';
+  const isGap = coverage === 'full_coverage_gap';
+
+  // 1. Direct or partial match in POPULAR_CAR_DATABASE
+  const directMatch = POPULAR_CAR_DATABASE.find(c => {
+    const dbModel = c.model.toLowerCase();
+    const dbFull = c.fullName.toLowerCase();
+    const makeMatches = !mk || mk === 'other' || c.make.toLowerCase() === mk;
+    return makeMatches && (m.includes(dbModel) || dbModel.includes(m) || dbFull.includes(m));
+  });
+
+  if (directMatch) {
+    const baseIns = directMatch.defaultInsurance || 120;
+    const adjIns = isLiability ? Math.max(50, Math.round(baseIns * 0.52)) : isGap ? Math.round(baseIns * 1.15) : baseIns;
+    return {
+      type: directMatch.type,
+      mpgOrEfficiency: directMatch.mpgOrEfficiency,
+      fuelGrade: directMatch.fuelGrade,
+      batteryKwh: directMatch.batteryKwh || (directMatch.type === 'ev' ? 75 : 0),
+      insuranceMonthly: adjIns
+    };
+  }
+
+  // 2. Keyword heuristic checks
+  const isEv = m.includes('ev') || m.includes('electric') || m.includes('tesla') || m.includes('rivian') || m.includes('polestar') || m.includes('ioniq') || m.includes('lightning') || m.includes('bz4x') || m.includes('solterra') || m.includes('ariya') || m.includes('model 3') || m.includes('model y') || m.includes('model s') || m.includes('model x') || m.includes('cybertruck') || m.includes('equinox ev') || m.includes('blazer ev');
+  const isPhev = !isEv && (m.includes('phev') || m.includes('plug-in') || m.includes('prime') || m.includes('4xe') || m.includes('330e'));
+  const isHybrid = !isEv && !isPhev && (m.includes('hybrid') || m.includes('prius') || m.includes('powerboost'));
+
+  const type = isEv ? 'ev' : isPhev ? 'phev' : isHybrid ? 'hybrid' : 'gas';
+  let fuelGrade = isEv ? 'electric' : 'regular';
+  if (['bmw', 'mercedes-benz', 'audi', 'porsche', 'lexus'].includes(mk) || m.includes('amg') || m.includes('m3') || m.includes('m340i') || m.includes('gt') || m.includes('c300') || m.includes('e350')) {
+    if (!isEv) fuelGrade = 'premium';
+  }
+
+  let mpgOrEfficiency = 30;
+  let batteryKwh = 0;
+  if (type === 'ev') {
+    mpgOrEfficiency = m.includes('truck') || m.includes('lightning') || m.includes('r1t') || m.includes('cybertruck') ? 45 : 28;
+    batteryKwh = m.includes('truck') || m.includes('lightning') || m.includes('r1t') || m.includes('cybertruck') ? 120 : 75;
+  } else if (type === 'hybrid') {
+    mpgOrEfficiency = m.includes('camry') || m.includes('prius') || m.includes('elantra') || m.includes('corolla') ? 50 : 38;
+  } else if (type === 'phev') {
+    mpgOrEfficiency = 38;
+    batteryKwh = 18;
+  } else {
+    // gas ICE
+    if (m.includes('camry') || m.includes('accord') || m.includes('altima')) mpgOrEfficiency = 32;
+    else if (m.includes('corolla') || m.includes('civic') || m.includes('sentra') || m.includes('elantra') || m.includes('forte')) mpgOrEfficiency = 35;
+    else if (m.includes('f-150') || m.includes('silverado') || m.includes('tahoe') || m.includes('ram') || m.includes('tundra') || m.includes('yukon')) mpgOrEfficiency = 19;
+    else if (m.includes('rav4') || m.includes('cr-v') || m.includes('rogue') || m.includes('cx-5') || m.includes('forester') || m.includes('tucson') || m.includes('sportage')) mpgOrEfficiency = 29;
+    else mpgOrEfficiency = 28;
+  }
+
+  const baseIns = type === 'ev' ? 150 : ['bmw', 'mercedes-benz', 'audi', 'porsche'].includes(mk) ? 165 : 120;
+  const adjIns = isLiability ? Math.max(50, Math.round(baseIns * 0.52)) : isGap ? Math.round(baseIns * 1.15) : baseIns;
+
+  return {
+    type,
+    mpgOrEfficiency,
+    fuelGrade,
+    batteryKwh,
+    insuranceMonthly: adjIns
+  };
+}

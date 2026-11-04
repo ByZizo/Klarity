@@ -33,6 +33,7 @@ import {
   DWELLING_TYPES,
   UTILITY_REGIONS,
   calculateHouseholdAndFleetMetrics,
+  detectCarSpecs,
   FREE_EV_CHARGING_GUIDE,
   ZERO_APR_EV_MODELS,
   MAJOR_HEALTH_PLANS,
@@ -127,7 +128,9 @@ export default function HouseholdLifestyleHub({
     name: '',
     type: 'gas',
     ownership: 'lease', // 'lease' | 'financed' | 'owned'
+    insuranceCoverage: 'full_coverage', // 'full_coverage' | 'liability_only' | 'full_coverage_gap'
     odometer: '',
+    estimatedValue: '',
     threeYearMileLimit: 36000,
     monthlyMiles: 1000,
     insuranceMonthly: 120,
@@ -175,14 +178,64 @@ export default function HouseholdLifestyleHub({
   };
 
   const handleMakeChange = (mk) => {
+    setNewCar(prev => {
+      const specs = detectCarSpecs(mk, prev.model, prev.insuranceCoverage);
+      return {
+        ...prev,
+        make: mk,
+        type: specs.type,
+        mpgOrEfficiency: specs.mpgOrEfficiency,
+        fuelGrade: specs.fuelGrade,
+        batteryKwh: specs.batteryKwh,
+        insuranceMonthly: specs.insuranceMonthly
+      };
+    });
+    setCarSearchFocused(true);
+  };
+
+  const handleModelTextChange = (val) => {
+    setCarModelSearch(val);
+    const specs = detectCarSpecs(newCar.make, val, newCar.insuranceCoverage);
     setNewCar(prev => ({
       ...prev,
-      make: mk,
-      model: '',
-      name: ''
+      model: val,
+      name: `${prev.year || 2025} ${prev.make || ''} ${val}`.replace(/\s+/g, ' ').trim(),
+      type: specs.type,
+      mpgOrEfficiency: specs.mpgOrEfficiency,
+      fuelGrade: specs.fuelGrade,
+      batteryKwh: specs.batteryKwh,
+      insuranceMonthly: specs.insuranceMonthly
     }));
-    setCarModelSearch('');
     setCarSearchFocused(true);
+  };
+
+  const handleInsuranceCoverageChange = (cov) => {
+    const specs = detectCarSpecs(newCar.make, newCar.model, cov);
+    setNewCar(prev => ({
+      ...prev,
+      insuranceCoverage: cov,
+      insuranceMonthly: specs.insuranceMonthly || (cov === 'liability_only' ? 65 : 120)
+    }));
+  };
+
+  const handleOdometerChange = (val) => {
+    const raw = String(val).replace(/[^0-9]/g, '');
+    if (!raw) {
+      setNewCar(prev => ({ ...prev, odometer: '' }));
+      return;
+    }
+    const formatted = Number(raw).toLocaleString('en-US');
+    setNewCar(prev => ({ ...prev, odometer: formatted }));
+  };
+
+  const handleEstimatedValueChange = (val) => {
+    const raw = String(val).replace(/[^0-9]/g, '');
+    if (!raw) {
+      setNewCar(prev => ({ ...prev, estimatedValue: '' }));
+      return;
+    }
+    const formatted = Number(raw).toLocaleString('en-US');
+    setNewCar(prev => ({ ...prev, estimatedValue: formatted }));
   };
 
   const handleMileLimitChange = (val) => {
@@ -254,20 +307,22 @@ export default function HouseholdLifestyleHub({
 
   const handleSelectCarSuggestion = (car) => {
     const yr = newCar.year || 2025;
+    const cov = newCar.insuranceCoverage || 'full_coverage';
+    const specs = detectCarSpecs(car.make, car.model, cov);
     const computedMonthlyMiles = newCar.threeYearMileLimit
       ? Math.round(Number(newCar.threeYearMileLimit) / 36)
-      : (car.type === 'ev' ? 1000 : 900);
+      : (specs.type === 'ev' ? 1000 : 900);
 
     setNewCar(prev => ({
       ...prev,
       make: car.make,
       model: car.model,
-      name: `${yr} ${car.fullName}`,
-      type: car.type,
-      mpgOrEfficiency: car.mpgOrEfficiency,
-      batteryKwh: car.batteryKwh || (car.type === 'ev' ? 75 : 0),
-      fuelGrade: car.fuelGrade || (car.type === 'ev' ? 'electric' : 'regular'),
-      insuranceMonthly: car.defaultInsurance || 120,
+      name: `${yr} ${car.fullName || car.model}`,
+      type: specs.type,
+      mpgOrEfficiency: specs.mpgOrEfficiency,
+      batteryKwh: specs.batteryKwh || (specs.type === 'ev' ? 75 : 0),
+      fuelGrade: specs.fuelGrade || (specs.type === 'ev' ? 'electric' : 'regular'),
+      insuranceMonthly: specs.insuranceMonthly || (cov === 'liability_only' ? 65 : 120),
       monthlyMiles: computedMonthlyMiles,
       monthlyPayment: prev.ownership === 'owned' ? 0 : (prev.monthlyPayment || (prev.ownership === 'lease' ? 399 : 450))
     }));
@@ -376,25 +431,38 @@ export default function HouseholdLifestyleHub({
     const finalModel = (newCar.model || newCar.name || '').trim();
     if (!finalModel) return;
     const isOwned = newCar.ownership === 'owned';
-    const computedName = `${newCar.year || ''} ${newCar.make || ''} ${finalModel}`.replace(/\s+/g, ' ').trim();
-    const threeYrLimit = Number(newCar.threeYearMileLimit) || 36000;
-    const monthlyAllowance = Math.round(threeYrLimit / 36);
+    const isLease = newCar.ownership === 'lease';
+    const yr = Number(newCar.year) || 2025;
+    const mk = newCar.make || 'Custom';
+    
+    // Clean model so typing "2013 Toyota Camry SE" or "Camry SE" gives a clean "2013 Toyota Camry SE"
+    const cleanModel = finalModel
+      .replace(new RegExp(`^${yr}\\s*`, 'i'), '')
+      .replace(new RegExp(`^${mk}\\s*`, 'i'), '')
+      .trim();
+    const computedName = `${yr} ${mk} ${cleanModel || finalModel}`.trim();
+    const rawOdo = Number(String(newCar.odometer).replace(/,/g, '')) || 0;
+    const rawEstValue = Number(String(newCar.estimatedValue).replace(/,/g, '')) || 0;
+    const threeYrLimit = isLease ? (Number(newCar.threeYearMileLimit) || 36000) : null;
+    const monthlyAllowance = threeYrLimit ? Math.round(threeYrLimit / 36) : 950;
 
     const item = {
       id: `veh-${Date.now()}`,
-      year: Number(newCar.year) || new Date().getFullYear(),
-      make: newCar.make || 'Custom',
-      model: finalModel,
+      year: yr,
+      make: mk,
+      model: cleanModel || finalModel,
       name: computedName,
       type: newCar.type,
       ownership: newCar.ownership || 'lease',
-      odometer: Number(newCar.odometer) || 0,
+      insuranceCoverage: newCar.insuranceCoverage || 'full_coverage',
+      odometer: rawOdo,
+      estimatedValue: rawEstValue,
       threeYearMileLimit: threeYrLimit,
       monthlyMiles: Number(newCar.monthlyMiles) || monthlyAllowance || 1000,
       fuelGrade: newCar.fuelGrade || (newCar.type === 'ev' ? 'electric' : 'regular'),
       batteryKwh: newCar.type === 'ev' ? (Number(newCar.batteryKwh) || 75) : null,
       mpgOrEfficiency: Number(newCar.mpgOrEfficiency) || (newCar.type === 'ev' ? 28 : 30),
-      insuranceMonthly: Number(newCar.insuranceMonthly) || 120,
+      insuranceMonthly: Number(newCar.insuranceMonthly) || (newCar.insuranceCoverage === 'liability_only' ? 65 : 120),
       monthlyPayment: isOwned ? 0 : (Number(newCar.monthlyPayment) || 0),
       freeChargingSharePercent: newCar.type === 'ev' ? Number(newCar.freeChargingSharePercent || 30) : 0
     };
@@ -409,7 +477,9 @@ export default function HouseholdLifestyleHub({
       name: '',
       type: 'gas',
       ownership: 'lease',
+      insuranceCoverage: 'full_coverage',
       odometer: '',
+      estimatedValue: '',
       threeYearMileLimit: 36000,
       monthlyMiles: 1000,
       insuranceMonthly: 120,
@@ -780,19 +850,19 @@ export default function HouseholdLifestyleHub({
       )}
 
       {/* ================================================================= */}
-      {/* SECTION 2: AUTO (Vehicle Fleet, Lease Tracking, Auto Insurance)   */}
+      {/* SECTION 2: AUTO (Vehicles, Commute & Auto Insurance)              */}
       {/* ================================================================= */}
       {section === 'auto' && (
         <div className="p-5 flex flex-col gap-4">
-          {/* Fleet Header */}
+          {/* Vehicles Header */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
                 <Car className="w-4 h-4 text-[#18457c]" />
-                <span>Vehicle Fleet ({metrics.fleet.vehicles.length})</span>
+                <span>Vehicles ({metrics.fleet.vehicles.length})</span>
               </span>
               <span className="text-[11px] text-slate-500 block">
-                Manage cars, lease mileage limits, and auto insurance coverage.
+                Manage your vehicles, commute costs, and auto insurance coverage.
               </span>
             </div>
 
@@ -802,11 +872,11 @@ export default function HouseholdLifestyleHub({
               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#18457c] hover:bg-[#133763] text-white text-xs font-bold transition-colors cursor-pointer shadow-2xs"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Add Car</span>
+              <span>Add Vehicle</span>
             </button>
           </div>
 
-          {/* Add Car Form (Structured with Separate Boxes & Auto-Filling Specs) */}
+          {/* Add Vehicle Form (Structured with Separate Boxes & Auto-Filling Specs) */}
           {showAddCar && (
             <form
               onSubmit={handleAddVehicle}
@@ -815,7 +885,7 @@ export default function HouseholdLifestyleHub({
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
                   <Car className="w-4 h-4 text-[#18457c]" />
-                  <span>Add Vehicle to Fleet</span>
+                  <span>Add Vehicle</span>
                 </span>
                 <button
                   type="button"
@@ -826,7 +896,7 @@ export default function HouseholdLifestyleHub({
                 </button>
               </div>
 
-              {/* Row 1: Separate Boxes for Year, Make, Model */}
+              {/* Row 1: Separate Boxes for Year, Make, Model & Trim */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 {/* Box 1: Year */}
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
@@ -838,7 +908,11 @@ export default function HouseholdLifestyleHub({
                     onChange={e => handleYearChange(e.target.value)}
                     className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
                   >
-                    {[2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010].map(y => (
+                    {[
+                      2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017,
+                      2016, 2015, 2014, 2013, 2012, 2011, 2010, 2009, 2008, 2007,
+                      2006, 2005, 2004, 2003, 2002, 2001, 2000, 1999, 1998, 1995
+                    ].map(y => (
                       <option key={y} value={y}>{y}</option>
                     ))}
                   </select>
@@ -860,29 +934,20 @@ export default function HouseholdLifestyleHub({
                   </select>
                 </div>
 
-                {/* Box 3: Model (with auto-suggest popup) */}
+                {/* Box 3: Model & Trim (with auto-suggest popup & free-form trim input) */}
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 relative" ref={carDropdownRef}>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                      Vehicle Model
+                      Model & Trim
                     </label>
                     <span className="text-[9px] text-[#18457c] font-semibold">Auto-fills specs</span>
                   </div>
                   <input
                     type="text"
                     required
-                    placeholder="Type or select model..."
+                    placeholder="e.g. Camry SE, Civic EX, Model Y..."
                     value={carModelSearch || newCar.model || ''}
-                    onChange={e => {
-                      const val = e.target.value;
-                      setCarModelSearch(val);
-                      setNewCar(prev => ({
-                        ...prev,
-                        model: val,
-                        name: `${prev.year || 2025} ${prev.make || ''} ${val}`.replace(/\s+/g, ' ').trim()
-                      }));
-                      setCarSearchFocused(true);
-                    }}
+                    onChange={e => handleModelTextChange(e.target.value)}
                     onFocus={() => setCarSearchFocused(true)}
                     className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
                   />
@@ -929,12 +994,12 @@ export default function HouseholdLifestyleHub({
                 </div>
               </div>
 
-              {/* Row 2: Separate Boxes for Lease/Ownership, Odometer, 3-Year Mile Limit, Monthly Payment */}
+              {/* Row 2: Ownership, Insurance Coverage, Odometer, Lease Limit / Est. Value, Monthly Payment */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                 {/* Box 4: Ownership / Lease */}
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                    Financing / Lease Status
+                    Financing / Status
                   </label>
                   <select
                     value={newCar.ownership || 'lease'}
@@ -943,7 +1008,8 @@ export default function HouseholdLifestyleHub({
                       setNewCar(prev => ({
                         ...prev,
                         ownership: own,
-                        monthlyPayment: own === 'owned' ? 0 : (prev.monthlyPayment || 399)
+                        threeYearMileLimit: own === 'lease' ? 36000 : null,
+                        monthlyPayment: own === 'owned' ? 0 : (prev.monthlyPayment || (own === 'lease' ? 399 : 450))
                       }));
                     }}
                     className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
@@ -954,7 +1020,23 @@ export default function HouseholdLifestyleHub({
                   </select>
                 </div>
 
-                {/* Box 5: Current Odometer */}
+                {/* Box 5: Insurance Coverage (Liability vs Full Coverage) */}
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Insurance Coverage
+                  </label>
+                  <select
+                    value={newCar.insuranceCoverage || 'full_coverage'}
+                    onChange={e => handleInsuranceCoverageChange(e.target.value)}
+                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                  >
+                    <option value="full_coverage">Full Coverage (Comp + Collision)</option>
+                    <option value="liability_only">Liability Only</option>
+                    <option value="full_coverage_gap">Full Coverage + GAP</option>
+                  </select>
+                </div>
+
+                {/* Box 6: Current Odometer (with automatic comma formatting) */}
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                     Current Odometer
@@ -962,39 +1044,60 @@ export default function HouseholdLifestyleHub({
                   <div className="flex items-center gap-1">
                     <Gauge className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <input
-                      type="number"
+                      type="text"
                       placeholder="e.g. 14,200"
                       value={newCar.odometer || ''}
-                      onChange={e => setNewCar({ ...newCar, odometer: e.target.value })}
+                      onChange={e => handleOdometerChange(e.target.value)}
                       className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
                     />
                     <span className="text-[10px] text-slate-400">mi</span>
                   </div>
                 </div>
 
-                {/* Box 6: 3-Year Mile Limit */}
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                      3-Year Mile Limit
-                    </label>
-                    <span className="text-[9px] text-emerald-700 font-bold">
-                      ~{Math.round((Number(newCar.threeYearMileLimit) || 36000) / 36)} mi/mo
-                    </span>
+                {/* Box 7: Conditional — 3-Year Mile Limit ONLY for Lease; Estimated Value for Financed/Owned */}
+                {newCar.ownership === 'lease' ? (
+                  <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block">
+                        3-Yr Lease Limit
+                      </label>
+                      <span className="text-[9px] text-amber-700 font-bold">
+                        ~{Math.round((Number(newCar.threeYearMileLimit) || 36000) / 36)} mi/mo
+                      </span>
+                    </div>
+                    <select
+                      value={newCar.threeYearMileLimit || 36000}
+                      onChange={e => handleMileLimitChange(e.target.value)}
+                      className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                    >
+                      <option value="30000">30,000 miles (10,000 mi/yr)</option>
+                      <option value="36000">36,000 miles (12,000 mi/yr - Standard)</option>
+                      <option value="45000">45,000 miles (15,000 mi/yr - High)</option>
+                      <option value="60000">60,000 miles (20,000 mi/yr)</option>
+                    </select>
                   </div>
-                  <select
-                    value={newCar.threeYearMileLimit || 36000}
-                    onChange={e => handleMileLimitChange(e.target.value)}
-                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
-                  >
-                    <option value="30000">30,000 miles (10,000 mi/yr)</option>
-                    <option value="36000">36,000 miles (12,000 mi/yr - Standard)</option>
-                    <option value="45000">45,000 miles (15,000 mi/yr - High)</option>
-                    <option value="60000">60,000 miles (20,000 mi/yr)</option>
-                  </select>
-                </div>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                      Est. Market Value
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-slate-400">$</span>
+                      <input
+                        type="text"
+                        placeholder="e.g. 12,500"
+                        value={newCar.estimatedValue || ''}
+                        onChange={e => handleEstimatedValueChange(e.target.value)}
+                        className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
 
-                {/* Box 7: Monthly Payment */}
+              {/* Row 3: Monthly Payment & Auto-filled Specs Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                {/* Monthly Payment */}
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                     {newCar.ownership === 'lease' ? 'Monthly Lease Payment' : newCar.ownership === 'financed' ? 'Monthly Loan Payment' : 'Payment Status'}
@@ -1012,29 +1115,33 @@ export default function HouseholdLifestyleHub({
                     <span className="text-[10px] text-slate-400">/mo</span>
                   </div>
                 </div>
-              </div>
 
-              {/* Row 3: Auto-filled Specs Row (App automatically puts everything else) */}
-              <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div>
-                  <span className="text-[10px] font-semibold text-slate-400 block">Powertrain (Auto)</span>
-                  <span className="font-bold text-slate-900 uppercase text-xs mt-0.5 block">{newCar.type}</span>
+                {/* Powertrain */}
+                <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                  <span className="text-[10px] font-semibold text-slate-400 block">Powertrain</span>
+                  <span className="font-bold text-slate-900 uppercase text-xs mt-1 block">{newCar.type}</span>
                 </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-slate-400 block">Fuel / Energy (Auto)</span>
-                  <span className="font-bold text-slate-900 text-xs mt-0.5 block capitalize">
+
+                {/* Fuel Grade / Energy */}
+                <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                  <span className="text-[10px] font-semibold text-slate-400 block">Fuel / Energy</span>
+                  <span className="font-bold text-slate-900 text-xs mt-1 block capitalize">
                     {newCar.type === 'ev' ? `⚡ Electric (${newCar.batteryKwh || 75} kWh)` : newCar.fuelGrade === 'premium' ? 'Premium 91+' : 'Regular 87'}
                   </span>
                 </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-slate-400 block">Rated Efficiency (Auto)</span>
-                  <span className="font-bold text-slate-900 text-xs mt-0.5 block">
+
+                {/* Efficiency */}
+                <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                  <span className="text-[10px] font-semibold text-slate-400 block">Rated Efficiency</span>
+                  <span className="font-bold text-slate-900 text-xs mt-1 block">
                     {newCar.type === 'ev' ? `${newCar.mpgOrEfficiency} kWh/100mi` : `${newCar.mpgOrEfficiency} MPG`}
                   </span>
                 </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-slate-400 block">Est. Insurance (Auto)</span>
-                  <div className="flex items-center gap-0.5 mt-0.5">
+
+                {/* Insurance Monthly Estimate */}
+                <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                  <span className="text-[10px] font-semibold text-slate-400 block">Est. Insurance</span>
+                  <div className="flex items-center gap-0.5 mt-1">
                     <span className="font-bold text-slate-400 text-xs">$</span>
                     <input
                       type="number"
@@ -1060,13 +1167,13 @@ export default function HouseholdLifestyleHub({
                   type="submit"
                   className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer shadow-2xs"
                 >
-                  Add Vehicle to Fleet
+                  Add Vehicle
                 </button>
               </div>
             </form>
           )}
 
-          {/* Vehicle Fleet Cards */}
+          {/* Vehicles Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {metrics.fleet.vehicles.map(v => (
               <div key={v.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-3 text-xs">
@@ -1089,6 +1196,17 @@ export default function HouseholdLifestyleHub({
                         {v.ownership === 'lease' ? 'Lease' : v.ownership === 'financed' ? 'Financed' : 'Owned'}
                       </span>
                     )}
+                    {v.insuranceCoverage && (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        v.insuranceCoverage === 'liability_only'
+                          ? 'bg-slate-200/80 text-slate-700 border border-slate-300'
+                          : v.insuranceCoverage === 'full_coverage_gap'
+                            ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                            : 'bg-emerald-100/70 text-emerald-800 border border-emerald-200'
+                      }`}>
+                        {v.insuranceCoverage === 'liability_only' ? 'Liability Only' : v.insuranceCoverage === 'full_coverage_gap' ? 'Full Coverage + GAP' : 'Full Coverage'}
+                      </span>
+                    )}
                     <span className="text-[10px] text-slate-400">
                       {v.type === 'ev' ? `${v.mpgOrEfficiency} kWh/100mi` : `${v.mpgOrEfficiency} MPG (${v.fuelGrade === 'premium' ? 'Premium 91+' : v.fuelGrade === 'diesel' ? 'Diesel' : 'Regular 87'})`}
                     </span>
@@ -1102,15 +1220,21 @@ export default function HouseholdLifestyleHub({
                   </button>
                 </div>
 
-                {/* Odometer & 3-Year Mileage Tracking Line */}
-                {(v.odometer || v.threeYearMileLimit) && (
+                {/* Odometer, Lease Limit (for lease only) & Market Value Line */}
+                {(v.odometer || (v.ownership === 'lease' && v.threeYearMileLimit) || v.estimatedValue) && (
                   <div className="flex items-center gap-2 text-[11px] text-slate-600 bg-white/70 px-2.5 py-1 rounded-lg border border-slate-200/60 flex-wrap">
                     {v.odometer ? (
-                      <span>Odometer: <strong className="text-slate-900">{Number(v.odometer).toLocaleString()} mi</strong></span>
+                      <span>Odometer: <strong className="text-slate-900">{Number(v.odometer).toLocaleString('en-US')} mi</strong></span>
                     ) : null}
-                    {v.odometer && v.threeYearMileLimit ? <span>•</span> : null}
-                    {v.threeYearMileLimit ? (
-                      <span>3-Yr Lease Limit: <strong className="text-slate-900">{Number(v.threeYearMileLimit).toLocaleString()} mi</strong> (~{Math.round(Number(v.threeYearMileLimit) / 36)} mi/mo)</span>
+                    {v.odometer && v.ownership === 'lease' && v.threeYearMileLimit ? <span>•</span> : null}
+                    {v.ownership === 'lease' && v.threeYearMileLimit ? (
+                      <span>3-Yr Lease Limit: <strong className="text-slate-900">{Number(v.threeYearMileLimit).toLocaleString('en-US')} mi</strong> (~{Math.round(Number(v.threeYearMileLimit) / 36)} mi/mo)</span>
+                    ) : null}
+                    {(v.ownership === 'owned' || v.ownership === 'financed') && v.estimatedValue ? (
+                      <>
+                        {v.odometer ? <span>•</span> : null}
+                        <span>Est. Market Value: <strong className="text-slate-900">${Number(v.estimatedValue).toLocaleString('en-US')}</strong></span>
+                      </>
                     ) : null}
                   </div>
                 )}

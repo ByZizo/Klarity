@@ -1519,7 +1519,7 @@ function KlarityApp() {
     bills: { id: 'bills', label: 'Bills', icon: Receipt, flag: null },
     subscriptions: { id: 'subscriptions', label: 'Subscriptions', icon: Zap, flag: null },
     budgets: { id: 'budgets', label: 'Budgets', icon: PieChart, flag: 'budgets' },
-    household: { id: 'household', label: 'Household', icon: Home, flag: 'household' },
+    household: { id: 'household', label: 'Lifestyle', icon: Home, flag: 'household' },
     retirement: { id: 'retirement', label: 'Retirement', icon: Landmark, flag: 'retirement' },
     vault: { id: 'vault', label: 'Passwords', icon: KeyRound, flag: 'vault' }
   };
@@ -5137,7 +5137,7 @@ function KlarityApp() {
                       { label: 'Bills', onClick: () => setActiveTab('bills') },
                       { label: 'Subscriptions', onClick: () => setActiveTab('subscriptions') },
                       { label: 'Cards', onClick: () => setActiveTab('cards') },
-                      ...(featureFlags.household !== false ? [{ label: 'Household & Auto', onClick: () => setActiveTab('household') }] : []),
+                      ...(featureFlags.household !== false ? [{ label: 'Lifestyle', onClick: () => setActiveTab('household') }] : []),
                       ...(featureFlags.retirement !== false ? [{ label: 'Retirement & Pensions', onClick: () => setActiveTab('retirement') }] : []),
                       ...(featureFlags.vault !== false ? [{ label: 'Passwords & Accounts', onClick: () => setActiveTab('vault') }] : []),
                       { label: 'Settings', onClick: () => setIsSettingsOpen(true) }
@@ -5324,7 +5324,7 @@ function KlarityApp() {
                     >
                       <ArrowLeft className="w-4 h-4" />
                     </button>
-                    <h1 className="font-serif-title text-[24px] font-bold text-slate-900">Household & Auto</h1>
+                    <h1 className="font-serif-title text-[24px] font-bold text-slate-900">Lifestyle</h1>
                   </div>
                   <HouseholdLifestyleHub
                     householdProfile={householdProfile}
@@ -6759,8 +6759,8 @@ function KlarityApp() {
                   <ArrowLeft className="w-4 h-4" />
                   <span>Back to Overview</span>
                 </button>
-                <h1 className="font-serif-title text-2xl font-bold text-slate-900 tracking-tight">Household, Auto & Lifestyle</h1>
-                <p className="text-xs text-slate-500 mt-0.5">Manage utility bills, vehicle expenses, health coverage, and smart efficiency recommendations.</p>
+                <h1 className="font-serif-title text-2xl font-bold text-slate-900 tracking-tight">Lifestyle</h1>
+                <p className="text-xs text-slate-500 mt-0.5">Manage home utilities, vehicles, health coverage, and lifestyle expenses.</p>
               </div>
             </div>
 
