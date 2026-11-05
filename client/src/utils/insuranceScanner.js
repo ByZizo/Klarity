@@ -122,6 +122,7 @@ export function parseInsuranceText(rawText = '') {
   const lines = text.split(/\r?\n/).map((l) => l.replace(/\s{2,}/g, ' ').trim()).filter(Boolean);
 
   const out = {
+    insuranceType: 'Medical',
     provider: '',
     planName: '',
     network: '',
@@ -204,9 +205,35 @@ export function parseInsuranceText(rawText = '') {
     }
   }
 
+  // Insurance type detection
+  if (/\b(?:dental|dentist|orthodontic|dmd|dds)\b/i.test(text)) {
+    out.insuranceType = 'Dental';
+  } else if (/\b(?:vision|optical|optometry|eyecare|optometrist)\b/i.test(text)) {
+    out.insuranceType = 'Vision';
+  } else if (/\b(?:prescription only|rx only|pharmacy benefits)\b/i.test(text)) {
+    out.insuranceType = 'Prescription';
+  } else {
+    out.insuranceType = 'Medical';
+  }
+
   // Primary care doctor: "LASTNAME, FIRSTNAME M (555) 555-5555"
   const doc = text.match(/([A-Z][A-Z'-]+,\s*[A-Z][A-Z .'-]*?)\s+(\(\d{3}\)\s?\d{3}[-.\s]\d{4})/);
-  if (doc) out.doctor = { name: doc[1].trim(), phone: doc[2].trim() };
+  if (doc) {
+    let office = '';
+    const docName = doc[1].trim();
+    const docIdx = lines.findIndex((l) => l.includes(docName.split(',')[0]));
+    if (docIdx > 0) {
+      for (let k = docIdx - 1; k >= Math.max(0, docIdx - 3); k--) {
+        const line = lines[k];
+        if (/pcp effective/i.test(line)) continue;
+        if (/phys|clinic|center|group|medical|health|sante|associates|hospital/i.test(line)) {
+          office = line.trim();
+          break;
+        }
+      }
+    }
+    out.doctor = { name: docName, phone: doc[2].trim(), office, specialty: 'Primary care (PCP)' };
+  }
 
   return out;
 }

@@ -29,6 +29,7 @@ import {
   ShieldCheck,
   Gauge,
   ChevronDown,
+  ChevronUp,
   FileText,
   Copy,
   Check,
@@ -363,29 +364,71 @@ export default function HouseholdLifestyleHub({
     memberId: '',
     groupNumber: '',
     network: '',
+    insuranceType: 'Medical',
+    memberName: '',
     copays: { primaryCare: null, specialist: null, urgentCare: null, er: null, rxGeneric: null },
     doctors: [],
-    cards: []
+    cards: [],
+    policies: []
   };
 
-  const hasSavedInsurance = Boolean(
-    health.saved ||
-    (health.cards && health.cards.length > 0) ||
-    (health.memberId && health.memberId.trim().length > 0)
-  );
+  // Multiple insurance policies support with backward-compatibility for existing single policy
+  const policies = useMemo(() => {
+    if (Array.isArray(health.policies) && health.policies.length > 0) {
+      return health.policies;
+    }
+    const hasSingle = Boolean(
+      health.saved ||
+      (health.cards && health.cards.length > 0) ||
+      (health.memberId && health.memberId.trim().length > 0) ||
+      health.planName
+    );
+    if (hasSingle) {
+      const pDoc = (health.doctors && health.doctors[0]) || health.doctor || null;
+      return [{
+        id: 'pol-primary',
+        memberName: health.memberName || '',
+        insuranceType: health.insuranceType || 'Medical',
+        provider: health.provider || '',
+        planName: health.planName || '',
+        memberId: health.memberId || '',
+        groupNumber: health.groupNumber || '',
+        network: health.network || '',
+        copays: health.copays || {},
+        deductible: health.deductible,
+        outOfPocketMax: health.outOfPocketMax,
+        rxBin: health.rxBin || '',
+        rxPcn: health.rxPcn || '',
+        rxGrp: health.rxGrp || '',
+        cards: health.cards || [],
+        doctor: pDoc
+      }];
+    }
+    return [];
+  }, [health]);
+
+  const hasSavedInsurance = policies.length > 0;
   const [healthView, setHealthView] = useState(hasSavedInsurance ? 'saved' : 'empty');
-  const [showMemberId, setShowMemberId] = useState(false);
-  const [copiedMemberId, setCopiedMemberId] = useState(false);
+  const [expandedPolicyIds, setExpandedPolicyIds] = useState({ 'pol-primary': true });
+  const [revealedMemberIds, setRevealedMemberIds] = useState({});
+  const [copiedPolicyId, setCopiedPolicyId] = useState(null);
+  const [flippedCards, setFlippedCards] = useState({});
+  const [editingPolicyId, setEditingPolicyId] = useState(null);
+  const [editingDoctorPolicyId, setEditingDoctorPolicyId] = useState(null);
+  const [inlineDoctorForm, setInlineDoctorForm] = useState({ name: '', specialty: 'Primary care (PCP)', office: '', phone: '' });
+
   const [keepCardImage, setKeepCardImage] = useState(health.keepCardImage !== false);
   const [pendingCard, setPendingCard] = useState(null);
   const [pendingCards, setPendingCards] = useState([]);
   const [pendingDoctor, setPendingDoctor] = useState(null);
   const [scanProgress, setScanProgress] = useState('');
-  const [cardFlipped, setCardFlipped] = useState(false);
   const [showCardDialog, setShowCardDialog] = useState(false);
+  const [dialogCards, setDialogCards] = useState([]);
   const healthFileInputRef = useRef(null);
 
   const [reviewForm, setReviewForm] = useState({
+    memberName: health.memberName || '',
+    insuranceType: health.insuranceType || 'Medical',
     planName: health.planName || '',
     provider: health.provider || '',
     memberId: health.memberId || '',
@@ -397,7 +440,14 @@ export default function HouseholdLifestyleHub({
     er: health.copays?.er != null ? `$${health.copays.er}` : '',
     rxGeneric: health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '',
     deductible: health.deductible != null && health.deductible !== '' ? (String(health.deductible).startsWith('$') ? health.deductible : `$${Number(health.deductible).toLocaleString()}`) : '',
-    outOfPocketMax: health.outOfPocketMax != null && health.outOfPocketMax !== '' ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : ''
+    outOfPocketMax: health.outOfPocketMax != null && health.outOfPocketMax !== '' ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : '',
+    rxBin: health.rxBin || '',
+    rxPcn: health.rxPcn || '',
+    rxGrp: health.rxGrp || '',
+    doctorName: (health.doctors && health.doctors[0]?.name) || '',
+    doctorPhone: (health.doctors && health.doctors[0]?.phone) || '',
+    doctorOffice: (health.doctors && health.doctors[0]?.office) || '',
+    doctorSpecialty: (health.doctors && health.doctors[0]?.specialty) || 'Primary care (PCP)'
   });
 
   useEffect(() => {
@@ -505,14 +555,26 @@ export default function HouseholdLifestyleHub({
     });
   };
 
-  const handleCopyMemberId = () => {
-    const mid = health.memberId || reviewForm.memberId || '';
+  const isPolicyExpanded = (id, idx) => {
+    if (expandedPolicyIds[id] !== undefined) return expandedPolicyIds[id];
+    return idx === 0;
+  };
+
+  const togglePolicyExpanded = (id, idx) => {
+    setExpandedPolicyIds(prev => ({
+      ...prev,
+      [id]: !isPolicyExpanded(id, idx)
+    }));
+  };
+
+  const handleCopyMemberId = (policy) => {
+    const mid = policy?.memberId || '';
     if (!mid) return;
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(mid).catch(() => {});
     }
-    setCopiedMemberId(true);
-    setTimeout(() => setCopiedMemberId(false), 2000);
+    setCopiedPolicyId(policy.id);
+    setTimeout(() => setCopiedPolicyId(null), 2000);
   };
 
   const parseCurrencyInput = (val, defaultVal = null) => {
@@ -555,6 +617,8 @@ export default function HouseholdLifestyleHub({
     const fmt = (v) => (v != null && v !== '' ? `$${Number(v).toLocaleString()}` : '');
     const pName = extractedDetails?.planName || '';
     setReviewForm({
+      memberName: extractedDetails?.memberName || '',
+      insuranceType: extractedDetails?.insuranceType || 'Medical',
       planName: pName,
       provider: extractedDetails?.provider || '',
       memberId: extractedDetails?.memberId || '',
@@ -567,10 +631,13 @@ export default function HouseholdLifestyleHub({
       rxGeneric: fmt(extractedDetails?.copays?.rxGeneric),
       deductible: fmt(extractedDetails?.deductible),
       outOfPocketMax: fmt(extractedDetails?.outOfPocketMax),
-      memberName: extractedDetails?.memberName || '',
       rxBin: extractedDetails?.rxBin || '',
       rxPcn: extractedDetails?.rxPcn || '',
-      rxGrp: extractedDetails?.rxGrp || ''
+      rxGrp: extractedDetails?.rxGrp || '',
+      doctorName: extractedDetails?.doctor?.name || '',
+      doctorPhone: extractedDetails?.doctor?.phone || '',
+      doctorOffice: extractedDetails?.doctor?.office || '',
+      doctorSpecialty: extractedDetails?.doctor?.specialty || 'Primary care (PCP)'
     });
 
     setScanProgress('');
@@ -578,29 +645,135 @@ export default function HouseholdLifestyleHub({
     setHealthView('review');
   };
 
+  const handleAddNewCard = () => {
+    setEditingPolicyId(null);
+    setPendingCards([]);
+    setPendingCard(null);
+    setPendingDoctor(null);
+    setKeepCardImage(true);
+    setReviewForm({
+      memberName: '',
+      insuranceType: 'Medical',
+      planName: '',
+      provider: '',
+      memberId: '',
+      groupNumber: '',
+      network: '',
+      primaryCare: '',
+      specialist: '',
+      urgentCare: '',
+      er: '',
+      rxGeneric: '',
+      deductible: '',
+      outOfPocketMax: '',
+      rxBin: '',
+      rxPcn: '',
+      rxGrp: '',
+      doctorName: '',
+      doctorPhone: '',
+      doctorOffice: '',
+      doctorSpecialty: 'Primary care (PCP)'
+    });
+    healthFileInputRef.current?.click();
+  };
+
+  const handleManualAddCard = () => {
+    setEditingPolicyId(null);
+    setPendingCards([]);
+    setPendingCard(null);
+    setPendingDoctor(null);
+    setKeepCardImage(true);
+    setReviewForm({
+      memberName: '',
+      insuranceType: 'Medical',
+      planName: '',
+      provider: '',
+      memberId: '',
+      groupNumber: '',
+      network: '',
+      primaryCare: '',
+      specialist: '',
+      urgentCare: '',
+      er: '',
+      rxGeneric: '',
+      deductible: '',
+      outOfPocketMax: '',
+      rxBin: '',
+      rxPcn: '',
+      rxGrp: '',
+      doctorName: '',
+      doctorPhone: '',
+      doctorOffice: '',
+      doctorSpecialty: 'Primary care (PCP)'
+    });
+    setHealthView('review');
+  };
+
+  const handleEditPolicy = (policy) => {
+    setEditingPolicyId(policy.id);
+    const fmt = (v) => (v != null && v !== '' ? (String(v).startsWith('$') ? v : `$${Number(v).toLocaleString()}`) : '');
+    setReviewForm({
+      memberName: policy.memberName || '',
+      insuranceType: policy.insuranceType || 'Medical',
+      planName: policy.planName || '',
+      provider: policy.provider || '',
+      memberId: policy.memberId || '',
+      groupNumber: policy.groupNumber || '',
+      network: policy.network || '',
+      primaryCare: policy.copays?.primaryCare != null ? `$${policy.copays.primaryCare}` : '',
+      specialist: policy.copays?.specialist != null ? `$${policy.copays.specialist}` : '',
+      urgentCare: policy.copays?.urgentCare != null ? `$${policy.copays.urgentCare}` : '',
+      er: policy.copays?.er != null ? `$${policy.copays.er}` : '',
+      rxGeneric: policy.copays?.rxGeneric != null ? `$${policy.copays.rxGeneric}` : '',
+      deductible: fmt(policy.deductible),
+      outOfPocketMax: fmt(policy.outOfPocketMax),
+      rxBin: policy.rxBin || '',
+      rxPcn: policy.rxPcn || '',
+      rxGrp: policy.rxGrp || '',
+      doctorName: policy.doctor?.name || '',
+      doctorPhone: policy.doctor?.phone || '',
+      doctorOffice: policy.doctor?.office || '',
+      doctorSpecialty: policy.doctor?.specialty || 'Primary care (PCP)'
+    });
+    setPendingCards(policy.cards || []);
+    setPendingCard((policy.cards && policy.cards[0]) || null);
+    setPendingDoctor(policy.doctor || null);
+    setKeepCardImage(policy.cards && policy.cards.length > 0);
+    setHealthView('review');
+  };
+
+  const handleReplaceCard = (policy) => {
+    setEditingPolicyId(policy.id);
+    healthFileInputRef.current?.click();
+  };
+
   const handleSaveReview = () => {
-    const savedCards = keepCardImage
-      ? (pendingCards.length > 0 ? pendingCards : (pendingCard ? [pendingCard] : (health.cards || [])))
+    const existingCards = editingPolicyId
+      ? (policies.find(p => p.id === editingPolicyId)?.cards || [])
       : [];
 
-    let nextDoctors = [...(health.doctors || [])];
-    if (pendingDoctor && pendingDoctor.name) {
-      const docExists = nextDoctors.some(d => d.name?.toLowerCase() === pendingDoctor.name.toLowerCase());
-      if (!docExists) {
-        nextDoctors.push({
-          id: `doc-${Date.now()}`,
-          name: pendingDoctor.name,
-          specialty: 'Primary care (PCP)',
-          office: '',
-          phone: pendingDoctor.phone || '',
-          notes: 'Auto-detected from insurance card'
-        });
-      }
-    }
+    const savedCards = keepCardImage
+      ? (pendingCards.length > 0 ? pendingCards : (pendingCard ? [pendingCard] : existingCards))
+      : [];
 
-    const nextHealth = {
-      ...health,
-      saved: true,
+    const policyDoctor = (reviewForm.doctorName && reviewForm.doctorName.trim()) ? {
+      name: reviewForm.doctorName.trim(),
+      phone: (reviewForm.doctorPhone || '').trim(),
+      office: (reviewForm.doctorOffice || '').trim(),
+      specialty: (reviewForm.doctorSpecialty || 'Primary care (PCP)').trim()
+    } : (pendingDoctor ? {
+      name: pendingDoctor.name,
+      phone: pendingDoctor.phone || '',
+      office: pendingDoctor.office || '',
+      specialty: pendingDoctor.specialty || 'Primary care (PCP)'
+    } : null);
+
+    const targetPolicyId = editingPolicyId || `pol-${Date.now()}`;
+
+    const policyData = {
+      id: targetPolicyId,
+      memberName: (reviewForm.memberName || '').trim(),
+      insuranceType: (reviewForm.insuranceType || 'Medical').trim(),
       provider: (reviewForm.provider || '').trim(),
       planName: (reviewForm.planName || '').trim(),
       memberId: (reviewForm.memberId || '').trim(),
@@ -609,20 +782,67 @@ export default function HouseholdLifestyleHub({
       deductible: parseCurrencyInput(reviewForm.deductible, null),
       outOfPocketMax: parseCurrencyInput(reviewForm.outOfPocketMax, null),
       copays: {
-        ...(health.copays || {}),
         primaryCare: parseCurrencyInput(reviewForm.primaryCare, null),
         specialist: parseCurrencyInput(reviewForm.specialist, null),
         urgentCare: parseCurrencyInput(reviewForm.urgentCare, null),
         er: parseCurrencyInput(reviewForm.er, null),
         rxGeneric: parseCurrencyInput(reviewForm.rxGeneric, null)
       },
-      memberName: (reviewForm.memberName || '').trim(),
       rxBin: (reviewForm.rxBin || '').trim(),
       rxPcn: (reviewForm.rxPcn || '').trim(),
       rxGrp: (reviewForm.rxGrp || '').trim(),
-      doctors: nextDoctors,
+      cards: savedCards,
+      doctor: policyDoctor
+    };
+
+    let nextPolicies = [...policies];
+    if (editingPolicyId) {
+      const idx = nextPolicies.findIndex(p => p.id === editingPolicyId);
+      if (idx !== -1) {
+        nextPolicies[idx] = policyData;
+      } else {
+        nextPolicies.push(policyData);
+      }
+    } else {
+      nextPolicies.push(policyData);
+    }
+
+    const primary = nextPolicies[0] || policyData;
+
+    let allDoctors = [...(health.doctors || [])];
+    if (policyDoctor && policyDoctor.name) {
+      const docExists = allDoctors.some(d => d.name?.toLowerCase() === policyDoctor.name.toLowerCase());
+      if (!docExists) {
+        allDoctors.push({
+          id: `doc-${Date.now()}`,
+          name: policyDoctor.name,
+          specialty: policyDoctor.specialty || 'Primary care (PCP)',
+          office: policyDoctor.office || '',
+          phone: policyDoctor.phone || ''
+        });
+      }
+    }
+
+    const nextHealth = {
+      ...health,
+      saved: true,
+      policies: nextPolicies,
+      insuranceType: primary.insuranceType,
+      memberName: primary.memberName,
+      provider: primary.provider,
+      planName: primary.planName,
+      memberId: primary.memberId,
+      groupNumber: primary.groupNumber,
+      network: primary.network,
+      deductible: primary.deductible,
+      outOfPocketMax: primary.outOfPocketMax,
+      copays: primary.copays,
+      rxBin: primary.rxBin,
+      rxPcn: primary.rxPcn,
+      rxGrp: primary.rxGrp,
+      doctors: allDoctors,
       keepCardImage,
-      cards: savedCards
+      cards: primary.cards
     };
 
     const nextProfile = {
@@ -647,63 +867,103 @@ export default function HouseholdLifestyleHub({
       console.warn('Card profile sync notice:', e);
     }
 
-    setCardFlipped(false);
+    setExpandedPolicyIds(prev => ({
+      ...prev,
+      [targetPolicyId]: true
+    }));
+    setEditingPolicyId(null);
     setHealthView('saved');
   };
 
   const handleCancelReview = () => {
-    if (hasSavedInsurance || health.saved || health.memberId) {
+    setEditingPolicyId(null);
+    if (policies.length > 0) {
       setHealthView('saved');
     } else {
       setHealthView('empty');
     }
   };
 
-  const handleEditInsurance = () => {
-    setReviewForm({
-      planName: health.planName || '',
-      provider: health.provider || '',
-      memberId: health.memberId || '',
-      groupNumber: health.groupNumber || '',
-      network: health.network || '',
-      primaryCare: health.copays?.primaryCare != null ? `$${health.copays.primaryCare}` : '',
-      specialist: health.copays?.specialist != null ? `$${health.copays.specialist}` : '',
-      urgentCare: health.copays?.urgentCare != null ? `$${health.copays.urgentCare}` : '',
-      er: health.copays?.er != null ? `$${health.copays.er}` : '',
-      rxGeneric: health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '',
-      deductible: health.deductible != null && health.deductible !== '' ? (String(health.deductible).startsWith('$') ? health.deductible : `$${Number(health.deductible).toLocaleString()}`) : '',
-      outOfPocketMax: health.outOfPocketMax != null && health.outOfPocketMax !== '' ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : '',
-      memberName: health.memberName || '',
-      rxBin: health.rxBin || '',
-      rxPcn: health.rxPcn || '',
-      rxGrp: health.rxGrp || ''
-    });
-    setPendingCards([]);
-    setPendingCard(null);
-    setPendingDoctor(null);
-    setKeepCardImage(health.keepCardImage !== false);
-    setHealthView('review');
-  };
-
-  const handleRemoveInsurance = () => {
+  const handleRemovePolicy = (policyId) => {
+    const updatedPolicies = policies.filter(p => p.id !== policyId);
+    const primary = updatedPolicies[0] || null;
     const nextHealth = {
       ...health,
-      saved: false,
-      provider: '',
-      planName: '',
-      memberId: '',
-      groupNumber: '',
-      network: '',
-      deductible: null,
-      outOfPocketMax: null,
-      copays: {
-        primaryCare: null,
-        specialist: null,
-        urgentCare: null,
-        er: null,
-        rxGeneric: null
-      },
-      cards: []
+      saved: updatedPolicies.length > 0,
+      policies: updatedPolicies,
+      provider: primary ? primary.provider : '',
+      planName: primary ? primary.planName : '',
+      memberId: primary ? primary.memberId : '',
+      groupNumber: primary ? primary.groupNumber : '',
+      network: primary ? primary.network : '',
+      memberName: primary ? primary.memberName : '',
+      insuranceType: primary ? primary.insuranceType : 'Medical',
+      rxBin: primary ? primary.rxBin : '',
+      rxPcn: primary ? primary.rxPcn : '',
+      rxGrp: primary ? primary.rxGrp : '',
+      deductible: primary ? primary.deductible : null,
+      outOfPocketMax: primary ? primary.outOfPocketMax : null,
+      copays: primary ? primary.copays : { primaryCare: null, specialist: null, urgentCare: null, er: null, rxGeneric: null },
+      cards: primary ? (primary.cards || []) : [],
+      doctors: updatedPolicies.filter(p => p.doctor && p.doctor.name).map(p => ({
+        id: `doc-${p.id}`,
+        name: p.doctor.name,
+        specialty: p.doctor.specialty || 'Primary care (PCP)',
+        phone: p.doctor.phone || '',
+        office: p.doctor.office || ''
+      }))
+    };
+
+    const nextProfile = {
+      ...householdProfile,
+      health: nextHealth
+    };
+    onUpdateProfile(nextProfile);
+    try {
+      localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
+      localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
+      const token = localStorage.getItem('klarity_token') || sessionStorage.getItem('klarity_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      fetch('/api/household', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(nextProfile)
+      }).catch(err => console.warn('Sync notice:', err));
+    } catch (e) {}
+
+    if (updatedPolicies.length === 0) {
+      setHealthView('empty');
+    }
+  };
+
+  const handleOpenDoctorEdit = (policy) => {
+    setEditingDoctorPolicyId(policy.id);
+    setInlineDoctorForm({
+      name: policy.doctor?.name || '',
+      specialty: policy.doctor?.specialty || 'Primary care (PCP)',
+      office: policy.doctor?.office || '',
+      phone: policy.doctor?.phone || ''
+    });
+  };
+
+  const handleSaveInlineDoctor = (policyId) => {
+    const updatedPolicies = policies.map(p => {
+      if (p.id !== policyId) return p;
+      return {
+        ...p,
+        doctor: inlineDoctorForm.name.trim() ? {
+          name: inlineDoctorForm.name.trim(),
+          specialty: inlineDoctorForm.specialty.trim() || 'Primary care (PCP)',
+          office: inlineDoctorForm.office.trim(),
+          phone: inlineDoctorForm.phone.trim()
+        } : null
+      };
+    });
+
+    const nextHealth = {
+      ...health,
+      policies: updatedPolicies
     };
     const nextProfile = {
       ...householdProfile,
@@ -722,25 +982,8 @@ export default function HouseholdLifestyleHub({
         body: JSON.stringify(nextProfile)
       }).catch(err => console.warn('Sync notice:', err));
     } catch (e) {}
-    setPendingCard(null);
-    setPendingCards([]);
-    setCardFlipped(false);
-    setHealthView('empty');
-  };
 
-  const handleRemoveInsuranceCard = (id) => {
-    const remainingCards = (health.cards || []).filter(c => c.id !== id);
-    const patch = { cards: remainingCards };
-    if (remainingCards.length === 0) {
-      patch.provider = '';
-      patch.planName = '';
-      patch.memberId = '';
-      patch.groupNumber = '';
-      patch.rxBin = '';
-      patch.rxPcn = '';
-      patch.rxGrp = '';
-    }
-    handleHealthChange(patch);
+    setEditingDoctorPolicyId(null);
   };
 
   const handleAddVehicle = (e) => {
@@ -1829,12 +2072,12 @@ export default function HouseholdLifestyleHub({
               <Loader2 className="w-5 h-5 animate-spin text-[#1B4B91] shrink-0" />
               <div>
                 <span className="font-semibold block">Reading your insurance document...</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 block">{scanProgress || 'Extracting carrier, plan name, member ID, group number, and copays…'}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 block">{scanProgress || 'Extracting carrier, plan name, member ID, group number, copays, and doctor…'}</span>
               </div>
             </div>
           )}
 
-          {/* STATE 1: EMPTY */}
+          {/* STATE 1: EMPTY (No cards added yet) */}
           {healthView === 'empty' && !isScanningCard && (
             <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
@@ -1852,30 +2095,47 @@ export default function HouseholdLifestyleHub({
                 >
                   <b className="text-base font-semibold text-slate-900 dark:text-white">Add your insurance card</b>
                   <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md">
-                    Upload a photo of your card or a policy PDF and we’ll fill in the details. You review everything before it’s saved.
+                    Upload a photo of your card or a policy PDF and we’ll fill in the details. You can add multiple cards for medical, dental, vision, or family members.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => healthFileInputRef.current?.click()}
-                    className="mt-2 px-4 py-2.5 rounded-lg bg-[#1B4B91] hover:bg-[#153c75] text-white font-medium text-sm transition-colors cursor-pointer shadow-xs"
-                  >
-                    Upload card or policy
-                  </button>
+                  <div className="flex items-center gap-2.5 mt-2 flex-wrap justify-center">
+                    <button
+                      type="button"
+                      onClick={() => handleAddNewCard()}
+                      className="px-4 py-2.5 rounded-lg bg-[#1B4B91] hover:bg-[#153c75] text-white font-medium text-sm transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>Upload card or policy</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleManualAddCard()}
+                      className="px-3.5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-sm transition-colors cursor-pointer"
+                    >
+                      Enter details manually
+                    </button>
+                  </div>
                   <small className="text-xs text-slate-400 mt-1">PDF, PNG, JPG or WebP</small>
                 </div>
               </div>
             </section>
           )}
 
-          {/* STATE 2: REVIEW ("Check what we read") */}
+          {/* STATE 2: REVIEW / EDIT ("Check what we read") */}
           {healthView === 'review' && (
             <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-                <h2 className="font-semibold text-base text-slate-900 dark:text-white">Check what we read</h2>
+              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-base text-slate-900 dark:text-white">
+                    {editingPolicyId ? 'Edit insurance card' : 'Check what we read'}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Compare each field with your card before saving.
+                  </p>
+                </div>
               </div>
               <div className="p-6">
                 <div className="bg-[#E8EEF8] dark:bg-slate-800/80 text-[#14233B] dark:text-slate-200 rounded-lg px-3.5 py-2.5 text-[13.5px] mb-5">
-                  Automatic reading can make mistakes. Compare each field with your card before saving.
+                  Automatic reading can make mistakes. Verify your name, card type, and coverage numbers below.
                 </div>
 
                 {scanFeedback?.type === 'error' && (
@@ -1885,7 +2145,9 @@ export default function HouseholdLifestyleHub({
                 )}
 
                 {(() => {
-                  const previewCards = pendingCards.length > 0 ? pendingCards : (health.cards || []);
+                  const previewCards = pendingCards.length > 0
+                    ? pendingCards
+                    : (editingPolicyId ? (policies.find(p => p.id === editingPolicyId)?.cards || []) : (health.cards || []));
                   const front = previewCards[0]?.dataUrl;
                   if (!front || String(front).startsWith('data:application/pdf')) return null;
                   return (
@@ -1902,83 +2164,124 @@ export default function HouseholdLifestyleHub({
                 })()}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {/* Name on insurance card */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      Name on insurance card <span className="text-[#1B4B91]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. ZIYAD O ELMAHI"
+                      value={reviewForm.memberName}
+                      onChange={(e) => setReviewForm({ ...reviewForm, memberName: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-medium text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    />
+                  </div>
+
+                  {/* Type of insurance */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      Type of insurance <span className="text-[#1B4B91]">*</span>
+                    </label>
+                    <select
+                      value={reviewForm.insuranceType}
+                      onChange={(e) => setReviewForm({ ...reviewForm, insuranceType: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                    >
+                      <option value="Medical">Medical</option>
+                      <option value="Dental">Dental</option>
+                      <option value="Vision">Vision</option>
+                      <option value="Prescription">Prescription (Rx)</option>
+                      <option value="Supplemental">Supplemental</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  {/* Plan name */}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Plan name</label>
                     <input
                       type="text"
-                      placeholder="e.g. Silver 70 PPO, Standard HMO"
+                      placeholder="e.g. SignatureValue Alliance HMO"
                       value={reviewForm.planName}
                       onChange={(e) => setReviewForm({ ...reviewForm, planName: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                     />
                   </div>
 
+                  {/* Carrier */}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Carrier</label>
                     <input
                       type="text"
-                      placeholder="e.g. Blue Shield, Kaiser, Aetna"
+                      placeholder="e.g. UnitedHealthcare, Blue Shield, Kaiser"
                       value={reviewForm.provider}
                       onChange={(e) => setReviewForm({ ...reviewForm, provider: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                     />
                   </div>
 
+                  {/* Member ID */}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Member ID</label>
                     <input
                       type="text"
-                      placeholder="Member ID number"
+                      placeholder="e.g. 8750439-04"
                       value={reviewForm.memberId}
                       onChange={(e) => setReviewForm({ ...reviewForm, memberId: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                     />
                   </div>
 
+                  {/* Group number */}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Group number</label>
                     <input
                       type="text"
-                      placeholder="Group number"
+                      placeholder="e.g. 682304"
                       value={reviewForm.groupNumber}
                       onChange={(e) => setReviewForm({ ...reviewForm, groupNumber: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                     />
                   </div>
 
+                  {/* Primary care copay */}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Primary care copay</label>
                     <input
                       type="text"
-                      placeholder="e.g. $20"
+                      placeholder="e.g. $15"
                       value={reviewForm.primaryCare}
                       onChange={(e) => setReviewForm({ ...reviewForm, primaryCare: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                     />
                   </div>
 
+                  {/* Specialist copay */}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Specialist copay</label>
                     <input
                       type="text"
-                      placeholder="e.g. $40"
+                      placeholder="e.g. $15"
                       value={reviewForm.specialist}
                       onChange={(e) => setReviewForm({ ...reviewForm, specialist: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                     />
                   </div>
 
+                  {/* Emergency room copay */}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Emergency room copay</label>
                     <input
                       type="text"
-                      placeholder="e.g. $250"
+                      placeholder="e.g. $50"
                       value={reviewForm.er}
                       onChange={(e) => setReviewForm({ ...reviewForm, er: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                     />
                   </div>
 
+                  {/* Generic prescription */}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Generic prescription</label>
                     <input
@@ -1990,26 +2293,70 @@ export default function HouseholdLifestyleHub({
                     />
                   </div>
 
+                  {/* Deductible */}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Deductible</label>
                     <input
                       type="text"
-                      placeholder="e.g. $1,000"
+                      placeholder="e.g. $0"
                       value={reviewForm.deductible}
                       onChange={(e) => setReviewForm({ ...reviewForm, deductible: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                     />
                   </div>
 
+                  {/* Out of pocket max */}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Out-of-pocket maximum</label>
                     <input
                       type="text"
-                      placeholder="e.g. $5,000"
+                      placeholder="e.g. $1,500"
                       value={reviewForm.outOfPocketMax}
                       onChange={(e) => setReviewForm({ ...reviewForm, outOfPocketMax: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                     />
+                  </div>
+
+                  {/* Primary Doctor Section in Form */}
+                  <div className="md:col-span-2 pt-3 border-t border-slate-200 dark:border-slate-700/80">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Stethoscope className="w-4 h-4 text-[#1B4B91] dark:text-[#7AA7F0]" />
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                        Primary Doctor / PCP (Associated with this card)
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Doctor or clinic name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. MONTANA, ANTHONY W"
+                          value={reviewForm.doctorName}
+                          onChange={(e) => setReviewForm({ ...reviewForm, doctorName: e.target.value })}
+                          className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Phone</label>
+                        <input
+                          type="tel"
+                          placeholder="(559) 299-2200"
+                          value={reviewForm.doctorPhone}
+                          onChange={(e) => setReviewForm({ ...reviewForm, doctorPhone: e.target.value })}
+                          className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Clinic / Office</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. SANTE COMMUNITY PHYS-FRESNO"
+                          value={reviewForm.doctorOffice}
+                          onChange={(e) => setReviewForm({ ...reviewForm, doctorOffice: e.target.value })}
+                          className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -2041,166 +2388,390 @@ export default function HouseholdLifestyleHub({
                     onClick={handleSaveReview}
                     className="px-5 py-2.5 rounded-lg bg-[#1B4B91] hover:bg-[#153c75] text-white font-medium text-sm transition-colors cursor-pointer shadow-xs"
                   >
-                    Save insurance
+                    {editingPolicyId ? 'Update insurance' : 'Save insurance'}
                   </button>
                 </div>
               </div>
             </section>
           )}
 
-          {/* STATE 3: SAVED (Physical Card + Coverage Rows + Footer Actions) */}
+          {/* STATE 3: SAVED (Collapsible Multi-Card Insurance List) */}
           {healthView === 'saved' && (
-            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-                <h2 className="font-semibold text-base text-slate-900 dark:text-white">Health insurance</h2>
-              </div>
-
-              <div className="p-6 grid grid-cols-1 md:grid-cols-[340px_1fr] gap-6 items-start">
-                {/* Card on Left: user's own card image (front/back flip), or a plain card if no image was kept */}
+            <div className="flex flex-col gap-4">
+              {/* Header Bar with Count and Add Card button */}
+              <div className="flex items-center justify-between flex-wrap gap-3 px-1">
                 <div>
-                  {health.cards?.[0]?.dataUrl && !String(health.cards[0].dataUrl).startsWith('data:application/pdf') ? (
-                    <InsuranceCardFlip
-                      front={health.cards[0].dataUrl}
-                      back={health.cards[1]?.dataUrl}
-                      flipped={cardFlipped}
-                      onFlip={() => setCardFlipped(!cardFlipped)}
-                      onOpen={(url, title) => { setViewingCardPhoto(url); setViewingCardTitle(title); }}
-                    />
-                  ) : (
-                  <div className="bg-[#1B4B91] text-white rounded-2xl p-5 flex flex-col justify-between aspect-[1.6/1] shadow-md min-h-[190px]">
-                    <div className="flex items-center justify-between text-[13px] opacity-90">
-                      <span className="font-medium">{health.provider || 'Health Insurance'}</span>
-                      {health.network ? <span className="font-semibold">{health.network}</span> : null}
-                    </div>
-
-                    <div className="font-serif text-xl font-medium tracking-tight leading-tight my-2">
-                      {health.planName || 'Coverage Plan'}
-                    </div>
-
-                    <div>
-                      <div className="text-lg font-mono font-medium tracking-wider tabular-nums">
-                        {health.memberId ? (
-                          showMemberId
-                            ? health.memberId
-                            : (health.memberId.length > 4
-                                ? `•••• •••• ${health.memberId.slice(-4)}`
-                                : health.memberId)
-                        ) : (
-                          <span className="text-xs opacity-60 font-sans tracking-normal">No Member ID</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[13px] opacity-90 mt-1">
-                      {health.groupNumber ? <span>Group {health.groupNumber}</span> : <span />}
-                    </div>
-                  </div>
-                  )}
-
-                  {/* Member ID mini controls */}
-                  <div className="flex items-center gap-2 mt-2.5">
-                    <button
-                      type="button"
-                      onClick={() => setShowMemberId(!showMemberId)}
-                      className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer"
-                    >
-                      {showMemberId ? 'Hide' : 'Show'} member ID
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCopyMemberId}
-                      className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
-                    >
-                      {copiedMemberId ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                  <h2 className="font-semibold text-lg text-slate-900 dark:text-white">Health insurance</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {policies.length === 1 ? '1 active card' : `${policies.length} active cards`} · Click any card to expand or minimize
+                  </p>
                 </div>
-
-                {/* Coverage List on Right */}
-                <div className="flex flex-col text-sm divide-y divide-slate-100 dark:divide-slate-800">
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="text-slate-500 dark:text-slate-400">Primary care copay</span>
-                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
-                      {health.copays?.primaryCare != null ? `$${health.copays.primaryCare}` : '—'}
-                    </b>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="text-slate-500 dark:text-slate-400">Specialist copay</span>
-                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
-                      {health.copays?.specialist != null ? `$${health.copays.specialist}` : '—'}
-                    </b>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="text-slate-500 dark:text-slate-400">Emergency room copay</span>
-                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
-                      {health.copays?.er != null ? `$${health.copays.er}` : '—'}
-                    </b>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="text-slate-500 dark:text-slate-400">Generic prescription</span>
-                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
-                      {health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '—'}
-                    </b>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="text-slate-500 dark:text-slate-400">Deductible</span>
-                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
-                      {health.deductible != null && health.deductible !== '' ? `$${Number(health.deductible).toLocaleString()}` : '—'}
-                    </b>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="text-slate-500 dark:text-slate-400">Out-of-pocket maximum</span>
-                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
-                      {health.outOfPocketMax != null && health.outOfPocketMax !== '' ? `$${Number(health.outOfPocketMax).toLocaleString()}` : '—'}
-                    </b>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer Actions */}
-              <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2 flex-wrap">
-                {keepCardImage && (health.cards?.length > 0 || pendingCard) && (
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setShowCardDialog(true)}
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer"
+                    onClick={handleAddNewCard}
+                    className="px-3.5 py-2 rounded-lg bg-[#1B4B91] hover:bg-[#153c75] text-white font-medium text-xs sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                   >
-                    View card image
+                    <Plus className="w-4 h-4" />
+                    <span>Add insurance card</span>
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleEditInsurance}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => healthFileInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
-                >
-                  Replace
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRemoveInsurance}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#B3261E] hover:text-red-700 transition-colors cursor-pointer"
-                >
-                  Remove
-                </button>
+                </div>
               </div>
-            </section>
+
+              {/* Cards List */}
+              {policies.map((policy, pIdx) => {
+                const isExpanded = isPolicyExpanded(policy.id, pIdx);
+                const isMemberIdShown = revealedMemberIds[policy.id];
+                const isCardFlipped = flippedCards[policy.id];
+                const isCopied = copiedPolicyId === policy.id;
+                const isEditingDoc = editingDoctorPolicyId === policy.id;
+
+                return (
+                  <section
+                    key={policy.id || pIdx}
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden transition-all"
+                  >
+                    {/* MINIMIZED HEADER: Name on insurance card, What type of insurance, and an arrow that when pressed expands the details below it */}
+                    <div
+                      onClick={() => togglePolicyExpanded(policy.id, pIdx)}
+                      className="w-full px-5 py-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition-colors select-none"
+                    >
+                      {/* Starting from the left side: Name on insurance card, What type of insurance */}
+                      <div className="flex items-center gap-3 flex-wrap min-w-0">
+                        {/* 1. Name on insurance card */}
+                        <span className="font-semibold text-slate-900 dark:text-white text-base tracking-tight truncate max-w-[240px] sm:max-w-none">
+                          {policy.memberName || 'Name on insurance card'}
+                        </span>
+
+                        {/* 2. What type of insurance badge */}
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-[#1B4B91] dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
+                          {policy.insuranceType || 'Medical'}
+                        </span>
+
+                        {/* Plan & Carrier summary */}
+                        {(policy.provider || policy.planName) && (
+                          <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline-block truncate max-w-[280px]">
+                            {[policy.provider, policy.planName].filter(Boolean).join(' · ')}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 3. Arrow that when pressed expands the details below it */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePolicyExpanded(policy.id, pIdx);
+                        }}
+                        aria-label={isExpanded ? 'Minimize insurance card details' : 'Expand insurance card details'}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* EXPANDED DETAILS BELOW HEADER */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-200 dark:border-slate-800">
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-[340px_1fr] gap-6 items-start">
+                          {/* Left Column: Physical or Styled Card */}
+                          <div>
+                            {policy.cards?.[0]?.dataUrl && !String(policy.cards[0].dataUrl).startsWith('data:application/pdf') ? (
+                              <InsuranceCardFlip
+                                front={policy.cards[0].dataUrl}
+                                back={policy.cards[1]?.dataUrl}
+                                flipped={isCardFlipped}
+                                onFlip={() => setFlippedCards(p => ({ ...p, [policy.id]: !p[policy.id] }))}
+                                onOpen={(url, title) => { setViewingCardPhoto(url); setViewingCardTitle(title); }}
+                              />
+                            ) : (
+                              <div className="bg-[#1B4B91] text-white rounded-2xl p-5 flex flex-col justify-between aspect-[1.6/1] shadow-md min-h-[190px]">
+                                <div className="flex items-center justify-between text-[13px] opacity-90">
+                                  <span className="font-medium">{policy.provider || 'Health Insurance'}</span>
+                                  {policy.network ? <span className="font-semibold">{policy.network}</span> : null}
+                                </div>
+
+                                <div className="font-serif text-xl font-medium tracking-tight leading-tight my-2">
+                                  {policy.planName || 'Coverage Plan'}
+                                </div>
+
+                                <div>
+                                  <div className="text-lg font-mono font-medium tracking-wider tabular-nums">
+                                    {policy.memberId ? (
+                                      isMemberIdShown
+                                        ? policy.memberId
+                                        : (policy.memberId.length > 4
+                                            ? `•••• •••• ${policy.memberId.slice(-4)}`
+                                            : policy.memberId)
+                                    ) : (
+                                      <span className="text-xs opacity-60 font-sans tracking-normal">No Member ID</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-[13px] opacity-90 mt-1">
+                                  {policy.groupNumber ? <span>Group {policy.groupNumber}</span> : <span />}
+                                  {policy.insuranceType && (
+                                    <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded bg-white/20">
+                                      {policy.insuranceType}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Member ID mini controls */}
+                            <div className="flex items-center gap-2 mt-2.5">
+                              <button
+                                type="button"
+                                onClick={() => setRevealedMemberIds(p => ({ ...p, [policy.id]: !p[policy.id] }))}
+                                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer"
+                              >
+                                {isMemberIdShown ? 'Hide' : 'Show'} member ID
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyMemberId(policy)}
+                                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+                              >
+                                {isCopied ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Copied</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3.5 h-3.5" />
+                                    <span>Copy</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {/* Pharmacy RX pills if available */}
+                            {(policy.rxBin || policy.rxPcn || policy.rxGrp) && (
+                              <div className="mt-2.5 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-xs grid grid-cols-3 gap-1 text-center font-mono">
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block font-sans">Rx BIN</span>
+                                  <b>{policy.rxBin || '—'}</b>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block font-sans">Rx PCN</span>
+                                  <b>{policy.rxPcn || '—'}</b>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block font-sans">Rx GRP</span>
+                                  <b>{policy.rxGrp || '—'}</b>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Right Column: Coverage Table + Doctor Details */}
+                          <div className="flex flex-col gap-4">
+                            {/* Coverage Rows */}
+                            <div className="flex flex-col text-sm divide-y divide-slate-100 dark:divide-slate-800">
+                              <div className="flex items-center justify-between py-2.5">
+                                <span className="text-slate-500 dark:text-slate-400">Primary care copay</span>
+                                <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
+                                  {policy.copays?.primaryCare != null ? `$${policy.copays.primaryCare}` : '—'}
+                                </b>
+                              </div>
+                              <div className="flex items-center justify-between py-2.5">
+                                <span className="text-slate-500 dark:text-slate-400">Specialist copay</span>
+                                <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
+                                  {policy.copays?.specialist != null ? `$${policy.copays.specialist}` : '—'}
+                                </b>
+                              </div>
+                              <div className="flex items-center justify-between py-2.5">
+                                <span className="text-slate-500 dark:text-slate-400">Emergency room copay</span>
+                                <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
+                                  {policy.copays?.er != null ? `$${policy.copays.er}` : '—'}
+                                </b>
+                              </div>
+                              <div className="flex items-center justify-between py-2.5">
+                                <span className="text-slate-500 dark:text-slate-400">Generic prescription</span>
+                                <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
+                                  {policy.copays?.rxGeneric != null ? `$${policy.copays.rxGeneric}` : '—'}
+                                </b>
+                              </div>
+                              <div className="flex items-center justify-between py-2.5">
+                                <span className="text-slate-500 dark:text-slate-400">Deductible</span>
+                                <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
+                                  {policy.deductible != null && policy.deductible !== '' ? `$${Number(policy.deductible).toLocaleString()}` : '—'}
+                                </b>
+                              </div>
+                              <div className="flex items-center justify-between py-2.5">
+                                <span className="text-slate-500 dark:text-slate-400">Out-of-pocket maximum</span>
+                                <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
+                                  {policy.outOfPocketMax != null && policy.outOfPocketMax !== '' ? `$${Number(policy.outOfPocketMax).toLocaleString()}` : '—'}
+                                </b>
+                              </div>
+                            </div>
+
+                            {/* DOCTOR SECTION DIRECTLY IN THIS CARD SECTION WITH THE REST OF THE INFO */}
+                            <div className="mt-1 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <Stethoscope className="w-4 h-4 text-[#1B4B91] dark:text-[#7AA7F0]" />
+                                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                    Primary Doctor & Care Provider
+                                  </span>
+                                </div>
+                                {!isEditingDoc && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenDoctorEdit(policy)}
+                                    className="text-xs font-medium text-[#1B4B91] dark:text-[#7AA7F0] hover:underline cursor-pointer"
+                                  >
+                                    {policy.doctor?.name ? 'Edit doctor' : '+ Add doctor'}
+                                  </button>
+                                )}
+                              </div>
+
+                              {isEditingDoc ? (
+                                <div className="mt-3 flex flex-col gap-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    <div>
+                                      <label className="text-[11px] text-slate-500 dark:text-slate-400 block mb-0.5">Doctor name</label>
+                                      <input
+                                        type="text"
+                                        placeholder="Doctor name"
+                                        value={inlineDoctorForm.name}
+                                        onChange={(e) => setInlineDoctorForm({ ...inlineDoctorForm, name: e.target.value })}
+                                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-[11px] text-slate-500 dark:text-slate-400 block mb-0.5">Specialty</label>
+                                      <input
+                                        type="text"
+                                        placeholder="Specialty (e.g. PCP, Dental)"
+                                        value={inlineDoctorForm.specialty}
+                                        onChange={(e) => setInlineDoctorForm({ ...inlineDoctorForm, specialty: e.target.value })}
+                                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-[11px] text-slate-500 dark:text-slate-400 block mb-0.5">Office / Clinic</label>
+                                      <input
+                                        type="text"
+                                        placeholder="Office or clinic name"
+                                        value={inlineDoctorForm.office}
+                                        onChange={(e) => setInlineDoctorForm({ ...inlineDoctorForm, office: e.target.value })}
+                                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-[11px] text-slate-500 dark:text-slate-400 block mb-0.5">Phone</label>
+                                      <input
+                                        type="tel"
+                                        placeholder="(555) 000-0000"
+                                        value={inlineDoctorForm.phone}
+                                        onChange={(e) => setInlineDoctorForm({ ...inlineDoctorForm, phone: e.target.value })}
+                                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center justify-end gap-2 pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingDoctorPolicyId(null)}
+                                      className="px-2.5 py-1 rounded text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveInlineDoctor(policy.id)}
+                                      className="px-3 py-1 rounded bg-[#1B4B91] hover:bg-[#153c75] text-white text-xs font-medium cursor-pointer"
+                                    >
+                                      Save doctor
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : policy.doctor?.name ? (
+                                <div className="flex items-start justify-between gap-4 flex-wrap mt-1">
+                                  <div>
+                                    <div className="font-semibold text-slate-900 dark:text-white text-sm">
+                                      {policy.doctor.name}
+                                    </div>
+                                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {[policy.doctor.specialty || 'Primary care (PCP)', policy.doctor.office].filter(Boolean).join(' · ')}
+                                    </div>
+                                  </div>
+                                  {policy.doctor.phone && (
+                                    <a
+                                      href={`tel:${policy.doctor.phone}`}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-[#1B4B91] dark:text-[#7AA7F0] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs"
+                                    >
+                                      <Phone className="w-3.5 h-3.5" />
+                                      <span>{policy.doctor.phone}</span>
+                                    </a>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between mt-1">
+                                  <span>No doctor linked to this policy.</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenDoctorEdit(policy)}
+                                    className="px-2.5 py-1 rounded-md text-xs font-medium bg-[#1B4B91] hover:bg-[#153c75] text-white cursor-pointer"
+                                  >
+                                    Assign doctor
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Footer Actions per Card */}
+                        <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2 flex-wrap bg-slate-50/50 dark:bg-slate-800/30">
+                          {policy.cards && policy.cards.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDialogCards(policy.cards);
+                                setShowCardDialog(true);
+                              }}
+                              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer"
+                            >
+                              View card image
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleEditPolicy(policy)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleReplaceCard(policy)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                          >
+                            Replace card
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePolicy(policy.id)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#B3261E] hover:text-red-700 transition-colors cursor-pointer"
+                          >
+                            Remove card
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
           )}
 
           {/* DOCTORS PANEL */}
@@ -2339,66 +2910,58 @@ export default function HouseholdLifestyleHub({
 
             <div className="grid grid-cols-2 gap-3 my-2">
               <div className="aspect-[1.6/1] border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
-                {health.cards?.[0]?.dataUrl ? (
-                  health.cards[0].dataUrl.startsWith('data:application/pdf') || (health.cards[0].name || '').toLowerCase().endsWith('.pdf') ? (
+                {(() => {
+                  const activeCards = (dialogCards && dialogCards.length > 0)
+                    ? dialogCards
+                    : (pendingCards.length > 0 ? pendingCards : (policies[0]?.cards || health.cards || []));
+                  const card0 = activeCards[0];
+                  if (!card0?.dataUrl) return <span className="text-xs text-slate-400 font-medium">Front</span>;
+                  return card0.dataUrl.startsWith('data:application/pdf') || (card0.name || '').toLowerCase().endsWith('.pdf') ? (
                     <div
                       className="flex flex-col items-center gap-1.5 p-3 text-center cursor-pointer"
                       onClick={() => {
-                        setViewingCardPhoto(health.cards[0].dataUrl);
-                        setViewingCardTitle(`${health.cards[0].name || 'Policy PDF'}`);
+                        setViewingCardPhoto(card0.dataUrl);
+                        setViewingCardTitle(`${card0.name || 'Policy PDF'}`);
                       }}
                     >
                       <FileText className="w-8 h-8 text-[#1B4B91]" />
                       <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[120px]">
-                        {health.cards[0].name || 'Policy PDF'}
+                        {card0.name || 'Policy PDF'}
                       </span>
                     </div>
                   ) : (
                     <img
-                      src={health.cards[0].dataUrl}
+                      src={card0.dataUrl}
                       alt="Front card"
                       className="w-full h-full object-cover cursor-pointer"
                       onClick={() => {
-                        setViewingCardPhoto(health.cards[0].dataUrl);
-                        setViewingCardTitle(`${health.cards[0].name || 'Insurance Card'} - Front`);
+                        setViewingCardPhoto(card0.dataUrl);
+                        setViewingCardTitle(`${card0.name || 'Insurance Card'} - Front`);
                       }}
                     />
-                  )
-                ) : pendingCard?.dataUrl ? (
-                  <img
-                    src={pendingCard.dataUrl}
-                    alt="Front card"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-xs text-slate-400 font-medium">Front</span>
-                )}
+                  );
+                })()}
               </div>
 
               <div className="aspect-[1.6/1] border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
-                {health.cards?.[1]?.dataUrl ? (
-                  <img
-                    src={health.cards[1].dataUrl}
-                    alt="Back card"
-                    className="w-full h-full object-cover cursor-pointer"
-                    onClick={() => {
-                      setViewingCardPhoto(health.cards[1].dataUrl);
-                      setViewingCardTitle(`${health.cards[1].name || 'Insurance Card'} - Back`);
-                    }}
-                  />
-                ) : pendingCards[1]?.dataUrl ? (
-                  <img
-                    src={pendingCards[1].dataUrl}
-                    alt="Back card"
-                    className="w-full h-full object-cover cursor-pointer"
-                    onClick={() => {
-                      setViewingCardPhoto(pendingCards[1].dataUrl);
-                      setViewingCardTitle('Insurance Card - Back');
-                    }}
-                  />
-                ) : (
-                  <span className="text-xs text-slate-400 font-medium">Back</span>
-                )}
+                {(() => {
+                  const activeCards = (dialogCards && dialogCards.length > 0)
+                    ? dialogCards
+                    : (pendingCards.length > 0 ? pendingCards : (policies[0]?.cards || health.cards || []));
+                  const card1 = activeCards[1];
+                  if (!card1?.dataUrl) return <span className="text-xs text-slate-400 font-medium">Back</span>;
+                  return (
+                    <img
+                      src={card1.dataUrl}
+                      alt="Back card"
+                      className="w-full h-full object-cover cursor-pointer"
+                      onClick={() => {
+                        setViewingCardPhoto(card1.dataUrl);
+                        setViewingCardTitle(`${card1.name || 'Insurance Card'} - Back`);
+                      }}
+                    />
+                  );
+                })()}
               </div>
             </div>
 
