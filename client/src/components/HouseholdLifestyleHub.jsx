@@ -16,6 +16,7 @@ import {
   CreditCard,
   Upload,
   Phone,
+  Smartphone,
   ShoppingBag,
   X,
   Search,
@@ -1328,7 +1329,7 @@ export default function HouseholdLifestyleHub({
                       {wizardStep === 4 && 'Electric vehicle charging at home'}
                       {wizardStep === 5 && 'Do you have a swimming pool or spa?'}
                       {wizardStep === 6 && 'Rooftop solar panels & battery storage'}
-                      {wizardStep === 7 && 'Review your monthly home living expenses'}
+                      {wizardStep === 7 && 'Who are your household service providers?'}
                     </h3>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
@@ -1338,7 +1339,7 @@ export default function HouseholdLifestyleHub({
                     {wizardStep === 4 && 'Details about your home charger, schedule, and daily charging needs.'}
                     {wizardStep === 5 && 'Pool filtration pumps and water heaters impact monthly energy bills.'}
                     {wizardStep === 6 && 'Calculates monthly solar generation, offset rates, and battery backup.'}
-                    {wizardStep === 7 && 'Check or adjust your monthly cost estimates before saving.'}
+                    {wizardStep === 7 && 'Enter your internet, mobile wireless, home security, and municipal services.'}
                   </p>
                 </div>
 
@@ -2414,6 +2415,54 @@ export default function HouseholdLifestyleHub({
                           )}
                         </div>
                       )}
+                    </div>
+
+                    {/* HOUSEHOLD PROVIDERS SUMMARY (Internet, Phones, Trash, Security) */}
+                    <div className="p-4 sm:p-5 rounded-xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-3 text-xs">
+                      <div className="font-bold text-slate-900 flex items-center justify-between pb-2 border-b border-slate-100">
+                        <span className="flex items-center gap-1.5">
+                          <Wifi className="w-4 h-4 text-[#18457c]" />
+                          <span>Household Service Providers</span>
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[11px]">
+                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col">
+                          <span className="text-slate-400 block flex items-center gap-1">
+                            <Wifi className="w-3 h-3 text-indigo-500" />
+                            <span>Internet / WiFi</span>
+                          </span>
+                          <span className="font-bold text-slate-800 mt-0.5 truncate">
+                            {householdProfile.internetProvider || 'Xfinity / Fiber'}
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col">
+                          <span className="text-slate-400 block flex items-center gap-1">
+                            <Smartphone className="w-3 h-3 text-purple-500" />
+                            <span>Mobile Wireless</span>
+                          </span>
+                          <span className="font-bold text-slate-800 mt-0.5 truncate">
+                            {householdProfile.phoneProvider || 'T-Mobile'} ({householdProfile.phoneLines || 3} lines)
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col">
+                          <span className="text-slate-400 block flex items-center gap-1">
+                            <Droplets className="w-3 h-3 text-blue-500" />
+                            <span>Municipal Trash</span>
+                          </span>
+                          <span className="font-bold text-slate-800 mt-0.5 truncate">
+                            {householdProfile.trashProvider || 'City Waste Services'}
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col">
+                          <span className="text-slate-400 block flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                            <span>Security</span>
+                          </span>
+                          <span className="font-bold text-slate-800 mt-0.5 truncate">
+                            {householdProfile.securityProvider || 'Ring / Smart Home'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
                     {/* PANEL 3: SOLAR & BATTERY */}

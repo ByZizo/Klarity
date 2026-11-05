@@ -244,6 +244,13 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
   poolPumpType: 'variable_speed', // 'variable_speed' | 'single_speed'
   poolHeating: 'none', // 'none' | 'solar' | 'gas' | 'electric_heat_pump'
 
+  // Household Providers (Internet, Phones, Security, Trash)
+  internetProvider: 'Xfinity',
+  phoneProvider: 'T-Mobile',
+  phoneLines: 3,
+  securityProvider: 'Ring',
+  trashProvider: 'City Municipal Utilities',
+
   // Solar & Storage suite
   hasSolar: false,
   solarPanelCount: 20,
@@ -367,8 +374,10 @@ export function getSuggestedProviders(profile = {}) {
     gas = 'Local Natural Gas Utility';
   }
 
-  const waterTrash = `City of ${city || 'Municipal'} Utilities`;
-  const internet = 'Xfinity / AT&T Fiber';
+  const waterTrash = profile.trashProvider || `City of ${city || 'Municipal'} Utilities`;
+  const internet = profile.internetProvider || 'Xfinity / AT&T Fiber';
+  const phone = profile.phoneProvider || 'T-Mobile Family Plan';
+  const security = profile.securityProvider || 'Ring / Smart Home';
   const mortgageRent = profile.ownership === 'rent' ? 'Property Landlord / Management' : 'Mortgage Servicer';
   const propertyTax = `${county} Tax Collector`;
   const hoa = 'HOA Community Association';
@@ -379,6 +388,8 @@ export function getSuggestedProviders(profile = {}) {
     gas,
     waterTrash,
     internet,
+    phone,
+    security,
     mortgageRent,
     propertyTax,
     hoa,
@@ -415,6 +426,7 @@ export function calculateHomeCostBreakdown(profile = {}, metrics = null, userBil
     { id: 'gas', label: 'Natural Gas', defaultProvider: suggestedProviders.gas, estAmount: estGas, billTerms: ['gas', 'socalgas', 'natural gas'] },
     { id: 'waterTrash', label: 'Water & Trash', defaultProvider: suggestedProviders.waterTrash, estAmount: estWaterTrash, billTerms: ['water', 'trash', 'sewer', 'waste', 'city utilities', 'republic services', 'waste management'] },
     { id: 'internet', label: 'Internet', defaultProvider: suggestedProviders.internet, estAmount: estInternet, billTerms: ['internet', 'wifi', 'xfinity', 'comcast', 'at&t', 'spectrum', 'verizon fios', 'frontier', 'sonic'] },
+    { id: 'phone', label: 'Mobile & Phone', defaultProvider: suggestedProviders.phone, estAmount: profile.phoneLines ? Number(profile.phoneLines) * 35 : 105, billTerms: ['phone', 'cell', 'mobile', 'wireless', 't-mobile', 'tmobile', 'verizon', 'att wireless', 'at&t wireless', 'mint mobile', 'google fi'] },
     { id: 'mortgageRent', label: isRent ? 'Rent' : 'Mortgage or Rent', defaultProvider: suggestedProviders.mortgageRent, estAmount: estMortgageRent, billTerms: ['mortgage', 'rent', 'housing', 'lease'] },
     { id: 'propertyTax', label: 'Property Tax', defaultProvider: suggestedProviders.propertyTax, estAmount: estPropertyTax, billTerms: ['property tax', 'county tax', 'tax collector'] },
     { id: 'hoa', label: 'HOA', defaultProvider: suggestedProviders.hoa, estAmount: estHoa, billTerms: ['hoa', 'homeowners association', 'condo fee'] },
