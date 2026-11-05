@@ -1720,58 +1720,68 @@ export default function HouseholdLifestyleHub({
                           </select>
                         </div>
 
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-1.5">
-                          <span className="text-[11px] font-bold text-slate-700 block">
-                            What time of day do you typically charge?
-                          </span>
-                          <select
-                            value={householdProfile.evChargingSchedule || 'overnight_offpeak'}
-                            onChange={e => handleFieldChange('evChargingSchedule', e.target.value)}
-                            className="w-full p-2 bg-white rounded-lg border border-slate-200 font-bold text-slate-900 focus:outline-none cursor-pointer text-xs"
-                          >
-                            {HOME_QUESTIONNAIRE_OPTIONS.evChargingSchedule.map(opt => (
-                              <option key={opt.id} value={opt.id}>{opt.label}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-slate-700">Daily miles charged at home:</span>
-                            <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded">
-                              ~{((Number(householdProfile.evDailyHomeMiles) || 35) * 30).toLocaleString()} mi/mo
-                            </span>
+                        {/* If user selects "never" for charging at home, remove the other questions related to miles and charging */}
+                        {householdProfile.evHomeChargingFrequency === 'never' ? (
+                          <div className="sm:col-span-2 lg:col-span-3 p-3 rounded-xl bg-amber-50/80 border border-amber-200/80 text-amber-900 text-xs flex items-center gap-2">
+                            <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>You selected <strong>Never charge at home</strong>. Home charging mileage and schedule questions are excluded, and $0 home charging load is added to your electric bill.</span>
                           </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <input
-                              type="range"
-                              min="5"
-                              max="120"
-                              step="5"
-                              value={householdProfile.evDailyHomeMiles || 35}
-                              onChange={e => handleFieldChange('evDailyHomeMiles', Number(e.target.value))}
-                              className="flex-1 accent-indigo-600 cursor-pointer"
-                            />
-                            <span className="font-extrabold text-slate-900 w-12 text-right">
-                              {householdProfile.evDailyHomeMiles || 35} mi
-                            </span>
-                          </div>
-                        </div>
+                        ) : (
+                          <>
+                            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-1.5">
+                              <span className="text-[11px] font-bold text-slate-700 block">
+                                What time of day do you typically charge?
+                              </span>
+                              <select
+                                value={householdProfile.evChargingSchedule || 'overnight_offpeak'}
+                                onChange={e => handleFieldChange('evChargingSchedule', e.target.value)}
+                                className="w-full p-2 bg-white rounded-lg border border-slate-200 font-bold text-slate-900 focus:outline-none cursor-pointer text-xs"
+                              >
+                                {HOME_QUESTIONNAIRE_OPTIONS.evChargingSchedule.map(opt => (
+                                  <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                ))}
+                              </select>
+                            </div>
 
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-1.5 sm:col-span-2">
-                          <span className="text-[11px] font-bold text-slate-700 block">
-                            Do you use free public or workplace chargers?
-                          </span>
-                          <select
-                            value={householdProfile.evFreeWorkplaceCharging || 'no'}
-                            onChange={e => handleFieldChange('evFreeWorkplaceCharging', e.target.value)}
-                            className="w-full p-2 bg-white rounded-lg border border-slate-200 font-bold text-slate-900 focus:outline-none cursor-pointer text-xs"
-                          >
-                            {HOME_QUESTIONNAIRE_OPTIONS.evFreeWorkplaceCharging.map(opt => (
-                              <option key={opt.id} value={opt.id}>{opt.label}</option>
-                            ))}
-                          </select>
-                        </div>
+                            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-slate-700">Daily miles charged at home:</span>
+                                <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded">
+                                  ~{((Number(householdProfile.evDailyHomeMiles) || 35) * 30).toLocaleString()} mi/mo
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <input
+                                  type="range"
+                                  min="5"
+                                  max="120"
+                                  step="5"
+                                  value={householdProfile.evDailyHomeMiles || 35}
+                                  onChange={e => handleFieldChange('evDailyHomeMiles', Number(e.target.value))}
+                                  className="flex-1 accent-indigo-600 cursor-pointer"
+                                />
+                                <span className="font-extrabold text-slate-900 w-12 text-right">
+                                  {householdProfile.evDailyHomeMiles || 35} mi
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-1.5 sm:col-span-2">
+                              <span className="text-[11px] font-bold text-slate-700 block">
+                                Do you use free public or workplace chargers?
+                              </span>
+                              <select
+                                value={householdProfile.evFreeWorkplaceCharging || 'no'}
+                                onChange={e => handleFieldChange('evFreeWorkplaceCharging', e.target.value)}
+                                className="w-full p-2 bg-white rounded-lg border border-slate-200 font-bold text-slate-900 focus:outline-none cursor-pointer text-xs"
+                              >
+                                {HOME_QUESTIONNAIRE_OPTIONS.evFreeWorkplaceCharging.map(opt => (
+                                  <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2365,26 +2375,43 @@ export default function HouseholdLifestyleHub({
                             <BatteryCharging className="w-3.5 h-3.5 text-indigo-600" />
                             <span>Home EV Charging Setup</span>
                           </span>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
-                            <div>
-                              <span className="text-slate-500 block">Charger:</span>
-                              <span className="font-bold text-slate-800">
-                                {householdProfile.evChargerType === 'level2_240v' ? 'Level 2 (240V Dedicated)' : householdProfile.evChargerType === 'level1_120v' ? 'Level 1 (120V Outlet)' : 'No Home Charger'}
-                              </span>
+                          {householdProfile.evHomeChargingFrequency === 'never' ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                              <div>
+                                <span className="text-slate-500 block">Charger:</span>
+                                <span className="font-bold text-slate-800">
+                                  {householdProfile.evChargerType === 'level2_240v' ? 'Level 2 (240V Dedicated)' : householdProfile.evChargerType === 'level1_120v' ? 'Level 1 (120V Outlet)' : 'No Home Charger'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block">Home Charging:</span>
+                                <span className="font-bold text-slate-800">
+                                  Never charge at home (100% public / away) · $0 home utility load
+                                </span>
+                              </div>
                             </div>
-                            <div>
-                              <span className="text-slate-500 block">Frequency & Timing:</span>
-                              <span className="font-bold text-slate-800 capitalize">
-                                {(householdProfile.evHomeChargingFrequency || 'daily')} · {(householdProfile.evChargingSchedule || 'overnight_offpeak').replace(/_/g, ' ')}
-                              </span>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                              <div>
+                                <span className="text-slate-500 block">Charger:</span>
+                                <span className="font-bold text-slate-800">
+                                  {householdProfile.evChargerType === 'level2_240v' ? 'Level 2 (240V Dedicated)' : householdProfile.evChargerType === 'level1_120v' ? 'Level 1 (120V Outlet)' : 'No Home Charger'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block">Frequency & Timing:</span>
+                                <span className="font-bold text-slate-800 capitalize">
+                                  {(householdProfile.evHomeChargingFrequency || 'daily')} · {(householdProfile.evChargingSchedule || 'overnight_offpeak').replace(/_/g, ' ')}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block">Daily Home Miles:</span>
+                                <span className="font-bold text-slate-800">
+                                  {householdProfile.evDailyHomeMiles || 35} mi/day (~{((Number(householdProfile.evDailyHomeMiles) || 35) * 30).toLocaleString()} mi/mo)
+                                </span>
+                              </div>
                             </div>
-                            <div>
-                              <span className="text-slate-500 block">Daily Home Miles:</span>
-                              <span className="font-bold text-slate-800">
-                                {householdProfile.evDailyHomeMiles || 35} mi/day (~{((Number(householdProfile.evDailyHomeMiles) || 35) * 30).toLocaleString()} mi/mo)
-                              </span>
-                            </div>
-                          </div>
+                          )}
                         </div>
                       )}
                     </div>

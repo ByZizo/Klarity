@@ -676,6 +676,12 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
     }
   });
 
+  // If user selected 'never' for home charging, force home EV charging kWh and cost to 0
+  if (profile.hasEvAtHome === false || profile.evHomeChargingFrequency === 'never' || profile.evChargerType === 'no_charger') {
+    totalMonthlyEvHomeKwh = 0;
+    totalMonthlyEvHomeCost = 0;
+  }
+
   const totalPgeCombinedBill = homeElectricCost + naturalGasCost + totalMonthlyEvHomeCost;
   const totalUtilitiesMonthly = totalPgeCombinedBill + waterTrashTotalCost;
   const totalFleetMonthly = totalMonthlyGasCost + totalMonthlyEvHomeCost + totalMonthlyInsurance + totalMonthlyCarPayments + totalMonthlyMaintenance;
