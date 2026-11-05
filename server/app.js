@@ -3,8 +3,11 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 require('dotenv').config();
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const {
   localModelEngine,
   SUPPORTED_MODELS,
@@ -462,6 +465,21 @@ async function requireAuth(req, res, next) {
 
   const reqPath = (req.path || '').split('?')[0];
   if (publicPaths.has(reqPath)) {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      if (token) {
+        try {
+          const tokenHash = hashToken(token);
+          db.getSession(tokenHash).then(session => {
+            if (session) {
+              req.userId = session.userId;
+              req.user = session.user;
+            }
+          }).catch(() => {});
+        } catch (e) {}
+      }
+    }
     return next();
   }
 
@@ -2160,118 +2178,190 @@ app.post(['/api/household', '/household'], async (req, res) => {
   }
 });
 
-// Heuristic Insurance Card Extraction Helper
+// Helper to extract text streams and readable strings from a PDF buffer
+function extractTextFromPdfBuffer(buffer) {
+  let text = '';
+  try {
+    const str = buffer.toString('latin1');
+    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+    let match;
+    while ((match = streamRegex.exec(str)) !== null) {
+      const rawStream = match[1];
+      let streamContent = rawStream;
+      try {
+        const decompressed = zlib.inflateSync(Buffer.from(rawStream, 'latin1'));
+        streamContent = decompressed.toString('latin1');
+      } catch (e) {
+        try {
+          const decompressed = zlib.inflateRawSync(Buffer.from(rawStream, 'latin1'));
+          streamContent = decompressed.toString('latin1');
+        } catch (e2) {}
+      }
+
+      const textMatches = streamContent.match(new RegExp('\\(([^)]+)\\)', 'g'));
+      if (textMatches) {
+        const extractedWords = textMatches
+          .map(m => m.slice(1, -1))
+          .join(' ');
+        text += ' ' + extractedWords;
+      }
+    }
+
+    const readable = str.replace(/[^\x20-\x7E\r\n]/g, ' ');
+    text += ' ' + readable;
+  } catch (err) {
+    console.warn('PDF text parse note:', err.message);
+  }
+  return text;
+}
+
+// Extraction helper that only extracts what is actually present (no invented or dummy fallback data)
 function heuristicInsuranceExtraction(fileName = '', textHint = '', base64Data = '') {
-  let sampleText = `${fileName || ''} ${textHint || ''}`.toLowerCase();
+  let sampleText = `${fileName || ''} ${textHint || ''}`;
 
   if (base64Data) {
     try {
-      const decoded = Buffer.from(base64Data, 'base64').toString('latin1');
-      const asciiOnly = decoded.replace(/[^\x20-\x7E]/g, ' ');
-      sampleText += ' ' + asciiOnly.toLowerCase();
+      const rawBuf = Buffer.from(base64Data, 'base64');
+      const isPdf = (fileName || '').toLowerCase().endsWith('.pdf') || rawBuf.slice(0, 5).toString('latin1').includes('%PDF');
+      if (isPdf) {
+        sampleText += ' ' + extractTextFromPdfBuffer(rawBuf);
+      } else {
+        const decoded = rawBuf.toString('latin1');
+        const asciiOnly = decoded.replace(/[^\x20-\x7E]/g, ' ');
+        sampleText += ' ' + asciiOnly;
+      }
     } catch (e) {}
   }
 
-  let provider = 'UnitedHealthcare';
-  let planName = 'Choice Plus (PPO)';
-  let copays = { primaryCare: 25, specialist: 50, urgentCare: 35, er: 250, rxGeneric: 10 };
+  const lowerText = sampleText.toLowerCase();
 
-  if (sampleText.includes('kaiser')) {
+  let provider = '';
+  let planName = '';
+  let network = '';
+
+  // Carrier detection strictly if referenced in document text
+  if (lowerText.includes('kaiser') || lowerText.includes('permanente')) {
     provider = 'Kaiser Permanente';
-    planName = sampleText.includes('advantage') || sampleText.includes('senior') ? 'Senior Advantage (HMO)' : 'Standard HMO';
-    copays = { primaryCare: 15, specialist: 30, urgentCare: 20, er: 100, rxGeneric: 10 };
-  } else if (sampleText.includes('blue cross') || sampleText.includes('anthem')) {
+    planName = lowerText.includes('advantage') || lowerText.includes('senior') ? 'Senior Advantage (HMO)' : 'HMO';
+    network = 'HMO';
+  } else if (lowerText.includes('anthem') || lowerText.includes('blue cross') || lowerText.includes('bcbs')) {
     provider = 'Anthem Blue Cross';
-    planName = sampleText.includes('select') ? 'Select PPO' : 'Preferred PPO';
-    copays = { primaryCare: 20, specialist: 40, urgentCare: 30, er: 200, rxGeneric: 10 };
-  } else if (sampleText.includes('blue shield')) {
+    network = lowerText.includes('hmo') ? 'HMO' : 'PPO';
+  } else if (lowerText.includes('blue shield') || lowerText.includes('blueshield')) {
     provider = 'Blue Shield of California';
-    planName = sampleText.includes('trio') ? 'Trio ACO HMO' : 'Access+ HMO';
-    copays = { primaryCare: 20, specialist: 40, urgentCare: 25, er: 150, rxGeneric: 10 };
-  } else if (sampleText.includes('aetna')) {
+    network = lowerText.includes('hmo') ? 'HMO' : 'PPO';
+  } else if (lowerText.includes('unitedhealthcare') || lowerText.includes('united healthcare') || lowerText.includes('uhc') || lowerText.includes('optum')) {
+    provider = 'UnitedHealthcare';
+    network = lowerText.includes('hmo') ? 'HMO' : 'PPO';
+  } else if (lowerText.includes('aetna')) {
     provider = 'Aetna';
-    planName = sampleText.includes('hmo') ? 'HMO Open Access' : 'Choice POS II (PPO)';
-    copays = { primaryCare: 20, specialist: 45, urgentCare: 35, er: 200, rxGeneric: 10 };
-  } else if (sampleText.includes('cigna')) {
+    network = lowerText.includes('hmo') ? 'HMO' : (lowerText.includes('pos') ? 'POS' : 'PPO');
+  } else if (lowerText.includes('cigna') || lowerText.includes('evernorth')) {
     provider = 'Cigna';
-    planName = sampleText.includes('connect') ? 'Connect (EPO)' : 'Open Access Plus (OAP)';
-    copays = { primaryCare: 25, specialist: 45, urgentCare: 30, er: 200, rxGeneric: 10 };
-  } else if (sampleText.includes('humana')) {
+    network = lowerText.includes('epo') ? 'EPO' : (lowerText.includes('hmo') ? 'HMO' : 'PPO');
+  } else if (lowerText.includes('humana')) {
     provider = 'Humana';
-    planName = sampleText.includes('choice') ? 'Choice PPO' : 'Gold Plus (HMO)';
-    copays = { primaryCare: 0, specialist: 25, urgentCare: 15, er: 120, rxGeneric: 5 };
-  } else if (sampleText.includes('medi-cal') || sampleText.includes('medical') || sampleText.includes('medicaid')) {
+    network = lowerText.includes('hmo') ? 'HMO' : 'PPO';
+  } else if (lowerText.includes('medi-cal') || lowerText.includes('medical') || lowerText.includes('medicaid')) {
     provider = 'Medi-Cal';
-    planName = 'Managed Care Plan';
-    copays = { primaryCare: 0, specialist: 0, urgentCare: 0, er: 0, rxGeneric: 0 };
-  } else if (sampleText.includes('medicare')) {
+  } else if (lowerText.includes('medicare')) {
     provider = 'Medicare';
-    planName = 'Original Medicare Part A & B';
-    copays = { primaryCare: 0, specialist: 20, urgentCare: 20, er: 100, rxGeneric: 10 };
-  } else if (sampleText.includes('sutter')) {
+  } else if (lowerText.includes('sutter health') || lowerText.includes('sutter')) {
     provider = 'Sutter Health Plus';
-    planName = 'Individual and Family HMO';
-    copays = { primaryCare: 20, specialist: 40, urgentCare: 25, er: 150, rxGeneric: 10 };
-  } else if (sampleText.includes('health net')) {
+    network = 'HMO';
+  } else if (lowerText.includes('health net') || lowerText.includes('healthnet')) {
     provider = 'Health Net';
-    planName = 'Ambetter HMO';
-    copays = { primaryCare: 15, specialist: 35, urgentCare: 25, er: 150, rxGeneric: 10 };
+  } else if (lowerText.includes('molina')) {
+    provider = 'Molina Healthcare';
+  } else if (lowerText.includes('oscar')) {
+    provider = 'Oscar Health';
   }
 
-  // Look for copay dollar numbers in text if available
-  const pcpMatch = sampleText.match(/(?:pcp|primary|office|ov)\s*(?:copay)?[:\s]*\$?([0-9]{1,3})/i);
-  if (pcpMatch) copays.primaryCare = Number(pcpMatch[1]);
+  // Network detection if not yet determined
+  if (!network) {
+    if (/\bppo\b/i.test(sampleText)) network = 'PPO';
+    else if (/\bhmo\b/i.test(sampleText)) network = 'HMO';
+    else if (/\bepo\b/i.test(sampleText)) network = 'EPO';
+    else if (/\bpos\b/i.test(sampleText)) network = 'POS';
+  }
 
-  const specMatch = sampleText.match(/(?:spec|specialist)\s*(?:copay)?[:\s]*\$?([0-9]{1,3})/i);
-  if (specMatch) copays.specialist = Number(specMatch[1]);
+  // Plan name extraction
+  const planMatch = sampleText.match(/(?:plan(?:\s*name)?|benefit\s*plan|product)\s*[:\s]*([A-Za-z0-9\s/+-]{4,30})/i);
+  if (planMatch && planMatch[1] && !['name', 'type', 'number', 'code'].includes(planMatch[1].trim().toLowerCase())) {
+    planName = planMatch[1].trim();
+  }
 
-  const ucMatch = sampleText.match(/(?:urgent|uc)\s*(?:copay)?[:\s]*\$?([0-9]{1,3})/i);
-  if (ucMatch) copays.urgentCare = Number(ucMatch[1]);
-
-  const erMatch = sampleText.match(/(?:er|emergency)\s*(?:copay)?[:\s]*\$?([0-9]{2,4})/i);
-  if (erMatch) copays.er = Number(erMatch[1]);
-
-  const rxMatch = sampleText.match(/(?:rx|prescription|generic)\s*(?:copay)?[:\s]*\$?([0-9]{1,3})/i);
-  if (rxMatch) copays.rxGeneric = Number(rxMatch[1]);
-
-  // Member ID extraction or realistic alphanumeric format
+  // Member ID extraction ONLY if found
   let memberId = '';
-  const idMatch = sampleText.match(/(?:id|member|subscriber|mrn|policy)\s*#?[:\s]*([a-z0-9-]{6,16})/i);
-  if (idMatch && idMatch[1] && !['undefined', 'number', 'policy'].includes(idMatch[1].toLowerCase())) {
-    memberId = idMatch[1].toUpperCase();
-  } else {
-    const prefix = provider === 'Kaiser Permanente' ? 'MRN' : (provider.includes('Blue') ? 'XEA' : 'U');
-    memberId = `${prefix}${Math.floor(10000000 + Math.random() * 89999999)}`;
+  const idMatch = sampleText.match(/(?:member\s*id|subscriber\s*id|enrollee\s*id|member\s*#|id\s*#|policy\s*#|identification\s*(?:no|number)?|mrn)\s*[:#\s]*([A-Za-z0-9-]{5,18})/i);
+  if (idMatch && idMatch[1]) {
+    const val = idMatch[1].trim();
+    if (!['number', 'policy', 'member', 'subscriber', 'identification'].includes(val.toLowerCase())) {
+      memberId = val.toUpperCase();
+    }
   }
 
-  // Group number extraction
+  // Group number extraction ONLY if found
   let groupNumber = '';
-  const grpMatch = sampleText.match(/(?:grp|group)\s*#?[:\s]*([a-z0-9-]{4,12})/i);
-  if (grpMatch && grpMatch[1] && !['number', 'group'].includes(grpMatch[1].toLowerCase())) {
-    groupNumber = grpMatch[1].toUpperCase();
-  } else {
-    groupNumber = `GRP-${Math.floor(10000 + Math.random() * 89999)}`;
+  const grpMatch = sampleText.match(/(?:group\s*#|group\s*number|grp\s*#|policy\s*group|grp|group)\s*[:#\s]*([A-Za-z0-9-]{4,14})/i);
+  if (grpMatch && grpMatch[1]) {
+    const val = grpMatch[1].trim();
+    if (!['number', 'group', 'policy', 'code', 'name'].includes(val.toLowerCase())) {
+      groupNumber = val.toUpperCase();
+    }
   }
 
-  // RxBIN extraction
+  // Rx numbers
   let rxBin = '';
-  const binMatch = sampleText.match(/(?:rxbin|bin)\s*#?[:\s]*([0-9]{6})/i);
+  const binMatch = sampleText.match(/(?:rxbin|rx\s*bin|bin)\s*#?[:\s]*([0-9]{6})/i);
   if (binMatch) rxBin = binMatch[1];
-  else rxBin = '004336';
 
   let rxPcn = '';
-  const pcnMatch = sampleText.match(/(?:rxpcn|pcn)\s*#?[:\s]*([a-z0-9]{3,8})/i);
-  if (pcnMatch) rxPcn = pcnMatch[1].toUpperCase();
-  else rxPcn = 'ADV';
+  const pcnMatch = sampleText.match(/(?:rxpcn|rx\s*pcn|pcn)\s*#?[:\s]*([A-Za-z0-9]{3,8})/i);
+  if (pcnMatch && !['number', 'code'].includes(pcnMatch[1].toLowerCase())) rxPcn = pcnMatch[1].toUpperCase();
 
   let rxGrp = '';
-  const rxGrpMatch = sampleText.match(/(?:rxgrp|rxgroup)\s*#?[:\s]*([a-z0-9]{4,10})/i);
-  if (rxGrpMatch) rxGrp = rxGrpMatch[1].toUpperCase();
-  else rxGrp = 'RXCUSTOM';
+  const rxGrpMatch = sampleText.match(/(?:rxgrp|rx\s*grp|rxgroup|rx\s*group)\s*#?[:\s]*([A-Za-z0-9]{3,10})/i);
+  if (rxGrpMatch && !['number', 'group'].includes(rxGrpMatch[1].toLowerCase())) rxGrp = rxGrpMatch[1].toUpperCase();
 
-  const network = planName.includes('HMO') ? 'HMO' : (planName.includes('EPO') ? 'EPO' : 'PPO');
-  const deductible = (provider === 'Kaiser Permanente' || provider === 'Medi-Cal') ? 0 : 1500;
-  const outOfPocketMax = provider === 'Medi-Cal' ? 0 : 6500;
+  // Copays ONLY if found in text
+  let copays = {
+    primaryCare: null,
+    specialist: null,
+    urgentCare: null,
+    er: null,
+    rxGeneric: null
+  };
+
+  const pcpMatch = sampleText.match(/(?:primary\s*care|pcp|office\s*visit|ov)\s*(?:copay)?[:\s]*\$?\s*([0-9]{1,3})/i);
+  if (pcpMatch) copays.primaryCare = Number(pcpMatch[1]);
+
+  const specMatch = sampleText.match(/(?:specialist|spec)\s*(?:copay)?[:\s]*\$?\s*([0-9]{1,3})/i);
+  if (specMatch) copays.specialist = Number(specMatch[1]);
+
+  const ucMatch = sampleText.match(/(?:urgent\s*care|urgent|uc)\s*(?:copay)?[:\s]*\$?\s*([0-9]{1,3})/i);
+  if (ucMatch) copays.urgentCare = Number(ucMatch[1]);
+
+  const erMatch = sampleText.match(/(?:emergency\s*room|emergency|er)\s*(?:copay)?[:\s]*\$?\s*([0-9]{2,4})/i);
+  if (erMatch) copays.er = Number(erMatch[1]);
+
+  const rxMatch = sampleText.match(/(?:generic\s*rx|generic|rx\s*copay|tier\s*1)\s*(?:copay)?[:\s]*\$?\s*([0-9]{1,3})/i);
+  if (rxMatch) copays.rxGeneric = Number(rxMatch[1]);
+
+  // Deductibles
+  let deductible = null;
+  const dedMatch = sampleText.match(/(?:individual\s*deductible|annual\s*deductible|deductible)\s*[:\s]*\$?\s*([0-9,]{2,7})/i);
+  if (dedMatch) {
+    const num = Number(dedMatch[1].replace(/,/g, ''));
+    if (!isNaN(num)) deductible = num;
+  }
+
+  let outOfPocketMax = null;
+  const oopMatch = sampleText.match(/(?:out\s*of\s*pocket\s*max(?:imum)?|oop\s*max|oopm|max\s*out\s*of\s*pocket)\s*[:\s]*\$?\s*([0-9,]{2,7})/i);
+  if (oopMatch) {
+    const num = Number(oopMatch[1].replace(/,/g, ''));
+    if (!isNaN(num)) outOfPocketMax = num;
+  }
 
   return {
     provider,
@@ -2345,26 +2435,29 @@ app.post(['/api/household/scan-insurance-card', '/household/scan-insurance-card'
 
     if (rawApiKey && aiProvider === 'gemini') {
       try {
-        const prompt = `You are an expert optical character recognition (OCR) and document scanner for health insurance cards and insurance policy documents (PDF or image). Analyze the provided document (front, back, or policy summary).
-Extract all visible insurance carrier details, plan name, subscriber/member ID, group number, prescription Rx numbers, and copays.
+        const prompt = `You are an optical character recognition (OCR) and document scanner for health insurance cards and insurance policy documents (PDF or image).
+Analyze the provided document (front, back, or policy summary).
+Extract ONLY the visible insurance carrier details, plan name, subscriber/member ID, group number, prescription Rx numbers, and copays actually printed on the document.
+If a field is NOT visible or not stated on the card, return null for that field. DO NOT invent or fabricate any numbers or details.
+
 Return strictly a valid JSON object with these exact keys:
 {
-  "provider": "Insurance Carrier Name (e.g. UnitedHealthcare, Kaiser Permanente, Anthem Blue Cross, Blue Shield of California, Aetna, Cigna, Humana, Medi-Cal, Medicare, etc.)",
-  "planName": "Plan Name or Network Type (e.g. Choice Plus PPO, Select HMO, Gold HMO, Platinum 90, Medicare Advantage, etc.)",
-  "memberId": "Member ID / Subscriber ID / Policy # / MRN",
-  "groupNumber": "Group Number / GRP",
-  "network": "PPO, HMO, EPO, or POS",
-  "rxBin": "RxBIN # (if visible)",
-  "rxPcn": "RxPCN (if visible)",
-  "rxGrp": "RxGRP (if visible)",
-  "deductible": number (Individual annual deductible in dollars, or null),
-  "outOfPocketMax": number (Annual out-of-pocket maximum in dollars, or null),
+  "provider": "Exact Insurance Carrier Name visible on card, or null",
+  "planName": "Exact Plan Name or Network Type visible on card, or null",
+  "memberId": "Exact Member ID / Subscriber ID / Policy # / MRN visible on card, or null",
+  "groupNumber": "Exact Group Number / GRP visible on card, or null",
+  "network": "PPO, HMO, EPO, POS, or null",
+  "rxBin": "RxBIN # if visible, or null",
+  "rxPcn": "RxPCN if visible, or null",
+  "rxGrp": "RxGRP if visible, or null",
+  "deductible": number (Individual annual deductible in dollars if visible, or null),
+  "outOfPocketMax": number (Annual out-of-pocket maximum in dollars if visible, or null),
   "copays": {
-    "primaryCare": number (Primary Care / Office Visit / PCP copay in dollars, or null if not listed),
-    "specialist": number (Specialist / SPEC copay in dollars, or null if not listed),
-    "urgentCare": number (Urgent Care / UC copay in dollars, or null if not listed),
-    "er": number (Emergency Room / ER copay in dollars, or null if not listed),
-    "rxGeneric": number (Generic Prescription / Tier 1 Rx copay in dollars, or null if not listed)
+    "primaryCare": number (Primary Care / PCP copay in dollars if visible, or null),
+    "specialist": number (Specialist copay in dollars if visible, or null),
+    "urgentCare": number (Urgent Care copay in dollars if visible, or null),
+    "er": number (Emergency Room copay in dollars if visible, or null),
+    "rxGeneric": number (Generic Prescription copay in dollars if visible, or null)
   }
 }
 Do not include markdown or backticks. Return strictly raw JSON.`;
@@ -2418,12 +2511,6 @@ Do not include markdown or backticks. Return strictly raw JSON.`;
     }
 
     if (!extracted.copays) extracted.copays = {};
-    const defaultCopays = { primaryCare: 20, specialist: 40, urgentCare: 30, er: 200, rxGeneric: 10 };
-    for (const [k, v] of Object.entries(defaultCopays)) {
-      if (typeof extracted.copays[k] !== 'number' || isNaN(extracted.copays[k])) {
-        extracted.copays[k] = v;
-      }
-    }
 
     res.json({
       success: true,

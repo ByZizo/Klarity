@@ -300,11 +300,12 @@ export default function HouseholdLifestyleHub({
   );
 
   const health = householdProfile.health || {
-    provider: 'Kaiser Permanente',
-    planName: 'HMO',
+    provider: '',
+    planName: '',
     memberId: '',
     groupNumber: '',
-    copays: { primaryCare: 15, specialist: 30, urgentCare: 20, er: 100, rxGeneric: 10 },
+    network: '',
+    copays: { primaryCare: null, specialist: null, urgentCare: null, er: null, rxGeneric: null },
     doctors: [],
     cards: []
   };
@@ -323,18 +324,18 @@ export default function HouseholdLifestyleHub({
   const healthFileInputRef = useRef(null);
 
   const [reviewForm, setReviewForm] = useState({
-    planName: health.planName || 'PPO Silver 70',
-    provider: health.provider || 'Blue Shield of California',
-    memberId: health.memberId || 'XEH482910377',
-    groupNumber: health.groupNumber || '0049221',
-    network: health.network || (health.planName?.includes('HMO') ? 'HMO' : 'PPO'),
-    primaryCare: health.copays?.primaryCare != null ? `$${health.copays.primaryCare}` : '$30',
-    specialist: health.copays?.specialist != null ? `$${health.copays.specialist}` : '$60',
-    urgentCare: health.copays?.urgentCare != null ? `$${health.copays.urgentCare}` : '$30',
-    er: health.copays?.er != null ? `$${health.copays.er}` : '$350',
-    rxGeneric: health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '$15',
-    deductible: health.deductible != null ? (String(health.deductible).startsWith('$') ? health.deductible : `$${Number(health.deductible).toLocaleString()}`) : '$1,500',
-    outOfPocketMax: health.outOfPocketMax != null ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : '$6,500'
+    planName: health.planName || '',
+    provider: health.provider || '',
+    memberId: health.memberId || '',
+    groupNumber: health.groupNumber || '',
+    network: health.network || '',
+    primaryCare: health.copays?.primaryCare != null ? `$${health.copays.primaryCare}` : '',
+    specialist: health.copays?.specialist != null ? `$${health.copays.specialist}` : '',
+    urgentCare: health.copays?.urgentCare != null ? `$${health.copays.urgentCare}` : '',
+    er: health.copays?.er != null ? `$${health.copays.er}` : '',
+    rxGeneric: health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '',
+    deductible: health.deductible != null && health.deductible !== '' ? (String(health.deductible).startsWith('$') ? health.deductible : `$${Number(health.deductible).toLocaleString()}`) : '',
+    outOfPocketMax: health.outOfPocketMax != null && health.outOfPocketMax !== '' ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : ''
   });
 
   useEffect(() => {
@@ -443,7 +444,8 @@ export default function HouseholdLifestyleHub({
   };
 
   const handleCopyMemberId = () => {
-    const mid = health.memberId || reviewForm.memberId || 'XEH482910377';
+    const mid = health.memberId || reviewForm.memberId || '';
+    if (!mid) return;
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(mid).catch(() => {});
     }
@@ -451,9 +453,9 @@ export default function HouseholdLifestyleHub({
     setTimeout(() => setCopiedMemberId(false), 2000);
   };
 
-  const parseCurrencyInput = (val, defaultVal = 0) => {
+  const parseCurrencyInput = (val, defaultVal = null) => {
     if (typeof val === 'number') return val;
-    if (!val) return defaultVal;
+    if (!val || String(val).trim() === '') return defaultVal;
     const num = Number(String(val).replace(/[^0-9.-]+/g, ''));
     return isNaN(num) ? defaultVal : num;
   };
@@ -497,20 +499,20 @@ export default function HouseholdLifestyleHub({
         console.warn('Card scan network notice:', err);
       }
 
-      const pName = extractedDetails?.planName || health.planName || 'PPO Silver 70';
-      const prov = extractedDetails?.provider || health.provider || 'Blue Shield of California';
-      const mId = extractedDetails?.memberId || health.memberId || 'XEH482910377';
-      const grp = extractedDetails?.groupNumber || health.groupNumber || '0049221';
-      const net = extractedDetails?.network || (pName.includes('HMO') ? 'HMO' : (pName.includes('EPO') ? 'EPO' : 'PPO'));
+      const pName = extractedDetails?.planName || '';
+      const prov = extractedDetails?.provider || '';
+      const mId = extractedDetails?.memberId || '';
+      const grp = extractedDetails?.groupNumber || '';
+      const net = extractedDetails?.network || (pName.toLowerCase().includes('hmo') ? 'HMO' : (pName.toLowerCase().includes('ppo') ? 'PPO' : ''));
 
-      const pc = extractedDetails?.copays?.primaryCare != null ? `$${extractedDetails.copays.primaryCare}` : (health.copays?.primaryCare != null ? `$${health.copays.primaryCare}` : '$30');
-      const sp = extractedDetails?.copays?.specialist != null ? `$${extractedDetails.copays.specialist}` : (health.copays?.specialist != null ? `$${health.copays.specialist}` : '$60');
-      const uc = extractedDetails?.copays?.urgentCare != null ? `$${extractedDetails.copays.urgentCare}` : (health.copays?.urgentCare != null ? `$${health.copays.urgentCare}` : '$30');
-      const er = extractedDetails?.copays?.er != null ? `$${extractedDetails.copays.er}` : (health.copays?.er != null ? `$${health.copays.er}` : '$350');
-      const rx = extractedDetails?.copays?.rxGeneric != null ? `$${extractedDetails.copays.rxGeneric}` : (health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '$15');
+      const pc = extractedDetails?.copays?.primaryCare != null ? `$${extractedDetails.copays.primaryCare}` : '';
+      const sp = extractedDetails?.copays?.specialist != null ? `$${extractedDetails.copays.specialist}` : '';
+      const uc = extractedDetails?.copays?.urgentCare != null ? `$${extractedDetails.copays.urgentCare}` : '';
+      const er = extractedDetails?.copays?.er != null ? `$${extractedDetails.copays.er}` : '';
+      const rx = extractedDetails?.copays?.rxGeneric != null ? `$${extractedDetails.copays.rxGeneric}` : '';
 
-      const ded = extractedDetails?.deductible != null ? `$${Number(extractedDetails.deductible).toLocaleString()}` : (health.deductible != null ? (String(health.deductible).startsWith('$') ? health.deductible : `$${Number(health.deductible).toLocaleString()}`) : '$1,500');
-      const oop = extractedDetails?.outOfPocketMax != null ? `$${Number(extractedDetails.outOfPocketMax).toLocaleString()}` : (health.outOfPocketMax != null ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : '$6,500');
+      const ded = extractedDetails?.deductible != null && extractedDetails.deductible !== '' ? `$${Number(extractedDetails.deductible).toLocaleString()}` : '';
+      const oop = extractedDetails?.outOfPocketMax != null && extractedDetails.outOfPocketMax !== '' ? `$${Number(extractedDetails.outOfPocketMax).toLocaleString()}` : '';
 
       setReviewForm({
         planName: pName,
@@ -545,16 +547,16 @@ export default function HouseholdLifestyleHub({
       planName: (reviewForm.planName || '').trim(),
       memberId: (reviewForm.memberId || '').trim(),
       groupNumber: (reviewForm.groupNumber || '').trim(),
-      network: (reviewForm.network || '').trim() || (reviewForm.planName?.includes('HMO') ? 'HMO' : 'PPO'),
-      deductible: parseCurrencyInput(reviewForm.deductible, 1500),
-      outOfPocketMax: parseCurrencyInput(reviewForm.outOfPocketMax, 6500),
+      network: (reviewForm.network || '').trim() || (reviewForm.planName?.toLowerCase().includes('hmo') ? 'HMO' : (reviewForm.planName?.toLowerCase().includes('ppo') ? 'PPO' : '')),
+      deductible: parseCurrencyInput(reviewForm.deductible, null),
+      outOfPocketMax: parseCurrencyInput(reviewForm.outOfPocketMax, null),
       copays: {
         ...(health.copays || {}),
-        primaryCare: parseCurrencyInput(reviewForm.primaryCare, 30),
-        specialist: parseCurrencyInput(reviewForm.specialist, 60),
-        urgentCare: parseCurrencyInput(reviewForm.urgentCare, 30),
-        er: parseCurrencyInput(reviewForm.er, 350),
-        rxGeneric: parseCurrencyInput(reviewForm.rxGeneric, 15)
+        primaryCare: parseCurrencyInput(reviewForm.primaryCare, null),
+        specialist: parseCurrencyInput(reviewForm.specialist, null),
+        urgentCare: parseCurrencyInput(reviewForm.urgentCare, null),
+        er: parseCurrencyInput(reviewForm.er, null),
+        rxGeneric: parseCurrencyInput(reviewForm.rxGeneric, null)
       },
       keepCardImage,
       cards: savedCards
@@ -595,18 +597,18 @@ export default function HouseholdLifestyleHub({
 
   const handleEditInsurance = () => {
     setReviewForm({
-      planName: health.planName || 'PPO Silver 70',
-      provider: health.provider || 'Blue Shield of California',
-      memberId: health.memberId || 'XEH482910377',
-      groupNumber: health.groupNumber || '0049221',
-      network: health.network || (health.planName?.includes('HMO') ? 'HMO' : 'PPO'),
-      primaryCare: health.copays?.primaryCare != null ? `$${health.copays.primaryCare}` : '$30',
-      specialist: health.copays?.specialist != null ? `$${health.copays.specialist}` : '$60',
-      urgentCare: health.copays?.urgentCare != null ? `$${health.copays.urgentCare}` : '$30',
-      er: health.copays?.er != null ? `$${health.copays.er}` : '$350',
-      rxGeneric: health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '$15',
-      deductible: health.deductible != null ? (String(health.deductible).startsWith('$') ? health.deductible : `$${Number(health.deductible).toLocaleString()}`) : '$1,500',
-      outOfPocketMax: health.outOfPocketMax != null ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : '$6,500'
+      planName: health.planName || '',
+      provider: health.provider || '',
+      memberId: health.memberId || '',
+      groupNumber: health.groupNumber || '',
+      network: health.network || '',
+      primaryCare: health.copays?.primaryCare != null ? `$${health.copays.primaryCare}` : '',
+      specialist: health.copays?.specialist != null ? `$${health.copays.specialist}` : '',
+      urgentCare: health.copays?.urgentCare != null ? `$${health.copays.urgentCare}` : '',
+      er: health.copays?.er != null ? `$${health.copays.er}` : '',
+      rxGeneric: health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '',
+      deductible: health.deductible != null && health.deductible !== '' ? (String(health.deductible).startsWith('$') ? health.deductible : `$${Number(health.deductible).toLocaleString()}`) : '',
+      outOfPocketMax: health.outOfPocketMax != null && health.outOfPocketMax !== '' ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : ''
     });
     setKeepCardImage(health.keepCardImage !== false);
     setHealthView('review');
@@ -621,14 +623,14 @@ export default function HouseholdLifestyleHub({
       memberId: '',
       groupNumber: '',
       network: '',
-      deductible: 0,
-      outOfPocketMax: 0,
+      deductible: null,
+      outOfPocketMax: null,
       copays: {
-        primaryCare: 0,
-        specialist: 0,
-        urgentCare: 0,
-        er: 0,
-        rxGeneric: 0
+        primaryCare: null,
+        specialist: null,
+        urgentCare: null,
+        er: null,
+        rxGeneric: null
       },
       cards: []
     };
@@ -1808,6 +1810,7 @@ export default function HouseholdLifestyleHub({
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Plan name</label>
                     <input
                       type="text"
+                      placeholder="e.g. Silver 70 PPO, Standard HMO"
                       value={reviewForm.planName}
                       onChange={(e) => setReviewForm({ ...reviewForm, planName: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
@@ -1818,6 +1821,7 @@ export default function HouseholdLifestyleHub({
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Carrier</label>
                     <input
                       type="text"
+                      placeholder="e.g. Blue Shield, Kaiser, Aetna"
                       value={reviewForm.provider}
                       onChange={(e) => setReviewForm({ ...reviewForm, provider: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
@@ -1828,6 +1832,7 @@ export default function HouseholdLifestyleHub({
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Member ID</label>
                     <input
                       type="text"
+                      placeholder="Member ID number"
                       value={reviewForm.memberId}
                       onChange={(e) => setReviewForm({ ...reviewForm, memberId: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
@@ -1838,6 +1843,7 @@ export default function HouseholdLifestyleHub({
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Group number</label>
                     <input
                       type="text"
+                      placeholder="Group number"
                       value={reviewForm.groupNumber}
                       onChange={(e) => setReviewForm({ ...reviewForm, groupNumber: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
@@ -1848,6 +1854,7 @@ export default function HouseholdLifestyleHub({
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Primary care copay</label>
                     <input
                       type="text"
+                      placeholder="e.g. $20"
                       value={reviewForm.primaryCare}
                       onChange={(e) => setReviewForm({ ...reviewForm, primaryCare: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
@@ -1858,6 +1865,7 @@ export default function HouseholdLifestyleHub({
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Specialist copay</label>
                     <input
                       type="text"
+                      placeholder="e.g. $40"
                       value={reviewForm.specialist}
                       onChange={(e) => setReviewForm({ ...reviewForm, specialist: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
@@ -1868,6 +1876,7 @@ export default function HouseholdLifestyleHub({
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Emergency room copay</label>
                     <input
                       type="text"
+                      placeholder="e.g. $250"
                       value={reviewForm.er}
                       onChange={(e) => setReviewForm({ ...reviewForm, er: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
@@ -1878,6 +1887,7 @@ export default function HouseholdLifestyleHub({
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Generic prescription</label>
                     <input
                       type="text"
+                      placeholder="e.g. $10"
                       value={reviewForm.rxGeneric}
                       onChange={(e) => setReviewForm({ ...reviewForm, rxGeneric: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
@@ -1888,6 +1898,7 @@ export default function HouseholdLifestyleHub({
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Deductible</label>
                     <input
                       type="text"
+                      placeholder="e.g. $1,000"
                       value={reviewForm.deductible}
                       onChange={(e) => setReviewForm({ ...reviewForm, deductible: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
@@ -1898,6 +1909,7 @@ export default function HouseholdLifestyleHub({
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Out-of-pocket maximum</label>
                     <input
                       type="text"
+                      placeholder="e.g. $5,000"
                       value={reviewForm.outOfPocketMax}
                       onChange={(e) => setReviewForm({ ...reviewForm, outOfPocketMax: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
@@ -1952,26 +1964,30 @@ export default function HouseholdLifestyleHub({
                 <div>
                   <div className="bg-[#1B4B91] text-white rounded-2xl p-5 flex flex-col justify-between aspect-[1.6/1] shadow-md min-h-[190px]">
                     <div className="flex items-center justify-between text-[13px] opacity-90">
-                      <span>{health.provider || 'Blue Shield of California'}</span>
-                      <span className="font-semibold">{health.network || 'PPO'}</span>
+                      <span className="font-medium">{health.provider || 'Health Insurance'}</span>
+                      {health.network ? <span className="font-semibold">{health.network}</span> : null}
                     </div>
 
                     <div className="font-serif text-xl font-medium tracking-tight leading-tight my-2">
-                      {health.planName || 'PPO Silver 70'}
+                      {health.planName || 'Coverage Plan'}
                     </div>
 
                     <div>
                       <div className="text-lg font-mono font-medium tracking-wider tabular-nums">
-                        {showMemberId
-                          ? (health.memberId || 'XEH482910377')
-                          : ((health.memberId || 'XEH482910377').length > 4
-                              ? `•••• •••• ${(health.memberId || 'XEH482910377').slice(-4)}`
-                              : `•••• •••• 0377`)}
+                        {health.memberId ? (
+                          showMemberId
+                            ? health.memberId
+                            : (health.memberId.length > 4
+                                ? `•••• •••• ${health.memberId.slice(-4)}`
+                                : health.memberId)
+                        ) : (
+                          <span className="text-xs opacity-60 font-sans tracking-normal">No Member ID</span>
+                        )}
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between text-[13px] opacity-90 mt-1">
-                      <span>Group {health.groupNumber || '0049221'}</span>
+                      {health.groupNumber ? <span>Group {health.groupNumber}</span> : <span />}
                     </div>
                   </div>
 
@@ -2008,30 +2024,38 @@ export default function HouseholdLifestyleHub({
                 <div className="flex flex-col text-sm divide-y divide-slate-100 dark:divide-slate-800">
                   <div className="flex items-center justify-between py-2.5">
                     <span className="text-slate-500 dark:text-slate-400">Primary care copay</span>
-                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">${health.copays?.primaryCare ?? 30}</b>
+                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
+                      {health.copays?.primaryCare != null ? `$${health.copays.primaryCare}` : '—'}
+                    </b>
                   </div>
                   <div className="flex items-center justify-between py-2.5">
                     <span className="text-slate-500 dark:text-slate-400">Specialist copay</span>
-                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">${health.copays?.specialist ?? 60}</b>
+                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
+                      {health.copays?.specialist != null ? `$${health.copays.specialist}` : '—'}
+                    </b>
                   </div>
                   <div className="flex items-center justify-between py-2.5">
                     <span className="text-slate-500 dark:text-slate-400">Emergency room copay</span>
-                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">${health.copays?.er ?? 350}</b>
+                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
+                      {health.copays?.er != null ? `$${health.copays.er}` : '—'}
+                    </b>
                   </div>
                   <div className="flex items-center justify-between py-2.5">
                     <span className="text-slate-500 dark:text-slate-400">Generic prescription</span>
-                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">${health.copays?.rxGeneric ?? 15}</b>
+                    <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
+                      {health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '—'}
+                    </b>
                   </div>
                   <div className="flex items-center justify-between py-2.5">
                     <span className="text-slate-500 dark:text-slate-400">Deductible</span>
                     <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
-                      ${Number(health.deductible ?? 1500).toLocaleString()}
+                      {health.deductible != null && health.deductible !== '' ? `$${Number(health.deductible).toLocaleString()}` : '—'}
                     </b>
                   </div>
                   <div className="flex items-center justify-between py-2.5">
                     <span className="text-slate-500 dark:text-slate-400">Out-of-pocket maximum</span>
                     <b className="font-semibold text-slate-900 dark:text-white tabular-nums">
-                      ${Number(health.outOfPocketMax ?? 6500).toLocaleString()}
+                      {health.outOfPocketMax != null && health.outOfPocketMax !== '' ? `$${Number(health.outOfPocketMax).toLocaleString()}` : '—'}
                     </b>
                   </div>
                 </div>
