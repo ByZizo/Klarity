@@ -130,6 +130,229 @@ export const UTILITY_REGIONS = [
   }
 ];
 
+export const PROVIDER_SPECIFIC_PLANS = {
+  phone: {
+    't-mobile': [
+      { name: 'Go5G Next', tag: 'Current' },
+      { name: 'Go5G Plus', tag: 'Current' },
+      { name: 'Go5G', tag: 'Current' },
+      { name: 'Experience Beyond', tag: 'Promo / New' },
+      { name: 'Magenta MAX', tag: 'Grandfathered' },
+      { name: 'Magenta', tag: 'Grandfathered' },
+      { name: 'ONE Plan', tag: 'Grandfathered' },
+      { name: 'ONE Plus', tag: 'Grandfathered' },
+      { name: 'Simple Choice', tag: 'Grandfathered' },
+      { name: 'Essentials', tag: 'Current' },
+      { name: 'Connect by T-Mobile', tag: 'Prepaid' }
+    ],
+    'at&t': [
+      { name: 'Unlimited Premium PL', tag: 'Current' },
+      { name: 'Unlimited Extra EL', tag: 'Current' },
+      { name: 'Unlimited Starter SL', tag: 'Current' },
+      { name: 'Unlimited Elite', tag: 'Grandfathered' },
+      { name: 'Unlimited Plus', tag: 'Grandfathered' },
+      { name: 'Unlimited Choice', tag: 'Grandfathered' },
+      { name: 'Unlimited &More Premium', tag: 'Grandfathered' },
+      { name: 'Value Plus VL', tag: 'Current' },
+      { name: '4GB Plan', tag: 'Current' }
+    ],
+    'verizon': [
+      { name: 'Unlimited Ultimate', tag: 'Current' },
+      { name: 'Unlimited Plus', tag: 'Current' },
+      { name: 'Unlimited Welcome', tag: 'Current' },
+      { name: '5G Get More', tag: 'Grandfathered' },
+      { name: '5G Play More', tag: 'Grandfathered' },
+      { name: '5G Do More', tag: 'Grandfathered' },
+      { name: '5G Start', tag: 'Grandfathered' },
+      { name: 'The New Verizon Plan Unlimited', tag: 'Grandfathered' },
+      { name: 'Single Basic Phone Plan', tag: 'Grandfathered' }
+    ],
+    'mint': [
+      { name: 'Unlimited (40GB high-speed)', tag: 'Current' },
+      { name: '20GB 5G/4G LTE', tag: 'Current' },
+      { name: '15GB 5G/4G LTE', tag: 'Current' },
+      { name: '5GB 5G/4G LTE', tag: 'Current' }
+    ],
+    'google fi': [
+      { name: 'Unlimited Plus', tag: 'Current' },
+      { name: 'Simply Unlimited', tag: 'Current' },
+      { name: 'Flexible ($20 + $10/GB)', tag: 'Current' }
+    ],
+    'visible': [
+      { name: 'Visible+', tag: 'Current' },
+      { name: 'Visible Base', tag: 'Current' }
+    ]
+  },
+  internet: {
+    'xfinity': [
+      { name: 'Gigabit Extra (1200 Mbps)', tag: 'Current' },
+      { name: 'Gigabit x2 (2000 Mbps)', tag: 'Current' },
+      { name: 'Gigabit (1000 Mbps)', tag: 'Current' },
+      { name: 'Ultrafast (800 Mbps)', tag: 'Current' },
+      { name: 'Superfast (500 Mbps)', tag: 'Current' },
+      { name: 'Fast (300 Mbps)', tag: 'Current' },
+      { name: 'Connect More (200 Mbps)', tag: 'Current' },
+      { name: 'Connect (75 Mbps)', tag: 'Current' },
+      { name: 'NOW Internet', tag: 'Current' },
+      { name: 'Extreme Pro', tag: 'Grandfathered' },
+      { name: 'Performance Pro', tag: 'Grandfathered' }
+    ],
+    'at&t': [
+      { name: 'AT&T Fiber 5000 (5 Gigs)', tag: 'Current' },
+      { name: 'AT&T Fiber 2000 (2 Gigs)', tag: 'Current' },
+      { name: 'AT&T Fiber 1000 (1 Gig)', tag: 'Current' },
+      { name: 'AT&T Fiber 500', tag: 'Current' },
+      { name: 'AT&T Fiber 300', tag: 'Current' },
+      { name: 'Internet Air (5G Home)', tag: 'Current' },
+      { name: 'Internet 100 (Copper/VDSL)', tag: 'Grandfathered' },
+      { name: 'Internet 50 / 25', tag: 'Grandfathered' }
+    ],
+    'spectrum': [
+      { name: 'Spectrum Internet Gig (1000 Mbps)', tag: 'Current' },
+      { name: 'Spectrum Internet Ultra (500 Mbps)', tag: 'Current' },
+      { name: 'Spectrum Internet (300 Mbps)', tag: 'Current' },
+      { name: 'Spectrum Internet 100', tag: 'Current' },
+      { name: 'Spectrum Internet Assist (30 Mbps)', tag: 'Grandfathered / Low-Income' }
+    ],
+    'verizon': [
+      { name: 'Fios 2 Gigabit', tag: 'Current' },
+      { name: 'Fios 1 Gigabit', tag: 'Current' },
+      { name: 'Fios 500 Mbps', tag: 'Current' },
+      { name: 'Fios 300 Mbps', tag: 'Current' },
+      { name: '5G Home Plus', tag: 'Current' },
+      { name: '5G Home', tag: 'Current' }
+    ],
+    'frontier': [
+      { name: 'Fiber 5 Gig', tag: 'Current' },
+      { name: 'Fiber 2 Gig', tag: 'Current' },
+      { name: 'Fiber 1 Gig', tag: 'Current' },
+      { name: 'Fiber 500 Mbps', tag: 'Current' },
+      { name: 'Frontier Internet (DSL)', tag: 'Grandfathered' }
+    ],
+    'starlink': [
+      { name: 'Standard (Residential)', tag: 'Current' },
+      { name: 'Priority (High Demand / Business)', tag: 'Current' },
+      { name: 'Mobile (Roam / RV)', tag: 'Current' },
+      { name: 'Best Effort', tag: 'Grandfathered' }
+    ]
+  },
+  electricGas: {
+    'pg&e': [
+      { name: 'EV2-A (Home Charging & Solar TOU)', tag: 'EV / Storage' },
+      { name: 'E-ELEC (Electric Home / Heat Pump / EV)', tag: 'All-Electric' },
+      { name: 'E-TOU-C (Peak 4–9 PM Every Day)', tag: 'Default TOU' },
+      { name: 'E-TOU-D (Peak 5–8 PM Weekdays)', tag: 'TOU' },
+      { name: 'E-1 (Tiered Rate Plan)', tag: 'Grandfathered / Tiered' },
+      { name: 'CARE Discount Rate (30%+ off)', tag: 'Discount Program' },
+      { name: 'FERA Discount Rate (18% off)', tag: 'Discount Program' },
+      { name: 'G-1 Residential Natural Gas', tag: 'Gas Rate' }
+    ],
+    'pge': [
+      { name: 'EV2-A (Home Charging & Solar TOU)', tag: 'EV / Storage' },
+      { name: 'E-ELEC (Electric Home / Heat Pump / EV)', tag: 'All-Electric' },
+      { name: 'E-TOU-C (Peak 4–9 PM Every Day)', tag: 'Default TOU' },
+      { name: 'E-TOU-D (Peak 5–8 PM Weekdays)', tag: 'TOU' },
+      { name: 'E-1 (Tiered Rate Plan)', tag: 'Grandfathered / Tiered' },
+      { name: 'CARE Discount Rate (30%+ off)', tag: 'Discount Program' },
+      { name: 'FERA Discount Rate (18% off)', tag: 'Discount Program' }
+    ],
+    'sce': [
+      { name: 'TOU-D-PRIME (EV, Battery & Heat Pump)', tag: 'EV / Storage' },
+      { name: 'TOU-D-4-9PM (Peak 4–9 PM)', tag: 'Current' },
+      { name: 'TOU-D-5-8PM (Peak 5–8 PM)', tag: 'Current' },
+      { name: 'Domestic (Tiered D)', tag: 'Tiered' },
+      { name: 'CARE / FERA Rate', tag: 'Discount Program' }
+    ],
+    'sdg&e': [
+      { name: 'EV-TOU-5 (Super Off-Peak EV)', tag: 'EV Rate' },
+      { name: 'EV-TOU-2', tag: 'EV Rate' },
+      { name: 'TOU-DR1 (Peak 4–9 PM)', tag: 'Default TOU' },
+      { name: 'Standard DR (Tiered Rate)', tag: 'Tiered' }
+    ],
+    'socalgas': [
+      { name: 'GR (Residential Natural Gas Service)', tag: 'Current' },
+      { name: 'G-CARE (Gas Discount Program)', tag: 'Discount Program' }
+    ],
+    'smud': [
+      { name: 'Time-of-Day (5–8 PM Peak)', tag: 'Default' },
+      { name: 'Fixed Rate (Standard Residential)', tag: 'Tiered' }
+    ]
+  },
+  trash: {
+    'standard': [
+      { name: '96-Gallon Heavy / Large Family Cart', tag: 'Large' },
+      { name: '64-Gallon Standard Household Cart', tag: 'Standard' },
+      { name: '32-Gallon Eco / Small Cart', tag: 'Eco / Small' },
+      { name: 'Commercial 2-Yard Bin', tag: 'Commercial' },
+      { name: 'Included in Municipal Property Taxes / HOA', tag: 'Included' }
+    ]
+  },
+  security: {
+    'ring': [
+      { name: 'Ring Protect Pro ($20/mo or $200/yr)', tag: '24/7 Pro + Backup' },
+      { name: 'Ring Protect Plus ($10/mo)', tag: 'Video All Devices' },
+      { name: 'Ring Protect Basic ($3.99/mo)', tag: 'Single Device Video' },
+      { name: 'Ring Home Standard', tag: 'New Tier' },
+      { name: 'Ring Home Premium', tag: 'New Tier' },
+      { name: 'Free (Live View & Notifications only)', tag: 'No Subscription' }
+    ],
+    'adt': [
+      { name: 'ADT Complete (Video + Smart Home + Pro Monitoring)', tag: 'Full Package' },
+      { name: 'ADT Remote (Smart Home + Pro Monitoring)', tag: 'Current' },
+      { name: 'ADT Secure (Basic 24/7 Police Monitoring)', tag: 'Current' },
+      { name: 'ADT Self Setup', tag: 'DIY' }
+    ],
+    'simplisafe': [
+      { name: 'Fast Protect Monitoring ($31.99/mo)', tag: 'Live Guard + 24/7' },
+      { name: 'Standard Monitoring ($21.99/mo)', tag: '24/7 Police Dispatch' },
+      { name: 'Self-Monitoring with Camera Recording ($9.99/mo)', tag: 'Cloud Storage' },
+      { name: 'Unmonitored Free', tag: 'Self-Monitored' }
+    ],
+    'nest': [
+      { name: 'Nest Aware Plus (24/7 10-day video + 60 days events)', tag: 'Full Video' },
+      { name: 'Nest Aware (30-day event video history)', tag: 'Event History' },
+      { name: 'Nest 1st Gen Grandfathered ($5/$10/mo)', tag: 'Grandfathered' },
+      { name: 'Nest Free (3-hour snapshot)', tag: 'Free' }
+    ],
+    'vivint': [
+      { name: 'Vivint Smart Home Total Video & Cloud', tag: 'Top Tier' },
+      { name: 'Vivint Smart Home Automation & Monitoring', tag: 'Current' },
+      { name: 'Vivint Security Basics', tag: 'Monitoring' }
+    ]
+  }
+};
+
+export function getPlansForProvider(category, providerName) {
+  if (!providerName) {
+    if (category === 'trash') return PROVIDER_SPECIFIC_PLANS.trash.standard;
+    const catObj = PROVIDER_SPECIFIC_PLANS[category] || {};
+    const firstKey = Object.keys(catObj)[0];
+    return firstKey ? catObj[firstKey] : [];
+  }
+  const norm = String(providerName).toLowerCase().replace(/[^a-z0-9&]/g, '');
+  const catObj = PROVIDER_SPECIFIC_PLANS[category] || {};
+
+  for (const [key, list] of Object.entries(catObj)) {
+    const keyNorm = key.replace(/[^a-z0-9&]/g, '');
+    if (norm.includes(keyNorm) || keyNorm.includes(norm)) {
+      return list;
+    }
+  }
+
+  if (category === 'trash') return PROVIDER_SPECIFIC_PLANS.trash.standard;
+
+  // Flatten unique plans from this category as fallback
+  const allInCat = [];
+  for (const list of Object.values(catObj)) {
+    for (const item of list) {
+      if (!allInCat.some(x => x.name === item.name)) {
+        allInCat.push(item);
+      }
+    }
+  }
+  return allInCat;
+}
+
 export const HOUSEHOLD_PLAN_OPTIONS = {
   internet: [
     { id: 'gigabit_fiber', label: 'Gigabit Fiber (1000+ Mbps)' },
@@ -277,17 +500,22 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
   poolPumpType: 'variable_speed', // 'variable_speed' | 'single_speed'
   poolHeating: 'none', // 'none' | 'solar' | 'gas' | 'electric_heat_pump'
 
-  // Household Providers & Plan Types
+  // Household Providers & Exact Plan Names
   internetProvider: 'Xfinity',
+  internetPlan: 'Gigabit Extra (1200 Mbps)',
   internetPlanType: 'gigabit_fiber',
   phoneProvider: 'T-Mobile',
+  phonePlan: 'Go5G Plus',
   phonePlanType: 'unlimited_premium',
   phoneLines: 3,
   electricGasProvider: 'PG&E',
+  electricGasPlan: 'EV2-A (Home Charging & Solar TOU)',
   electricGasPlanType: 'tou_ev',
   trashProvider: 'City Municipal Utilities',
+  trashPlan: '64-Gallon Standard Household Cart',
   trashPlanType: 'standard_64',
   securityProvider: 'Ring',
+  securityPlan: 'Ring Protect Pro ($20/mo or $200/yr)',
   securityPlanType: 'cloud_video',
 
   // Solar & Storage suite

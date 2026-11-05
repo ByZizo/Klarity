@@ -54,6 +54,8 @@ import {
   UTILITY_REGIONS,
   HOME_QUESTIONNAIRE_OPTIONS,
   HOUSEHOLD_PLAN_OPTIONS,
+  PROVIDER_SPECIFIC_PLANS,
+  getPlansForProvider,
   getSuggestedProviders,
   calculateHomeCostBreakdown,
   calculateHouseholdAndFleetMetrics,
@@ -628,6 +630,27 @@ export default function HouseholdLifestyleHub({
   const totalActualBills = useMemo(
     () => actualHouseholdBills.reduce((sum, b) => sum + Number(b.expectedAmount || b.amount || 0), 0),
     [actualHouseholdBills]
+  );
+
+  const suggestedInternetPlans = useMemo(
+    () => getPlansForProvider('internet', householdProfile.internetProvider),
+    [householdProfile.internetProvider]
+  );
+  const suggestedPhonePlans = useMemo(
+    () => getPlansForProvider('phone', householdProfile.phoneProvider),
+    [householdProfile.phoneProvider]
+  );
+  const suggestedUtilityPlans = useMemo(
+    () => getPlansForProvider('electricGas', householdProfile.electricGasProvider),
+    [householdProfile.electricGasProvider]
+  );
+  const suggestedTrashPlans = useMemo(
+    () => getPlansForProvider('trash', householdProfile.trashProvider),
+    [householdProfile.trashProvider]
+  );
+  const suggestedSecurityPlans = useMemo(
+    () => getPlansForProvider('security', householdProfile.securityProvider),
+    [householdProfile.securityProvider]
   );
 
   const handleCostItemChange = (catId, field, value) => {
@@ -1998,6 +2021,10 @@ export default function HouseholdLifestyleHub({
                 {/* ------------------------------------------------------- */}
                 {wizardStep === 7 && (
                   <div className="flex flex-col gap-4 text-xs">
+                    <p className="text-[11px] text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                      Enter your exact plan names (including current, grandfathered, or discontinued plans) or click any suggested plan name below.
+                    </p>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* 1. Home Internet & Plan */}
                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
@@ -2007,7 +2034,7 @@ export default function HouseholdLifestyleHub({
                         </span>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">What provider do you use?</span>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Provider</span>
                           <input
                             type="text"
                             value={householdProfile.internetProvider || ''}
@@ -2030,16 +2057,49 @@ export default function HouseholdLifestyleHub({
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">What type of plan are you on?</span>
-                          <select
-                            value={householdProfile.internetPlanType || 'gigabit_fiber'}
-                            onChange={e => handleFieldChange('internetPlanType', e.target.value)}
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none cursor-pointer"
-                          >
-                            {(HOUSEHOLD_PLAN_OPTIONS.internet || []).map(opt => (
-                              <option key={opt.id} value={opt.id}>{opt.label}</option>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                            Plan Name (enter your plan or pick a suggestion)
+                          </span>
+                          <input
+                            type="text"
+                            list="internet-plans-list"
+                            value={householdProfile.internetPlan || ''}
+                            onChange={e => handleFieldChange('internetPlan', e.target.value)}
+                            placeholder="Type plan name, e.g. Gigabit Extra, Fast 300, Performance Pro..."
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
+                          />
+                          <datalist id="internet-plans-list">
+                            {suggestedInternetPlans.map(p => (
+                              <option key={p.name} value={p.name}>{p.name} ({p.tag})</option>
                             ))}
-                          </select>
+                          </datalist>
+
+                          {suggestedInternetPlans.length > 0 && (
+                            <div className="flex items-center gap-1.5 flex-wrap mt-2 max-h-24 overflow-y-auto pr-1">
+                              {suggestedInternetPlans.map(p => {
+                                const isSelected = householdProfile.internetPlan === p.name;
+                                return (
+                                  <button
+                                    key={p.name}
+                                    type="button"
+                                    onClick={() => handleFieldChange('internetPlan', p.name)}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                      isSelected
+                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                  >
+                                    <span>{p.name}</span>
+                                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                                      isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-500'
+                                    }`}>
+                                      {p.tag}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -2064,7 +2124,7 @@ export default function HouseholdLifestyleHub({
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">What carrier / provider do you use?</span>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Carrier / Provider</span>
                           <input
                             type="text"
                             value={householdProfile.phoneProvider || ''}
@@ -2087,16 +2147,49 @@ export default function HouseholdLifestyleHub({
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">What type of phone plan are you on?</span>
-                          <select
-                            value={householdProfile.phonePlanType || 'unlimited_premium'}
-                            onChange={e => handleFieldChange('phonePlanType', e.target.value)}
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none cursor-pointer"
-                          >
-                            {(HOUSEHOLD_PLAN_OPTIONS.phone || []).map(opt => (
-                              <option key={opt.id} value={opt.id}>{opt.label}</option>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                            Plan Name (enter your plan or pick a suggestion)
+                          </span>
+                          <input
+                            type="text"
+                            list="phone-plans-list"
+                            value={householdProfile.phonePlan || ''}
+                            onChange={e => handleFieldChange('phonePlan', e.target.value)}
+                            placeholder="Type plan name, e.g. Go5G Plus, Experience Beyond, Magenta MAX, Simple Choice..."
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
+                          />
+                          <datalist id="phone-plans-list">
+                            {suggestedPhonePlans.map(p => (
+                              <option key={p.name} value={p.name}>{p.name} ({p.tag})</option>
                             ))}
-                          </select>
+                          </datalist>
+
+                          {suggestedPhonePlans.length > 0 && (
+                            <div className="flex items-center gap-1.5 flex-wrap mt-2 max-h-24 overflow-y-auto pr-1">
+                              {suggestedPhonePlans.map(p => {
+                                const isSelected = householdProfile.phonePlan === p.name;
+                                return (
+                                  <button
+                                    key={p.name}
+                                    type="button"
+                                    onClick={() => handleFieldChange('phonePlan', p.name)}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                      isSelected
+                                        ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                  >
+                                    <span>{p.name}</span>
+                                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                                      isSelected ? 'bg-purple-700 text-purple-100' : 'bg-slate-100 text-slate-500'
+                                    }`}>
+                                      {p.tag}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -2108,26 +2201,71 @@ export default function HouseholdLifestyleHub({
                         </span>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Electric & Gas Utility Provider</span>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Utility Provider</span>
                           <input
                             type="text"
                             value={householdProfile.electricGasProvider || (UTILITY_REGIONS.find(r => r.id === householdProfile.utilityRegionId)?.name || 'Pacific Gas & Electric (PG&E)')}
                             onChange={e => handleFieldChange('electricGasProvider', e.target.value)}
                             className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
                           />
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                            {['PG&E', 'SCE', 'SDG&E', 'SoCalGas', 'SMUD'].map(p => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => handleFieldChange('electricGasProvider', p)}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.electricGasProvider === p ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                              >
+                                {p}
+                              </button>
+                            ))}
+                          </div>
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">What utility rate plan are you on?</span>
-                          <select
-                            value={householdProfile.electricGasPlanType || 'tou_ev'}
-                            onChange={e => handleFieldChange('electricGasPlanType', e.target.value)}
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none cursor-pointer"
-                          >
-                            {(HOUSEHOLD_PLAN_OPTIONS.electricGas || []).map(opt => (
-                              <option key={opt.id} value={opt.id}>{opt.label}</option>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                            Utility Rate Plan Name (enter or pick a suggestion)
+                          </span>
+                          <input
+                            type="text"
+                            list="utility-plans-list"
+                            value={householdProfile.electricGasPlan || ''}
+                            onChange={e => handleFieldChange('electricGasPlan', e.target.value)}
+                            placeholder="Type rate plan, e.g. EV2-A, E-TOU-C, E-ELEC, Tiered E-1, CARE..."
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
+                          />
+                          <datalist id="utility-plans-list">
+                            {suggestedUtilityPlans.map(p => (
+                              <option key={p.name} value={p.name}>{p.name} ({p.tag})</option>
                             ))}
-                          </select>
+                          </datalist>
+
+                          {suggestedUtilityPlans.length > 0 && (
+                            <div className="flex items-center gap-1.5 flex-wrap mt-2 max-h-24 overflow-y-auto pr-1">
+                              {suggestedUtilityPlans.map(p => {
+                                const isSelected = householdProfile.electricGasPlan === p.name;
+                                return (
+                                  <button
+                                    key={p.name}
+                                    type="button"
+                                    onClick={() => handleFieldChange('electricGasPlan', p.name)}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                      isSelected
+                                        ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                  >
+                                    <span>{p.name}</span>
+                                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                                      isSelected ? 'bg-amber-700 text-amber-100' : 'bg-slate-100 text-slate-500'
+                                    }`}>
+                                      {p.tag}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -2144,22 +2282,55 @@ export default function HouseholdLifestyleHub({
                             type="text"
                             value={householdProfile.trashProvider || ''}
                             onChange={e => handleFieldChange('trashProvider', e.target.value)}
-                            placeholder="e.g. City Municipal Utilities, Waste Management..."
+                            placeholder="e.g. City Municipal Utilities, Waste Management, Republic Services..."
                             className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
                           />
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">What cart size or service plan?</span>
-                          <select
-                            value={householdProfile.trashPlanType || 'standard_64'}
-                            onChange={e => handleFieldChange('trashPlanType', e.target.value)}
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none cursor-pointer"
-                          >
-                            {(HOUSEHOLD_PLAN_OPTIONS.trash || []).map(opt => (
-                              <option key={opt.id} value={opt.id}>{opt.label}</option>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                            Cart Size / Plan Name (enter or pick a suggestion)
+                          </span>
+                          <input
+                            type="text"
+                            list="trash-plans-list"
+                            value={householdProfile.trashPlan || ''}
+                            onChange={e => handleFieldChange('trashPlan', e.target.value)}
+                            placeholder="Type plan, e.g. 64-Gallon Standard, 96-Gallon Large, 32-Gallon Eco..."
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
+                          />
+                          <datalist id="trash-plans-list">
+                            {suggestedTrashPlans.map(p => (
+                              <option key={p.name} value={p.name}>{p.name} ({p.tag})</option>
                             ))}
-                          </select>
+                          </datalist>
+
+                          {suggestedTrashPlans.length > 0 && (
+                            <div className="flex items-center gap-1.5 flex-wrap mt-2 max-h-24 overflow-y-auto pr-1">
+                              {suggestedTrashPlans.map(p => {
+                                const isSelected = householdProfile.trashPlan === p.name;
+                                return (
+                                  <button
+                                    key={p.name}
+                                    type="button"
+                                    onClick={() => handleFieldChange('trashPlan', p.name)}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                      isSelected
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                  >
+                                    <span>{p.name}</span>
+                                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                                      isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-500'
+                                    }`}>
+                                      {p.tag}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -2177,7 +2348,7 @@ export default function HouseholdLifestyleHub({
                               type="text"
                               value={householdProfile.securityProvider || ''}
                               onChange={e => handleFieldChange('securityProvider', e.target.value)}
-                              placeholder="e.g. Ring, ADT, SimpliSafe, Nest, None..."
+                              placeholder="e.g. Ring, ADT, SimpliSafe, Nest, Vivint, None..."
                               className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
                             />
                             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
@@ -2195,16 +2366,49 @@ export default function HouseholdLifestyleHub({
                           </div>
 
                           <div>
-                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">What security plan are you on?</span>
-                            <select
-                              value={householdProfile.securityPlanType || 'cloud_video'}
-                              onChange={e => handleFieldChange('securityPlanType', e.target.value)}
-                              className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none cursor-pointer"
-                            >
-                              {(HOUSEHOLD_PLAN_OPTIONS.security || []).map(opt => (
-                                <option key={opt.id} value={opt.id}>{opt.label}</option>
+                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                              Security Plan Name (enter or pick a suggestion)
+                            </span>
+                            <input
+                              type="text"
+                              list="security-plans-list"
+                              value={householdProfile.securityPlan || ''}
+                              onChange={e => handleFieldChange('securityPlan', e.target.value)}
+                              placeholder="Type plan, e.g. Ring Protect Pro, Fast Protect Monitoring, Nest Aware..."
+                              className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
+                            />
+                            <datalist id="security-plans-list">
+                              {suggestedSecurityPlans.map(p => (
+                                <option key={p.name} value={p.name}>{p.name} ({p.tag})</option>
                               ))}
-                            </select>
+                            </datalist>
+
+                            {suggestedSecurityPlans.length > 0 && (
+                              <div className="flex items-center gap-1.5 flex-wrap mt-2 max-h-24 overflow-y-auto pr-1">
+                                {suggestedSecurityPlans.map(p => {
+                                  const isSelected = householdProfile.securityPlan === p.name;
+                                  return (
+                                    <button
+                                      key={p.name}
+                                      type="button"
+                                      onClick={() => handleFieldChange('securityPlan', p.name)}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                        isSelected
+                                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                      }`}
+                                    >
+                                      <span>{p.name}</span>
+                                      <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                                        isSelected ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-100 text-slate-500'
+                                      }`}>
+                                        {p.tag}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2607,49 +2811,83 @@ export default function HouseholdLifestyleHub({
                       )}
                     </div>
 
-                    {/* HOUSEHOLD PROVIDERS SUMMARY (Internet, Phones, Trash, Security) */}
+                    {/* HOUSEHOLD PROVIDERS & PLANS SUMMARY */}
                     <div className="p-4 sm:p-5 rounded-xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-3 text-xs">
                       <div className="font-bold text-slate-900 flex items-center justify-between pb-2 border-b border-slate-100">
                         <span className="flex items-center gap-1.5">
                           <Wifi className="w-4 h-4 text-[#18457c]" />
-                          <span>Household Service Providers</span>
+                          <span>Household Providers & Plan Names</span>
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[11px]">
-                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col">
-                          <span className="text-slate-400 block flex items-center gap-1">
-                            <Wifi className="w-3 h-3 text-indigo-500" />
-                            <span>Internet / WiFi</span>
-                          </span>
-                          <span className="font-bold text-slate-800 mt-0.5 truncate">
-                            {householdProfile.internetProvider || 'Xfinity / Fiber'}
-                          </span>
-                        </div>
-                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col">
-                          <span className="text-slate-400 block flex items-center gap-1">
-                            <Smartphone className="w-3 h-3 text-purple-500" />
-                            <span>Mobile Wireless</span>
-                          </span>
-                          <span className="font-bold text-slate-800 mt-0.5 truncate">
-                            {householdProfile.phoneProvider || 'T-Mobile'} ({householdProfile.phoneLines || 3} lines)
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-[11px]">
+                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                          <div>
+                            <span className="text-slate-400 block flex items-center gap-1">
+                              <Wifi className="w-3 h-3 text-indigo-500" />
+                              <span>Internet / WiFi</span>
+                            </span>
+                            <span className="font-bold text-slate-800 mt-0.5 truncate block">
+                              {householdProfile.internetProvider || 'Xfinity'}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-indigo-700 font-semibold truncate block mt-1.5 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">
+                            {householdProfile.internetPlan || 'Gigabit Extra'}
                           </span>
                         </div>
-                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col">
-                          <span className="text-slate-400 block flex items-center gap-1">
-                            <Droplets className="w-3 h-3 text-blue-500" />
-                            <span>Municipal Trash</span>
-                          </span>
-                          <span className="font-bold text-slate-800 mt-0.5 truncate">
-                            {householdProfile.trashProvider || 'City Waste Services'}
+                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                          <div>
+                            <span className="text-slate-400 block flex items-center gap-1">
+                              <Smartphone className="w-3 h-3 text-purple-500" />
+                              <span>Mobile Wireless</span>
+                            </span>
+                            <span className="font-bold text-slate-800 mt-0.5 truncate block">
+                              {householdProfile.phoneProvider || 'T-Mobile'} ({householdProfile.phoneLines || 3} lines)
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-purple-700 font-semibold truncate block mt-1.5 bg-purple-50 border border-purple-100 px-1.5 py-0.5 rounded">
+                            {householdProfile.phonePlan || 'Go5G Plus'}
                           </span>
                         </div>
-                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col">
-                          <span className="text-slate-400 block flex items-center gap-1">
-                            <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                            <span>Security</span>
+                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                          <div>
+                            <span className="text-slate-400 block flex items-center gap-1">
+                              <Zap className="w-3 h-3 text-amber-500" />
+                              <span>Utility Rate Plan</span>
+                            </span>
+                            <span className="font-bold text-slate-800 mt-0.5 truncate block">
+                              {householdProfile.electricGasProvider || 'PG&E'}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-amber-700 font-semibold truncate block mt-1.5 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded">
+                            {householdProfile.electricGasPlan || 'EV2-A Home TOU'}
                           </span>
-                          <span className="font-bold text-slate-800 mt-0.5 truncate">
-                            {householdProfile.securityProvider || 'Ring / Smart Home'}
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                          <div>
+                            <span className="text-slate-400 block flex items-center gap-1">
+                              <Droplets className="w-3 h-3 text-blue-500" />
+                              <span>Municipal Trash</span>
+                            </span>
+                            <span className="font-bold text-slate-800 mt-0.5 truncate block">
+                              {householdProfile.trashProvider || 'City Waste Services'}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-blue-700 font-semibold truncate block mt-1.5 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">
+                            {householdProfile.trashPlan || '64-Gal Cart'}
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                          <div>
+                            <span className="text-slate-400 block flex items-center gap-1">
+                              <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                              <span>Home Security</span>
+                            </span>
+                            <span className="font-bold text-slate-800 mt-0.5 truncate block">
+                              {householdProfile.securityProvider || 'Ring / Smart Home'}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-emerald-700 font-semibold truncate block mt-1.5 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded">
+                            {householdProfile.securityPlan || 'Ring Protect Pro'}
                           </span>
                         </div>
                       </div>
