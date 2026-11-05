@@ -130,15 +130,137 @@ export const UTILITY_REGIONS = [
   }
 ];
 
+export const HOME_QUESTIONNAIRE_OPTIONS = {
+  heating: [
+    { id: 'natural_gas_furnace', label: 'Natural Gas Furnace (Central Ducted)' },
+    { id: 'heat_pump', label: 'Electric Heat Pump (Mini-Split or Central)' },
+    { id: 'electric_baseboard', label: 'Electric Baseboard / Wall Heaters' },
+    { id: 'propane_other', label: 'Propane / Wood / Other' }
+  ],
+  cooling: [
+    { id: 'central_ac', label: 'Central Air Conditioning' },
+    { id: 'heat_pump', label: 'Heat Pump (Heating & Cooling)' },
+    { id: 'evaporative_cooler', label: 'Evaporative / Swamp Cooler' },
+    { id: 'window_units', label: 'Window / Portable AC Units' },
+    { id: 'none', label: 'No Air Conditioning' }
+  ],
+  waterHeater: [
+    { id: 'natural_gas_tank', label: 'Natural Gas Tank (40–50 Gal)' },
+    { id: 'tankless_gas', label: 'Tankless Natural Gas (On-Demand)' },
+    { id: 'electric_tank', label: 'Standard Electric Tank' },
+    { id: 'hybrid_heat_pump', label: 'Hybrid Heat Pump Water Heater' }
+  ],
+  evCharger: [
+    { id: 'level2_240v', label: 'Level 2 (240V Dedicated Wall Connector / NEMA 14-50)' },
+    { id: 'level1_120v', label: 'Level 1 (Standard 120V Wall Outlet)' },
+    { id: 'no_charger', label: 'No Home Charger (Charge Away from Home)' }
+  ],
+  evChargingFrequency: [
+    { id: 'daily', label: 'Daily (Plug in every night)' },
+    { id: 'several_times_week', label: '2–4 Times a Week' },
+    { id: 'rarely', label: 'Rarely (Occasional top-offs only)' },
+    { id: 'never', label: 'Never (Charge 100% away from home)' }
+  ],
+  evChargingSchedule: [
+    { id: 'overnight_offpeak', label: 'Overnight / Off-Peak (Midnight – 6 AM, lowest electric rate)' },
+    { id: 'daytime_solar', label: 'Daytime (While solar panels produce)' },
+    { id: 'evening_peak', label: 'Evening Peak (4 PM – 9 PM, highest rate)' },
+    { id: 'anytime', label: 'Anytime / Unscheduled' }
+  ],
+  evFreeWorkplaceCharging: [
+    { id: 'no', label: 'No (100% home power)' },
+    { id: 'yes_sometimes', label: 'Yes, 20–30% free public or workplace' },
+    { id: 'yes_often', label: 'Yes, 50%+ free public or workplace' }
+  ],
+  poolOrSpa: [
+    { id: 'none', label: 'None' },
+    { id: 'pool_only', label: 'In-Ground Swimming Pool' },
+    { id: 'spa_only', label: 'Hot Tub / Spa Only' },
+    { id: 'pool_and_spa', label: 'Pool & Spa Combo' }
+  ],
+  poolPump: [
+    { id: 'variable_speed', label: 'Variable-Speed Eco Pump (Energy Star)' },
+    { id: 'single_speed', label: 'Single-Speed Standard Pump' }
+  ],
+  poolHeating: [
+    { id: 'none', label: 'Unheated / Ambient' },
+    { id: 'solar', label: 'Rooftop Solar Pool Panels' },
+    { id: 'gas', label: 'Natural Gas Pool Heater' },
+    { id: 'electric_heat_pump', label: 'Electric Pool Heat Pump' }
+  ],
+  solarOwnership: [
+    { id: 'owned', label: 'Owned (Paid Off / Purchased)' },
+    { id: 'leased', label: 'Leased' },
+    { id: 'ppa', label: 'Power Purchase Agreement (PPA)' }
+  ],
+  solarBillingPlans: [
+    { id: 'nem_2', label: 'NEM 2.0 (Grandfathered Net Energy Metering)' },
+    { id: 'nem_3', label: 'NEM 3.0 (Solar Billing Plan / Net Billing)' },
+    { id: 'nem_1', label: 'NEM 1.0 (Original Net Metering)' },
+    { id: 'other', label: 'Wholesale / Avoided Cost Rate' }
+  ],
+  batteryModes: [
+    { id: 'self_consumption', label: 'Maximize Solar Self-Consumption' },
+    { id: 'backup_only', label: 'Emergency Backup Only (100% Reserve)' },
+    { id: 'tou_arbitrage', label: 'Time-of-Use Rate Arbitrage' }
+  ]
+};
+
 export const DEFAULT_HOUSEHOLD_PROFILE = {
+  // Property details
+  address: '',
+  street: '',
+  city: '',
+  state: 'CA',
+  zip: '',
+  cityOrZip: 'Bay Area / Northern CA',
+  zillowUrl: '',
+  zillowImportedAt: null,
   dwellingType: 'single_family',
   ownership: 'own',
-  cityOrZip: 'Bay Area / Northern CA',
-  utilityRegionId: 'pge_norcal',
   householdSize: 4,
   sqFt: 2100,
+  bedrooms: 3,
+  bathrooms: 2,
+  yearBuilt: 2004,
+  lotSize: '6,500 sq ft',
+  estimatedValue: '$425,000',
+  county: 'Fresno County',
+  garage: 'Attached 2-Car Garage',
+  utilityRegionId: 'pge_norcal',
   hasCareDiscount: true, // CARE/FERA low-income or senior discount
+
+  // Questionnaire: Heating, Cooling, Water, EV, Pool
+  heatingType: 'natural_gas_furnace', // 'natural_gas_furnace' | 'heat_pump' | 'electric_baseboard' | 'propane_other'
+  coolingType: 'central_ac', // 'central_ac' | 'heat_pump' | 'evaporative_cooler' | 'window_units' | 'none'
+  waterHeaterType: 'natural_gas_tank', // 'natural_gas_tank' | 'tankless_gas' | 'electric_tank' | 'hybrid_heat_pump'
+  hasEvAtHome: true,
+  evChargerType: 'level2_240v', // 'level2_240v' | 'level1_120v' | 'no_charger'
+  evHomeChargingFrequency: 'daily', // 'daily' | 'several_times_week' | 'rarely' | 'never'
+  evChargingSchedule: 'overnight_offpeak', // 'overnight_offpeak' | 'daytime_solar' | 'evening_peak' | 'anytime'
+  evDailyHomeMiles: 35,
+  evFreeWorkplaceCharging: 'no', // 'no' | 'yes_sometimes' | 'yes_often'
+  poolOrSpa: 'none', // 'none' | 'pool_only' | 'spa_only' | 'pool_and_spa'
+  poolPumpType: 'variable_speed', // 'variable_speed' | 'single_speed'
+  poolHeating: 'none', // 'none' | 'solar' | 'gas' | 'electric_heat_pump'
+
+  // Solar & Storage suite
   hasSolar: false,
+  solarPanelCount: 20,
+  solarWattsPerPanel: 400,
+  solarOwnership: 'owned', // 'owned' | 'leased' | 'ppa'
+  solarMonthlyPayment: 165,
+  solarBillingPlan: 'nem_2', // 'nem_2' | 'nem_3' | 'nem_1' | 'other'
+  solarYearInstalled: 2021,
+  hasSolarBattery: false,
+  solarBatteryModel: 'Tesla Powerwall 2',
+  solarBatteryKwh: 13.5,
+  solarBatteryMode: 'self_consumption', // 'self_consumption' | 'backup_only' | 'tou_arbitrage'
+  solarPeakSunHours: 5.5,
+
+  // User-customized monthly home costs { [costKey]: { provider, amount, source: 'user' | 'estimate' | 'bills' } }
+  monthlyCosts: {},
+
   climateSeason: 'average', // 'average' | 'summer_ac' | 'winter_heat'
   foodMonthly: 650,
   health: {
@@ -216,6 +338,129 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
  * Calculates comprehensive monthly utility bills (PG&E Electric, Natural Gas, Water/Sewer/Trash)
  * and Fleet Fuel/Charging expenses based on the household profile.
  */
+
+/**
+ * Helper to suggest utility, telecom, and home finance providers based on ZIP code & region.
+ */
+export function getSuggestedProviders(profile = {}) {
+  const regId = profile.utilityRegionId || 'pge_norcal';
+  const city = (profile.city || profile.cityOrZip || 'Fresno').split(',')[0].trim();
+  const county = profile.county || 'Fresno County';
+
+  let electric = 'Pacific Gas & Electric (PG&E)';
+  let gas = 'Pacific Gas & Electric (PG&E)';
+
+  if (regId === 'smud_sac') {
+    electric = 'SMUD (Sacramento Municipal Utility)';
+    gas = 'Pacific Gas & Electric (PG&E)';
+  } else if (regId === 'sce_socal') {
+    electric = 'Southern California Edison (SCE)';
+    gas = 'SoCalGas';
+  } else if (regId === 'sdge_sandiego') {
+    electric = 'San Diego Gas & Electric (SDG&E)';
+    gas = 'San Diego Gas & Electric (SDG&E)';
+  } else if (regId === 'ladwp_la') {
+    electric = 'Los Angeles Dept of Water & Power (LADWP)';
+    gas = 'SoCalGas';
+  } else if (regId === 'national_avg') {
+    electric = 'Local Electric Utility';
+    gas = 'Local Natural Gas Utility';
+  }
+
+  const waterTrash = `City of ${city || 'Municipal'} Utilities`;
+  const internet = 'Xfinity / AT&T Fiber';
+  const mortgageRent = profile.ownership === 'rent' ? 'Property Landlord / Management' : 'Mortgage Servicer';
+  const propertyTax = `${county} Tax Collector`;
+  const hoa = 'HOA Community Association';
+  const homeInsurance = profile.ownership === 'rent' ? 'Lemonade / State Farm Renters' : 'State Farm / Travelers Homeowners';
+
+  return {
+    electricity: electric,
+    gas,
+    waterTrash,
+    internet,
+    mortgageRent,
+    propertyTax,
+    hoa,
+    homeInsurance
+  };
+}
+
+/**
+ * Computes standard monthly cost items matching bills, user inputs, and calculated engine estimates.
+ */
+export function calculateHomeCostBreakdown(profile = {}, metrics = null, userBills = []) {
+  const suggestedProviders = getSuggestedProviders(profile);
+  const userCosts = profile.monthlyCosts || {};
+  const bills = Array.isArray(userBills) ? userBills : [];
+
+  const rawVal = Number(String(profile.estimatedValue || '425000').replace(/[^0-9]/g, '')) || 425000;
+  const isRent = profile.ownership === 'rent';
+  const sqFt = Number(profile.sqFt) || 2100;
+
+  // Baseline estimates
+  const estElectric = metrics?.utilities?.homeElectricCost != null
+    ? metrics.utilities.homeElectricCost + (metrics.utilities.evHomeChargingCost || 0)
+    : 378;
+  const estGas = metrics?.utilities?.naturalGasCost != null ? metrics.utilities.naturalGasCost : 119;
+  const estWaterTrash = metrics?.utilities?.waterTrashTotalCost != null ? metrics.utilities.waterTrashTotalCost : 216;
+  const estInternet = 65;
+  const estMortgageRent = isRent ? Math.round(sqFt * 1.35) : Math.round(rawVal * 0.0052);
+  const estPropertyTax = isRent ? 0 : Math.round((rawVal * 0.0115) / 12);
+  const estHoa = profile.dwellingType === 'apartment' || profile.dwellingType === 'townhouse' ? 245 : 0;
+  const estHomeInsurance = isRent ? 22 : Math.round((rawVal * 0.0035) / 12);
+
+  const categories = [
+    { id: 'electricity', label: 'Electricity', defaultProvider: suggestedProviders.electricity, estAmount: estElectric, billTerms: ['electric', 'pg&e', 'pge', 'smud', 'edison', 'sdge', 'ladwp'] },
+    { id: 'gas', label: 'Natural Gas', defaultProvider: suggestedProviders.gas, estAmount: estGas, billTerms: ['gas', 'socalgas', 'natural gas'] },
+    { id: 'waterTrash', label: 'Water & Trash', defaultProvider: suggestedProviders.waterTrash, estAmount: estWaterTrash, billTerms: ['water', 'trash', 'sewer', 'waste', 'city utilities', 'republic services', 'waste management'] },
+    { id: 'internet', label: 'Internet', defaultProvider: suggestedProviders.internet, estAmount: estInternet, billTerms: ['internet', 'wifi', 'xfinity', 'comcast', 'at&t', 'spectrum', 'verizon fios', 'frontier', 'sonic'] },
+    { id: 'mortgageRent', label: isRent ? 'Rent' : 'Mortgage or Rent', defaultProvider: suggestedProviders.mortgageRent, estAmount: estMortgageRent, billTerms: ['mortgage', 'rent', 'housing', 'lease'] },
+    { id: 'propertyTax', label: 'Property Tax', defaultProvider: suggestedProviders.propertyTax, estAmount: estPropertyTax, billTerms: ['property tax', 'county tax', 'tax collector'] },
+    { id: 'hoa', label: 'HOA', defaultProvider: suggestedProviders.hoa, estAmount: estHoa, billTerms: ['hoa', 'homeowners association', 'condo fee'] },
+    { id: 'homeInsurance', label: isRent ? 'Renters Insurance' : 'Home Insurance', defaultProvider: suggestedProviders.homeInsurance, estAmount: estHomeInsurance, billTerms: ['home insurance', 'hazard insurance', 'renters insurance', 'homeowners insurance'] }
+  ];
+
+  return categories.map(cat => {
+    // 1. User manual entry takes top precedence
+    if (userCosts[cat.id] && userCosts[cat.id].amount !== undefined) {
+      return {
+        id: cat.id,
+        label: cat.label,
+        provider: userCosts[cat.id].provider || cat.defaultProvider,
+        amount: Number(userCosts[cat.id].amount) || 0,
+        source: userCosts[cat.id].source || 'user'
+      };
+    }
+
+    // 2. Check user bills
+    const matchedBill = bills.find(b => {
+      const bName = (b.name || '').toLowerCase();
+      const bCat = (b.category || '').toLowerCase();
+      return cat.billTerms.some(term => bName.includes(term) || bCat.includes(term));
+    });
+
+    if (matchedBill && Number(matchedBill.expectedAmount) > 0) {
+      return {
+        id: cat.id,
+        label: cat.label,
+        provider: matchedBill.name || cat.defaultProvider,
+        amount: Math.round(Number(matchedBill.expectedAmount)),
+        source: 'bills'
+      };
+    }
+
+    // 3. Fallback to model estimate
+    return {
+      id: cat.id,
+      label: cat.label,
+      provider: cat.defaultProvider,
+      amount: Math.round(cat.estAmount),
+      source: 'estimate'
+    };
+  });
+}
+
 export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PROFILE) {
   const dwelling = DWELLING_TYPES.find(d => d.id === profile.dwellingType) || DWELLING_TYPES[2];
   const region = UTILITY_REGIONS.find(r => r.id === profile.utilityRegionId) || UTILITY_REGIONS[0];
@@ -227,11 +472,73 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
   const electricSeasonMult = profile.climateSeason === 'summer_ac' ? 1.35 : profile.climateSeason === 'winter_heat' ? 0.92 : 1.0;
   const gasSeasonMult = profile.climateSeason === 'winter_heat' ? 1.65 : profile.climateSeason === 'summer_ac' ? 0.65 : 1.0;
 
+  // Heating & Cooling equipment adjustments
+  let heatingElectricDelta = 0;
+  let heatingGasDelta = 0;
+  if (profile.heatingType === 'heat_pump') {
+    heatingElectricDelta = 110 * (profile.climateSeason === 'winter_heat' ? 1.8 : 0.6);
+    heatingGasDelta = -18;
+  } else if (profile.heatingType === 'electric_baseboard') {
+    heatingElectricDelta = 220 * (profile.climateSeason === 'winter_heat' ? 2.1 : 0.5);
+    heatingGasDelta = -25;
+  } else if (profile.heatingType === 'propane_other') {
+    heatingGasDelta = -20;
+  }
+
+  let coolingElectricMult = 1.0;
+  if (profile.coolingType === 'heat_pump') {
+    coolingElectricMult = 0.88;
+  } else if (profile.coolingType === 'evaporative_cooler') {
+    coolingElectricMult = 0.65;
+  } else if (profile.coolingType === 'window_units') {
+    coolingElectricMult = 0.82;
+  } else if (profile.coolingType === 'none') {
+    coolingElectricMult = 0.60;
+  }
+
+  // Water heater equipment adjustments
+  let waterElectricDelta = 0;
+  let waterGasDelta = 0;
+  if (profile.waterHeaterType === 'electric_tank') {
+    waterElectricDelta = 190;
+    waterGasDelta = -12;
+  } else if (profile.waterHeaterType === 'hybrid_heat_pump') {
+    waterElectricDelta = 65;
+    waterGasDelta = -12;
+  } else if (profile.waterHeaterType === 'tankless_gas') {
+    waterGasDelta = -6;
+  }
+
+  // Pool & Spa load adjustments
+  let poolElectricDelta = 0;
+  let poolGasDelta = 0;
+  if (profile.poolOrSpa === 'pool_only' || profile.poolOrSpa === 'pool_and_spa') {
+    poolElectricDelta += profile.poolPumpType === 'single_speed' ? 160 : 75;
+    if (profile.poolHeating === 'gas') poolGasDelta += 24;
+    else if (profile.poolHeating === 'electric_heat_pump') poolElectricDelta += 115;
+  }
+  if (profile.poolOrSpa === 'spa_only' || profile.poolOrSpa === 'pool_and_spa') {
+    poolElectricDelta += 85;
+    if (profile.poolHeating === 'gas') poolGasDelta += 12;
+  }
+
+  // Solar system computed parameters
+  const solarPanelCount = Math.max(1, Number(profile.solarPanelCount) || 20);
+  const solarWattsPerPanel = Math.max(100, Number(profile.solarWattsPerPanel) || 400);
+  const solarSystemKw = Number(((solarPanelCount * solarWattsPerPanel) / 1000).toFixed(2));
+  const solarPeakSunHours = Math.max(1, Number(profile.solarPeakSunHours) || 5.5);
+  // Monthly solar kWh with 20% system losses stated (inverter, wiring, dust, heat)
+  const solarMonthlyKwh = Math.round(solarSystemKw * solarPeakSunHours * 30 * 0.80);
+
   // 1. Home Electricity (excluding EV charging)
-  // Base dwelling kWh scaled by sqFt + 115 kWh per person (appliances, laundry, refrigerators, electronics)
-  let homeKwh = Math.round((dwelling.baseKwh * sqFtRatio + (people * 115)) * electricSeasonMult);
+  // Base dwelling kWh scaled by sqFt + 115 kWh per person, modified by HVAC, water heater, and pool
+  let grossHomeKwh = Math.round((dwelling.baseKwh * sqFtRatio * coolingElectricMult + (people * 115) + heatingElectricDelta + waterElectricDelta + poolElectricDelta) * electricSeasonMult);
+
+  let homeKwh = grossHomeKwh;
   if (profile.hasSolar) {
-    homeKwh = Math.max(80, Math.round(homeKwh * 0.25)); // Solar offsets ~75% of daytime load
+    const offsetFactor = profile.solarBillingPlan === 'nem_3' ? 0.70 : 0.85;
+    const solarOffset = Math.round(solarMonthlyKwh * offsetFactor);
+    homeKwh = Math.max(85, grossHomeKwh - solarOffset);
   }
 
   const effectiveElectricRate = profile.hasCareDiscount
@@ -244,9 +551,9 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
 
   const homeElectricCost = Math.round(homeKwh * effectiveElectricRate);
 
-  // 2. Natural Gas (Water heating, stove, furnace)
-  // Base dwelling therms + 6 therms per person for hot showers/laundry/cooking
-  const monthlyTherms = Math.round((dwelling.baseTherms * Math.sqrt(sqFtRatio) + (people * 6)) * gasSeasonMult);
+  // 2. Natural Gas (Water heating, stove, furnace, pool)
+  const grossTherms = (dwelling.baseTherms * Math.sqrt(sqFtRatio) + (people * 6) + heatingGasDelta + waterGasDelta + poolGasDelta) * gasSeasonMult;
+  const monthlyTherms = Math.max(4, Math.round(grossTherms));
   const effectiveThermRate = profile.hasCareDiscount
     ? region.thermRate * 0.80 // 20% CARE gas discount
     : region.thermRate;
@@ -378,12 +685,32 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
     ? Math.round((homeElectricCost + totalMonthlyEvHomeCost) * (region.careDiscountPercent / 100) + naturalGasCost * 0.20)
     : Math.round(((homeElectricCost + totalMonthlyEvHomeCost) / (1 - region.careDiscountPercent / 100)) * (region.careDiscountPercent / 100));
 
+  // Solar suite details
+  const solar = {
+    hasSolar: Boolean(profile.hasSolar),
+    panelCount: solarPanelCount,
+    wattsPerPanel: solarWattsPerPanel,
+    systemSizeKw: solarSystemKw,
+    peakSunHours: solarPeakSunHours,
+    monthlyKwhEstimate: solarMonthlyKwh,
+    ownership: profile.solarOwnership || 'owned',
+    monthlyPayment: profile.solarOwnership !== 'owned' ? (Number(profile.solarMonthlyPayment) || 0) : 0,
+    billingPlan: profile.solarBillingPlan || 'nem_2',
+    yearInstalled: profile.solarYearInstalled || 2021,
+    hasBattery: Boolean(profile.hasSolarBattery),
+    batteryModel: profile.solarBatteryModel || 'Tesla Powerwall 2',
+    batteryKwh: Number(profile.solarBatteryKwh) || 13.5,
+    batteryMode: profile.solarBatteryMode || 'self_consumption'
+  };
+
   return {
     dwelling,
     region,
     people,
     sqFt,
+    solar,
     utilities: {
+      grossHomeKwh,
       homeKwh,
       evHomeKwh: totalMonthlyEvHomeKwh,
       totalKwh: homeKwh + totalMonthlyEvHomeKwh,

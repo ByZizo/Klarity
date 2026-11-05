@@ -1376,7 +1376,71 @@ function KlarityApp() {
   }, [vaultItems]);
 
   const handleSyncUtilitiesToBills = (calcMetrics) => {
-    if (!calcMetrics || !calcMetrics.utilities) return;
+    if (!calcMetrics) return;
+
+    if (Array.isArray(calcMetrics.homeCostItems) && calcMetrics.homeCostItems.length > 0) {
+      setData(prev => {
+        const existingBills = [...(prev.bills || [])];
+        const upsertBill = (name, category, amount, dueDay) => {
+          if (!amount || amount <= 0) return;
+          const searchKey = name.toLowerCase().split(' ')[0];
+          const idx = existingBills.findIndex(b => (b.name || '').toLowerCase().includes(searchKey));
+          if (idx >= 0) {
+            existingBills[idx] = { ...existingBills[idx], name, expectedAmount: amount, category };
+          } else {
+            existingBills.push({
+              id: `bill-sync-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              name,
+              category,
+              expectedAmount: amount,
+              dueDay: dueDay || 15,
+              nextDueDate: `Monthly on Day ${dueDay || 15}`,
+              autopay: true,
+              status: 'upcoming'
+            });
+          }
+        };
+
+        const catMap = {
+          electricity: 'Utilities',
+          gas: 'Utilities',
+          waterTrash: 'Utilities',
+          internet: 'Internet & Tech',
+          mortgageRent: 'Housing',
+          propertyTax: 'Housing',
+          hoa: 'Housing',
+          homeInsurance: 'Insurance'
+        };
+
+        calcMetrics.homeCostItems.forEach(item => {
+          const cat = catMap[item.id] || 'Housing';
+          const billName = item.provider ? `${item.provider} (${item.label})` : item.label;
+          upsertBill(billName, cat, Number(item.amount) || 0, 15);
+        });
+
+        const insAmount = Number(calcMetrics.fleet?.totalMonthlyInsurance || 0);
+        if (insAmount > 0 && calcMetrics.fleet?.vehicles?.length > 0) {
+          upsertBill(`Auto Insurance (${calcMetrics.fleet.vehicles.length} Household Cars)`, 'Insurance', insAmount, 10);
+        }
+
+        const nextState = {
+          ...prev,
+          bills: existingBills,
+          metrics: {
+            ...prev.metrics,
+            totalMonthlyBills: existingBills.reduce((s, b) => s + Number(b.expectedAmount || 0), 0)
+          }
+        };
+        try {
+          localStorage.setItem('klarity_finance_data', JSON.stringify(nextState));
+          localStorage.setItem('klarity_bills', JSON.stringify(existingBills));
+        } catch (e) {}
+        return nextState;
+      });
+      return;
+    }
+
+    if (!calcMetrics.utilities) return;
     const pgeAmount = Number(calcMetrics.utilities.totalPgeCombinedBill || 0);
     const waterAmount = Number(calcMetrics.utilities.waterTrashTotalCost || 0);
     const insAmount = Number(calcMetrics.fleet?.totalMonthlyInsurance || 0);
@@ -5502,6 +5566,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                     <h1 className="font-serif-title text-[24px] font-bold text-slate-900">Lifestyle</h1>
                   </div>
                   <HouseholdLifestyleHub
+                    bills={data.bills || []}
                     householdProfile={householdProfile}
                     onUpdateProfile={setHouseholdProfile}
                     onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
@@ -6048,7 +6113,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
             {/* Household, Utility (PG&E / Water / Gas) & EV Fleet Intelligence Hub */}
             <HouseholdLifestyleHub
-              householdProfile={householdProfile}
+                    bills={data.bills || []}
+                    householdProfile={householdProfile}
               onUpdateProfile={setHouseholdProfile}
               onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
               onAskAiAdvisor={(promptText) => {
@@ -6940,7 +7006,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             </div>
 
             <HouseholdLifestyleHub
-              householdProfile={householdProfile}
+                    bills={data.bills || []}
+                    householdProfile={householdProfile}
               onUpdateProfile={setHouseholdProfile}
               onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
               onAskAiAdvisor={(promptText) => {
