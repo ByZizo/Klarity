@@ -65,7 +65,14 @@ function shouldTriggerWebSearch(prompt = '') {
     // Temporal & Search Intent
     'current', 'currently', 'today', 'latest', 'new', 'now', '2025', '2026', 'recent',
     'search', 'look up', 'find', 'compare', 'best', 'top', 'recommend', 'review', 'vs',
-    'what is', 'who is', 'where is', 'how much', 'when is', 'why is', 'weather', 'news', 'internet', 'web', 'online', 'browse', 'browsing'
+    'what is', 'who is', 'where is', 'how much', 'when is', 'why is', 'weather', 'news', 'internet', 'web', 'online', 'browse', 'browsing', 'google',
+    // Search, Lookup & Timeliness Actions
+    'recently', 'right now', 'as of', 'updated', 'this week', 'this month', 'this year', 'trending', 'breaking', 'forecast', 'upcoming',
+    'lookup', 'search up', 'look into', 'check on', 'check', 'pull up', 'find out', 'see if', 'fetch', 'verify', 'track',
+    // Deals, Discounts & Inventory
+    'coupon', 'discount', 'promo code', 'sale', 'weekly ad', 'circular', 'in stock', 'inventory', 'store hours', 'open now', 'nearest', 'fee', 'subsidy', 'quote',
+    // Question & Conversation Starters
+    'is there', 'has there', 'tell me about', 'info on', 'what happened', 'did you hear'
   ];
 
   if (triggerKeywords.some(kw => lower.includes(kw))) {

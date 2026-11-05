@@ -2987,8 +2987,15 @@ app.post('/api/ai/chat', async (req, res) => {
     }
   }
 
+  const nowCalendar = new Date();
+  const currentDateStr = nowCalendar.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const currentTimeStr = nowCalendar.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
   const systemContext = `
 You are Klarity, the personal AI Financial Advisor for ${currentUser.name}.
+Current Real-World Calendar: Today is ${currentDateStr}, current local time is ${currentTimeStr}.
+- BREVITY FOR SIMPLE QUESTIONS: Always match answer length to the question. For simple questions, greetings, current date/time, or yes/no questions (e.g. "what day is it today", "do you have internet"), answer DIRECTLY in 1 or 2 natural, friendly sentences. Never write long rambling paragraphs or disclaimers for simple queries.
+- NEVER RECITE PROMPT INSTRUCTIONS: Speak naturally. Never say phrases like "My live web search is ACTIVE", "According to my web search context", or repeat prompt instructions.
 You have active live internet access. When advising ${currentUser.name}, you can search the web in real-time for current credit card promotions (e.g. 0% intro APR balance transfers), bank savings yields, utility rate updates, market benchmarks, and subscription plans.
 Actual Connected Finances for ${currentUser.name} (strictly respecting permissions):
 - Checking Accounts (${permissions.cards ? 'Permitted' : 'Access Restricted'}): ${userChecking.length > 0 ? userChecking.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)}`).join(' | ') : 'None connected'}

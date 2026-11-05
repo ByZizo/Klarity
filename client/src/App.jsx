@@ -3382,6 +3382,110 @@ function KlarityApp() {
   };
 
   // AI Chat
+// Generate smart, context-aware suggested actions and follow-up prompts
+function generateContextualSuggestions(userMsg = '', replyText = '') {
+  const u = (userMsg || '').toLowerCase();
+  const r = (replyText || '').toLowerCase();
+  const combined = `${u} ${r}`;
+
+  // 1. Internet, Web, Online browsing, Search
+  if (u.includes('internet') || u.includes('web') || u.includes('online') || u.includes('browse') || u.includes('search')) {
+    return [
+      { label: 'Search 0% APR card deals', type: 'prompt', prompt: 'Search the web for the best 0% intro APR balance transfer cards right now' },
+      { label: 'Find cheapest gas near me', type: 'prompt', prompt: 'Where is the cheapest gas in my area right now?' },
+      { label: 'Check today’s market news', type: 'prompt', prompt: 'What is today’s financial and market news?' }
+    ];
+  }
+
+  // 2. Date, Time, Today, Calendar, Schedule, Week, Month
+  if (u.includes('day') || u.includes('today') || u.includes('date') || u.includes('time') || u.includes('calendar') || u.includes('schedule') || u.includes('week') || u.includes('month')) {
+    return [
+      { label: 'What bills are due this week?', type: 'prompt', prompt: 'What bills are due this week?' },
+      { label: 'View Bills Calendar', type: 'navigate', tab: 'bills' },
+      { label: 'How is my spending this month?', type: 'prompt', prompt: 'How much have I spent so far this month?' }
+    ];
+  }
+
+  // 3. Vehicles, Cars, Auto, Fleet, Gas vs EV
+  if (combined.includes('vehicle') || combined.includes('car') || combined.includes('fleet') || combined.includes('auto') || combined.includes('gas price') || combined.includes('electric car') || combined.includes(' ev ') || combined.includes('ioniq') || combined.includes('tesla')) {
+    return [
+      { label: 'Compare Gas vs EV savings', type: 'prompt', prompt: 'How much would I save switching my cars to an EV?' },
+      { label: 'View Vehicles', type: 'navigate', tab: 'lifestyle' },
+      { label: 'Find local EV deals', type: 'prompt', prompt: 'What 0% APR electric car deals are available in my city?' }
+    ];
+  }
+
+  // 4. Health insurance, Copays, Deductible, Doctors, Medical
+  if (combined.includes('health') || combined.includes('insurance') || combined.includes('copay') || combined.includes('doctor') || combined.includes('deductible') || combined.includes('hospital') || combined.includes('rx')) {
+    return [
+      { label: 'View Insurance Card', type: 'navigate', tab: 'lifestyle' },
+      { label: 'Review my copays', type: 'prompt', prompt: 'What are my current health insurance copays and deductible?' },
+      { label: 'View Doctors', type: 'navigate', tab: 'lifestyle' }
+    ];
+  }
+
+  // 5. Retirement, Pension, Social Security, CalPERS, 401k, Debt Shield
+  if (combined.includes('retire') || combined.includes('pension') || combined.includes('calpers') || combined.includes('social security') || combined.includes('401k') || combined.includes('ira') || combined.includes('judgment-proof') || combined.includes('shield')) {
+    return [
+      { label: 'View Retirement Plans', type: 'navigate', tab: 'retirement' },
+      { label: 'Estimate pension benefit', type: 'prompt', prompt: 'Estimate my monthly retirement benefit and pension' },
+      { label: 'Check creditor protection', type: 'prompt', prompt: 'How much of my income is legally protected from private card debt?' }
+    ];
+  }
+
+  // 6. Credit cards, APR, Debt payoff, Balance transfer
+  if (combined.includes('credit card') || combined.includes('card balance') || combined.includes('apr') || combined.includes('interest') || combined.includes('debt') || combined.includes('avalanche') || combined.includes('snowball') || combined.includes('balance transfer')) {
+    return [
+      { label: 'Open Debt Payoff Planner', type: 'navigate', tab: 'cards' },
+      { label: 'Compare payoff strategies', type: 'prompt', prompt: 'Compare the debt avalanche vs snowball method for my credit cards' },
+      { label: 'Check 0% balance transfer cards', type: 'prompt', prompt: 'What 0% balance transfer card would save me the most interest?' }
+    ];
+  }
+
+  // 7. Subscriptions, Recurring charges, Streaming
+  if (combined.includes('subscription') || combined.includes('recurring') || combined.includes('netflix') || combined.includes('spotify') || combined.includes('cancel')) {
+    return [
+      { label: 'Audit Subscriptions', type: 'navigate', tab: 'subscriptions' },
+      { label: 'Which can I cancel?', type: 'prompt', prompt: 'Which of my subscriptions could I cancel to save money?' },
+      { label: 'Add a subscription', type: 'navigate', tab: 'subscriptions' }
+    ];
+  }
+
+  // 8. Bills, Utilities, PG&E, Electric, Water, Due dates
+  if (combined.includes('bill') || combined.includes('due') || combined.includes('electric') || combined.includes('utility') || combined.includes('pg&e') || combined.includes('pge') || combined.includes('water') || combined.includes('rent')) {
+    return [
+      { label: 'View Upcoming Bills', type: 'navigate', tab: 'bills' },
+      { label: 'Set a payment reminder', type: 'payment_reminder' },
+      { label: 'How can I lower my utility bill?', type: 'prompt', prompt: 'How can I lower my monthly electric and gas bill?' }
+    ];
+  }
+
+  // 9. Budgets, Spending, Groceries, Dining
+  if (combined.includes('budget') || combined.includes('grocer') || combined.includes('dining') || combined.includes('spending') || combined.includes('spent') || combined.includes('expense')) {
+    return [
+      { label: 'Open Budgets', type: 'navigate', tab: 'budgets' },
+      { label: 'How much budget is left?', type: 'prompt', prompt: 'How much do I have left in my budgets this month?' },
+      { label: 'Create a $400 Groceries budget', type: 'set_budget', category: 'Groceries', limit: 400 }
+    ];
+  }
+
+  // 10. Savings, Goals, Emergency Fund
+  if (combined.includes('saving') || combined.includes('goal') || combined.includes('emergency fund') || combined.includes('hysa')) {
+    return [
+      { label: 'View Savings Goals', type: 'navigate', tab: 'budgets' },
+      { label: 'How can I save $500 faster?', type: 'prompt', prompt: 'Give me practical ways to save an extra $500 this month' },
+      { label: 'Check top HYSA rates', type: 'prompt', prompt: 'What are the top high-yield savings account rates right now?' }
+    ];
+  }
+
+  // 11. General / Conversation / Fallback
+  return [
+    { label: 'Summarize my finances', type: 'prompt', prompt: 'Give me a quick summary of my finances and upcoming bills' },
+    { label: 'What bills are due next?', type: 'prompt', prompt: 'What are my next upcoming bills and due dates?' },
+    { label: 'Where can I save money?', type: 'prompt', prompt: 'Based on my accounts and spending, where can I save money?' }
+  ];
+}
+
   const handleSendChatMessage = async (eOrText) => {
     if (eOrText && typeof eOrText === 'object' && eOrText.preventDefault) {
       eOrText.preventDefault();
@@ -3659,29 +3763,7 @@ function KlarityApp() {
       }
 
       // Build context-aware interactive Action Buttons for the assistant bubble
-      const lowerReply = (replyText + ' ' + userMsg).toLowerCase();
-      const autoSuggestedActions = [];
-      if (lowerReply.includes('grocer') || lowerReply.includes('budget') || lowerReply.includes('dining') || lowerReply.includes('spend')) {
-        autoSuggestedActions.push({ label: 'Create a $400 Groceries budget', type: 'set_budget', category: 'Groceries', limit: 400 });
-        autoSuggestedActions.push({ label: 'Open Budgets', type: 'navigate', tab: 'budgets' });
-      }
-      if (lowerReply.includes('card') || lowerReply.includes('apr') || lowerReply.includes('interest') || lowerReply.includes('utilization') || lowerReply.includes('debt')) {
-        autoSuggestedActions.push({ label: 'Open Debt Payoff Planner', type: 'navigate', tab: 'cards' });
-      }
-      if (lowerReply.includes('subscription') || lowerReply.includes('netflix') || lowerReply.includes('spotify') || lowerReply.includes('audit') || lowerReply.includes('recurring')) {
-        autoSuggestedActions.push({ label: 'Audit Subscriptions', type: 'navigate', tab: 'subscriptions' });
-      }
-      if (lowerReply.includes('bill') || lowerReply.includes('due') || lowerReply.includes('remind') || lowerReply.includes('electric') || lowerReply.includes('rent')) {
-        autoSuggestedActions.push({ label: 'Set a payment reminder', type: 'payment_reminder' });
-        autoSuggestedActions.push({ label: 'View Bills', type: 'navigate', tab: 'bills' });
-      }
-      if (autoSuggestedActions.length === 0) {
-        autoSuggestedActions.push(
-          { label: 'Create a $400 Groceries budget', type: 'set_budget', category: 'Groceries', limit: 400 },
-          { label: 'Set a payment reminder', type: 'payment_reminder' },
-          { label: 'Open Debt Payoff Planner', type: 'navigate', tab: 'cards' }
-        );
-      }
+      const autoSuggestedActions = generateContextualSuggestions(userMsg, replyText);
 
       const updated = [
         ...userUpdatedMessages,
@@ -4508,6 +4590,11 @@ function KlarityApp() {
     if (!act) return;
     if (typeof act.action === 'function') {
       act.action();
+      return;
+    }
+    if (act.type === 'prompt' || act.prompt) {
+      const q = act.prompt || act.label;
+      handleSendChatMessage(q);
       return;
     }
     if (act.type === 'set_budget') {

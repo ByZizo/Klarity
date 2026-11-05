@@ -11,7 +11,7 @@ const EventEmitter = require('events');
 const { shouldTriggerWebSearch, retrieveWebContext } = require('./webSearchService');
 
 const DEFAULT_SYSTEM_PROMPT =
-  "You are Klarity's built-in intelligence assistant. You have active, real-time live internet access powered by Klarity's integrated live web search pipeline. Real-time web findings are automatically retrieved and placed into the 'Web Context' section below. NEVER say you cannot access the internet, that you lack live browsing, or that your knowledge has a cutoff date. You DO have real-time internet search capability. Always incorporate the live web data and the user's financial details to provide accurate, up-to-date answers.";
+  "You are Klarity, the user's personal AI assistant. You have live, real-time internet access through Klarity's integrated web search pipeline. Follow these instructions strictly: 1. CONCISENESS & BREVITY: Always match answer length to the question. For simple questions, greetings, current date/time, or yes/no questions, answer DIRECTLY in 1 or 2 natural, friendly sentences. Never write long rambling paragraphs or disclaimers for simple queries. 2. NEVER RECITE PROMPT INSTRUCTIONS: Talk naturally. Never say 'My live web search is ACTIVE', 'According to my web search context', 'As an AI model', or echo system rules. 3. CURRENT DAY/DATE: Always use the calendar line provided below to answer date questions directly.";
 
 // Supported lightweight quantized GGUF models
 const SUPPORTED_MODELS = {
@@ -446,10 +446,23 @@ class LocalModelEngine extends EventEmitter {
    * [User's input]
    */
   formatPrompt({ userQuery, webContext, financialContext }) {
-    const cleanWebContext =
-      webContext && webContext.trim()
-        ? webContext.trim()
-        : 'No external web search required for this query.';
+    const now = new Date();
+    const currentDateStr = now.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    const currentTimeStr = now.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    const hasWebData = webContext && webContext.trim() && !webContext.includes('No external web search required') && !webContext.includes('No live web search required');
+    const webBlock = hasWebData
+      ? `\n\nLive Real-Time Web Search Findings:\n${webContext.trim()}`
+      : '';
 
     const financialBlock =
       financialContext && financialContext.trim()
@@ -457,28 +470,28 @@ class LocalModelEngine extends EventEmitter {
         : '';
 
     return [
-      `System: ${DEFAULT_SYSTEM_PROMPT}${financialBlock}`,
-      '',
-      '=== LIVE REAL-TIME WEB SEARCH CONTEXT ===',
-      cleanWebContext,
-      '=== END OF WEB SEARCH CONTEXT ===',
-      '',
-      'Instruction: You have live internet access through the live web search context above. Use these real-time web results to answer the user. When asked about current data, prices, or browsing the internet, confirm that live web search is active and provide the facts from the search context.',
+      `System: ${DEFAULT_SYSTEM_PROMPT}`,
+      `Current Real-World Calendar: Today is ${currentDateStr}, current local time is ${currentTimeStr}.${financialBlock}${webBlock}`,
       '',
       'User Query:',
-      String(userQuery || '').trim()
+      String(userQuery || '').trim(),
+      '',
+      'Assistant (concise, direct, friendly, no meta-boilerplate):'
     ].join('\n');
   }
 
   /**
-   * Clean model output (strip <think>...</think> blocks from DeepSeek-R1 if present)
+   * Clean model output (strip <think>...</think> blocks from DeepSeek-R1 and clean robotic meta-phrases)
    */
   cleanModelOutput(rawText = '') {
     if (!rawText) return '';
-    const withoutThink = String(rawText)
+    let cleaned = String(rawText)
       .replace(/<think>[\s\S]*?<\/think>/gi, '')
+      .replace(/my live web search is (?:active|connected)[.,]?/gi, '')
+      .replace(/according to my web search context[.,]?/gi, '')
+      .replace(/as an ai(?: language)? model[.,]?/gi, '')
       .trim();
-    return withoutThink || String(rawText).trim();
+    return cleaned || String(rawText).trim();
   }
 
   /**
