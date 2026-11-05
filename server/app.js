@@ -2989,8 +2989,24 @@ app.post('/api/ai/chat', async (req, res) => {
     ? `\n\nUser Financial Preferences & Memory:\n${userMemory.map(m => `- ${m}`).join('\n')}`
     : '';
 
-  // Extract user location from householdProfile or userSettings
-  const residence = householdProfile || {};
+  // Extract user location from householdProfile or userSettings/database
+  const residence = (householdProfile && Object.keys(householdProfile).length > 0)
+    ? householdProfile
+    : (data.householdProfiles?.[userId] || data.householdProfile || {});
+
+  // Comprehensive Household Summaries for AI Context
+  const evSummary = residence.hasEvAtHome !== false
+    ? `Has EV at home: Yes | Home Charger: ${residence.evChargerType === 'level2_240v' ? 'Level 2 (240V Dedicated)' : residence.evChargerType === 'level1_120v' ? 'Level 1 (120V Standard Outlet)' : 'No Dedicated Home Charger'} | Home Charging Frequency: ${residence.evHomeChargingFrequency || 'daily'} | Daily Home Charging Miles: ${residence.evDailyHomeMiles || 35} mi/day (~${((Number(residence.evDailyHomeMiles) || 35) * 30).toLocaleString()} mi/mo) | Charging Schedule: ${residence.evChargingSchedule || 'overnight_offpeak'}`
+    : `Has EV at home: No (User does not charge or keep an EV at home)`;
+
+  const solarSystemKw = residence.solarSystemSizeKw || (((Number(residence.solarPanelCount) || 20) * (Number(residence.solarWattsPerPanel) || 400)) / 1000).toFixed(2);
+  const solarSummary = Boolean(residence.hasSolar)
+    ? `Rooftop Solar Installed: Yes (${residence.solarPanelCount || 20} Panels @ ${residence.solarWattsPerPanel || 400}W, System Size: ${solarSystemKw} kW, Ownership: ${(residence.solarOwnership || 'owned').toUpperCase()}, Net Metering Plan: ${(residence.solarBillingPlan || 'NEM 2.0').toUpperCase()}) | Home Battery Storage: ${residence.solarHasBattery ? `Yes (${residence.solarBatteryCapacityKwh || 13.5} kWh Battery Installed)` : 'None (No Battery Storage System Installed)'}`
+    : `Rooftop Solar Installed: No`;
+
+  const appliancesSummary = `Heating: ${(residence.heatingType || 'natural_gas_furnace').replace(/_/g, ' ')} | Cooling: ${(residence.coolingType || 'central_ac').replace(/_/g, ' ')} | Water Heater: ${(residence.waterHeaterType || 'natural_gas_tank').replace(/_/g, ' ')} | Pool/Spa: ${residence.hasPool ? 'Yes' : 'No'}`;
+
+  const providersSummary = `Electric & Gas: ${residence.electricGasProvider || 'PG&E'} (Rate Plan: ${residence.electricGasPlan || 'EV2-A Home TOU'}) | Internet: ${residence.internetProvider || 'Xfinity'} (Plan: ${residence.internetPlan || 'Gigabit Extra'}) | Mobile: ${residence.phoneProvider || 'T-Mobile'} (${residence.phoneLines || 3} lines, Plan: ${residence.phonePlan || 'Go5G Plus'}) | Trash: ${residence.trashProvider || 'City Utilities'} (Cart: ${residence.trashPlan || '64-Gal'}) | Security: ${residence.securityProvider || 'Ring'} (Plan: ${residence.securityPlan || 'Ring Protect Pro'})`;
   const userCityOrZip = residence.cityOrZip || (residence.city ? `${residence.city}, ${residence.state || 'CA'}` : '') || userSettings.profile?.location || 'California';
   const fullAddress = residence.address || (residence.street ? `${residence.street}, ${userCityOrZip}` : userCityOrZip);
   const neighborhoodDesc = residence.neighborhood ? ` (${residence.neighborhood})` : '';
@@ -3031,7 +3047,11 @@ Actual Connected Finances for ${currentUser.name} (strictly respecting permissio
 - Savings Goals: ${savingsGoals && savingsGoals.length > 0 ? savingsGoals.map(g => `${g.name}: ${g.currentAmount} of ${g.targetAmount} (${g.monthlyContribution || 0}/mo)`).join(' | ') : 'None created'}
 - Manual Assets & Investments: ${manualAssets && manualAssets.length > 0 ? manualAssets.map(a => `${a.name}: ${Number(a.balance || 0).toLocaleString()} (${a.type})`).join(' | ') : 'None'}${retirementSection}
 - Net Worth: ${Number(netWorth || 0).toLocaleString()}
-- Household & Residence Profile: ${residence ? `${residence.dwellingType || 'Single-Family'} (${residence.sqFt || 2100} sq ft, ${residence.bedrooms || 3} beds, ${residence.bathrooms || 2} baths) at ${fullAddress}${neighborhoodDesc} | Est. Home Value: ${residence.estimatedValue || 'N/A'} | Household Size: ${residence.householdSize || 4} people | PG&E CARE Discount: ${residence.hasCareDiscount ? 'Enrolled (~32% Off)' : 'Not Enrolled'} | Solar: ${residence.hasSolar ? 'Yes' : 'No'}${localHubsDesc}` : 'Standard Single-Family Household'}
+- Household & Residence Profile: ${residence ? `${residence.dwellingType || 'Single-Family'} (${residence.sqFt || 2100} sq ft, ${residence.bedrooms || 3} beds, ${residence.bathrooms || 2} baths) at ${fullAddress}${neighborhoodDesc} | Est. Home Value: ${residence.estimatedValue || 'N/A'} | Household Size: ${residence.householdSize || 4} people | PG&E CARE Discount: ${residence.hasCareDiscount ? 'Enrolled (~32% Off)' : 'Not Enrolled'}${localHubsDesc}` : 'Standard Single-Family Household'}
+- Home EV Charging Setup: ${evSummary}
+- Rooftop Solar & Battery Storage: ${solarSummary}
+- Home Systems & Heating/Cooling: ${appliancesSummary}
+- Household Service Providers & Plans: ${providersSummary}
 - Connected Credit Cards for Cash Back & Rewards: ${userCards.length > 0 ? userCards.map(c => `[Card: ${c.institution} ${c.name} (APR ${c.apr}%, Bal $${Number(c.balance || 0).toFixed(2)})]`).join(' | ') : 'None connected'}
 - Calculated Real-Life Monthly Utilities: ${householdMetrics?.utilities ? `Combined PG&E (Electric + Gas): ${householdMetrics.utilities.totalPgeCombinedBill}/mo [Home Electric: ${householdMetrics.utilities.homeKwh} kWh (${householdMetrics.utilities.homeElectricCost}), EV Home Charging: ${householdMetrics.utilities.evHomeKwh} kWh (${householdMetrics.utilities.evHomeChargingCost}), Natural Gas: ${householdMetrics.utilities.monthlyTherms} Therms (${householdMetrics.utilities.naturalGasCost})] | Water, Sewer & Trash: ${householdMetrics.utilities.waterTrashTotalCost}/mo (${householdMetrics.utilities.monthlyWaterGallons} gal/mo) | Total Utilities: ${householdMetrics.utilities.totalUtilitiesMonthly}/mo` : 'Not calculated yet'}
 - Household Vehicle Fleet (${householdMetrics?.fleet?.vehicles?.length || 0} Cars): ${householdMetrics?.fleet?.vehicles?.length > 0 ? householdMetrics.fleet.vehicles.map(v => `${v.name} (${v.type.toUpperCase()}): ${v.monthlyMiles} mi/mo, Fuel/Charge: ${v.monthlyFuelOrChargeCost}/mo, Ins: ${v.insuranceMonthly}/mo, Maint: ${v.maintenance}/mo${v.potentialEvSwitchSavings ? ` [Saves ${v.potentialEvSwitchSavings}/mo if switched to EV]` : ''}`).join(' | ') : 'None listed'}${memoryContext}${liveWebSearchContext}
@@ -3151,7 +3171,11 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
     `- Monthly Budgets: ${budgets && budgets.length > 0 ? budgets.map(b => `${b.category}: $${b.limit}/mo`).join(' | ') : 'None set'}`,
     `- Savings Goals: ${savingsGoals && savingsGoals.length > 0 ? savingsGoals.map(g => `${g.name}: $${g.currentAmount} of $${g.targetAmount} ($${g.monthlyContribution || 0}/mo)`).join(' | ') : 'None created'}`,
     `- Manual Assets & Investments: ${manualAssets && manualAssets.length > 0 ? manualAssets.map(a => `${a.name}: $${Number(a.balance || 0).toLocaleString()} (${a.type})`).join(' | ') : 'None'}${retirementSection}`,
-    `- Household & Utilities: ${residence ? `${residence.dwellingType || 'Single-Family'} (${residence.sqFt || 2100} sq ft, ${residence.bedrooms || 3} bd, ${residence.bathrooms || 2} ba) at ${fullAddress} | Est. Value: ${residence.estimatedValue || 'N/A'} | Household Size: ${residence.householdSize || 4} | PG&E CARE: ${residence.hasCareDiscount ? 'Yes' : 'No'} | Solar: ${residence.hasSolar ? 'Yes' : 'No'}` : 'Standard Household'}`,
+    `- Household & Utilities: ${residence ? `${residence.dwellingType || 'Single-Family'} (${residence.sqFt || 2100} sq ft, ${residence.bedrooms || 3} bd, ${residence.bathrooms || 2} ba) at ${fullAddress} | Est. Value: ${residence.estimatedValue || 'N/A'} | Household Size: ${residence.householdSize || 4} | PG&E CARE: ${residence.hasCareDiscount ? 'Yes' : 'No'}` : 'Standard Household'}`,
+    `- Home EV Charging Setup: ${evSummary}`,
+    `- Rooftop Solar & Battery Storage: ${solarSummary}`,
+    `- Home Systems & Heating/Cooling: ${appliancesSummary}`,
+    `- Household Service Providers & Plans: ${providersSummary}`,
     `- Monthly Utility Breakdown: ${householdMetrics?.utilities ? `PG&E Combined: $${householdMetrics.utilities.totalPgeCombinedBill}/mo (Electric: ${householdMetrics.utilities.homeKwh} kWh / $${householdMetrics.utilities.homeElectricCost}, EV Charging: $${householdMetrics.utilities.evHomeChargingCost}, Gas: ${householdMetrics.utilities.monthlyTherms} Therms / $${householdMetrics.utilities.naturalGasCost}) | Water & Trash: $${householdMetrics.utilities.waterTrashTotalCost}/mo` : 'N/A'}`,
     `- Vehicle Fleet (${householdMetrics?.fleet?.vehicles?.length || 0} Cars): ${householdMetrics?.fleet?.vehicles?.length > 0 ? householdMetrics.fleet.vehicles.map(v => `${v.name} (${v.type.toUpperCase()}${v.ownership ? ` • ${v.ownership.toUpperCase()}` : ''}): ${v.monthlyMiles} mi/mo, Fuel/Charge: $${v.monthlyFuelOrChargeCost}/mo${v.monthlyPayment > 0 ? `, Payment: $${v.monthlyPayment}/mo` : ''}, Ins: $${v.insuranceMonthly}/mo`).join(' | ') : 'None listed'}${memoryContext}`,
     `- Health Insurance & Copays: ${residence.health?.provider ? `${residence.health.provider}${residence.health.planName ? ` (${residence.health.planName})` : ''} | Copays: Primary $${residence.health.copays?.primaryCare ?? 15}, Specialist $${residence.health.copays?.specialist ?? 30}, Urgent $${residence.health.copays?.urgentCare ?? 20}, ER $${residence.health.copays?.er ?? 100}, Rx $${residence.health.copays?.rxGeneric ?? 10}${residence.health.doctors?.length > 0 ? ` | Doctors: ${residence.health.doctors.map(d => d.name).join(', ')}` : ''}` : 'None specified'}`,
