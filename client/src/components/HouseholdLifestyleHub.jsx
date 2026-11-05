@@ -31,7 +31,8 @@ import {
   ChevronDown,
   FileText,
   Copy,
-  Check
+  Check,
+  RotateCw
 } from 'lucide-react';
 import {
   DWELLING_TYPES,
@@ -46,6 +47,63 @@ import {
   AUTO_INSURANCE_PROVIDERS,
   AUTO_INSURANCE_TYPES
 } from '../utils/householdLifestyleEngine';
+
+
+// Shows the user's own insurance card photo; flips to the back side if one was provided.
+function InsuranceCardFlip({ front, back, flipped, onFlip, onOpen }) {
+  const showBack = Boolean(back) && flipped;
+  const face = {
+    position: 'absolute',
+    inset: 0,
+    backfaceVisibility: 'hidden',
+    WebkitBackfaceVisibility: 'hidden'
+  };
+  return (
+    <div>
+      <div className="relative w-full aspect-[1.6/1]" style={{ perspective: '1200px' }}>
+        <div
+          className="relative w-full h-full"
+          style={{
+            transformStyle: 'preserve-3d',
+            transition: 'transform 0.6s ease',
+            transform: showBack ? 'rotateY(180deg)' : 'rotateY(0deg)'
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => onOpen(front, 'Insurance card – Front')}
+            style={face}
+            className="rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-slate-700 bg-white cursor-zoom-in"
+            aria-label="Open front of card"
+          >
+            <img src={front} alt="Insurance card front" className="w-full h-full object-cover" />
+          </button>
+          {back && (
+            <button
+              type="button"
+              onClick={() => onOpen(back, 'Insurance card – Back')}
+              style={{ ...face, transform: 'rotateY(180deg)' }}
+              className="rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-slate-700 bg-white cursor-zoom-in"
+              aria-label="Open back of card"
+            >
+              <img src={back} alt="Insurance card back" className="w-full h-full object-cover" />
+            </button>
+          )}
+        </div>
+      </div>
+      {back && (
+        <button
+          type="button"
+          onClick={onFlip}
+          className="mt-2.5 w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center justify-center gap-1.5"
+        >
+          <RotateCw className="w-3.5 h-3.5" />
+          {showBack ? 'Show front' : 'Show back'}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default function HouseholdLifestyleHub({
   householdProfile,
@@ -322,6 +380,8 @@ export default function HouseholdLifestyleHub({
   const [pendingCard, setPendingCard] = useState(null);
   const [pendingCards, setPendingCards] = useState([]);
   const [pendingDoctor, setPendingDoctor] = useState(null);
+  const [scanProgress, setScanProgress] = useState('');
+  const [cardFlipped, setCardFlipped] = useState(false);
   const [showCardDialog, setShowCardDialog] = useState(false);
   const healthFileInputRef = useRef(null);
 
@@ -462,91 +522,60 @@ export default function HouseholdLifestyleHub({
     return isNaN(num) ? defaultVal : num;
   };
 
-  const handleProcessInsuranceFile = (file) => {
+  const handleProcessInsuranceFile = async (file) => {
     if (!file) return;
 
     setIsScanningCard(true);
     setScanFeedback(null);
+    setScanProgress('Preparing document…');
+    setPendingDoctor(null);
 
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const dataUrl = evt.target.result;
-      const cardId = `ic-${Date.now()}`;
-      const newCard = { id: cardId, name: file.name, dataUrl };
-      setPendingCard(newCard);
+    let extractedDetails = null;
+    let cards = [];
 
-      let extractedDetails = null;
+    try {
+      const { scanInsuranceFile } = await import('../utils/insuranceScanner.js');
+      const result = await scanInsuranceFile(file, (msg) => setScanProgress(msg));
+      extractedDetails = result.extracted;
+      cards = (result.cardImages || []).map((url, idx) => ({
+        id: `ic-${Date.now()}-${idx}`,
+        name: idx === 0 ? 'Front' : 'Back',
+        side: idx === 0 ? 'front' : 'back',
+        dataUrl: url
+      }));
+    } catch (err) {
+      console.warn('Card scan failed:', err);
+      setScanFeedback({ type: 'error', message: 'We couldn’t read that file. You can still enter the details by hand.' });
+    }
 
-      try {
-        const token = localStorage.getItem('klarity_token') || sessionStorage.getItem('klarity_token');
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+    setPendingCards(cards);
+    setPendingCard(cards[0] || null);
+    if (extractedDetails?.doctor) setPendingDoctor(extractedDetails.doctor);
 
-        const res = await fetch('/api/household/scan-insurance-card', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            image: dataUrl,
-            fileName: file.name
-          })
-        });
+    const fmt = (v) => (v != null && v !== '' ? `$${Number(v).toLocaleString()}` : '');
+    const pName = extractedDetails?.planName || '';
+    setReviewForm({
+      planName: pName,
+      provider: extractedDetails?.provider || '',
+      memberId: extractedDetails?.memberId || '',
+      groupNumber: extractedDetails?.groupNumber || '',
+      network: extractedDetails?.network || (/hmo/i.test(pName) ? 'HMO' : (/ppo/i.test(pName) ? 'PPO' : '')),
+      primaryCare: fmt(extractedDetails?.copays?.primaryCare),
+      specialist: fmt(extractedDetails?.copays?.specialist),
+      urgentCare: fmt(extractedDetails?.copays?.urgentCare),
+      er: fmt(extractedDetails?.copays?.er),
+      rxGeneric: fmt(extractedDetails?.copays?.rxGeneric),
+      deductible: fmt(extractedDetails?.deductible),
+      outOfPocketMax: fmt(extractedDetails?.outOfPocketMax),
+      memberName: extractedDetails?.memberName || '',
+      rxBin: extractedDetails?.rxBin || '',
+      rxPcn: extractedDetails?.rxPcn || '',
+      rxGrp: extractedDetails?.rxGrp || ''
+    });
 
-        if (res.ok) {
-          const json = await res.json();
-          if (json.extracted) {
-            extractedDetails = json.extracted;
-          }
-          if (json.cardImages && json.cardImages.length > 0) {
-            const cards = json.cardImages.map((cUrl, idx) => ({
-              id: `ic-${Date.now()}-${idx}`,
-              name: json.cardImages.length > 1 ? (idx === 0 ? 'Card - Front' : 'Card - Back') : (file.name || 'Insurance Card'),
-              dataUrl: cUrl
-            }));
-            setPendingCard(cards[0]);
-            setPendingCards(cards);
-          }
-          if (json.extracted?.doctor) {
-            setPendingDoctor(json.extracted.doctor);
-          }
-        }
-      } catch (err) {
-        console.warn('Card scan network notice:', err);
-      }
-
-      const pName = extractedDetails?.planName || '';
-      const prov = extractedDetails?.provider || '';
-      const mId = extractedDetails?.memberId || '';
-      const grp = extractedDetails?.groupNumber || '';
-      const net = extractedDetails?.network || (pName.toLowerCase().includes('hmo') ? 'HMO' : (pName.toLowerCase().includes('ppo') ? 'PPO' : ''));
-
-      const pc = extractedDetails?.copays?.primaryCare != null ? `$${extractedDetails.copays.primaryCare}` : '';
-      const sp = extractedDetails?.copays?.specialist != null ? `$${extractedDetails.copays.specialist}` : '';
-      const uc = extractedDetails?.copays?.urgentCare != null ? `$${extractedDetails.copays.urgentCare}` : '';
-      const er = extractedDetails?.copays?.er != null ? `$${extractedDetails.copays.er}` : '';
-      const rx = extractedDetails?.copays?.rxGeneric != null ? `$${extractedDetails.copays.rxGeneric}` : '';
-
-      const ded = extractedDetails?.deductible != null && extractedDetails.deductible !== '' ? `$${Number(extractedDetails.deductible).toLocaleString()}` : '';
-      const oop = extractedDetails?.outOfPocketMax != null && extractedDetails.outOfPocketMax !== '' ? `$${Number(extractedDetails.outOfPocketMax).toLocaleString()}` : '';
-
-      setReviewForm({
-        planName: pName,
-        provider: prov,
-        memberId: mId,
-        groupNumber: grp,
-        network: net,
-        primaryCare: pc,
-        specialist: sp,
-        urgentCare: uc,
-        er: er,
-        rxGeneric: rx,
-        deductible: ded,
-        outOfPocketMax: oop
-      });
-
-      setIsScanningCard(false);
-      setHealthView('review');
-    };
-    reader.readAsDataURL(file);
+    setScanProgress('');
+    setIsScanningCard(false);
+    setHealthView('review');
   };
 
   const handleSaveReview = () => {
@@ -587,6 +616,10 @@ export default function HouseholdLifestyleHub({
         er: parseCurrencyInput(reviewForm.er, null),
         rxGeneric: parseCurrencyInput(reviewForm.rxGeneric, null)
       },
+      memberName: (reviewForm.memberName || '').trim(),
+      rxBin: (reviewForm.rxBin || '').trim(),
+      rxPcn: (reviewForm.rxPcn || '').trim(),
+      rxGrp: (reviewForm.rxGrp || '').trim(),
       doctors: nextDoctors,
       keepCardImage,
       cards: savedCards
@@ -614,6 +647,7 @@ export default function HouseholdLifestyleHub({
       console.warn('Card profile sync notice:', e);
     }
 
+    setCardFlipped(false);
     setHealthView('saved');
   };
 
@@ -638,8 +672,15 @@ export default function HouseholdLifestyleHub({
       er: health.copays?.er != null ? `$${health.copays.er}` : '',
       rxGeneric: health.copays?.rxGeneric != null ? `$${health.copays.rxGeneric}` : '',
       deductible: health.deductible != null && health.deductible !== '' ? (String(health.deductible).startsWith('$') ? health.deductible : `$${Number(health.deductible).toLocaleString()}`) : '',
-      outOfPocketMax: health.outOfPocketMax != null && health.outOfPocketMax !== '' ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : ''
+      outOfPocketMax: health.outOfPocketMax != null && health.outOfPocketMax !== '' ? (String(health.outOfPocketMax).startsWith('$') ? health.outOfPocketMax : `$${Number(health.outOfPocketMax).toLocaleString()}`) : '',
+      memberName: health.memberName || '',
+      rxBin: health.rxBin || '',
+      rxPcn: health.rxPcn || '',
+      rxGrp: health.rxGrp || ''
     });
+    setPendingCards([]);
+    setPendingCard(null);
+    setPendingDoctor(null);
     setKeepCardImage(health.keepCardImage !== false);
     setHealthView('review');
   };
@@ -682,6 +723,8 @@ export default function HouseholdLifestyleHub({
       }).catch(err => console.warn('Sync notice:', err));
     } catch (e) {}
     setPendingCard(null);
+    setPendingCards([]);
+    setCardFlipped(false);
     setHealthView('empty');
   };
 
@@ -1786,7 +1829,7 @@ export default function HouseholdLifestyleHub({
               <Loader2 className="w-5 h-5 animate-spin text-[#1B4B91] shrink-0" />
               <div>
                 <span className="font-semibold block">Reading your insurance document...</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 block">Extracting carrier, plan name, member ID, group number, and copays...</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 block">{scanProgress || 'Extracting carrier, plan name, member ID, group number, and copays…'}</span>
               </div>
             </div>
           )}
@@ -1834,6 +1877,29 @@ export default function HouseholdLifestyleHub({
                 <div className="bg-[#E8EEF8] dark:bg-slate-800/80 text-[#14233B] dark:text-slate-200 rounded-lg px-3.5 py-2.5 text-[13.5px] mb-5">
                   Automatic reading can make mistakes. Compare each field with your card before saving.
                 </div>
+
+                {scanFeedback?.type === 'error' && (
+                  <div className="bg-red-50 dark:bg-red-900/20 text-[#B3261E] rounded-lg px-3.5 py-2.5 text-[13.5px] mb-5">
+                    {scanFeedback.message}
+                  </div>
+                )}
+
+                {(() => {
+                  const previewCards = pendingCards.length > 0 ? pendingCards : (health.cards || []);
+                  const front = previewCards[0]?.dataUrl;
+                  if (!front || String(front).startsWith('data:application/pdf')) return null;
+                  return (
+                    <div className="max-w-[360px] mb-5">
+                      <InsuranceCardFlip
+                        front={front}
+                        back={previewCards[1]?.dataUrl}
+                        flipped={cardFlipped}
+                        onFlip={() => setCardFlipped(!cardFlipped)}
+                        onOpen={(url, title) => { setViewingCardPhoto(url); setViewingCardTitle(title); }}
+                      />
+                    </div>
+                  );
+                })()}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   <div className="flex flex-col gap-1.5">
@@ -1990,8 +2056,17 @@ export default function HouseholdLifestyleHub({
               </div>
 
               <div className="p-6 grid grid-cols-1 md:grid-cols-[340px_1fr] gap-6 items-start">
-                {/* Physical Card Mockup on Left */}
+                {/* Card on Left: user's own card image (front/back flip), or a plain card if no image was kept */}
                 <div>
+                  {health.cards?.[0]?.dataUrl && !String(health.cards[0].dataUrl).startsWith('data:application/pdf') ? (
+                    <InsuranceCardFlip
+                      front={health.cards[0].dataUrl}
+                      back={health.cards[1]?.dataUrl}
+                      flipped={cardFlipped}
+                      onFlip={() => setCardFlipped(!cardFlipped)}
+                      onOpen={(url, title) => { setViewingCardPhoto(url); setViewingCardTitle(title); }}
+                    />
+                  ) : (
                   <div className="bg-[#1B4B91] text-white rounded-2xl p-5 flex flex-col justify-between aspect-[1.6/1] shadow-md min-h-[190px]">
                     <div className="flex items-center justify-between text-[13px] opacity-90">
                       <span className="font-medium">{health.provider || 'Health Insurance'}</span>
@@ -2020,6 +2095,7 @@ export default function HouseholdLifestyleHub({
                       {health.groupNumber ? <span>Group {health.groupNumber}</span> : <span />}
                     </div>
                   </div>
+                  )}
 
                   {/* Member ID mini controls */}
                   <div className="flex items-center gap-2 mt-2.5">
