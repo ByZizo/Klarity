@@ -31,8 +31,12 @@
 /* Gemini-style Markdown Chat Formatting */
 .gemini-markdown {
   word-break: break-word;
-  font-size: 0.8125rem;
-  line-height: 1.6;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: #1e293b;
+}
+.dark .gemini-markdown {
+  color: #e2e8f0;
 }
 .gemini-markdown > *:first-child {
   margin-top: 0 !important;
@@ -41,64 +45,83 @@
   margin-bottom: 0 !important;
 }
 .gemini-markdown p {
-  margin-bottom: 0.5rem;
-  line-height: 1.6;
+  margin-bottom: 0.65rem !important;
+  line-height: 1.65 !important;
 }
 .gemini-markdown h1,
 .gemini-markdown h2,
 .gemini-markdown h3,
 .gemini-markdown h4 {
-  font-weight: 700;
-  line-height: 1.35;
-  margin-top: 0.85rem;
-  margin-bottom: 0.35rem;
-  color: #0f172a;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  margin-top: 0.85rem !important;
+  margin-bottom: 0.4rem !important;
+  color: #0f172a !important;
 }
-.gemini-markdown h1 { font-size: 1rem; }
-.gemini-markdown h2 { font-size: 0.925rem; }
-.gemini-markdown h3 { font-size: 0.875rem; }
-.gemini-markdown h4 { font-size: 0.8125rem; }
+.dark .gemini-markdown h1,
+.dark .gemini-markdown h2,
+.dark .gemini-markdown h3,
+.dark .gemini-markdown h4 {
+  color: #f8fafc !important;
+}
+.gemini-markdown h1 { font-size: 1.05rem !important; }
+.gemini-markdown h2 { font-size: 0.975rem !important; }
+.gemini-markdown h3 { font-size: 0.925rem !important; }
+.gemini-markdown h4 { font-size: 0.875rem !important; }
 
 .gemini-markdown strong,
 .gemini-markdown b {
-  font-weight: 650;
-  color: #0f172a;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+}
+.dark .gemini-markdown strong,
+.dark .gemini-markdown b {
+  color: #f8fafc !important;
 }
 
+.gemini-markdown ul,
+.gemini-markdown ol {
+  padding-left: 1.35rem !important;
+  margin-top: 0.45rem !important;
+  margin-bottom: 0.75rem !important;
+}
 .gemini-markdown ul {
-  list-style-type: disc;
-  margin-left: 1.25rem;
-  margin-top: 0.25rem;
-  margin-bottom: 0.5rem;
+  list-style-type: disc !important;
 }
 .gemini-markdown ol {
-  list-style-type: decimal;
-  margin-left: 1.25rem;
-  margin-top: 0.25rem;
-  margin-bottom: 0.5rem;
+  list-style-type: decimal !important;
 }
 .gemini-markdown li {
-  margin-bottom: 0.25rem;
-  line-height: 1.55;
-  padding-left: 0.15rem;
+  display: list-item !important;
+  margin-bottom: 0.35rem !important;
+  line-height: 1.6 !important;
+  padding-left: 0.2rem !important;
 }
 .gemini-markdown li::marker {
-  color: currentColor;
-  opacity: 0.75;
+  color: #18457c !important;
+  font-weight: bold;
+}
+.dark .gemini-markdown li::marker {
+  color: #60a5fa !important;
 }
 
 .gemini-markdown code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.85em;
-  padding: 0.12rem 0.35rem;
+  padding: 0.15rem 0.4rem;
   border-radius: 0.35rem;
-  background-color: rgba(0, 0, 0, 0.07);
+  background-color: rgba(15, 23, 42, 0.08);
   color: #0f172a;
+  font-weight: 500;
+}
+.dark .gemini-markdown code {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
 }
 .gemini-markdown pre {
-  margin: 0.5rem 0;
-  padding: 0.65rem 0.85rem;
-  border-radius: 0.5rem;
+  margin: 0.65rem 0;
+  padding: 0.75rem 0.95rem;
+  border-radius: 0.6rem;
   background-color: #0f172a;
   color: #f8fafc;
   overflow-x: auto;
@@ -107,47 +130,70 @@
   background: transparent;
   padding: 0;
   color: inherit;
-  font-size: 0.8em;
+  font-size: 0.825em;
 }
 
 .gemini-markdown a {
   color: #18457c;
   text-decoration: underline;
-  text-underline-offset: 2px;
-  font-weight: 500;
+  text-underline-offset: 2.5px;
+  font-weight: 600;
 }
 .gemini-markdown a:hover {
   color: #0f2c52;
 }
+.dark .gemini-markdown a {
+  color: #60a5fa;
+}
 
 .gemini-markdown hr {
-  margin: 0.75rem 0;
+  margin: 0.85rem 0;
   border: 0;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
+.dark .gemini-markdown hr {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
 
 .gemini-markdown blockquote {
-  border-left: 3px solid #cbd5e1;
-  padding-left: 0.65rem;
-  margin: 0.5rem 0;
+  border-left: 3.5px solid #18457c;
+  padding-left: 0.75rem;
+  margin: 0.65rem 0;
   color: #475569;
   font-style: italic;
+  background: rgba(24, 69, 124, 0.04);
+  border-radius: 0 0.4rem 0.4rem 0;
+}
+.dark .gemini-markdown blockquote {
+  border-left-color: #60a5fa;
+  color: #94a3b8;
+  background: rgba(96, 165, 250, 0.08);
 }
 
 .gemini-markdown table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0.5rem 0;
-  font-size: 0.8em;
+  margin: 0.65rem 0;
+  font-size: 0.825rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
 }
 .gemini-markdown th,
 .gemini-markdown td {
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 0.45rem 0.65rem;
   text-align: left;
 }
-.gemini-markdown th {
-  background-color: rgba(0, 0, 0, 0.04);
-  font-weight: 600;
+.dark .gemini-markdown th,
+.dark .gemini-markdown td {
+  border-color: rgba(255, 255, 255, 0.12);
 }
-
+.gemini-markdown th {
+  background-color: rgba(24, 69, 124, 0.08);
+  font-weight: 600;
+  color: #0f172a;
+}
+.dark .gemini-markdown th {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}

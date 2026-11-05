@@ -293,14 +293,19 @@ function MultiCardFilterDropdown({ cards, selectedCardIds, onChangeSelectedCards
 // Gemini-style Markdown Formatter Component
 function FormattedChatMessage({ text, isUser }) {
   if (!text) return null;
+  // Safety: thoroughly strip any internal command tags before formatting
+  const clean = String(text)
+    .replace(/\[(?:NAVIGATE|ACTION):[\s\S]*?\]/gi, '')
+    .trim();
+
   if (isUser) {
-    return <div className="whitespace-pre-wrap leading-relaxed text-white">{text}</div>;
+    return <div className="whitespace-pre-wrap leading-relaxed text-white">{clean}</div>;
   }
   let html = '';
   try {
-    html = sanitizeHtmlAgainstInjection(marked.parse(text, { breaks: true, gfm: true }));
+    html = sanitizeHtmlAgainstInjection(marked.parse(clean, { breaks: true, gfm: true }));
   } catch (err) {
-    return <div className="whitespace-pre-wrap leading-relaxed">{text}</div>;
+    return <div className="whitespace-pre-wrap leading-relaxed">{clean}</div>;
   }
   return (
     <div
@@ -3742,21 +3747,26 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         setTimeout(() => setNotificationToast(''), 4000);
       }
 
-      // Strip any [ACTION:...] tags from display text
-      replyText = replyText.replace(/\[ACTION:[a-zA-Z0-9_-]+:[\s\S]*?\]/gi, '').trim();
-
-      // Handle AI navigation tags: [NAVIGATE:target]
-      const navMatch = replyText.match(/\[NAVIGATE:([a-zA-Z0-9_-]+)\]/i);
+      // Handle AI navigation tags: [NAVIGATE:target] (support single destination or pipe-delimited)
+      const navMatch = replyText.match(/\[NAVIGATE:([^\]]+)\]/i);
       if (navMatch) {
-        const dest = navMatch[1].toLowerCase();
-        if (dest === 'settings') {
+        const rawTarget = navMatch[1].toLowerCase();
+        const parts = rawTarget.split('|').map(s => s.trim());
+        const validTabs = ['dashboard', 'bills', 'subscriptions', 'cards', 'transactions', 'budgets', 'overview', 'vault', 'passwords', 'retirement', 'pension', 'pensions', 'lifestyle', 'household', 'health', 'settings'];
+        const matchedTab = parts.find(p => validTabs.includes(p));
+        if (matchedTab === 'settings') {
           setSettingsActiveTab('ai');
           setIsSettingsOpen(true);
-        } else if (['dashboard', 'bills', 'subscriptions', 'cards', 'transactions', 'budgets', 'overview', 'vault', 'passwords', 'retirement', 'pension', 'pensions'].includes(dest)) {
-          setActiveTab(dest === 'overview' ? 'dashboard' : dest === 'passwords' ? 'vault' : ['retirement', 'pension', 'pensions'].includes(dest) ? 'retirement' : dest);
+        } else if (matchedTab) {
+          setActiveTab(matchedTab === 'overview' ? 'dashboard' : matchedTab === 'passwords' ? 'vault' : ['retirement', 'pension', 'pensions'].includes(matchedTab) ? 'retirement' : ['household', 'health'].includes(matchedTab) ? 'lifestyle' : matchedTab);
         }
-        replyText = replyText.replace(/\[NAVIGATE:[a-zA-Z0-9_-]+\]/gi, '').trim();
       }
+
+      // Stripping: ALWAYS thoroughly remove all [NAVIGATE:...] and [ACTION:...] tags regardless of content
+      replyText = replyText
+        .replace(/\[NAVIGATE:[\s\S]*?\]/gi, '')
+        .replace(/\[ACTION:[\s\S]*?\]/gi, '')
+        .trim();
 
       if (json.needsKey) {
         setSettingsAiStatus('not_connected');
