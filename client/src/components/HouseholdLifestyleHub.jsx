@@ -1359,7 +1359,7 @@ export default function HouseholdLifestyleHub({
       </div>
 
       {/* ================================================================= */}
-      {/* SECTION 1: HOUSEHOLD (CLEAN, MODERN, UNCLUTTERED UI)             */}
+      {/* SECTION 1: HOUSEHOLD (CLEAN, UNCLUTTERED & QUESTION SELECTOR)    */}
       {/* ================================================================= */}
       {section === 'household' && (
         <div className="p-4 sm:p-6 max-w-6xl mx-auto flex flex-col gap-6">
@@ -1371,7 +1371,7 @@ export default function HouseholdLifestyleHub({
               {/* Wizard Top Header */}
               <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <div className="flex items-center gap-2.5 mb-1">
+                  <div className="flex items-center gap-2.5 mb-1 flex-wrap">
                     <span className="text-[11px] font-bold text-[#18457c] bg-blue-50 border border-blue-200/80 px-2.5 py-0.5 rounded-full tracking-wide">
                       Question {wizardStep} of {totalWizardSteps}
                     </span>
@@ -1396,35 +1396,69 @@ export default function HouseholdLifestyleHub({
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHouseholdView('saved');
-                    setIsHouseholdExpanded(true);
-                  }}
-                  className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
-                >
-                  Skip to overview
-                </button>
+                {/* Quick Question Selector Dropdown & Skip to Overview */}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Go to:</span>
+                    <select
+                      value={wizardStep}
+                      onChange={e => setWizardStep(Number(e.target.value))}
+                      className="text-xs font-bold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
+                    >
+                      <option value={1}>1. Home Specs</option>
+                      <option value={2}>2. Residents</option>
+                      <option value={3}>3. Heating & AC</option>
+                      <option value={4}>4. EV Charging</option>
+                      <option value={5}>5. Pool / Spa</option>
+                      <option value={6}>6. Solar & Battery</option>
+                      <option value={7}>7. Providers & Plans</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHouseholdView('saved');
+                      setIsHouseholdExpanded(true);
+                    }}
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-xl hover:bg-slate-200/60 transition-colors cursor-pointer"
+                  >
+                    Skip to overview
+                  </button>
+                </div>
               </div>
 
-              {/* Step Progress Segments */}
-              <div className="grid grid-cols-7 gap-1 px-6 pt-3 pb-1 bg-white">
-                {Array.from({ length: totalWizardSteps }).map((_, idx) => {
-                  const stepNum = idx + 1;
-                  const isDone = stepNum < wizardStep;
-                  const isCurrent = stepNum === wizardStep;
+              {/* Interactive Clickable Question Stepper Bar */}
+              <div className="px-6 py-2.5 bg-slate-50/50 border-b border-slate-100 flex items-center gap-2 overflow-x-auto">
+                {[
+                  { step: 1, label: '1. Specs', icon: Home },
+                  { step: 2, label: '2. Residents', icon: Users },
+                  { step: 3, label: '3. Climate', icon: Flame },
+                  { step: 4, label: '4. EV Charging', icon: Zap },
+                  { step: 5, label: '5. Pool', icon: Droplets },
+                  { step: 6, label: '6. Solar', icon: Sun },
+                  { step: 7, label: '7. Plans', icon: Wifi }
+                ].map(item => {
+                  const isCurrent = wizardStep === item.step;
+                  const isCompleted = wizardStep > item.step;
+                  const Icon = item.icon;
                   return (
-                    <div
-                      key={stepNum}
-                      className={`h-1.5 rounded-full transition-all duration-300 ${
-                        isDone
-                          ? 'bg-emerald-600'
-                          : isCurrent
-                          ? 'bg-[#18457c]'
-                          : 'bg-slate-200'
+                    <button
+                      key={item.step}
+                      type="button"
+                      onClick={() => setWizardStep(item.step)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                        isCurrent
+                          ? 'bg-[#18457c] text-white shadow-2xs'
+                          : isCompleted
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/70 hover:bg-emerald-100'
+                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
                       }`}
-                    />
+                    >
+                      <Icon className={`w-3.5 h-3.5 ${isCurrent ? 'text-white' : isCompleted ? 'text-emerald-600' : 'text-slate-400'}`} />
+                      <span>{item.label}</span>
+                      {isCompleted && <Check className="w-3 h-3 text-emerald-600" />}
+                    </button>
                   );
                 })}
               </div>
@@ -1436,7 +1470,7 @@ export default function HouseholdLifestyleHub({
                 {/* ------------------------------------------------------- */}
                 {wizardStep === 1 && (
                   <div className="flex flex-col gap-6 text-xs">
-                    {/* Zillow / Address Input Bar */}
+                    {/* Safe Property Lookup Bar */}
                     <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
                       <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
                         <MapPin className="w-4 h-4 text-[#18457c]" />
@@ -1445,25 +1479,30 @@ export default function HouseholdLifestyleHub({
                       <div className="flex flex-col sm:flex-row gap-2">
                         <input
                           type="text"
-                          value={zillowInput}
-                          onChange={e => setZillowInput(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') handleZillowLookup(); }}
+                          value={propertyUrlInput}
+                          onChange={e => setPropertyUrlInput(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleFetchProperty(); }}
                           placeholder="Search address (e.g. 742 Evergreen Terr, Springfield) or paste Zillow URL..."
                           className="flex-1 text-xs font-medium text-slate-900 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#18457c]/20"
                         />
                         <button
                           type="button"
-                          disabled={isZillowLoading}
-                          onClick={handleZillowLookup}
+                          disabled={isFetchingProperty}
+                          onClick={handleFetchProperty}
                           className="px-4 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                         >
-                          {isZillowLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                          {isFetchingProperty ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
                           <span>Auto-fill Specs</span>
                         </button>
                       </div>
-                      {zillowFeedback && (
-                        <p className={`text-[11px] font-medium ${zillowFeedback.type === 'success' ? 'text-emerald-700' : 'text-amber-700'}`}>
-                          {zillowFeedback.text}
+                      {propertyLookupError && (
+                        <p className="text-[11px] font-medium text-amber-700">
+                          {propertyLookupError}
+                        </p>
+                      )}
+                      {propertyLookupSuccess && (
+                        <p className="text-[11px] font-medium text-emerald-700">
+                          {propertyLookupSuccess}
                         </p>
                       )}
                     </div>
@@ -2490,10 +2529,20 @@ export default function HouseholdLifestyleHub({
                   <span>Previous</span>
                 </button>
 
-                {/* Step indicator text in the center */}
-                <span className="text-[11px] font-semibold text-slate-400 hidden sm:inline-block">
-                  Step {wizardStep} of {totalWizardSteps}
-                </span>
+                {/* Step indicator in center */}
+                <div className="hidden sm:flex items-center gap-1">
+                  {Array.from({ length: totalWizardSteps }).map((_, i) => (
+                    <button
+                      key={i + 1}
+                      type="button"
+                      onClick={() => setWizardStep(i + 1)}
+                      className={`w-2.5 h-2.5 rounded-full transition-all cursor-pointer ${
+                        wizardStep === i + 1 ? 'bg-[#18457c] w-6' : 'bg-slate-300 hover:bg-slate-400'
+                      }`}
+                      aria-label={`Go to step ${i + 1}`}
+                    />
+                  ))}
+                </div>
 
                 <div className="flex items-center gap-2">
                   {wizardStep < totalWizardSteps ? (
@@ -2525,35 +2574,22 @@ export default function HouseholdLifestyleHub({
           {/* ============================================================= */}
           {householdView === 'saved' && (
             <div className="flex flex-col gap-4">
-              {/* Header Bar matching Health section */}
-              <div className="flex items-center justify-between flex-wrap gap-3 px-1">
-                <div>
-                  <h2 className="font-bold text-xl text-slate-900 tracking-tight">Household</h2>
-                  <p className="text-xs text-slate-500">
-                    1 active property · Click any card to expand or minimize
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWizardStep(1);
-                    setHouseholdView('wizard');
-                  }}
-                  className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-bold text-xs flex items-center gap-2 transition-all shadow-2xs cursor-pointer"
-                >
-                  <Sliders className="w-3.5 h-3.5" />
-                  <span>Answer questions again</span>
-                </button>
+              {/* Header Bar: Clean title matching Health section (no cluttered button in the header) */}
+              <div className="px-1">
+                <h2 className="font-bold text-xl text-slate-900 tracking-tight">Household</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  1 active property · Click card to expand or collapse details
+                </p>
               </div>
 
               {/* Minimized Card Container */}
               <section className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs overflow-hidden transition-all">
-                {/* Minimized Card Header Row: Left-to-right Name, Type pill, Specs, Badges, Bills, and Arrow */}
+                {/* Minimized Card Header Row: Clean Left-to-Right layout with arrow */}
                 <div
                   onClick={() => setIsHouseholdExpanded(!isHouseholdExpanded)}
                   className="w-full px-5 sm:px-6 py-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
                 >
-                  {/* Left content: Address, Dwelling Type, Specs */}
+                  {/* Left content: Address, Dwelling Type, Specs, Badges, Bills */}
                   <div className="flex items-center gap-3 flex-wrap min-w-0">
                     {/* Name / Address */}
                     <span className="font-bold text-slate-900 text-sm sm:text-base tracking-tight truncate max-w-[280px] sm:max-w-none">
@@ -2611,32 +2647,65 @@ export default function HouseholdLifestyleHub({
                 {/* Expanded Panels */}
                 {isHouseholdExpanded && (
                   <div className="border-t border-slate-100 p-5 sm:p-6 flex flex-col gap-6 bg-slate-50/40">
-                    {/* PANEL 1: PROPERTY SPECS TILES */}
-                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-4">
-                      <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-slate-100">
-                        <div>
-                          <span className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                            <Home className="w-4 h-4 text-[#18457c]" />
-                            <span>{householdProfile.address || '742 Evergreen Terr, Springfield'}</span>
-                          </span>
-                          <span className="text-[11px] text-slate-400 block mt-0.5">
-                            {householdProfile.zillowImportedAt ? `Zillow specs verified on ${new Date(householdProfile.zillowImportedAt).toLocaleDateString()}` : 'Custom property specifications'}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setWizardStep(1);
-                              setHouseholdView('wizard');
-                            }}
-                            className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
-                          >
-                            Edit Specs
-                          </button>
-                        </div>
+                    {/* Action Bar inside Expanded View (Placed where it's natural and non-intrusive) */}
+                    <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-slate-200/80">
+                      <div>
+                        <span className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                          <Home className="w-4 h-4 text-[#18457c]" />
+                          <span>Property Specifications & Service Details</span>
+                        </span>
+                        <span className="text-[11px] text-slate-400 block mt-0.5">
+                          {householdProfile.zillowImportedAt ? `Zillow specs verified on ${new Date(householdProfile.zillowImportedAt).toLocaleDateString()}` : 'Custom property specifications'}
+                        </span>
                       </div>
 
+                      {/* Better placed Questionnaire Action Buttons */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-2xs">
+                          <span className="text-[10px] font-bold text-slate-400 px-2 uppercase">Jump to:</span>
+                          <button
+                            type="button"
+                            onClick={() => { setWizardStep(1); setHouseholdView('wizard'); }}
+                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                          >
+                            Specs (Q1)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setWizardStep(4); setHouseholdView('wizard'); }}
+                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                          >
+                            EV (Q4)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setWizardStep(6); setHouseholdView('wizard'); }}
+                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                          >
+                            Solar (Q6)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setWizardStep(7); setHouseholdView('wizard'); }}
+                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                          >
+                            Plans (Q7)
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => { setWizardStep(1); setHouseholdView('wizard'); }}
+                          className="px-3.5 py-1.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Sliders className="w-3.5 h-3.5" />
+                          <span>Re-answer Questions</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* PANEL 1: PROPERTY SPECS TILES */}
+                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-4">
                       {/* 8 Specs Tiles */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                         <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
@@ -2676,10 +2745,19 @@ export default function HouseholdLifestyleHub({
 
                     {/* PANEL 2: HOME SYSTEMS, EV & SOLAR */}
                     <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-4">
-                      <span className="font-bold text-sm text-slate-900 flex items-center gap-2 pb-2 border-b border-slate-100">
-                        <Zap className="w-4 h-4 text-amber-500" />
-                        <span>Home Systems, Energy & EV Setup</span>
-                      </span>
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <span className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                          <Zap className="w-4 h-4 text-amber-500" />
+                          <span>Home Systems, Energy & EV Setup</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setWizardStep(4); setHouseholdView('wizard'); }}
+                          className="text-[11px] font-bold text-[#18457c] hover:underline cursor-pointer"
+                        >
+                          Change EV / Solar Settings
+                        </button>
+                      </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 text-xs">
                         {/* Heating & Cooling */}
@@ -2751,10 +2829,19 @@ export default function HouseholdLifestyleHub({
 
                     {/* PANEL 3: HOUSEHOLD PROVIDERS & PLAN NAMES */}
                     <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-4">
-                      <span className="font-bold text-sm text-slate-900 flex items-center gap-2 pb-2 border-b border-slate-100">
-                        <Wifi className="w-4 h-4 text-[#18457c]" />
-                        <span>Household Service Providers & Plan Names</span>
-                      </span>
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <span className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                          <Wifi className="w-4 h-4 text-[#18457c]" />
+                          <span>Household Service Providers & Plan Names</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setWizardStep(7); setHouseholdView('wizard'); }}
+                          className="text-[11px] font-bold text-[#18457c] hover:underline cursor-pointer"
+                        >
+                          Change Providers & Plans
+                        </button>
+                      </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 text-xs">
                         {/* Internet */}
