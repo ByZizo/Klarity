@@ -130,6 +130,39 @@ export const UTILITY_REGIONS = [
   }
 ];
 
+export const HOUSEHOLD_PLAN_OPTIONS = {
+  internet: [
+    { id: 'gigabit_fiber', label: 'Gigabit Fiber (1000+ Mbps)' },
+    { id: 'fast_500', label: 'Fast Fiber / Cable (500 Mbps)' },
+    { id: 'standard_300', label: 'Standard High-Speed (300 Mbps)' },
+    { id: 'wireless_5g', label: '5G Home Wireless Internet' },
+    { id: 'basic_dsl', label: 'Basic Cable / DSL' }
+  ],
+  phone: [
+    { id: 'unlimited_premium', label: 'Unlimited Premium (Priority Data & Hotspot)' },
+    { id: 'unlimited_standard', label: 'Unlimited Standard (Core Data Plan)' },
+    { id: 'budget_prepaid', label: 'Prepaid / Budget Unlimited' },
+    { id: 'by_the_gig', label: 'Shared / By-the-Gig Plan' }
+  ],
+  electricGas: [
+    { id: 'tou_ev', label: 'Time-of-Use EV Rate (Lowest overnight off-peak)' },
+    { id: 'tou_standard', label: 'Time-of-Use 4–9 PM Peak (Standard TOU)' },
+    { id: 'tiered_flat', label: 'Tiered Flat Rate (Traditional Tier 1/2)' },
+    { id: 'care_discount', label: 'CARE / FERA Discounted Rate Plan' }
+  ],
+  trash: [
+    { id: 'standard_64', label: 'Standard Household (64-Gal Carts)' },
+    { id: 'large_96', label: 'Large Family (96-Gal Carts)' },
+    { id: 'small_32', label: 'Eco / Small Household (32-Gal Carts)' }
+  ],
+  security: [
+    { id: 'pro_monitoring', label: '24/7 Professional Police Monitoring' },
+    { id: 'cloud_video', label: 'Cloud Video Recording & History' },
+    { id: 'self_monitored', label: 'Self-Monitored (No subscription)' },
+    { id: 'none', label: 'No Security System' }
+  ]
+};
+
 export const HOME_QUESTIONNAIRE_OPTIONS = {
   heating: [
     { id: 'natural_gas_furnace', label: 'Natural Gas Furnace (Central Ducted)' },
@@ -244,12 +277,18 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
   poolPumpType: 'variable_speed', // 'variable_speed' | 'single_speed'
   poolHeating: 'none', // 'none' | 'solar' | 'gas' | 'electric_heat_pump'
 
-  // Household Providers (Internet, Phones, Security, Trash)
+  // Household Providers & Plan Types
   internetProvider: 'Xfinity',
+  internetPlanType: 'gigabit_fiber',
   phoneProvider: 'T-Mobile',
+  phonePlanType: 'unlimited_premium',
   phoneLines: 3,
-  securityProvider: 'Ring',
+  electricGasProvider: 'PG&E',
+  electricGasPlanType: 'tou_ev',
   trashProvider: 'City Municipal Utilities',
+  trashPlanType: 'standard_64',
+  securityProvider: 'Ring',
+  securityPlanType: 'cloud_video',
 
   // Solar & Storage suite
   hasSolar: false,

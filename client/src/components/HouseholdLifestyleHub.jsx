@@ -40,6 +40,7 @@ import {
   Wifi,
   DollarSign,
   Sliders,
+  Receipt,
   CheckSquare,
   ArrowRight,
   ArrowLeft,
@@ -52,6 +53,7 @@ import {
   DWELLING_TYPES,
   UTILITY_REGIONS,
   HOME_QUESTIONNAIRE_OPTIONS,
+  HOUSEHOLD_PLAN_OPTIONS,
   getSuggestedProviders,
   calculateHomeCostBreakdown,
   calculateHouseholdAndFleetMetrics,
@@ -598,6 +600,34 @@ export default function HouseholdLifestyleHub({
   const totalMonthlyHomeCost = useMemo(
     () => homeCostItems.reduce((acc, item) => acc + (Number(item.amount) || 0), 0),
     [homeCostItems]
+  );
+
+  // Extract only verified bills pulled from actual payments & connected accounts
+  const actualHouseholdBills = useMemo(() => {
+    if (!Array.isArray(bills) || bills.length === 0) return [];
+    const householdKeywords = [
+      'electric', 'pg&e', 'pge', 'smud', 'edison', 'sdge', 'ladwp',
+      'gas', 'socalgas', 'natural gas',
+      'water', 'trash', 'sewer', 'waste', 'city utilities', 'republic services', 'waste management',
+      'internet', 'wifi', 'xfinity', 'comcast', 'at&t', 'spectrum', 'verizon', 'frontier', 'starlink',
+      'phone', 'cell', 'mobile', 'wireless', 't-mobile', 'tmobile', 'mint mobile', 'google fi',
+      'mortgage', 'rent', 'housing', 'lease',
+      'property tax', 'county tax', 'tax collector',
+      'hoa', 'homeowners',
+      'home insurance', 'hazard insurance', 'renters insurance', 'security', 'ring', 'adt'
+    ];
+    return bills.filter(b => {
+      const name = (b.name || '').toLowerCase();
+      const cat = (b.category || '').toLowerCase();
+      const isHouseholdCat = ['utilities', 'housing', 'insurance', 'internet & tech', 'home'].includes(cat);
+      const matches = householdKeywords.some(kw => name.includes(kw));
+      return (isHouseholdCat || matches) && Number(b.expectedAmount || b.amount || 0) > 0;
+    });
+  }, [bills]);
+
+  const totalActualBills = useMemo(
+    () => actualHouseholdBills.reduce((sum, b) => sum + Number(b.expectedAmount || b.amount || 0), 0),
+    [actualHouseholdBills]
   );
 
   const handleCostItemChange = (catId, field, value) => {
@@ -1329,7 +1359,7 @@ export default function HouseholdLifestyleHub({
                       {wizardStep === 4 && 'Electric vehicle charging at home'}
                       {wizardStep === 5 && 'Do you have a swimming pool or spa?'}
                       {wizardStep === 6 && 'Rooftop solar panels & battery storage'}
-                      {wizardStep === 7 && 'Who are your household service providers?'}
+                      {wizardStep === 7 && 'Household Providers & Plan Types'}
                     </h3>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
@@ -1339,7 +1369,7 @@ export default function HouseholdLifestyleHub({
                     {wizardStep === 4 && 'Details about your home charger, schedule, and daily charging needs.'}
                     {wizardStep === 5 && 'Pool filtration pumps and water heaters impact monthly energy bills.'}
                     {wizardStep === 6 && 'Calculates monthly solar generation, offset rates, and battery backup.'}
-                    {wizardStep === 7 && 'Enter your internet, mobile wireless, home security, and municipal services.'}
+                    {wizardStep === 7 && 'Select your internet, phone, utility, and home service providers and plan types. Bills are only shown once pulled from actual payments.'}
                   </p>
                 </div>
 
@@ -1964,66 +1994,220 @@ export default function HouseholdLifestyleHub({
                 )}
 
                 {/* ------------------------------------------------------- */}
-                {/* STEP 7: REVIEW MONTHLY LIVING COSTS                     */}
+                {/* STEP 7: PROVIDERS & PLAN TYPES                          */}
                 {/* ------------------------------------------------------- */}
                 {wizardStep === 7 && (
                   <div className="flex flex-col gap-4 text-xs">
-                    <div className="overflow-x-auto rounded-xl border border-slate-200">
-                      <table className="w-full text-left text-xs min-w-[550px]">
-                        <thead>
-                          <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                            <th className="py-2.5 px-3.5">Expense</th>
-                            <th className="py-2.5 px-3.5">Provider</th>
-                            <th className="py-2.5 px-3.5">Source Tag</th>
-                            <th className="py-2.5 px-3.5 text-right">Monthly Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {homeCostItems.map((item) => (
-                            <tr key={item.id} className="hover:bg-slate-50/70">
-                              <td className="py-3 px-3.5 font-bold text-slate-900">
-                                <span>{item.label}</span>
-                              </td>
-                              <td className="py-2.5 px-3.5">
-                                <input
-                                  type="text"
-                                  value={item.provider || ''}
-                                  onChange={e => handleCostItemChange(item.id, 'provider', e.target.value)}
-                                  className="w-full text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5 focus:bg-white focus:outline-none"
-                                />
-                              </td>
-                              <td className="py-2.5 px-3.5">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${item.source === 'user' ? 'bg-purple-100 text-purple-800 border border-purple-200' : item.source === 'bills' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200/70'}`}>
-                                  {item.source === 'user' ? 'You entered' : item.source === 'bills' ? 'From your bills' : 'Estimate'}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3.5 text-right">
-                                <div className="inline-flex items-center justify-end gap-1">
-                                  <span className="text-slate-500 font-bold">$</span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={item.amount || ''}
-                                    onChange={e => handleCostItemChange(item.id, 'amount', e.target.value)}
-                                    className="w-20 text-right font-black text-slate-900 bg-slate-50 border border-slate-200/80 rounded-lg px-2 py-1.5 focus:bg-white focus:outline-none text-xs"
-                                  />
-                                  <span className="text-slate-400 text-[11px]">/mo</span>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-slate-50 border-t-2 border-slate-200 font-bold">
-                            <td colSpan="3" className="py-3 px-3.5 text-sm text-slate-900">
-                              Total Monthly Home Living Cost
-                            </td>
-                            <td className="py-3 px-3.5 text-right text-base font-black text-[#18457c]">
-                              ${totalMonthlyHomeCost.toLocaleString()} <span className="text-xs font-normal text-slate-500">/mo</span>
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* 1. Home Internet & Plan */}
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                        <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                          <Wifi className="w-4 h-4 text-indigo-600" />
+                          <span>1. Home Internet & WiFi</span>
+                        </span>
+
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">What provider do you use?</span>
+                          <input
+                            type="text"
+                            value={householdProfile.internetProvider || ''}
+                            onChange={e => handleFieldChange('internetProvider', e.target.value)}
+                            placeholder="e.g. Xfinity, AT&T Fiber, Spectrum, Starlink..."
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
+                          />
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                            {['Xfinity', 'AT&T Fiber', 'Spectrum', 'Verizon Fios', 'Frontier', 'Starlink'].map(p => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => handleFieldChange('internetProvider', p)}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.internetProvider === p ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                              >
+                                {p}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">What type of plan are you on?</span>
+                          <select
+                            value={householdProfile.internetPlanType || 'gigabit_fiber'}
+                            onChange={e => handleFieldChange('internetPlanType', e.target.value)}
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none cursor-pointer"
+                          >
+                            {(HOUSEHOLD_PLAN_OPTIONS.internet || []).map(opt => (
+                              <option key={opt.id} value={opt.id}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* 2. Mobile & Cell Phone Plan */}
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                            <Smartphone className="w-4 h-4 text-purple-600" />
+                            <span>2. Mobile & Cell Phone</span>
+                          </span>
+                          <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                            <span className="text-[10px] font-semibold text-slate-500">Lines:</span>
+                            <input
+                              type="number"
+                              min="1"
+                              max="12"
+                              value={householdProfile.phoneLines || 3}
+                              onChange={e => handleFieldChange('phoneLines', Number(e.target.value) || 1)}
+                              className="w-7 text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">What carrier / provider do you use?</span>
+                          <input
+                            type="text"
+                            value={householdProfile.phoneProvider || ''}
+                            onChange={e => handleFieldChange('phoneProvider', e.target.value)}
+                            placeholder="e.g. T-Mobile, AT&T, Verizon, Mint Mobile..."
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
+                          />
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                            {['T-Mobile', 'AT&T', 'Verizon', 'Mint Mobile', 'Google Fi', 'Visible'].map(p => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => handleFieldChange('phoneProvider', p)}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.phoneProvider === p ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                              >
+                                {p}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">What type of phone plan are you on?</span>
+                          <select
+                            value={householdProfile.phonePlanType || 'unlimited_premium'}
+                            onChange={e => handleFieldChange('phonePlanType', e.target.value)}
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none cursor-pointer"
+                          >
+                            {(HOUSEHOLD_PLAN_OPTIONS.phone || []).map(opt => (
+                              <option key={opt.id} value={opt.id}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* 3. Electric & Gas Utility Rate Plan */}
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                        <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                          <Zap className="w-4 h-4 text-amber-500" />
+                          <span>3. Electric & Gas Utility Plan</span>
+                        </span>
+
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Electric & Gas Utility Provider</span>
+                          <input
+                            type="text"
+                            value={householdProfile.electricGasProvider || (UTILITY_REGIONS.find(r => r.id === householdProfile.utilityRegionId)?.name || 'Pacific Gas & Electric (PG&E)')}
+                            onChange={e => handleFieldChange('electricGasProvider', e.target.value)}
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">What utility rate plan are you on?</span>
+                          <select
+                            value={householdProfile.electricGasPlanType || 'tou_ev'}
+                            onChange={e => handleFieldChange('electricGasPlanType', e.target.value)}
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none cursor-pointer"
+                          >
+                            {(HOUSEHOLD_PLAN_OPTIONS.electricGas || []).map(opt => (
+                              <option key={opt.id} value={opt.id}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* 4. Municipal Trash & Recycling */}
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                        <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                          <Droplets className="w-4 h-4 text-blue-500" />
+                          <span>4. Municipal Trash & Recycling</span>
+                        </span>
+
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Trash & Recycling Provider</span>
+                          <input
+                            type="text"
+                            value={householdProfile.trashProvider || ''}
+                            onChange={e => handleFieldChange('trashProvider', e.target.value)}
+                            placeholder="e.g. City Municipal Utilities, Waste Management..."
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">What cart size or service plan?</span>
+                          <select
+                            value={householdProfile.trashPlanType || 'standard_64'}
+                            onChange={e => handleFieldChange('trashPlanType', e.target.value)}
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none cursor-pointer"
+                          >
+                            {(HOUSEHOLD_PLAN_OPTIONS.trash || []).map(opt => (
+                              <option key={opt.id} value={opt.id}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* 5. Home Security System */}
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-3 md:col-span-2">
+                        <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                          <span>5. Home Security & Smart Home</span>
+                        </span>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">Security Equipment / Brand</span>
+                            <input
+                              type="text"
+                              value={householdProfile.securityProvider || ''}
+                              onChange={e => handleFieldChange('securityProvider', e.target.value)}
+                              placeholder="e.g. Ring, ADT, SimpliSafe, Nest, None..."
+                              className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none"
+                            />
+                            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                              {['Ring', 'ADT', 'SimpliSafe', 'Vivint', 'Nest', 'Self-Monitored'].map(p => (
+                                <button
+                                  key={p}
+                                  type="button"
+                                  onClick={() => handleFieldChange('securityProvider', p)}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.securityProvider === p ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                >
+                                  {p}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">What security plan are you on?</span>
+                            <select
+                              value={householdProfile.securityPlanType || 'cloud_video'}
+                              onChange={e => handleFieldChange('securityPlanType', e.target.value)}
+                              className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none cursor-pointer"
+                            >
+                              {(HOUSEHOLD_PLAN_OPTIONS.security || []).map(opt => (
+                                <option key={opt.id} value={opt.id}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2119,9 +2303,15 @@ export default function HouseholdLifestyleHub({
                     </span>
 
                     {/* Total Monthly Cost summary */}
-                    <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-md hidden md:inline-flex items-center gap-1">
-                      <span>${totalMonthlyHomeCost.toLocaleString()} /mo</span>
-                    </span>
+                    {actualHouseholdBills.length > 0 ? (
+                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-md hidden md:inline-flex items-center gap-1">
+                        <span>${totalActualBills.toLocaleString()} /mo from bills</span>
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-md hidden md:inline-flex items-center gap-1">
+                        <span>No bills synced yet</span>
+                      </span>
+                    )}
 
                     {Boolean(householdProfile.hasSolar) && (
                       <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md hidden lg:inline-flex items-center gap-1">
@@ -2498,87 +2688,88 @@ export default function HouseholdLifestyleHub({
                       </div>
                     )}
 
-                    {/* PANEL 4: MONTHLY LIVING COSTS TABLE */}
+                    {/* PANEL 4: HOUSEHOLD BILLS FROM PAYMENTS ONLY */}
                     <div className="p-4 sm:p-5 rounded-xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-3">
                       <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100">
-                        <span className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
-                          <DollarSign className="w-4 h-4 text-[#18457c]" />
-                          <span>Monthly Living Costs</span>
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {syncSuccess && (
-                            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
-                              {syncSuccess}
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={handleSyncToBills}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer"
-                          >
-                            <CheckSquare className="w-3.5 h-3.5" />
-                            <span>Save to Bills</span>
-                          </button>
+                        <div>
+                          <span className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+                            <Receipt className="w-4 h-4 text-[#18457c]" />
+                            <span>Household Bills from Actual Payments</span>
+                          </span>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Only verified bills pulled directly from your payment statements and accounts appear here.
+                          </p>
                         </div>
+
+                        {actualHouseholdBills.length > 0 && (
+                          <div className="text-right">
+                            <span className="text-xs font-bold text-slate-500 block">Total from actual bills</span>
+                            <span className="text-base font-black text-[#18457c]">
+                              ${totalActualBills.toLocaleString()} /mo
+                            </span>
+                          </div>
+                        )}
                       </div>
 
-                      <div className="overflow-x-auto rounded-xl border border-slate-200">
-                        <table className="w-full text-left text-xs min-w-[550px]">
-                          <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                              <th className="py-2.5 px-3.5">Expense</th>
-                              <th className="py-2.5 px-3.5">Provider</th>
-                              <th className="py-2.5 px-3.5">Source Tag</th>
-                              <th className="py-2.5 px-3.5 text-right">Monthly Cost</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {homeCostItems.map((item) => (
-                              <tr key={item.id} className="hover:bg-slate-50/70">
-                                <td className="py-3 px-3.5 font-bold text-slate-900">
-                                  <span>{item.label}</span>
+                      {actualHouseholdBills.length > 0 ? (
+                        <div className="overflow-x-auto rounded-xl border border-slate-200">
+                          <table className="w-full text-left text-xs min-w-[550px]">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                <th className="py-2.5 px-3.5">Bill / Provider</th>
+                                <th className="py-2.5 px-3.5">Category</th>
+                                <th className="py-2.5 px-3.5">Due Date & Status</th>
+                                <th className="py-2.5 px-3.5">Source</th>
+                                <th className="py-2.5 px-3.5 text-right">Amount Paid</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {actualHouseholdBills.map((b) => (
+                                <tr key={b.id} className="hover:bg-slate-50/70 transition-colors">
+                                  <td className="py-3 px-3.5 font-bold text-slate-900">
+                                    <span>{b.name}</span>
+                                  </td>
+                                  <td className="py-2.5 px-3.5">
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
+                                      {b.category || 'Utilities'}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 px-3.5 text-slate-600 font-medium">
+                                    <span>{b.nextDueDate || `Monthly on Day ${b.dueDay || 15}`}</span>
+                                  </td>
+                                  <td className="py-2.5 px-3.5">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                      <span>Pulled from payments</span>
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 px-3.5 text-right font-black text-slate-900 text-sm">
+                                    ${Number(b.expectedAmount || b.amount || 0).toLocaleString()} <span className="text-slate-400 text-[11px] font-normal">/mo</span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-slate-50 border-t-2 border-slate-200 font-bold">
+                                <td colSpan="4" className="py-3 px-3.5 text-sm text-slate-900">
+                                  Total Verified Monthly Household Bills
                                 </td>
-                                <td className="py-2.5 px-3.5">
-                                  <input
-                                    type="text"
-                                    value={item.provider || ''}
-                                    onChange={e => handleCostItemChange(item.id, 'provider', e.target.value)}
-                                    className="w-full text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5 focus:bg-white focus:outline-none"
-                                  />
-                                </td>
-                                <td className="py-2.5 px-3.5">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${item.source === 'user' ? 'bg-purple-100 text-purple-800 border border-purple-200' : item.source === 'bills' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200/70'}`}>
-                                    {item.source === 'user' ? 'You entered' : item.source === 'bills' ? 'From your bills' : 'Estimate'}
-                                  </span>
-                                </td>
-                                <td className="py-2.5 px-3.5 text-right">
-                                  <div className="inline-flex items-center justify-end gap-1">
-                                    <span className="text-slate-500 font-bold">$</span>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      value={item.amount || ''}
-                                      onChange={e => handleCostItemChange(item.id, 'amount', e.target.value)}
-                                      className="w-20 text-right font-black text-slate-900 bg-slate-50 border border-slate-200/80 rounded-lg px-2 py-1.5 focus:bg-white focus:outline-none text-xs"
-                                    />
-                                    <span className="text-slate-400 text-[11px]">/mo</span>
-                                  </div>
+                                <td className="py-3 px-3.5 text-right text-base font-black text-[#18457c]">
+                                  ${totalActualBills.toLocaleString()} <span className="text-xs font-normal text-slate-500">/mo</span>
                                 </td>
                               </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr className="bg-slate-50 border-t-2 border-slate-200 font-bold">
-                              <td colSpan="3" className="py-3 px-3.5 text-sm text-slate-900">
-                                Total Monthly Home Living Cost
-                              </td>
-                              <td className="py-3 px-3.5 text-right text-base font-black text-[#18457c]">
-                                ${totalMonthlyHomeCost.toLocaleString()} <span className="text-xs font-normal text-slate-500">/mo</span>
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
+                            </tfoot>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="p-6 rounded-xl bg-slate-50 border border-dashed border-slate-200 flex flex-col items-center justify-center text-center gap-2">
+                          <Receipt className="w-8 h-8 text-slate-300" />
+                          <b className="text-xs font-bold text-slate-800">No household bills pulled from payments yet</b>
+                          <p className="text-[11px] text-slate-500 max-w-sm">
+                            Once your payment statements or bank transactions sync in Klarity, your verified utility and household provider bills will automatically appear here.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
