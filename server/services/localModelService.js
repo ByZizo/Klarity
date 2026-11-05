@@ -11,7 +11,7 @@ const EventEmitter = require('events');
 const { shouldTriggerWebSearch, retrieveWebContext } = require('./webSearchService');
 
 const DEFAULT_SYSTEM_PROMPT =
-  "You are Klarity's built-in intelligence assistant. Use the following live web data to answer the user accurately. If the context does not contain the answer, rely on your general knowledge.";
+  "You are Klarity's built-in intelligence assistant. You have active, real-time live internet access powered by Klarity's integrated live web search pipeline. Real-time web findings are automatically retrieved and placed into the 'Web Context' section below. NEVER say you cannot access the internet, that you lack live browsing, or that your knowledge has a cutoff date. You DO have real-time internet search capability. Always incorporate the live web data and the user's financial details to provide accurate, up-to-date answers.";
 
 // Supported lightweight quantized GGUF models
 const SUPPORTED_MODELS = {
@@ -459,8 +459,11 @@ class LocalModelEngine extends EventEmitter {
     return [
       `System: ${DEFAULT_SYSTEM_PROMPT}${financialBlock}`,
       '',
-      'Web Context:',
+      '=== LIVE REAL-TIME WEB SEARCH CONTEXT ===',
       cleanWebContext,
+      '=== END OF WEB SEARCH CONTEXT ===',
+      '',
+      'Instruction: You have live internet access through the live web search context above. Use these real-time web results to answer the user. When asked about current data, prices, or browsing the internet, confirm that live web search is active and provide the facts from the search context.',
       '',
       'User Query:',
       String(userQuery || '').trim()

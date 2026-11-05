@@ -65,7 +65,7 @@ function shouldTriggerWebSearch(prompt = '') {
     // Temporal & Search Intent
     'current', 'currently', 'today', 'latest', 'new', 'now', '2025', '2026', 'recent',
     'search', 'look up', 'find', 'compare', 'best', 'top', 'recommend', 'review', 'vs',
-    'what is', 'who is', 'where is', 'how much', 'when is', 'why is', 'weather', 'news'
+    'what is', 'who is', 'where is', 'how much', 'when is', 'why is', 'weather', 'news', 'internet', 'web', 'online', 'browse', 'browsing'
   ];
 
   if (triggerKeywords.some(kw => lower.includes(kw))) {
