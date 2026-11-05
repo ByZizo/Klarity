@@ -21,3 +21,5 @@ tree.txt
 
 dist/
 client/dist/
+
+*.traineddata

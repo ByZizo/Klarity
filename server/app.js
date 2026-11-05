@@ -4,6 +4,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const zlib = require('zlib');
+let Tesseract;
+try {
+  Tesseract = require('tesseract.js');
+} catch (e) {
+  console.warn('tesseract.js not loaded:', e.message);
+}
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 require('dotenv').config();
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
@@ -2215,24 +2221,109 @@ function extractTextFromPdfBuffer(buffer) {
   return text;
 }
 
-// Extraction helper that only extracts what is actually present (no invented or dummy fallback data)
-function heuristicInsuranceExtraction(fileName = '', textHint = '', base64Data = '') {
-  let sampleText = `${fileName || ''} ${textHint || ''}`;
+function rawRgbToBmp(rgbBuf, width, height) {
+  const rowSize = Math.floor((24 * width + 31) / 32) * 4;
+  const imageSize = rowSize * height;
+  const fileSize = 54 + imageSize;
+  const bmpBuf = Buffer.alloc(fileSize);
 
-  if (base64Data) {
-    try {
-      const rawBuf = Buffer.from(base64Data, 'base64');
-      const isPdf = (fileName || '').toLowerCase().endsWith('.pdf') || rawBuf.slice(0, 5).toString('latin1').includes('%PDF');
-      if (isPdf) {
-        sampleText += ' ' + extractTextFromPdfBuffer(rawBuf);
-      } else {
-        const decoded = rawBuf.toString('latin1');
-        const asciiOnly = decoded.replace(/[^\x20-\x7E]/g, ' ');
-        sampleText += ' ' + asciiOnly;
-      }
-    } catch (e) {}
+  bmpBuf.write('BM', 0);
+  bmpBuf.writeUInt32LE(fileSize, 2);
+  bmpBuf.writeUInt32LE(54, 10);
+
+  bmpBuf.writeUInt32LE(40, 14);
+  bmpBuf.writeInt32LE(width, 18);
+  bmpBuf.writeInt32LE(-height, 22);
+  bmpBuf.writeUInt16LE(1, 26);
+  bmpBuf.writeUInt16LE(24, 28);
+  bmpBuf.writeUInt32LE(0, 30);
+  bmpBuf.writeUInt32LE(imageSize, 34);
+
+  for (let y = 0; y < height; y++) {
+    const srcRowStart = y * width * 3;
+    const destRowStart = 54 + y * rowSize;
+    for (let x = 0; x < width; x++) {
+      const r = rgbBuf[srcRowStart + x * 3];
+      const g = rgbBuf[srcRowStart + x * 3 + 1];
+      const b = rgbBuf[srcRowStart + x * 3 + 2];
+      bmpBuf[destRowStart + x * 3] = b;
+      bmpBuf[destRowStart + x * 3 + 1] = g;
+      bmpBuf[destRowStart + x * 3 + 2] = r;
+    }
+  }
+  return bmpBuf;
+}
+
+function extractImagesAndBitmapsFromPdf(pdfBuf) {
+  const extractedImages = [];
+  
+  // 1. Embedded JPEG detection (JFIF / Exif)
+  let pos = 0;
+  while (pos < pdfBuf.length - 4) {
+    const start = pdfBuf.indexOf(Buffer.from([0xFF, 0xD8, 0xFF]), pos);
+    if (start === -1) break;
+    const end = pdfBuf.indexOf(Buffer.from([0xFF, 0xD9]), start + 3);
+    if (end === -1) break;
+    const jpegBuf = pdfBuf.slice(start, end + 2);
+    if (jpegBuf.length > 5000) {
+      extractedImages.push({ buffer: jpegBuf, mimeType: 'image/jpeg' });
+    }
+    pos = end + 2;
   }
 
+  // 2. Embedded FlateDecode / raw pixel XObjects
+  if (extractedImages.length === 0) {
+    const text = pdfBuf.toString('latin1');
+    const regex = /(\d+\s+\d+\s+obj[\s\S]*?endobj)/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const objStr = match[1];
+      if (objStr.includes('/Subtype /Image') || objStr.includes('/Subtype/Image')) {
+        const wMatch = objStr.match(/\/Width\s+(\d+)/);
+        const hMatch = objStr.match(/\/Height\s+(\d+)/);
+        const filterMatch = objStr.match(/\/Filter\s*\/([A-Za-z0-9]+)/);
+        const width = wMatch ? parseInt(wMatch[1], 10) : 0;
+        const height = hMatch ? parseInt(hMatch[1], 10) : 0;
+        const filter = filterMatch ? filterMatch[1] : '';
+
+        if (width >= 200 && height >= 200) {
+          const streamIdx = pdfBuf.indexOf(Buffer.from('stream'), match.index);
+          if (streamIdx !== -1) {
+            let dataStart = streamIdx + 6;
+            if (pdfBuf[dataStart] === 0x0D && pdfBuf[dataStart + 1] === 0x0A) dataStart += 2;
+            else if (pdfBuf[dataStart] === 0x0A || pdfBuf[dataStart] === 0x0D) dataStart += 1;
+
+            const endStreamIdx = pdfBuf.indexOf(Buffer.from('endstream'), dataStart);
+            if (endStreamIdx !== -1) {
+              const rawStream = pdfBuf.slice(dataStart, endStreamIdx);
+              try {
+                let pixelBuf;
+                if (filter === 'FlateDecode') {
+                  pixelBuf = zlib.inflateSync(rawStream);
+                } else {
+                  pixelBuf = rawStream;
+                }
+                if (pixelBuf.length >= width * height * 3) {
+                  const bmp = rawRgbToBmp(pixelBuf, width, height);
+                  extractedImages.push({ buffer: bmp, mimeType: 'image/bmp' });
+                }
+              } catch (e) {
+                console.warn('PDF stream extraction note:', e.message);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return extractedImages;
+}
+
+// Extraction helper that accurately extracts visible fields from recognized OCR text
+function heuristicInsuranceExtraction(fileName = '', textHint = '', rawBuf = null) {
+  let sampleText = `${fileName || ''} ${textHint || ''}`;
+  const lines = sampleText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const lowerText = sampleText.toLowerCase();
 
   let provider = '';
@@ -2240,19 +2331,18 @@ function heuristicInsuranceExtraction(fileName = '', textHint = '', base64Data =
   let network = '';
 
   // Carrier detection strictly if referenced in document text
-  if (lowerText.includes('kaiser') || lowerText.includes('permanente')) {
-    provider = 'Kaiser Permanente';
-    planName = lowerText.includes('advantage') || lowerText.includes('senior') ? 'Senior Advantage (HMO)' : 'HMO';
-    network = 'HMO';
-  } else if (lowerText.includes('anthem') || lowerText.includes('blue cross') || lowerText.includes('bcbs')) {
-    provider = 'Anthem Blue Cross';
+  if (lowerText.includes('unitedhealthcare') || lowerText.includes('united healthcare') || lowerText.includes('uhc') || lowerText.includes('optum')) {
+    provider = 'UnitedHealthcare';
     network = lowerText.includes('hmo') ? 'HMO' : 'PPO';
   } else if (lowerText.includes('blue shield') || lowerText.includes('blueshield')) {
     provider = 'Blue Shield of California';
     network = lowerText.includes('hmo') ? 'HMO' : 'PPO';
-  } else if (lowerText.includes('unitedhealthcare') || lowerText.includes('united healthcare') || lowerText.includes('uhc') || lowerText.includes('optum')) {
-    provider = 'UnitedHealthcare';
+  } else if (lowerText.includes('anthem') || lowerText.includes('blue cross') || lowerText.includes('bcbs')) {
+    provider = 'Anthem Blue Cross';
     network = lowerText.includes('hmo') ? 'HMO' : 'PPO';
+  } else if (lowerText.includes('kaiser') || lowerText.includes('permanente')) {
+    provider = 'Kaiser Permanente';
+    network = 'HMO';
   } else if (lowerText.includes('aetna')) {
     provider = 'Aetna';
     network = lowerText.includes('hmo') ? 'HMO' : (lowerText.includes('pos') ? 'POS' : 'PPO');
@@ -2279,31 +2369,40 @@ function heuristicInsuranceExtraction(fileName = '', textHint = '', base64Data =
 
   // Network detection if not yet determined
   if (!network) {
-    if (/\bppo\b/i.test(sampleText)) network = 'PPO';
-    else if (/\bhmo\b/i.test(sampleText)) network = 'HMO';
-    else if (/\bepo\b/i.test(sampleText)) network = 'EPO';
-    else if (/\bpos\b/i.test(sampleText)) network = 'POS';
+    if (/\bHMO\b/i.test(sampleText)) network = 'HMO';
+    else if (/\bPPO\b/i.test(sampleText)) network = 'PPO';
+    else if (/\bEPO\b/i.test(sampleText)) network = 'EPO';
+    else if (/\bPOS\b/i.test(sampleText)) network = 'POS';
   }
 
   // Plan name extraction
-  const planMatch = sampleText.match(/(?:plan(?:\s*name)?|benefit\s*plan|product)\s*[:\s]*([A-Za-z0-9\s/+-]{4,30})/i);
-  if (planMatch && planMatch[1] && !['name', 'type', 'number', 'code'].includes(planMatch[1].trim().toLowerCase())) {
-    planName = planMatch[1].trim();
+  for (const line of lines) {
+    if (/\b(HMO|PPO|EPO|POS|Choice Plus|Select Plus|Alliance|Advantage|Standard|Gold|Silver|Bronze)\b/i.test(line) &&
+        !line.toLowerCase().includes('ded') &&
+        !line.toLowerCase().includes('oopm') &&
+        !line.toLowerCase().includes('member') &&
+        !line.toLowerCase().includes('group')) {
+      const cleaned = line.replace(/^(?:State Regulated\s*)/i, '').replace(/^(?:Plan(?:\s*Name)?\s*[:\s]*)/i, '').trim();
+      if (cleaned.length >= 3 && cleaned.length <= 40) {
+        planName = cleaned;
+        break;
+      }
+    }
   }
 
-  // Member ID extraction ONLY if found
+  // Member ID extraction
   let memberId = '';
-  const idMatch = sampleText.match(/(?:member\s*id|subscriber\s*id|enrollee\s*id|member\s*#|id\s*#|policy\s*#|identification\s*(?:no|number)?|mrn)\s*[:#\s]*([A-Za-z0-9-]{5,18})/i);
+  const idMatch = sampleText.match(/(?:member\s*id|subscriber\s*id|enrollee\s*id|identification\s*(?:no|number)?|id\s*#|member\s*#|policy\s*#|mrn)\s*[:#\s]*([A-Za-z0-9-]+)/i);
   if (idMatch && idMatch[1]) {
     const val = idMatch[1].trim();
-    if (!['number', 'policy', 'member', 'subscriber', 'identification'].includes(val.toLowerCase())) {
+    if (!['number', 'id', 'member', 'subscriber', 'identification'].includes(val.toLowerCase())) {
       memberId = val.toUpperCase();
     }
   }
 
-  // Group number extraction ONLY if found
+  // Group number extraction
   let groupNumber = '';
-  const grpMatch = sampleText.match(/(?:group\s*#|group\s*number|grp\s*#|policy\s*group|grp|group)\s*[:#\s]*([A-Za-z0-9-]{4,14})/i);
+  const grpMatch = sampleText.match(/(?:group\s*number|group\s*#|grp\s*#|policy\s*group|grp|group)\s*[:#\s]*([A-Za-z0-9-]+)/i);
   if (grpMatch && grpMatch[1]) {
     const val = grpMatch[1].trim();
     if (!['number', 'group', 'policy', 'code', 'name'].includes(val.toLowerCase())) {
@@ -2311,20 +2410,30 @@ function heuristicInsuranceExtraction(fileName = '', textHint = '', base64Data =
     }
   }
 
+  // Member Name extraction
+  let memberName = '';
+  const nameMatch = sampleText.match(/Member:\s*([A-Za-z\s]+?)(?=\r?\n|$)/i);
+  if (nameMatch && nameMatch[1]) {
+    const val = nameMatch[1].trim();
+    if (val.length > 2 && val.length < 50 && !val.toLowerCase().includes('id')) {
+      memberName = val;
+    }
+  }
+
   // Rx numbers
   let rxBin = '';
-  const binMatch = sampleText.match(/(?:rxbin|rx\s*bin|bin)\s*#?[:\s]*([0-9]{6})/i);
+  const binMatch = sampleText.match(/(?:rxbin|rx\s*bin|bin)\s*#?[:.\s]*([0-9]{6})/i);
   if (binMatch) rxBin = binMatch[1];
 
   let rxPcn = '';
-  const pcnMatch = sampleText.match(/(?:rxpcn|rx\s*pcn|pcn)\s*#?[:\s]*([A-Za-z0-9]{3,8})/i);
+  const pcnMatch = sampleText.match(/(?:rxpcn|rx\s*pcn|pcn)\s*#?[:.\s]*([A-Za-z0-9]{3,8})/i);
   if (pcnMatch && !['number', 'code'].includes(pcnMatch[1].toLowerCase())) rxPcn = pcnMatch[1].toUpperCase();
 
   let rxGrp = '';
-  const rxGrpMatch = sampleText.match(/(?:rxgrp|rx\s*grp|rxgroup|rx\s*group)\s*#?[:\s]*([A-Za-z0-9]{3,10})/i);
+  const rxGrpMatch = sampleText.match(/(?:rxgrp|rx\s*grp|rxgroup|rx\s*group)\s*#?[:.\s]*([A-Za-z0-9]{3,10})/i);
   if (rxGrpMatch && !['number', 'group'].includes(rxGrpMatch[1].toLowerCase())) rxGrp = rxGrpMatch[1].toUpperCase();
 
-  // Copays ONLY if found in text
+  // Copays
   let copays = {
     primaryCare: null,
     specialist: null,
@@ -2333,34 +2442,52 @@ function heuristicInsuranceExtraction(fileName = '', textHint = '', base64Data =
     rxGeneric: null
   };
 
-  const pcpMatch = sampleText.match(/(?:primary\s*care|pcp|office\s*visit|ov)\s*(?:copay)?[:\s]*\$?\s*([0-9]{1,3})/i);
+  const pcpMatch = sampleText.match(/\b(?:office|pcp|primary\s*care|office\s*visit|ov)\s*[:\s]*\$?\s*([0-9]{1,3})\b/i);
   if (pcpMatch) copays.primaryCare = Number(pcpMatch[1]);
 
-  const specMatch = sampleText.match(/(?:specialist|spec)\s*(?:copay)?[:\s]*\$?\s*([0-9]{1,3})/i);
+  const specMatch = sampleText.match(/\b(?:spec|specialist)\s*[:\s]*\$?\s*([0-9]{1,3})\b/i);
   if (specMatch) copays.specialist = Number(specMatch[1]);
 
-  const ucMatch = sampleText.match(/(?:urgent\s*care|urgent|uc)\s*(?:copay)?[:\s]*\$?\s*([0-9]{1,3})/i);
+  const ucMatch = sampleText.match(/\b(?:urgent\s*care|urgent|uc)\s*[:\s]*\$?\s*([0-9]{1,3})\b/i);
   if (ucMatch) copays.urgentCare = Number(ucMatch[1]);
 
-  const erMatch = sampleText.match(/(?:emergency\s*room|emergency|er)\s*(?:copay)?[:\s]*\$?\s*([0-9]{2,4})/i);
+  const erMatch = sampleText.match(/\b(?:emergency\s*room|emergency|er)\s*[:\s]*\$?\s*([0-9]{1,4})\b/i);
   if (erMatch) copays.er = Number(erMatch[1]);
 
-  const rxMatch = sampleText.match(/(?:generic\s*rx|generic|rx\s*copay|tier\s*1)\s*(?:copay)?[:\s]*\$?\s*([0-9]{1,3})/i);
+  const rxMatch = sampleText.match(/\b(?:generic(?:\s*rx)?|generic|rx\s*copay|tier\s*1)\s*[:\s]*\$?\s*([0-9]{1,3})\b/i);
   if (rxMatch) copays.rxGeneric = Number(rxMatch[1]);
 
-  // Deductibles
+  // Deductible and Out-of-pocket maximum
   let deductible = null;
-  const dedMatch = sampleText.match(/(?:individual\s*deductible|annual\s*deductible|deductible)\s*[:\s]*\$?\s*([0-9,]{2,7})/i);
-  if (dedMatch) {
-    const num = Number(dedMatch[1].replace(/,/g, ''));
-    if (!isNaN(num)) deductible = num;
+  let outOfPocketMax = null;
+
+  const dedInline = sampleText.match(/\b(?:individual\s*deductible|annual\s*deductible|deductible|ded)\s*[:\s]*\$?\s*([0-9,]+)/i);
+  if (dedInline) {
+    const v = Number(dedInline[1].replace(/,/g, ''));
+    if (!isNaN(v)) deductible = v;
   }
 
-  let outOfPocketMax = null;
-  const oopMatch = sampleText.match(/(?:out\s*of\s*pocket\s*max(?:imum)?|oop\s*max|oopm|max\s*out\s*of\s*pocket)\s*[:\s]*\$?\s*([0-9,]{2,7})/i);
-  if (oopMatch) {
-    const num = Number(oopMatch[1].replace(/,/g, ''));
-    if (!isNaN(num)) outOfPocketMax = num;
+  const oopInline = sampleText.match(/\b(?:out\s*of\s*pocket\s*max(?:imum)?|oop\s*max|oopm|max\s*out\s*of\s*pocket)\s*[:\s]*\$?\s*([0-9,]+)/i);
+  if (oopInline) {
+    const v = Number(oopInline[1].replace(/,/g, ''));
+    if (!isNaN(v)) outOfPocketMax = v;
+  }
+
+  // Grid match for multiline card formats (Ded IND/FAM ... OOPM IND/FAM)
+  const gridMatch = sampleText.match(/Ded\s*(?:IND\/FAM)?[\s\S]{0,30}?OOPM\s*(?:IND\/FAM)?[\s\S]{0,40}?(?:INN:?\s*)?\$?([0-9]+)(?:[\/%][0-9]+)?\s+\$?([0-9,]+)(?:[\/%][0-9,]+)?/i);
+  if (gridMatch) {
+    if (deductible == null) deductible = Number(gridMatch[1]);
+    if (outOfPocketMax == null) outOfPocketMax = Number(gridMatch[2].replace(/,/g, ''));
+  }
+
+  // Doctor or Clinic detection
+  let doctor = null;
+  const docMatch = sampleText.match(/([A-Z\s]+,\s+[A-Z\s]+(?:\s+[A-Z])?)\s+(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/);
+  if (docMatch) {
+    doctor = {
+      name: docMatch[1].trim(),
+      phone: docMatch[2].trim()
+    };
   }
 
   return {
@@ -2369,12 +2496,14 @@ function heuristicInsuranceExtraction(fileName = '', textHint = '', base64Data =
     network,
     memberId,
     groupNumber,
+    memberName,
     rxBin,
     rxPcn,
     rxGrp,
     deductible,
     outOfPocketMax,
-    copays
+    copays,
+    doctor
   };
 }
 
@@ -2395,10 +2524,63 @@ app.post(['/api/household/scan-insurance-card', '/household/scan-insurance-card'
         base64Data = match[2];
       }
     }
-    if (fileName && fileName.toLowerCase().endsWith('.pdf')) {
+    const isPdf = (fileName && fileName.toLowerCase().endsWith('.pdf')) || mimeType === 'application/pdf';
+    if (isPdf) {
       mimeType = 'application/pdf';
     }
 
+    const rawBuf = Buffer.from(base64Data, 'base64');
+    const cardImages = [];
+    let recognizedText = `${fileName || ''} ${textHint || ''}`;
+
+    // 1. Run local OCR engine (Tesseract) on image or extracted PDF pages
+    if (Tesseract) {
+      try {
+        if (isPdf) {
+          const pdfImages = extractImagesAndBitmapsFromPdf(rawBuf);
+          if (pdfImages.length > 0) {
+            for (let i = 0; i < pdfImages.length; i++) {
+              const img = pdfImages[i];
+              cardImages.push(`data:${img.mimeType};base64,${img.buffer.toString('base64')}`);
+              try {
+                const ocr = await Tesseract.recognize(img.buffer, 'eng');
+                if (ocr?.data?.text) {
+                  recognizedText += '\n' + ocr.data.text;
+                }
+              } catch (pageOcrErr) {
+                console.warn(`OCR error on page ${i + 1}:`, pageOcrErr.message);
+              }
+            }
+          } else {
+            const pdfText = extractTextFromPdfBuffer(rawBuf);
+            recognizedText += '\n' + pdfText;
+          }
+        } else {
+          // Direct image (JPG, PNG, WebP)
+          cardImages.push(image.startsWith('data:') ? image : `data:${mimeType};base64,${base64Data}`);
+          try {
+            const ocr = await Tesseract.recognize(rawBuf, 'eng');
+            if (ocr?.data?.text) {
+              recognizedText += '\n' + ocr.data.text;
+            }
+          } catch (imgOcrErr) {
+            console.warn('OCR error on image:', imgOcrErr.message);
+          }
+        }
+      } catch (ocrErr) {
+        console.warn('Tesseract recognition warning:', ocrErr.message);
+      }
+    }
+
+    // 2. Fallback PDF text extraction if OCR yielded little text
+    if (isPdf && recognizedText.trim().length < 50) {
+      try {
+        const fallbackText = extractTextFromPdfBuffer(rawBuf);
+        recognizedText += '\n' + fallbackText;
+      } catch (e) {}
+    }
+
+    // 3. Optional Gemini AI enhancement if user has configured API key
     const uid = req.userId || 'default';
     const data = await readData(uid);
     let rawApiKey = '';
@@ -2435,16 +2617,18 @@ app.post(['/api/household/scan-insurance-card', '/household/scan-insurance-card'
 
     if (rawApiKey && aiProvider === 'gemini') {
       try {
-        const prompt = `You are an optical character recognition (OCR) and document scanner for health insurance cards and insurance policy documents (PDF or image).
-Analyze the provided document (front, back, or policy summary).
-Extract ONLY the visible insurance carrier details, plan name, subscriber/member ID, group number, prescription Rx numbers, and copays actually printed on the document.
-If a field is NOT visible or not stated on the card, return null for that field. DO NOT invent or fabricate any numbers or details.
-
+        const prompt = `You are an optical character recognition (OCR) scanner for health insurance cards.
+Analyze this health insurance card or text.
+Recognized OCR text:
+"""
+${recognizedText}
+"""
+Extract ONLY the visible insurance details actually printed. DO NOT invent or fabricate any dummy numbers.
 Return strictly a valid JSON object with these exact keys:
 {
   "provider": "Exact Insurance Carrier Name visible on card, or null",
   "planName": "Exact Plan Name or Network Type visible on card, or null",
-  "memberId": "Exact Member ID / Subscriber ID / Policy # / MRN visible on card, or null",
+  "memberId": "Exact Member ID / Subscriber ID visible on card, or null",
   "groupNumber": "Exact Group Number / GRP visible on card, or null",
   "network": "PPO, HMO, EPO, POS, or null",
   "rxBin": "RxBIN # if visible, or null",
@@ -2462,22 +2646,22 @@ Return strictly a valid JSON object with these exact keys:
 }
 Do not include markdown or backticks. Return strictly raw JSON.`;
 
-        const parts = [
-          { text: prompt },
-          {
+        const parts = [{ text: prompt }];
+        if (!isPdf && base64Data) {
+          parts.push({
             inlineData: {
               mimeType: mimeType || 'image/jpeg',
               data: base64Data
             }
-          }
-        ];
+          });
+        }
 
-        const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash'];
+        const models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
         for (const curModel of models) {
           try {
             const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${rawApiKey}`;
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 20000);
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
             const aiRes = await fetch(geminiUrl, {
               method: 'POST',
               signal: controller.signal,
@@ -2492,13 +2676,13 @@ Do not include markdown or backticks. Return strictly raw JSON.`;
               const resJson = await aiRes.json();
               const text = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
               if (text) {
-                const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                const cleaned = text.replace(/\`\`\`json/gi, '').replace(/\`\`\`/g, '').trim();
                 extracted = JSON.parse(cleaned);
                 if (extracted && (extracted.provider || extracted.memberId)) break;
               }
             }
           } catch (e) {
-            console.warn(`Gemini card scan attempt with ${curModel} error:`, e.message);
+            console.warn(`Gemini scan attempt with ${curModel} error:`, e.message);
           }
         }
       } catch (err) {
@@ -2506,15 +2690,17 @@ Do not include markdown or backticks. Return strictly raw JSON.`;
       }
     }
 
+    // 4. Fallback to heuristic OCR extraction from recognized text
     if (!extracted || (!extracted.provider && !extracted.memberId)) {
-      extracted = heuristicInsuranceExtraction(fileName, textHint, base64Data);
+      extracted = heuristicInsuranceExtraction(fileName, recognizedText, rawBuf);
     }
 
     if (!extracted.copays) extracted.copays = {};
 
     res.json({
       success: true,
-      extracted
+      extracted,
+      cardImages
     });
   } catch (err) {
     console.error('Failed to scan insurance card:', err);
@@ -2522,7 +2708,6 @@ Do not include markdown or backticks. Return strictly raw JSON.`;
   }
 });
 
-// ============================================================================
 // EMBEDDED LOCAL AI ENGINE ROUTES (node-llama-cpp + Live Web RAG)
 // ============================================================================
 

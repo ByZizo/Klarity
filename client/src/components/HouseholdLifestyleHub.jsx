@@ -320,6 +320,8 @@ export default function HouseholdLifestyleHub({
   const [copiedMemberId, setCopiedMemberId] = useState(false);
   const [keepCardImage, setKeepCardImage] = useState(health.keepCardImage !== false);
   const [pendingCard, setPendingCard] = useState(null);
+  const [pendingCards, setPendingCards] = useState([]);
+  const [pendingDoctor, setPendingDoctor] = useState(null);
   const [showCardDialog, setShowCardDialog] = useState(false);
   const healthFileInputRef = useRef(null);
 
@@ -494,6 +496,18 @@ export default function HouseholdLifestyleHub({
           if (json.extracted) {
             extractedDetails = json.extracted;
           }
+          if (json.cardImages && json.cardImages.length > 0) {
+            const cards = json.cardImages.map((cUrl, idx) => ({
+              id: `ic-${Date.now()}-${idx}`,
+              name: json.cardImages.length > 1 ? (idx === 0 ? 'Card - Front' : 'Card - Back') : (file.name || 'Insurance Card'),
+              dataUrl: cUrl
+            }));
+            setPendingCard(cards[0]);
+            setPendingCards(cards);
+          }
+          if (json.extracted?.doctor) {
+            setPendingDoctor(json.extracted.doctor);
+          }
         }
       } catch (err) {
         console.warn('Card scan network notice:', err);
@@ -537,8 +551,23 @@ export default function HouseholdLifestyleHub({
 
   const handleSaveReview = () => {
     const savedCards = keepCardImage
-      ? (pendingCard ? [pendingCard] : (health.cards || []))
+      ? (pendingCards.length > 0 ? pendingCards : (pendingCard ? [pendingCard] : (health.cards || [])))
       : [];
+
+    let nextDoctors = [...(health.doctors || [])];
+    if (pendingDoctor && pendingDoctor.name) {
+      const docExists = nextDoctors.some(d => d.name?.toLowerCase() === pendingDoctor.name.toLowerCase());
+      if (!docExists) {
+        nextDoctors.push({
+          id: `doc-${Date.now()}`,
+          name: pendingDoctor.name,
+          specialty: 'Primary care (PCP)',
+          office: '',
+          phone: pendingDoctor.phone || '',
+          notes: 'Auto-detected from insurance card'
+        });
+      }
+    }
 
     const nextHealth = {
       ...health,
@@ -558,6 +587,7 @@ export default function HouseholdLifestyleHub({
         er: parseCurrencyInput(reviewForm.er, null),
         rxGeneric: parseCurrencyInput(reviewForm.rxGeneric, null)
       },
+      doctors: nextDoctors,
       keepCardImage,
       cards: savedCards
     };
@@ -2278,6 +2308,16 @@ export default function HouseholdLifestyleHub({
                     onClick={() => {
                       setViewingCardPhoto(health.cards[1].dataUrl);
                       setViewingCardTitle(`${health.cards[1].name || 'Insurance Card'} - Back`);
+                    }}
+                  />
+                ) : pendingCards[1]?.dataUrl ? (
+                  <img
+                    src={pendingCards[1].dataUrl}
+                    alt="Back card"
+                    className="w-full h-full object-cover cursor-pointer"
+                    onClick={() => {
+                      setViewingCardPhoto(pendingCards[1].dataUrl);
+                      setViewingCardTitle('Insurance Card - Back');
                     }}
                   />
                 ) : (
