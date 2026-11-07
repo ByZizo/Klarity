@@ -101,6 +101,35 @@ export default function PasswordVaultPage({
     } catch {}
   };
 
+  // Custom user-defined sections management
+  const [customSections, setCustomSections] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_vault_sections');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return ['General', 'Utilities', 'Finance', 'Personal'];
+  });
+  const [isAddingSection, setIsAddingSection] = useState(false);
+  const [newSectionInput, setNewSectionInput] = useState('');
+  const [isCreatingNewSection, setIsCreatingNewSection] = useState(false);
+  const [showFormPassword, setShowFormPassword] = useState(false);
+
+  // Compute all available sections from user-created custom sections and active cards
+  const allSections = useMemo(() => {
+    const set = new Set();
+    (customSections || []).forEach(s => {
+      if (s && String(s).trim()) set.add(String(s).trim());
+    });
+    (vaultItems || []).forEach(item => {
+      if (item.category && String(item.category).trim()) set.add(String(item.category).trim());
+    });
+    if (set.size === 0) set.add('General');
+    return Array.from(set);
+  }, [customSections, vaultItems]);
+
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [visiblePasswords, setVisiblePasswords] = useState({});
@@ -112,7 +141,7 @@ export default function PasswordVaultPage({
 
   const [formState, setFormState] = useState({
     service: '',
-    category: 'Household',
+    category: 'General',
     username: '',
     password: '',
     accountNumber: '',
@@ -122,7 +151,7 @@ export default function PasswordVaultPage({
 
   const filteredItems = useMemo(() => {
     return (vaultItems || []).filter(item => {
-      const matchesCat = selectedCategory === 'All' || item.category === selectedCategory;
+      const matchesCat = selectedCategory === 'All' || (item.category || '').toLowerCase() === selectedCategory.toLowerCase();
       const q = searchQuery.toLowerCase();
       const matchesSearch =
         !q ||
@@ -286,14 +315,57 @@ export default function PasswordVaultPage({
     XLSX.writeFile(wb, 'Klarity_Accounts_Passwords.xlsx');
   };
 
+  const handleCreateSection = () => {
+    const trimmed = newSectionInput.trim();
+    if (!trimmed) {
+      setIsAddingSection(false);
+      return;
+    }
+    const nextSections = Array.from(new Set([...customSections, trimmed]));
+    setCustomSections(nextSections);
+    try {
+      localStorage.setItem('klarity_vault_sections', JSON.stringify(nextSections));
+    } catch {}
+    setSelectedCategory(trimmed);
+    setIsAddingSection(false);
+    setNewSectionInput('');
+  };
+
+  const handleDeleteSection = (secName) => {
+    const nextSections = customSections.filter(s => s.toLowerCase() !== secName.toLowerCase());
+    setCustomSections(nextSections);
+    try {
+      localStorage.setItem('klarity_vault_sections', JSON.stringify(nextSections));
+    } catch {}
+    if (selectedCategory.toLowerCase() === secName.toLowerCase()) {
+      setSelectedCategory('All');
+    }
+  };
+
   const handleSaveForm = (e) => {
     e.preventDefault();
     if (!formState.service.trim()) return;
 
+    const chosenCategory = (formState.category || '').trim() || 'General';
+    // Persist any new section entered by user
+    if (chosenCategory && !customSections.some(s => s.toLowerCase() === chosenCategory.toLowerCase())) {
+      const nextSections = [...customSections, chosenCategory];
+      setCustomSections(nextSections);
+      try {
+        localStorage.setItem('klarity_vault_sections', JSON.stringify(nextSections));
+      } catch {}
+    }
+
     if (editingId) {
       onUpdateVaultItems(
         (vaultItems || []).map(item =>
-          item.id === editingId ? { ...item, ...formState, service: formState.service.trim() } : item
+          item.id === editingId ? {
+            ...item,
+            ...formState,
+            service: formState.service.trim(),
+            category: chosenCategory,
+            website: (formState.website || '').trim()
+          } : item
         )
       );
       setEditingId(null);
@@ -301,33 +373,39 @@ export default function PasswordVaultPage({
       const newItem = {
         id: `v-${Date.now()}`,
         ...formState,
-        service: formState.service.trim()
+        service: formState.service.trim(),
+        category: chosenCategory,
+        website: (formState.website || '').trim()
       };
       onUpdateVaultItems([newItem, ...(vaultItems || [])]);
     }
 
     setFormState({
       service: '',
-      category: 'Household',
+      category: chosenCategory,
       username: '',
       password: '',
       accountNumber: '',
       website: '',
       notes: ''
     });
+    setIsCreatingNewSection(false);
+    setNewSectionInput('');
     setShowAddForm(false);
   };
 
   const handleStartEdit = (item) => {
     setFormState({
       service: item.service || '',
-      category: item.category || 'Household',
+      category: item.category || allSections[0] || 'General',
       username: item.username || '',
       password: item.password || '',
       accountNumber: item.accountNumber || '',
       website: item.website || '',
       notes: item.notes || ''
     });
+    setIsCreatingNewSection(false);
+    setNewSectionInput('');
     setEditingId(item.id);
     setShowAddForm(true);
   };
@@ -666,9 +744,11 @@ export default function PasswordVaultPage({
             type="button"
             onClick={() => {
               setEditingId(null);
+              setIsCreatingNewSection(false);
+              setNewSectionInput('');
               setFormState({
                 service: '',
-                category: selectedCategory === 'All' ? 'Household' : selectedCategory,
+                category: selectedCategory === 'All' ? (allSections[0] || 'General') : selectedCategory,
                 username: '',
                 password: '',
                 accountNumber: '',
@@ -702,114 +782,274 @@ export default function PasswordVaultPage({
         </div>
       )}
 
-      {/* Category Filter Pills & Search */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200/90 shadow-2xs">
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold overflow-x-auto">
-          {CATEGORIES.map(cat => (
+      {/* User Custom Sections Filter Bar & Search */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs">
+        <div className="flex items-center gap-1.5 overflow-x-auto p-1 max-w-full">
+          {/* All Section Pill */}
+          <button
+            type="button"
+            onClick={() => setSelectedCategory('All')}
+            className={`px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer whitespace-nowrap font-bold ${
+              selectedCategory === 'All'
+                ? 'bg-[#18457c] text-white shadow-2xs'
+                : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+          >
+            All ({(vaultItems || []).length})
+          </button>
+
+          {/* User's Custom Sections */}
+          {allSections.map(sec => {
+            const count = (vaultItems || []).filter(i => (i.category || '').toLowerCase() === sec.toLowerCase()).length;
+            const isSelected = selectedCategory.toLowerCase() === sec.toLowerCase();
+            return (
+              <div key={sec} className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory(sec)}
+                  className={`px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 font-bold ${
+                    isSelected
+                      ? 'bg-[#18457c] text-white shadow-2xs'
+                      : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>{sec}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                    {count}
+                  </span>
+                </button>
+                {count === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSection(sec)}
+                    className="p-1 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
+                    title={`Delete empty section "${sec}"`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          {/* + Create New Section Button */}
+          {isAddingSection ? (
+            <div className="flex items-center gap-1 bg-white border border-[#18457c] rounded-xl px-2 py-1 shadow-2xs shrink-0">
+              <input
+                type="text"
+                placeholder="Section name..."
+                value={newSectionInput}
+                onChange={e => setNewSectionInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleCreateSection();
+                  if (e.key === 'Escape') setIsAddingSection(false);
+                }}
+                className="text-xs font-bold text-slate-900 outline-none w-28 bg-transparent"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={handleCreateSection}
+                className="p-1 bg-[#18457c] text-white rounded-lg hover:bg-[#123561] cursor-pointer"
+                title="Save section"
+              >
+                <Check className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAddingSection(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                title="Cancel"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
             <button
-              key={cat}
               type="button"
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                selectedCategory === cat
-                  ? 'bg-white text-[#18457c] shadow-2xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+              onClick={() => { setIsAddingSection(true); setNewSectionInput(''); }}
+              className="px-2.5 py-1.5 rounded-xl border border-dashed border-slate-300 hover:border-[#18457c] text-[#18457c] bg-white hover:bg-blue-50 text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 shrink-0"
             >
-              {cat}
+              <Plus className="w-3 h-3" />
+              <span>New Section</span>
             </button>
-          ))}
+          )}
         </div>
 
-        <div className="relative sm:w-64">
+        {/* Search Bar */}
+        <div className="relative sm:w-64 shrink-0">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search PG&E, Chase, account #..."
+            placeholder="Search accounts, logins, notes..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#18457c]"
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:border-[#18457c]"
           />
         </div>
       </div>
 
-      {/* Add / Edit Account Form */}
+      {/* Add / Edit Account Form (With Website URL and Custom Section) */}
       {showAddForm && (
-        <form onSubmit={handleSaveForm} className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 text-xs">
-          <div>
-            <label className="block font-semibold text-slate-600 mb-1">Account / Service</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. PG&E, Water, Kaiser"
-              value={formState.service}
-              onChange={e => setFormState({ ...formState, service: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#18457c]"
-            />
-          </div>
-
-          <div>
-            <label className="block font-semibold text-slate-600 mb-1">Section</label>
-            <select
-              value={formState.category}
-              onChange={e => setFormState({ ...formState, category: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 font-semibold focus:outline-none"
-            >
-              {CATEGORIES.filter(c => c !== 'All').map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-slate-600 mb-1">Username / Email</label>
-            <input
-              type="text"
-              placeholder="Username or email"
-              value={formState.username}
-              onChange={e => setFormState({ ...formState, username: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#18457c]"
-            />
-          </div>
-
-          <div>
-            <label className="block font-semibold text-slate-600 mb-1">Password</label>
-            <input
-              type="text"
-              placeholder="Password"
-              value={formState.password}
-              onChange={e => setFormState({ ...formState, password: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#18457c]"
-            />
-          </div>
-
-          <div>
-            <label className="block font-semibold text-slate-600 mb-1">Account # / ID</label>
-            <input
-              type="text"
-              placeholder="Account or Member #"
-              value={formState.accountNumber}
-              onChange={e => setFormState({ ...formState, accountNumber: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#18457c]"
-            />
-          </div>
-
-          <div className="flex items-end gap-2">
-            <button
-              type="submit"
-              className="flex-1 py-2 px-3 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white font-bold cursor-pointer"
-            >
-              {editingId ? 'Save' : 'Add'}
-            </button>
+        <form onSubmit={handleSaveForm} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4 text-xs">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+              <KeyRound className="w-4 h-4 text-[#18457c]" />
+              <span>{editingId ? 'Edit Account Credentials' : 'Add New Account Credentials'}</span>
+            </span>
             <button
               type="button"
-              onClick={() => {
-                setShowAddForm(false);
-                setEditingId(null);
-              }}
-              className="py-2 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"
+              onClick={() => { setShowAddForm(false); setEditingId(null); }}
+              className="text-slate-400 hover:text-slate-600 cursor-pointer p-1"
             >
               <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {/* 1. Account / Service Name */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Account / Service Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. PG&E, Chase, Netflix, Kaiser..."
+                value={formState.service}
+                onChange={e => setFormState({ ...formState, service: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-[#18457c] font-semibold text-slate-900"
+              />
+            </div>
+
+            {/* 2. Section (Custom user-defined section) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-bold text-slate-700">Section</label>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingNewSection(!isCreatingNewSection)}
+                  className="text-[11px] text-[#18457c] hover:underline font-bold cursor-pointer"
+                >
+                  {isCreatingNewSection ? 'Pick existing' : '+ New section'}
+                </button>
+              </div>
+              {isCreatingNewSection ? (
+                <input
+                  type="text"
+                  placeholder="Type section name (e.g. Personal, Work)..."
+                  value={newSectionInput}
+                  onChange={e => {
+                    setNewSectionInput(e.target.value);
+                    setFormState({ ...formState, category: e.target.value });
+                  }}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-[#18457c] focus:outline-none focus:bg-white text-xs font-semibold text-slate-900"
+                  autoFocus
+                />
+              ) : (
+                <select
+                  value={formState.category || allSections[0] || 'General'}
+                  onChange={e => {
+                    if (e.target.value === '__new__') {
+                      setIsCreatingNewSection(true);
+                      setNewSectionInput('');
+                    } else {
+                      setFormState({ ...formState, category: e.target.value });
+                    }
+                  }}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:bg-white cursor-pointer"
+                >
+                  {allSections.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                  <option value="__new__">+ Create new section...</option>
+                </select>
+              )}
+            </div>
+
+            {/* 3. Website URL */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Website URL</label>
+              <input
+                type="text"
+                placeholder="e.g. pge.com or https://chase.com"
+                value={formState.website}
+                onChange={e => setFormState({ ...formState, website: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-[#18457c] text-slate-900"
+              />
+            </div>
+
+            {/* 4. Username / Email */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Username / Email / Login ID</label>
+              <input
+                type="text"
+                placeholder="Username or email"
+                value={formState.username}
+                onChange={e => setFormState({ ...formState, username: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-[#18457c] text-slate-900 font-mono"
+              />
+            </div>
+
+            {/* 5. Password */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Password</label>
+              <div className="relative">
+                <input
+                  type={showFormPassword ? 'text' : 'password'}
+                  placeholder="Password or Secret PIN"
+                  value={formState.password}
+                  onChange={e => setFormState({ ...formState, password: e.target.value })}
+                  className="w-full pl-3 pr-9 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-[#18457c] text-slate-900 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowFormPassword(!showFormPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                >
+                  {showFormPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* 6. Account # / Member ID */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Account Number / Member ID</label>
+              <input
+                type="text"
+                placeholder="Account #, Member ID, or Policy #"
+                value={formState.accountNumber}
+                onChange={e => setFormState({ ...formState, accountNumber: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-[#18457c] text-slate-900 font-mono"
+              />
+            </div>
+
+            {/* 7. Notes */}
+            <div className="sm:col-span-2 lg:col-span-3">
+              <label className="block font-bold text-slate-700 mb-1">Notes / Security Answers (Optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. 2FA recovery code, security questions, renewal date..."
+                value={formState.notes}
+                onChange={e => setFormState({ ...formState, notes: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-[#18457c] text-slate-900"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => { setShowAddForm(false); setEditingId(null); }}
+              className="px-4 py-2 rounded-xl text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 font-bold transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-bold transition-colors cursor-pointer shadow-2xs"
+            >
+              {editingId ? 'Save Changes' : 'Add Card to Section'}
             </button>
           </div>
         </form>
@@ -833,12 +1073,23 @@ export default function PasswordVaultPage({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-slate-900 text-sm">{item.service}</span>
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-semibold text-[10px]">
-                        {item.category || 'Household'}
+                      <span className="px-2 py-0.5 rounded-md bg-blue-50 text-[#18457c] border border-blue-200/70 font-bold text-[10px]">
+                        {item.category || 'General'}
                       </span>
                     </div>
                     {item.notes && (
                       <p className="text-[11px] text-slate-400 mt-0.5">{item.notes}</p>
+                    )}
+                    {item.website && (
+                      <a
+                        href={item.website.startsWith('http') ? item.website : `https://${item.website}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-[#18457c] hover:underline font-semibold mt-1"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span className="truncate max-w-[200px]">{item.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</span>
+                      </a>
                     )}
                   </div>
 
