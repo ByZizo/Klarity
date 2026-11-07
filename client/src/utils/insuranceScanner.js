@@ -276,3 +276,141 @@ export async function scanInsuranceFile(file, onProgress = () => {}) {
 
   return { extracted, cardImages, text: orderedText };
 }
+
+
+// ---------------------------------------------------------------------------
+// Auto Insurance Parsing & Scanning
+// ---------------------------------------------------------------------------
+
+const AUTO_CARRIERS = [
+  { re: /geico/i, name: 'GEICO' },
+  { re: /state\s*farm/i, name: 'State Farm' },
+  { re: /progressive/i, name: 'Progressive' },
+  { re: /allstate/i, name: 'Allstate' },
+  { re: /aaa|auto\s*club/i, name: 'AAA (Auto Club)' },
+  { re: /farmers\s*insurance|farmers/i, name: 'Farmers Insurance' },
+  { re: /liberty\s*mutual/i, name: 'Liberty Mutual' },
+  { re: /usaa/i, name: 'USAA' },
+  { re: /travelers/i, name: 'Travelers' },
+  { re: /nationwide/i, name: 'Nationwide' },
+  { re: /american\s*family|amfam/i, name: 'American Family' },
+  { re: /mercury\s*insurance|mercury/i, name: 'Mercury Insurance' }
+];
+
+export function parseAutoInsuranceText(rawText = '') {
+  const text = rawText.replace(/%(\d)/g, '$$$$1').replace(/[|]/g, ' ');
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/\s{2,}/g, ' ').trim()).filter(Boolean);
+
+  const out = {
+    provider: '',
+    policyNumber: '',
+    driverName: '',
+    year: null,
+    make: '',
+    model: '',
+    vin: '',
+    coverage: 'full_coverage',
+    deductible: null,
+    monthlyPremium: null,
+    effectiveDate: '',
+    expirationDate: ''
+  };
+
+  const carrier = AUTO_CARRIERS.find((c) => c.re.test(text));
+  if (carrier) out.provider = carrier.name;
+
+  // Policy number match
+  const pol = text.match(/\b(?:policy\s*(?:number|no\.?|#)?|pol\s*#?)\s*[:#.]?\s*([A-Z0-9-]{5,25})\b/i);
+  if (pol) out.policyNumber = pol[1].toUpperCase();
+
+  // Insured name match
+  const name = text.match(/\b(?:named\s*insured|insured|driver|policyholder|name)\s*[:#.]?\s*([A-Z][A-Z .'-]{2,35})(?=\r?\n|$)/i);
+  if (name && !/\b(?:company|insurance|auto|policy|vehicle)\b/i.test(name[1])) {
+    out.driverName = name[1].trim();
+  }
+
+  // VIN match (17 alphanumeric)
+  const vinMatch = text.match(/\b([A-HJ-NPR-Z0-9]{17})\b/i);
+  if (vinMatch) out.vin = vinMatch[1].toUpperCase();
+
+  // Year match
+  const yrMatch = text.match(/\b(19\d{2}|20[0-3]\d)\b/);
+  if (yrMatch) out.year = Number(yrMatch[1]);
+
+  // Car make & model detection
+  const carMakes = ['Toyota', 'Honda', 'Ford', 'Chevrolet', 'Chevy', 'Tesla', 'Nissan', 'BMW', 'Mercedes', 'Mercedes-Benz', 'Audi', 'Hyundai', 'Kia', 'Subaru', 'Lexus', 'Mazda', 'Volkswagen', 'VW', 'Jeep', 'Dodge', 'Ram', 'GMC', 'Acura', 'Infiniti', 'Volvo', 'Rivian', 'Lucid', 'Porsche'];
+  for (const make of carMakes) {
+    const re = new RegExp(`\\b${make}\\b`, 'i');
+    if (re.test(text)) {
+      out.make = make === 'Chevy' ? 'Chevrolet' : (make === 'VW' ? 'Volkswagen' : make);
+      const lineWithMake = lines.find((l) => re.test(l));
+      if (lineWithMake) {
+        const cleaned = lineWithMake
+          .replace(/\b(19\d{2}|20[0-3]\d)\b/g, '')
+          .replace(re, '')
+          .replace(/\b(?:vin|policy|expires|effective|coverage|driver|insured)\b.*$/i, '')
+          .trim();
+        if (cleaned.length >= 2 && cleaned.length <= 35) {
+          out.model = cleaned;
+        }
+      }
+      break;
+    }
+  }
+
+  // Coverage type detection
+  if (/gap/i.test(text)) {
+    out.coverage = 'full_coverage_gap';
+  } else if (/liability\s*only|minimum\s*liability/i.test(text)) {
+    out.coverage = 'liability_only';
+  } else if (/collision|comprehensive|full\s*coverage/i.test(text)) {
+    out.coverage = 'full_coverage';
+  }
+
+  // Deductible
+  const ded = text.match(/\b(?:comp(?:rehensive)?|coll(?:ision)?|deductible|ded)\b\s*[:\-]?\s*\$?\s?([0-9][0-9,]*)/i);
+  if (ded) out.deductible = money(ded[1]);
+
+  // Monthly Premium
+  const prem = text.match(/\b(?:premium|monthly|amount\s*due)\b\s*[:\-]?\s*\$?\s?([0-9][0-9,]*)/i);
+  if (prem) out.monthlyPremium = money(prem[1]);
+
+  return out;
+}
+
+const looksLikeAutoFront = (t) => /policy\s*#|policy\s*number|insured|vin|effective|vehicle/i.test(t);
+
+export async function scanAutoInsuranceFile(file, onProgress = () => {}) {
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  onProgress('Preparing document…');
+  const pages = isPdf ? await pagesFromPdf(file) : await pagesFromImage(file);
+
+  const { createWorker } = await import('tesseract.js');
+  onProgress('Loading text reader…');
+  const worker = await createWorker('eng');
+  const texts = [];
+  try {
+    for (let i = 0; i < pages.length; i++) {
+      onProgress(pages.length > 1 ? `Reading page ${i + 1} of ${pages.length}…` : 'Reading auto insurance document…');
+      const p = pages[i];
+      let t = p.embeddedText && p.embeddedText.trim().length > 40 ? p.embeddedText : '';
+      if (!t) {
+        const { data } = await worker.recognize(p.ocrCanvas);
+        t = data?.text || '';
+      }
+      texts.push(t);
+    }
+  } finally {
+    await worker.terminate();
+  }
+
+  let order = pages.map((_, i) => i);
+  const frontIdx = texts.findIndex(looksLikeAutoFront);
+  if (frontIdx > 0) order = [frontIdx, ...order.filter((i) => i !== frontIdx)];
+
+  const orderedText = order.map((i) => texts[i]).join('\n');
+  const extracted = parseAutoInsuranceText(orderedText);
+  const cardImages = order.slice(0, 2).map((i) => pages[i].displayUrl);
+
+  return { extracted, cardImages, text: orderedText };
+}

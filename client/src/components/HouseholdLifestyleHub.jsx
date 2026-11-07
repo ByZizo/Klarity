@@ -33,6 +33,9 @@ import {
   ChevronUp,
   FileText,
   Copy,
+  Pencil,
+  Eye,
+  EyeOff,
   Check,
   RotateCw,
   Sun,
@@ -133,8 +136,47 @@ export default function HouseholdLifestyleHub({
   bills = []
 }) {
   const [section, setSection] = useState('household'); // 'household' | 'auto' | 'health'
-  const [autoView, setAutoView] = useState('vehicles'); // 'vehicles' | 'chargers' | 'deals'
+  const [autoView, setAutoView] = useState((householdProfile.vehicles && householdProfile.vehicles.length > 0) ? 'saved' : 'empty');
   const [showAddCar, setShowAddCar] = useState(false);
+  const autoFileInputRef = useRef(null);
+  const [editingVehicleId, setEditingVehicleId] = useState(null);
+  const [isScanningAutoCard, setIsScanningAutoCard] = useState(false);
+  const [autoScanProgress, setAutoScanProgress] = useState('');
+  const [autoScanFeedback, setAutoScanFeedback] = useState(null);
+  const [pendingAutoCards, setPendingAutoCards] = useState([]);
+  const [autoCardFlipped, setAutoCardFlipped] = useState(false);
+  const [keepAutoCardImage, setKeepAutoCardImage] = useState(true);
+  const [expandedVehicleIds, setExpandedVehicleIds] = useState({ 'veh-1': true });
+  const [revealedPolicyIds, setRevealedPolicyIds] = useState({});
+  const [copiedVehiclePolicyId, setCopiedVehiclePolicyId] = useState(null);
+  const [flippedAutoCards, setFlippedAutoCards] = useState({});
+
+  const [autoReviewForm, setAutoReviewForm] = useState({
+    id: '',
+    year: 2025,
+    make: 'Toyota',
+    model: 'Camry Hybrid',
+    trim: '',
+    name: '2025 Toyota Camry Hybrid',
+    vin: '',
+    type: 'hybrid',
+    ownership: 'owned',
+    driverName: '',
+    insuranceProvider: 'GEICO',
+    insuranceCoverage: 'full_coverage',
+    insuranceMonthly: 120,
+    insurancePolicyNumber: '',
+    insuranceDeductible: 500,
+    odometer: '',
+    estimatedValue: '',
+    threeYearMileLimit: 36000,
+    monthlyMiles: 1000,
+    monthlyPayment: 0,
+    fuelGrade: 'regular',
+    mpgOrEfficiency: 51,
+    batteryKwh: 0,
+    freeChargingSharePercent: 0
+  });
   const [showAddDoctor, setShowAddDoctor] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState('');
 
@@ -1264,6 +1306,262 @@ export default function HouseholdLifestyleHub({
       ...householdProfile,
       vehicles: (householdProfile.vehicles || []).map(v => v.id === id ? { ...v, ...patch } : v)
     });
+  };
+
+  const isVehicleExpanded = (id, idx) => {
+    if (expandedVehicleIds[id] !== undefined) return expandedVehicleIds[id];
+    return idx === 0;
+  };
+
+  const toggleVehicleExpanded = (id, idx) => {
+    setExpandedVehicleIds(prev => ({
+      ...prev,
+      [id]: !isVehicleExpanded(id, idx)
+    }));
+  };
+
+  const handleCopyVehiclePolicy = (v) => {
+    const pol = v?.insurancePolicyNumber || '';
+    if (!pol) return;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(pol).catch(() => {});
+    }
+    setCopiedVehiclePolicyId(v.id);
+    setTimeout(() => setCopiedVehiclePolicyId(null), 2500);
+  };
+
+  const handleAddNewAutoCard = () => {
+    if (autoFileInputRef.current) {
+      autoFileInputRef.current.click();
+    }
+  };
+
+  const handleManualAddVehicle = () => {
+    setEditingVehicleId(null);
+    setPendingAutoCards([]);
+    setAutoScanFeedback(null);
+    setAutoReviewForm({
+      id: `veh-${Date.now()}`,
+      year: 2025,
+      make: 'Toyota',
+      model: '',
+      trim: '',
+      name: '',
+      vin: '',
+      type: 'gas',
+      ownership: 'owned',
+      driverName: '',
+      insuranceProvider: 'State Farm',
+      insuranceCoverage: 'full_coverage',
+      insuranceMonthly: 120,
+      insurancePolicyNumber: '',
+      insuranceDeductible: 500,
+      odometer: '',
+      estimatedValue: '',
+      threeYearMileLimit: 36000,
+      monthlyMiles: 1000,
+      monthlyPayment: 0,
+      fuelGrade: 'regular',
+      mpgOrEfficiency: 32,
+      batteryKwh: 0,
+      freeChargingSharePercent: 0
+    });
+    setAutoView('review');
+  };
+
+  const handleEditVehicle = (v) => {
+    setEditingVehicleId(v.id);
+    setAutoScanFeedback(null);
+    const existingCards = (v.cards && v.cards.length > 0)
+      ? v.cards
+      : (v.insuranceCardPhoto ? [{ id: 'ic-0', name: 'Front', side: 'front', dataUrl: v.insuranceCardPhoto }] : []);
+    setPendingAutoCards(existingCards);
+    setAutoReviewForm({
+      id: v.id,
+      year: v.year || 2025,
+      make: v.make || 'Toyota',
+      model: v.model || '',
+      trim: v.trim || '',
+      name: v.name || `${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim(),
+      vin: v.vin || '',
+      type: v.type || 'gas',
+      ownership: v.ownership || 'owned',
+      driverName: v.driverName || '',
+      insuranceProvider: v.insuranceProvider || 'State Farm',
+      insuranceCoverage: v.insuranceCoverage || 'full_coverage',
+      insuranceMonthly: v.insuranceMonthly || 120,
+      insurancePolicyNumber: v.insurancePolicyNumber || '',
+      insuranceDeductible: v.insuranceDeductible || 500,
+      odometer: v.odometer ? Number(v.odometer).toLocaleString('en-US') : '',
+      estimatedValue: v.estimatedValue ? Number(v.estimatedValue).toLocaleString('en-US') : '',
+      threeYearMileLimit: v.threeYearMileLimit || 36000,
+      monthlyMiles: v.monthlyMiles || 1000,
+      monthlyPayment: v.monthlyPayment || 0,
+      fuelGrade: v.fuelGrade || 'regular',
+      mpgOrEfficiency: v.mpgOrEfficiency || 32,
+      batteryKwh: v.batteryKwh || 0,
+      freeChargingSharePercent: v.freeChargingSharePercent || 0
+    });
+    setAutoView('review');
+  };
+
+  const handleProcessAutoInsuranceFile = async (file) => {
+    if (!file) return;
+
+    setIsScanningAutoCard(true);
+    setAutoScanFeedback(null);
+    setAutoScanProgress('Preparing document…');
+
+    let extractedDetails = null;
+    let cards = [];
+
+    try {
+      const { scanAutoInsuranceFile } = await import('../utils/insuranceScanner.js');
+      const result = await scanAutoInsuranceFile(file, (msg) => setAutoScanProgress(msg));
+      extractedDetails = result.extracted;
+      cards = (result.cardImages || []).map((url, idx) => ({
+        id: `ic-auto-${Date.now()}-${idx}`,
+        name: idx === 0 ? 'Front' : 'Back',
+        side: idx === 0 ? 'front' : 'back',
+        dataUrl: url
+      }));
+    } catch (err) {
+      console.warn('Auto card scan failed:', err);
+      setAutoScanFeedback({ type: 'error', message: "We couldn't read that file. You can still enter the details by hand." });
+    } finally {
+      setIsScanningAutoCard(false);
+    }
+
+    setPendingAutoCards(cards);
+
+    const yr = extractedDetails?.year || 2025;
+    const mk = extractedDetails?.make || 'Toyota';
+    const md = extractedDetails?.model || '';
+    const specs = detectCarSpecs(mk, md, extractedDetails?.coverage || 'full_coverage');
+
+    setAutoReviewForm({
+      id: editingVehicleId || `veh-${Date.now()}`,
+      year: yr,
+      make: mk,
+      model: md,
+      trim: '',
+      name: `${yr} ${mk} ${md}`.replace(/\s+/g, ' ').trim(),
+      vin: extractedDetails?.vin || '',
+      type: specs.type || 'gas',
+      ownership: 'owned',
+      driverName: extractedDetails?.driverName || '',
+      insuranceProvider: extractedDetails?.provider || 'GEICO',
+      insuranceCoverage: extractedDetails?.coverage || 'full_coverage',
+      insuranceMonthly: extractedDetails?.monthlyPremium || specs.insuranceMonthly || 120,
+      insurancePolicyNumber: extractedDetails?.policyNumber || '',
+      insuranceDeductible: extractedDetails?.deductible || 500,
+      odometer: '',
+      estimatedValue: '',
+      threeYearMileLimit: 36000,
+      monthlyMiles: 1000,
+      monthlyPayment: 0,
+      fuelGrade: specs.fuelGrade || 'regular',
+      mpgOrEfficiency: specs.mpgOrEfficiency || 32,
+      batteryKwh: specs.batteryKwh || 0,
+      freeChargingSharePercent: 0
+    });
+
+    setAutoView('review');
+  };
+
+  const handleSaveAutoReview = () => {
+    const targetVehId = editingVehicleId || autoReviewForm.id || `veh-${Date.now()}`;
+    const cleanOdo = Number(String(autoReviewForm.odometer || '').replace(/[^0-9]/g, '')) || 0;
+    const cleanVal = Number(String(autoReviewForm.estimatedValue || '').replace(/[^0-9]/g, '')) || 0;
+    const cleanMonthly = Number(autoReviewForm.insuranceMonthly) || 0;
+
+    const cardsToKeep = keepAutoCardImage ? pendingAutoCards : [];
+    const frontPhoto = cardsToKeep[0]?.dataUrl || (keepAutoCardImage ? autoReviewForm.insuranceCardPhoto : null);
+
+    const updatedVehicle = {
+      id: targetVehId,
+      year: Number(autoReviewForm.year) || 2025,
+      make: (autoReviewForm.make || '').trim(),
+      model: (autoReviewForm.model || '').trim(),
+      name: autoReviewForm.name || `${autoReviewForm.year} ${autoReviewForm.make} ${autoReviewForm.model}`.trim(),
+      type: autoReviewForm.type || 'gas',
+      ownership: autoReviewForm.ownership || 'owned',
+      driverName: (autoReviewForm.driverName || '').trim(),
+      insuranceProvider: (autoReviewForm.insuranceProvider || '').trim(),
+      insuranceCoverage: autoReviewForm.insuranceCoverage || 'full_coverage',
+      insuranceMonthly: cleanMonthly,
+      insurancePolicyNumber: (autoReviewForm.insurancePolicyNumber || '').trim(),
+      insuranceDeductible: Number(autoReviewForm.insuranceDeductible) || 500,
+      vin: (autoReviewForm.vin || '').trim(),
+      odometer: cleanOdo,
+      estimatedValue: cleanVal,
+      threeYearMileLimit: autoReviewForm.ownership === 'lease' ? (Number(autoReviewForm.threeYearMileLimit) || 36000) : null,
+      monthlyMiles: Number(autoReviewForm.monthlyMiles) || 1000,
+      monthlyPayment: Number(autoReviewForm.monthlyPayment) || 0,
+      fuelGrade: autoReviewForm.fuelGrade || 'regular',
+      mpgOrEfficiency: Number(autoReviewForm.mpgOrEfficiency) || 30,
+      batteryKwh: Number(autoReviewForm.batteryKwh) || 0,
+      freeChargingSharePercent: Number(autoReviewForm.freeChargingSharePercent) || 0,
+      cards: cardsToKeep,
+      insuranceCardPhoto: frontPhoto
+    };
+
+    const existingVehicles = householdProfile.vehicles || [];
+    let nextVehicles;
+    if (editingVehicleId) {
+      nextVehicles = existingVehicles.map(v => v.id === editingVehicleId ? updatedVehicle : v);
+    } else {
+      nextVehicles = [...existingVehicles, updatedVehicle];
+    }
+
+    onUpdateProfile({
+      ...householdProfile,
+      vehicles: nextVehicles
+    });
+
+    setExpandedVehicleIds(prev => ({
+      ...prev,
+      [targetVehId]: true
+    }));
+    setEditingVehicleId(null);
+    setAutoView('saved');
+  };
+
+  const handleCancelAutoReview = () => {
+    setEditingVehicleId(null);
+    if ((householdProfile.vehicles || []).length > 0) {
+      setAutoView('saved');
+    } else {
+      setAutoView('empty');
+    }
+  };
+
+  const handleAutoFormMakeChange = (mk) => {
+    const specs = detectCarSpecs(mk, autoReviewForm.model, autoReviewForm.insuranceCoverage);
+    setAutoReviewForm(prev => ({
+      ...prev,
+      make: mk,
+      name: `${prev.year} ${mk} ${prev.model}`.replace(/\s+/g, ' ').trim(),
+      type: specs.type,
+      mpgOrEfficiency: specs.mpgOrEfficiency,
+      fuelGrade: specs.fuelGrade,
+      batteryKwh: specs.batteryKwh,
+      insuranceMonthly: specs.insuranceMonthly || prev.insuranceMonthly
+    }));
+  };
+
+  const handleAutoFormModelChange = (md) => {
+    const specs = detectCarSpecs(autoReviewForm.make, md, autoReviewForm.insuranceCoverage);
+    setAutoReviewForm(prev => ({
+      ...prev,
+      model: md,
+      name: `${prev.year} ${prev.make} ${md}`.replace(/\s+/g, ' ').trim(),
+      type: specs.type,
+      mpgOrEfficiency: specs.mpgOrEfficiency,
+      fuelGrade: specs.fuelGrade,
+      batteryKwh: specs.batteryKwh,
+      insuranceMonthly: specs.insuranceMonthly || prev.insuranceMonthly
+    }));
   };
 
   const netFinancedEvAmount = Math.max(0, simEvMsrp - simFedCredit - simStateRebate - simDownPayment);
@@ -2978,578 +3276,689 @@ export default function HouseholdLifestyleHub({
         </div>
       )}
       {section === 'auto' && (
-        <div className="p-5 flex flex-col gap-4">
-          {/* Vehicles Header */}
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                <Car className="w-4 h-4 text-[#18457c]" />
-                <span>Vehicles ({metrics.fleet.vehicles.length})</span>
-              </span>
-              <span className="text-[11px] text-slate-500 block">
-                Manage your vehicles, commute costs, and auto insurance coverage.
-              </span>
-            </div>
+        <div className="p-5 flex flex-col gap-5 text-sm">
+          {/* Hidden file input for auto card/policy upload */}
+          <input
+            ref={autoFileInputRef}
+            type="file"
+            accept="application/pdf,image/png,image/jpeg,image/webp"
+            disabled={isScanningAutoCard}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleProcessAutoInsuranceFile(file);
+              e.target.value = '';
+            }}
+            className="hidden"
+          />
 
-            <button
-              type="button"
-              onClick={() => setShowAddCar(!showAddCar)}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#18457c] hover:bg-[#133763] text-white text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Vehicle</span>
-            </button>
-          </div>
-
-          {/* Add Vehicle Form (Structured with Separate Boxes & Auto-Filling Specs) */}
-          {showAddCar && (
-            <form
-              onSubmit={handleAddVehicle}
-              className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col gap-3.5 text-xs"
-            >
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                  <Car className="w-4 h-4 text-[#18457c]" />
-                  <span>Add Vehicle</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowAddCar(false)}
-                  className="text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+          {/* Scanning Progress Banner */}
+          {isScanningAutoCard && (
+            <div className="p-4 bg-[#E8EEF8] dark:bg-slate-800 border border-[#1B4B91]/20 rounded-xl flex items-center gap-3 text-[#14233B] dark:text-slate-200 text-sm animate-pulse">
+              <Loader2 className="w-5 h-5 animate-spin text-[#1B4B91] shrink-0" />
+              <div>
+                <span className="font-semibold block">Reading your auto insurance document...</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 block">{autoScanProgress || 'Extracting vehicle, carrier, policy number, driver name, coverage, and deductibles…'}</span>
               </div>
+            </div>
+          )}
 
-              {/* Row 1: Separate Boxes for Year, Make, Model & Trim */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {/* Box 1: Year */}
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                    Model Year
-                  </label>
-                  <select
-                    value={newCar.year || 2025}
-                    onChange={e => handleYearChange(e.target.value)}
-                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
-                  >
-                    {[
-                      2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017,
-                      2016, 2015, 2014, 2013, 2012, 2011, 2010, 2009, 2008, 2007,
-                      2006, 2005, 2004, 2003, 2002, 2001, 2000, 1999, 1998, 1995
-                    ].map(y => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Box 2: Make */}
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                    Vehicle Make
-                  </label>
-                  <select
-                    value={newCar.make || 'Toyota'}
-                    onChange={e => handleMakeChange(e.target.value)}
-                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
-                  >
-                    {POPULAR_CAR_MAKES.map(mk => (
-                      <option key={mk} value={mk}>{mk}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Box 3: Model & Trim (with auto-suggest popup & free-form trim input) */}
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 relative" ref={carDropdownRef}>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                      Model & Trim
-                    </label>
-                    <span className="text-[9px] text-[#18457c] font-semibold">Select or type</span>
+          {/* STATE 1: EMPTY (No vehicles/cards added yet) */}
+          {autoView === 'empty' && !isScanningAutoCard && (
+            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <h2 className="font-semibold text-base text-slate-900 dark:text-white">Auto insurance & vehicles</h2>
+              </div>
+              <div className="p-6 sm:p-8">
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleProcessAutoInsuranceFile(file);
+                  }}
+                  className="border-1.5 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 sm:p-10 text-center flex flex-col items-center justify-center gap-2"
+                >
+                  <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-slate-800 flex items-center justify-center text-[#18457c] mb-1">
+                    <Car className="w-6 h-6" />
                   </div>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Traverse Premier, Camry SE, Model Y..."
-                      value={carModelSearch || newCar.model || ''}
-                      onChange={e => handleModelTextChange(e.target.value)}
-                      onFocus={() => setCarSearchFocused(true)}
-                      className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
-                    />
+                  <b className="text-base font-semibold text-slate-900 dark:text-white">Add your auto insurance card</b>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md">
+                    Upload a photo of your insurance card or a policy PDF and we’ll fill in the details. You can add cards for all vehicles and drivers in your household.
+                  </p>
+                  <div className="flex items-center gap-2.5 mt-2 flex-wrap justify-center">
                     <button
                       type="button"
-                      onClick={() => setCarSearchFocused(prev => !prev)}
-                      className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer shrink-0"
-                      title="Show all models and trims"
+                      onClick={handleAddNewAutoCard}
+                      className="px-4 py-2.5 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white font-medium text-sm transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
                     >
-                      <ChevronDown className="w-3.5 h-3.5" />
+                      <Upload className="w-4 h-4" />
+                      <span>Upload card or policy</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleManualAddVehicle}
+                      className="px-3.5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-sm transition-colors cursor-pointer"
+                    >
+                      Enter details manually
                     </button>
                   </div>
-
-                  {/* Dropdown Suggestions matching Make & Model */}
-                  {carSearchFocused && filteredCars.length > 0 && (
-                    <div className="absolute left-0 right-0 top-full mt-1.5 max-h-60 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-30 py-1 divide-y divide-slate-100">
-                      <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between bg-slate-50/90 sticky top-0 z-10 border-b border-slate-100">
-                        <span>{newCar.make} Models & Trims ({filteredCars.length})</span>
-                        <span className="text-[9px] text-slate-400 font-normal">Click to select</span>
-                      </div>
-                      {filteredCars.map((car, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => handleSelectCarSuggestion(car)}
-                          className="w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
-                        >
-                          <div>
-                            <span className="font-bold text-slate-900 text-xs">{car.model}</span>
-                            <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-                              {car.type === 'ev' ? (
-                                <span className="text-emerald-700 font-semibold">⚡ {car.mpgOrEfficiency} kWh/100mi • {car.batteryKwh} kWh</span>
-                              ) : (
-                                <span className="text-blue-700 font-semibold">⛽ {car.mpgOrEfficiency} MPG • {car.fuelGrade === 'premium' ? 'Premium 91+' : 'Regular 87'}</span>
-                              )}
-                              <span>•</span>
-                              <span className="uppercase text-[9px] font-bold">{car.type}</span>
-                            </div>
-                          </div>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${
-                            car.type === 'ev'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : car.type === 'hybrid'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-slate-100 text-slate-700'
-                          }`}>
-                            {car.type}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <small className="text-xs text-slate-400 mt-1">PDF, PNG, JPG or WebP</small>
                 </div>
               </div>
+            </section>
+          )}
 
-              {/* Row 2: Ownership, Odometer, Lease Limit / Est. Market Value, Monthly Payment (only if not owned) */}
-              <div className={`grid grid-cols-1 sm:grid-cols-2 ${newCar.ownership === 'owned' ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-2.5`}>
-                {/* Box 4: Ownership / Lease */}
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                    Financing / Status
-                  </label>
-                  <select
-                    value={newCar.ownership || 'lease'}
-                    onChange={e => {
-                      const own = e.target.value;
-                      setNewCar(prev => ({
-                        ...prev,
-                        ownership: own,
-                        threeYearMileLimit: own === 'lease' ? 36000 : null,
-                        monthlyPayment: own === 'owned' ? 0 : (prev.monthlyPayment || (own === 'lease' ? 399 : 450))
-                      }));
-                    }}
-                    className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
-                  >
-                    <option value="lease">Lease</option>
-                    <option value="financed">Financed (Car Loan)</option>
-                    <option value="owned">Owned Outright (Paid Off)</option>
-                  </select>
+          {/* STATE 2: REVIEW / EDIT ("Check what we read") */}
+          {autoView === 'review' && (
+            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-base text-slate-900 dark:text-white">
+                    {editingVehicleId ? 'Edit auto insurance card' : 'Check what we read'}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Compare each field with your card before saving.
+                  </p>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="bg-[#E8EEF8] dark:bg-slate-800/80 text-[#14233B] dark:text-slate-200 rounded-lg px-3.5 py-2.5 text-[13.5px] mb-5">
+                  Automatic reading can make mistakes. Verify your driver name, vehicle specs, and policy numbers below.
                 </div>
 
-                {/* Box 5: Current Odometer (with automatic comma formatting) */}
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                    Current Odometer
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <Gauge className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                {autoScanFeedback?.type === 'error' && (
+                  <div className="bg-red-50 dark:bg-red-900/20 text-[#B3261E] rounded-lg px-3.5 py-2.5 text-[13.5px] mb-5">
+                    {autoScanFeedback.message}
+                  </div>
+                )}
+
+                {(() => {
+                  const front = pendingAutoCards[0]?.dataUrl;
+                  if (!front || String(front).startsWith('data:application/pdf')) return null;
+                  return (
+                    <div className="max-w-[360px] mb-5">
+                      <InsuranceCardFlip
+                        front={front}
+                        back={pendingAutoCards[1]?.dataUrl}
+                        flipped={autoCardFlipped}
+                        onFlip={() => setAutoCardFlipped(!autoCardFlipped)}
+                        onOpen={(url, title) => { setViewingCardPhoto(url); setViewingCardTitle(title); }}
+                      />
+                    </div>
+                  );
+                })()}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {/* Driver Name / Named Insured */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      Primary Driver / Named Insured <span className="text-[#18457c]">*</span>
+                    </label>
                     <input
                       type="text"
-                      placeholder="e.g. 14,200"
-                      value={newCar.odometer || ''}
-                      onChange={e => handleOdometerChange(e.target.value)}
-                      className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
+                      placeholder="e.g. ZIYAD O ELMAHI"
+                      value={autoReviewForm.driverName}
+                      onChange={(e) => setAutoReviewForm({ ...autoReviewForm, driverName: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-medium text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
                     />
-                    <span className="text-[10px] text-slate-400">mi</span>
                   </div>
-                </div>
 
-                {/* Box 6: Conditional — 3-Year Mile Limit ONLY for Lease; Estimated Value for Financed/Owned */}
-                {newCar.ownership === 'lease' ? (
-                  <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80">
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block">
-                        3-Yr Lease Limit
-                      </label>
-                      <span className="text-[9px] text-amber-700 font-bold">
-                        ~{Math.round((Number(newCar.threeYearMileLimit) || 36000) / 36)} mi/mo
-                      </span>
-                    </div>
-                    <select
-                      value={newCar.threeYearMileLimit || 36000}
-                      onChange={e => handleMileLimitChange(e.target.value)}
-                      className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
-                    >
-                      <option value="30000">30,000 miles (10,000 mi/yr)</option>
-                      <option value="36000">36,000 miles (12,000 mi/yr - Standard)</option>
-                      <option value="45000">45,000 miles (15,000 mi/yr - High)</option>
-                      <option value="60000">60,000 miles (20,000 mi/yr)</option>
-                    </select>
-                  </div>
-                ) : (
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                      Est. Market Value
-                    </label>
-                    <div className="flex items-center gap-1">
-                      <span className="font-bold text-slate-400">$</span>
-                      <input
-                        type="text"
-                        placeholder="e.g. 12,500"
-                        value={newCar.estimatedValue || ''}
-                        onChange={e => handleEstimatedValueChange(e.target.value)}
-                        className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Box 7: Monthly Payment (Hidden completely when car is owned) */}
-                {newCar.ownership !== 'owned' && (
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                      {newCar.ownership === 'lease' ? 'Monthly Lease Payment' : 'Monthly Loan Payment'}
-                    </label>
-                    <div className="flex items-center gap-1">
-                      <span className="font-bold text-slate-400">$</span>
-                      <input
-                        type="number"
-                        value={newCar.monthlyPayment}
-                        onChange={e => setNewCar({ ...newCar, monthlyPayment: Number(e.target.value) || 0 })}
-                        placeholder="e.g. 399"
-                        className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
-                      />
-                      <span className="text-[10px] text-slate-400">/mo</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Row 3: Dedicated Insurance Policy & Digital Card for THIS Vehicle */}
-              <div className="p-3.5 rounded-xl bg-slate-50/90 border border-slate-200 flex flex-col gap-2.5">
-                <div className="flex items-center justify-between pb-1 border-b border-slate-200/70">
-                  <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-[#18457c]" />
-                    <span>Insurance Policy & Digital Card</span>
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-medium">Individual coverage for this car</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                   {/* Insurance Carrier */}
-                  <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                      Insurance Carrier
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      Insurance Carrier <span className="text-[#18457c]">*</span>
                     </label>
-                    <select
-                      value={newCar.insuranceProvider || 'State Farm'}
-                      onChange={e => setNewCar({ ...newCar, insuranceProvider: e.target.value })}
-                      className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
-                    >
-                      {AUTO_INSURANCE_PROVIDERS.map(p => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Coverage Tier */}
-                  <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                      Coverage Tier
-                    </label>
-                    <select
-                      value={newCar.insuranceCoverage || 'full_coverage'}
-                      onChange={e => handleInsuranceCoverageChange(e.target.value)}
-                      className="w-full font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
-                    >
-                      <option value="full_coverage">Full Coverage (Comp + Collision)</option>
-                      <option value="liability_only">Liability Only</option>
-                      <option value="full_coverage_gap">Full Coverage + GAP</option>
-                    </select>
+                    <input
+                      type="text"
+                      list="auto-carriers-list"
+                      placeholder="e.g. State Farm, GEICO, Progressive, AAA"
+                      value={autoReviewForm.insuranceProvider}
+                      onChange={(e) => setAutoReviewForm({ ...autoReviewForm, insuranceProvider: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
+                    />
+                    <datalist id="auto-carriers-list">
+                      {AUTO_INSURANCE_PROVIDERS.map(p => <option key={p} value={p} />)}
+                    </datalist>
                   </div>
 
                   {/* Policy Number */}
-                  <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                      Policy Number
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      Policy Number <span className="text-[#18457c]">*</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. 9482103-PA"
-                      value={newCar.insurancePolicyNumber || ''}
-                      onChange={e => setNewCar({ ...newCar, insurancePolicyNumber: e.target.value })}
-                      className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
+                      placeholder="e.g. G-8821943"
+                      value={autoReviewForm.insurancePolicyNumber}
+                      onChange={(e) => setAutoReviewForm({ ...autoReviewForm, insurancePolicyNumber: e.target.value })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
                     />
                   </div>
 
-                  {/* Monthly Insurance Premium */}
-                  <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                      Monthly Premium
-                    </label>
-                    <div className="flex items-center gap-1">
-                      <span className="font-bold text-slate-400">$</span>
+                  {/* Coverage Type */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Coverage Type</label>
+                    <select
+                      value={autoReviewForm.insuranceCoverage}
+                      onChange={(e) => {
+                        const cov = e.target.value;
+                        const specs = detectCarSpecs(autoReviewForm.make, autoReviewForm.model, cov);
+                        setAutoReviewForm({
+                          ...autoReviewForm,
+                          insuranceCoverage: cov,
+                          insuranceMonthly: specs.insuranceMonthly || autoReviewForm.insuranceMonthly
+                        });
+                      }}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
+                    >
+                      {AUTO_INSURANCE_TYPES.map(t => (
+                        <option key={t.id} value={t.id}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Monthly Premium */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Monthly Insurance Premium</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-slate-400 font-bold">$</span>
                       <input
                         type="number"
-                        value={newCar.insuranceMonthly}
-                        onChange={e => setNewCar({ ...newCar, insuranceMonthly: Number(e.target.value) || 0 })}
-                        className="w-full font-bold text-slate-900 bg-transparent focus:outline-none"
+                        placeholder="120"
+                        value={autoReviewForm.insuranceMonthly || ''}
+                        onChange={(e) => setAutoReviewForm({ ...autoReviewForm, insuranceMonthly: Number(e.target.value) || 0 })}
+                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg pl-7 pr-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
                       />
-                      <span className="text-[10px] text-slate-400">/mo</span>
                     </div>
                   </div>
-                </div>
 
-                {/* Insurance Card Photo Upload Box */}
-                <div className="p-2.5 rounded-xl bg-white border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">
-                      Insurance Card Photo
-                    </span>
-                    <span className="text-[10px] text-slate-400">
-                      Snap or upload this car's insurance card photo for proof & quick reference
-                    </span>
-                  </div>
-
-                  {newCar.insuranceCardPhoto ? (
-                    <div className="flex items-center gap-2">
-                      <img
-                        src={newCar.insuranceCardPhoto}
-                        alt="Insurance Card"
-                        onClick={() => setViewingCardPhoto(newCar.insuranceCardPhoto)}
-                        className="h-9 w-14 object-cover rounded-md border border-slate-300 shadow-2xs cursor-pointer hover:opacity-90"
-                        title="Click to view full size"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setViewingCardPhoto(newCar.insuranceCardPhoto)}
-                        className="text-xs text-[#18457c] hover:underline font-bold cursor-pointer"
-                      >
-                        View Photo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setNewCar(prev => ({ ...prev, insuranceCardPhoto: null }))}
-                        className="text-xs text-rose-600 hover:text-rose-700 font-semibold cursor-pointer ml-1"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold cursor-pointer shrink-0 transition-colors">
-                      <Upload className="w-3.5 h-3.5 text-[#18457c]" />
-                      <span>Upload Card Photo</span>
+                  {/* Deductible */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Comprehensive & Collision Deductible</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-slate-400 font-bold">$</span>
                       <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleNewCarCardPhotoUpload}
+                        type="number"
+                        placeholder="500"
+                        value={autoReviewForm.insuranceDeductible || ''}
+                        onChange={(e) => setAutoReviewForm({ ...autoReviewForm, insuranceDeductible: Number(e.target.value) || 0 })}
+                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg pl-7 pr-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
                       />
-                    </label>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowAddCar(false)}
-                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer shadow-2xs"
-                >
-                  Add Vehicle
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Vehicles Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {metrics.fleet.vehicles.map(v => (
-              <div key={v.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-3 text-xs">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-slate-900 text-sm">
-                      {v.name}
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-bold uppercase text-slate-700">
-                      {v.type}
-                    </span>
-                    {v.ownership && (
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        v.ownership === 'lease'
-                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                          : v.ownership === 'financed'
-                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                            : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                      }`}>
-                        {v.ownership === 'lease' ? 'Lease' : v.ownership === 'financed' ? 'Financed' : 'Owned'}
-                      </span>
-                    )}
-                    <span className="text-[10px] text-slate-400">
-                      {v.type === 'ev' ? `${v.mpgOrEfficiency} kWh/100mi` : `${v.mpgOrEfficiency} MPG (${v.fuelGrade === 'premium' ? 'Premium 91+' : v.fuelGrade === 'diesel' ? 'Diesel' : 'Regular 87'})`}
-                    </span>
+                    </div>
                   </div>
+
+                  {/* Vehicle Year & Make */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Model Year & Make</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={autoReviewForm.year}
+                        onChange={(e) => {
+                          const yr = Number(e.target.value) || 2025;
+                          setAutoReviewForm(prev => ({
+                            ...prev,
+                            year: yr,
+                            name: `${yr} ${prev.make} ${prev.model}`.replace(/\s+/g, ' ').trim()
+                          }));
+                        }}
+                        className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-2 text-sm font-bold text-slate-900 dark:text-white"
+                      >
+                        {[2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010, 2005, 2000].map(y => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="e.g. Toyota"
+                        value={autoReviewForm.make}
+                        onChange={(e) => handleAutoFormMakeChange(e.target.value)}
+                        className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-bold text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Model */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Model & Trim</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Camry Hybrid, Model Y, RAV4 Prime..."
+                      value={autoReviewForm.model}
+                      onChange={(e) => handleAutoFormModelChange(e.target.value)}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-bold text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
+                    />
+                  </div>
+
+                  {/* Ownership & Powertrain */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Ownership & Powertrain</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={autoReviewForm.ownership}
+                        onChange={(e) => setAutoReviewForm({ ...autoReviewForm, ownership: e.target.value })}
+                        className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-2 text-sm text-slate-900 dark:text-white"
+                      >
+                        <option value="owned">Paid Off (Owned)</option>
+                        <option value="financed">Financed (Loan)</option>
+                        <option value="lease">Leased</option>
+                      </select>
+                      <select
+                        value={autoReviewForm.type}
+                        onChange={(e) => setAutoReviewForm({ ...autoReviewForm, type: e.target.value })}
+                        className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-2 text-sm text-slate-900 dark:text-white"
+                      >
+                        <option value="gas">Gasoline (ICE)</option>
+                        <option value="hybrid">Hybrid</option>
+                        <option value="phev">Plug-In Hybrid (PHEV)</option>
+                        <option value="ev">Electric Vehicle (EV)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* VIN */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Vehicle Identification Number (VIN)</label>
+                    <input
+                      type="text"
+                      placeholder="17-character VIN"
+                      value={autoReviewForm.vin}
+                      onChange={(e) => setAutoReviewForm({ ...autoReviewForm, vin: e.target.value.toUpperCase() })}
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
+                    />
+                  </div>
+                </div>
+
+                <label className="flex items-start gap-3 my-5 p-3.5 border border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                  <input
+                    type="checkbox"
+                    checked={keepAutoCardImage}
+                    onChange={(e) => setKeepAutoCardImage(e.target.checked)}
+                    className="mt-1 w-4.5 h-4.5 rounded accent-[#18457c]"
+                  />
+                  <div>
+                    <span className="font-medium text-sm text-slate-900 dark:text-white block">Keep a copy of the card image</span>
+                    <small className="block text-slate-500 dark:text-slate-400 text-[13px] mt-0.5">
+                      Stored encrypted so you can pull up proof of insurance in an emergency. If you turn this off, the image is discarded after reading.
+                    </small>
+                  </div>
+                </label>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={() => handleRemoveVehicle(v.id)}
-                    className="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5"
+                    onClick={handleCancelAutoReview}
+                    className="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium text-sm transition-colors cursor-pointer"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveAutoReview}
+                    className="px-5 py-2.5 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white font-medium text-sm transition-colors cursor-pointer shadow-xs"
+                  >
+                    {editingVehicleId ? 'Update vehicle' : 'Save vehicle'}
                   </button>
                 </div>
-
-                {/* Odometer, Lease Limit (for lease only) & Market Value Line */}
-                {(v.odometer || (v.ownership === 'lease' && v.threeYearMileLimit) || v.estimatedValue) && (
-                  <div className="flex items-center gap-2 text-[11px] text-slate-600 bg-white/70 px-2.5 py-1 rounded-lg border border-slate-200/60 flex-wrap">
-                    {v.odometer ? (
-                      <span>Odometer: <strong className="text-slate-900">{Number(v.odometer).toLocaleString('en-US')} mi</strong></span>
-                    ) : null}
-                    {v.odometer && v.ownership === 'lease' && v.threeYearMileLimit ? <span>•</span> : null}
-                    {v.ownership === 'lease' && v.threeYearMileLimit ? (
-                      <span>3-Yr Lease Limit: <strong className="text-slate-900">{Number(v.threeYearMileLimit).toLocaleString('en-US')} mi</strong> (~{Math.round(Number(v.threeYearMileLimit) / 36)} mi/mo)</span>
-                    ) : null}
-                    {(v.ownership === 'owned' || v.ownership === 'financed') && v.estimatedValue ? (
-                      <>
-                        {v.odometer ? <span>•</span> : null}
-                        <span>Est. Market Value: <strong className="text-slate-900">${Number(v.estimatedValue).toLocaleString('en-US')}</strong></span>
-                      </>
-                    ) : null}
-                  </div>
-                )}
-
-                {/* Individual Vehicle Insurance & Card Photo Bar */}
-                <div className="p-2.5 rounded-lg bg-white border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <ShieldCheck className="w-4 h-4 text-[#18457c] shrink-0" />
-                    <span className="font-bold text-slate-900 text-xs">
-                      {v.insuranceProvider || 'Insurance'}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                      v.insuranceCoverage === 'liability_only'
-                        ? 'bg-slate-100 text-slate-700 border border-slate-300'
-                        : v.insuranceCoverage === 'full_coverage_gap'
-                          ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                          : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    }`}>
-                      {v.insuranceCoverage === 'liability_only' ? 'Liability Only' : v.insuranceCoverage === 'full_coverage_gap' ? 'Full Coverage + GAP' : 'Full Coverage'}
-                    </span>
-                    {v.insurancePolicyNumber && (
-                      <span className="text-[10px] text-slate-500 font-medium">
-                        Pol: {v.insurancePolicyNumber}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Digital Insurance Card Photo */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    {v.insuranceCardPhoto ? (
-                      <div className="flex items-center gap-1.5">
-                        <img
-                          src={v.insuranceCardPhoto}
-                          alt="Insurance Card"
-                          onClick={() => setViewingCardPhoto(v.insuranceCardPhoto)}
-                          className="h-7 w-11 object-cover rounded border border-slate-300 shadow-2xs cursor-pointer hover:opacity-90"
-                          title="Click to view card full size"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setViewingCardPhoto(v.insuranceCardPhoto)}
-                          className="text-[11px] text-[#18457c] hover:underline font-bold cursor-pointer"
-                        >
-                          View Card
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateVehicle(v.id, { insuranceCardPhoto: null })}
-                          className="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5 ml-0.5"
-                          title="Remove card photo"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-semibold cursor-pointer transition-colors">
-                        <Upload className="w-3 h-3 text-[#18457c]" />
-                        <span>Upload Card</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => handleUploadVehicleCardPhoto(v.id, e)}
-                        />
-                      </label>
-                    )}
-                  </div>
-                </div>
-
-                {/* Costs Breakdown Grid */}
-                <div className={`grid ${v.ownership !== 'owned' && Number(v.monthlyPayment) > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 bg-white p-2.5 rounded-lg border border-slate-200/70`}>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">{v.type === 'ev' ? 'Charging' : 'Fuel'}</span>
-                    <span className="font-bold text-slate-900">${v.monthlyFuelOrChargeCost}/mo</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">Insurance</span>
-                    <span className="font-bold text-slate-900">${v.insuranceMonthly}/mo</span>
-                  </div>
-                  {v.ownership !== 'owned' && Number(v.monthlyPayment) > 0 && (
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">{v.ownership === 'lease' ? 'Lease' : 'Payment'}</span>
-                      <span className="font-bold text-slate-900">${v.monthlyPayment}/mo</span>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">Total</span>
-                    <span className="font-bold text-[#18457c]">${v.totalMonthlyVehicleCost}/mo</span>
-                  </div>
-                </div>
-
-                {/* ONLY FOR ELECTRIC VEHICLES: Free EV Chargers Near Me button */}
-                {v.type === 'ev' && (
-                  <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedEvForChargers(v)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors cursor-pointer shadow-2xs"
-                    >
-                      <Zap className="w-3.5 h-3.5" />
-                      <span>Free EV Chargers Near Me</span>
-                    </button>
-                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-800">
-                      <span>Free Charging: <strong>{v.freeChargingSharePercent || 0}%</strong></span>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="5"
-                        value={v.freeChargingSharePercent || 0}
-                        onChange={e => handleUpdateVehicle(v.id, { freeChargingSharePercent: Number(e.target.value) })}
-                        className="w-24 accent-emerald-600 cursor-pointer"
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
-            ))}
-          </div>
+            </section>
+          )}
 
-          {/* Free EV Chargers Modal (Triggered exclusively from EV car cards) */}
+          {/* STATE 3: SAVED (Collapsible Multi-Vehicle Insurance List) */}
+          {autoView === 'saved' && (
+            <div className="flex flex-col gap-4">
+              {/* Header Bar with Count and Add Card button */}
+              <div className="flex items-center justify-between flex-wrap gap-3 px-1">
+                <div>
+                  <h2 className="font-semibold text-lg text-slate-900 dark:text-white">Vehicles & Auto insurance</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {metrics.fleet.vehicles.length === 1 ? '1 active vehicle & insurance card' : `${metrics.fleet.vehicles.length} active vehicles & insurance cards`} · Click any card to expand or minimize
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddNewAutoCard}
+                    className="px-3.5 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white font-medium text-xs sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Upload insurance card</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleManualAddVehicle}
+                    className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-xs sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Add manually</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Vehicles Cards List */}
+              {metrics.fleet.vehicles.map((v, vIdx) => {
+                const isExpanded = isVehicleExpanded(v.id, vIdx);
+                const isCopied = copiedVehiclePolicyId === v.id;
+                const isPolicyRevealed = revealedPolicyIds[v.id];
+                const isCardFlipped = flippedAutoCards[v.id];
+
+                return (
+                  <section
+                    key={v.id || vIdx}
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden transition-all"
+                  >
+                    {/* MINIMIZED HEADER: Vehicle Name, Powertrain, Ownership, Carrier, Cost & Arrow */}
+                    <div
+                      onClick={() => toggleVehicleExpanded(v.id, vIdx)}
+                      className="w-full px-5 py-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition-colors select-none"
+                    >
+                      {/* Left side: Vehicle specs & Insurance summary */}
+                      <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap min-w-0">
+                        {/* 1. Vehicle Name */}
+                        <span className="font-semibold text-slate-900 dark:text-white text-base tracking-tight truncate max-w-[240px] sm:max-w-none">
+                          {v.name || 'Vehicle'}
+                        </span>
+
+                        {/* 2. Powertrain Badge */}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                          v.type === 'ev'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : v.type === 'hybrid' || v.type === 'phev'
+                              ? 'bg-blue-50 text-blue-800 border-blue-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}>
+                          {v.type}
+                        </span>
+
+                        {/* 3. Ownership Badge */}
+                        {v.ownership && (
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                            v.ownership === 'lease'
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : v.ownership === 'financed'
+                                ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                                : 'bg-slate-50 text-slate-700 border-slate-200'
+                          }`}>
+                            {v.ownership === 'lease' ? 'Lease' : v.ownership === 'financed' ? 'Financed' : 'Owned'}
+                          </span>
+                        )}
+
+                        {/* 4. Insurance Carrier Badge */}
+                        {v.insuranceProvider && (
+                          <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/70">
+                            <ShieldCheck className="w-3.5 h-3.5 text-[#18457c]" />
+                            <span>{v.insuranceProvider}</span>
+                          </span>
+                        )}
+
+                        {/* 5. Policy Number or Premium */}
+                        {v.insurancePolicyNumber && (
+                          <span className="hidden lg:inline-flex items-center font-mono text-[11px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                            Pol: {v.insurancePolicyNumber}
+                          </span>
+                        )}
+
+                        {/* 6. Total Monthly Cost */}
+                        <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                          ${v.totalMonthlyVehicleCost || 0} /mo
+                        </span>
+                      </div>
+
+                      {/* Right side: Arrow toggle button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleVehicleExpanded(v.id, vIdx);
+                        }}
+                        aria-label={isExpanded ? 'Minimize vehicle details' : 'Expand vehicle details'}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* EXPANDED DETAILS */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-200 dark:border-slate-800 p-5 sm:p-6 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col gap-5">
+                        {/* Action buttons on top-right */}
+                        <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200/80 dark:border-slate-800">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                              <ShieldCheck className="w-4 h-4 text-[#18457c]" />
+                              <span>{v.insuranceProvider || 'Auto Insurance Policy'}</span>
+                            </span>
+                            <span className="text-xs text-slate-400">·</span>
+                            <span className="text-xs text-slate-500 capitalize">
+                              {(v.insuranceCoverage || 'full_coverage').replace(/_/g, ' ')}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {v.insurancePolicyNumber && (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyVehiclePolicy(v)}
+                                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                              >
+                                {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                <span>{isCopied ? 'Copied' : 'Copy policy'}</span>
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleEditVehicle(v)}
+                              className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              <span>Edit</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveVehicle(v.id)}
+                              className="px-2.5 py-1 rounded-lg border border-rose-200 bg-white dark:bg-slate-800 text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Main Grid: Card Viewer on Left + Specifications on Right */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                          {/* Left Column: Interactive Digital or Scanned Card Preview */}
+                          <div className="lg:col-span-5 flex flex-col items-center">
+                            {(() => {
+                              const vCards = (v.cards && v.cards.length > 0)
+                                ? v.cards
+                                : (v.insuranceCardPhoto ? [{ id: 'ic-0', name: 'Front', side: 'front', dataUrl: v.insuranceCardPhoto }] : []);
+                              const front = vCards[0]?.dataUrl;
+                              const isPdf = String(front).startsWith('data:application/pdf');
+
+                              if (front && !isPdf) {
+                                return (
+                                  <div className="max-w-[360px] w-full">
+                                    <InsuranceCardFlip
+                                      front={front}
+                                      back={vCards[1]?.dataUrl}
+                                      flipped={Boolean(flippedAutoCards[v.id])}
+                                      onFlip={() => setFlippedAutoCards(prev => ({ ...prev, [v.id]: !prev[v.id] }))}
+                                      onOpen={(url, title) => { setViewingCardPhoto(url); setViewingCardTitle(title); }}
+                                    />
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div className="bg-gradient-to-br from-[#18457c] to-[#0f2d52] text-white rounded-2xl p-5 flex flex-col justify-between aspect-[1.6/1] shadow-md min-h-[190px] max-w-[360px] w-full">
+                                  <div className="flex items-center justify-between text-[13px] opacity-90">
+                                    <span className="font-bold flex items-center gap-1.5">
+                                      <ShieldCheck className="w-4 h-4 text-emerald-300" />
+                                      <span>{v.insuranceProvider || 'Auto Insurance'}</span>
+                                    </span>
+                                    <span className="text-[10px] tracking-wider uppercase font-mono px-2 py-0.5 rounded bg-white/15">
+                                      AUTO PROOF
+                                    </span>
+                                  </div>
+
+                                  <div className="my-2">
+                                    <span className="text-[10px] uppercase tracking-wider opacity-75 block">Named Insured</span>
+                                    <span className="font-bold text-base tracking-wide block truncate">
+                                      {v.driverName || 'Primary Driver'}
+                                    </span>
+                                    <span className="text-xs text-white/90 block mt-0.5 font-medium truncate">
+                                      {v.name}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-end justify-between pt-2 border-t border-white/15">
+                                    <div>
+                                      <span className="text-[9px] uppercase tracking-wider opacity-75 block">Policy Number</span>
+                                      <span className="font-mono text-xs font-bold tracking-wider">{v.insurancePolicyNumber || 'Not specified'}</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingVehicleId(v.id);
+                                        handleAddNewAutoCard();
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1"
+                                    >
+                                      <Upload className="w-3 h-3" />
+                                      <span>Upload photo</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Right Column: Key Details & Costs Breakdown */}
+                          <div className="lg:col-span-7 flex flex-col gap-3.5">
+                            {/* Policy & Coverage Tiles */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Policy Number</span>
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="font-mono font-bold text-slate-900 dark:text-white truncate">
+                                    {v.insurancePolicyNumber ? (isPolicyRevealed ? v.insurancePolicyNumber : `••• ••• ${v.insurancePolicyNumber.slice(-4)}`) : 'None'}
+                                  </span>
+                                  {v.insurancePolicyNumber && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setRevealedPolicyIds(p => ({ ...p, [v.id]: !p[v.id] }))}
+                                      className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                                    >
+                                      {isPolicyRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Coverage Type</span>
+                                <span className="font-bold text-slate-900 dark:text-white capitalize block truncate">
+                                  {(v.insuranceCoverage || 'full_coverage').replace(/_/g, ' ')}
+                                </span>
+                              </div>
+
+                              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Insurance Premium</span>
+                                <span className="font-bold text-emerald-700 dark:text-emerald-400 text-sm block">
+                                  ${v.insuranceMonthly || 0} <span className="text-[10px] font-normal text-slate-400">/mo</span>
+                                </span>
+                              </div>
+
+                              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Deductible</span>
+                                <span className="font-bold text-slate-900 dark:text-white block">
+                                  ${v.insuranceDeductible || 500}
+                                </span>
+                              </div>
+
+                              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Odometer</span>
+                                <span className="font-bold text-slate-900 dark:text-white block">
+                                  {v.odometer ? `${Number(v.odometer).toLocaleString()} mi` : 'Not set'}
+                                </span>
+                              </div>
+
+                              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Monthly Miles</span>
+                                <span className="font-bold text-slate-900 dark:text-white block">
+                                  {Number(v.monthlyMiles || 1000).toLocaleString()} mi/mo
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Monthly Cost Breakdown Bar */}
+                            <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-col gap-2">
+                              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                                Monthly Vehicle Cost Breakdown
+                              </span>
+                              <div className={`grid ${v.ownership !== 'owned' && Number(v.monthlyPayment) > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 text-xs pt-1`}>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block">{v.type === 'ev' ? 'Charging' : 'Fuel'}</span>
+                                  <span className="font-bold text-slate-900 dark:text-white">${v.monthlyFuelOrChargeCost || 0}/mo</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block">Insurance</span>
+                                  <span className="font-bold text-slate-900 dark:text-white">${v.insuranceMonthly || 0}/mo</span>
+                                </div>
+                                {v.ownership !== 'owned' && Number(v.monthlyPayment) > 0 && (
+                                  <div>
+                                    <span className="text-[10px] text-slate-400 block">{v.ownership === 'lease' ? 'Lease' : 'Payment'}</span>
+                                    <span className="font-bold text-slate-900 dark:text-white">${v.monthlyPayment || 0}/mo</span>
+                                  </div>
+                                )}
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block">Total</span>
+                                  <span className="font-bold text-[#18457c] text-sm">${v.totalMonthlyVehicleCost || 0}/mo</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Free EV Chargers Near Me button for Electric Vehicles */}
+                            {v.type === 'ev' && (
+                              <div className="pt-2 flex items-center justify-between gap-2 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedEvForChargers(v)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors cursor-pointer shadow-2xs"
+                                >
+                                  <Zap className="w-3.5 h-3.5" />
+                                  <span>Free EV Chargers Near Me</span>
+                                </button>
+                                <div className="flex items-center gap-1.5 text-[11px] text-emerald-800 dark:text-emerald-300">
+                                  <span>Free Charging: <strong>{v.freeChargingSharePercent || 0}%</strong></span>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    step="5"
+                                    value={v.freeChargingSharePercent || 0}
+                                    onChange={e => handleUpdateVehicle(v.id, { freeChargingSharePercent: Number(e.target.value) })}
+                                    className="w-24 accent-emerald-600 cursor-pointer"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Free EV Chargers Modal */}
           {selectedEvForChargers && (
             <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl p-5 flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
@@ -3603,8 +4012,7 @@ export default function HouseholdLifestyleHub({
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* SECTION 3: HEALTH (Redesigned with card mockup & 3-state flow)     */}
+
       {/* ================================================================= */}
       {section === 'health' && (
         <div className="p-5 flex flex-col gap-5 text-sm">
