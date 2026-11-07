@@ -16,7 +16,8 @@ import {
   FileSpreadsheet,
   Lock,
   AlertCircle,
-  ArrowLeft
+  ArrowLeft,
+  ChevronDown
 } from 'lucide-react';
 import {
   copySensitiveWithAutoClear,
@@ -105,9 +106,9 @@ export default function PasswordVaultPage({
   const [customSections, setCustomSections] = useState(() => {
     try {
       const saved = localStorage.getItem('klarity_vault_sections');
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
     return ['General', 'Utilities', 'Finance', 'Personal'];
@@ -116,6 +117,11 @@ export default function PasswordVaultPage({
   const [newSectionInput, setNewSectionInput] = useState('');
   const [isCreatingNewSection, setIsCreatingNewSection] = useState(false);
   const [showFormPassword, setShowFormPassword] = useState(false);
+  const [expandedCardIds, setExpandedCardIds] = useState({});
+
+  const toggleCardExpand = (id) => {
+    setExpandedCardIds(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // Compute all available sections from user-created custom sections and active cards
   const allSections = useMemo(() => {
@@ -126,7 +132,6 @@ export default function PasswordVaultPage({
     (vaultItems || []).forEach(item => {
       if (item.category && String(item.category).trim()) set.add(String(item.category).trim());
     });
-    if (set.size === 0) set.add('General');
     return Array.from(set);
   }, [customSections, vaultItems]);
 
@@ -337,6 +342,14 @@ export default function PasswordVaultPage({
     try {
       localStorage.setItem('klarity_vault_sections', JSON.stringify(nextSections));
     } catch {}
+    // If any items were tagged with this section, reset their category so the section won't reappear
+    if ((vaultItems || []).some(item => (item.category || '').toLowerCase() === secName.toLowerCase())) {
+      onUpdateVaultItems(
+        (vaultItems || []).map(item =>
+          (item.category || '').toLowerCase() === secName.toLowerCase() ? { ...item, category: '' } : item
+        )
+      );
+    }
     if (selectedCategory.toLowerCase() === secName.toLowerCase()) {
       setSelectedCategory('All');
     }
@@ -720,26 +733,6 @@ export default function PasswordVaultPage({
               <span>Lock Vault</span>
             </button>
           )}
-          <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs cursor-pointer transition-colors">
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Upload Excel / CSV</span>
-            <input
-              type="file"
-              accept=".xlsx,.xls,.csv,.tsv"
-              onChange={handleExcelUpload}
-              className="hidden"
-            />
-          </label>
-
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export Excel</span>
-          </button>
-
           <button
             type="button"
             onClick={() => {
@@ -926,33 +919,34 @@ export default function PasswordVaultPage({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block font-bold text-slate-700">Section</label>
-                <button
-                  type="button"
-                  onClick={() => setIsCreatingNewSection(!isCreatingNewSection)}
-                  className="text-[11px] text-[#18457c] hover:underline font-bold cursor-pointer"
-                >
-                  {isCreatingNewSection ? 'Pick existing' : '+ New section'}
-                </button>
+                {allSections.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingNewSection(!isCreatingNewSection)}
+                    className="text-[11px] text-[#18457c] hover:underline font-bold cursor-pointer"
+                  >
+                    {isCreatingNewSection ? 'Pick existing' : '+ New section'}
+                  </button>
+                )}
               </div>
-              {isCreatingNewSection ? (
+              {isCreatingNewSection || allSections.length === 0 ? (
                 <input
                   type="text"
-                  placeholder="Type section name (e.g. Personal, Work)..."
-                  value={newSectionInput}
+                  placeholder="Type section name (e.g. Personal, Work, Utilities)..."
+                  value={formState.category || ''}
                   onChange={e => {
-                    setNewSectionInput(e.target.value);
                     setFormState({ ...formState, category: e.target.value });
                   }}
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-[#18457c] focus:outline-none focus:bg-white text-xs font-semibold text-slate-900"
-                  autoFocus
+                  autoFocus={isCreatingNewSection || allSections.length === 0}
                 />
               ) : (
                 <select
-                  value={formState.category || allSections[0] || 'General'}
+                  value={formState.category || allSections[0] || ''}
                   onChange={e => {
                     if (e.target.value === '__new__') {
                       setIsCreatingNewSection(true);
-                      setNewSectionInput('');
+                      setFormState({ ...formState, category: '' });
                     } else {
                       setFormState({ ...formState, category: e.target.value });
                     }
@@ -1058,148 +1052,188 @@ export default function PasswordVaultPage({
       {/* Accounts & Passwords List */}
       {filteredItems.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-xs text-slate-500">
-          No saved accounts in this section yet. Click <strong>Add Account</strong> or <strong>Upload Excel / CSV</strong>.
+          No saved accounts in this section yet. Click <strong>Add Account</strong> to get started.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {filteredItems.map(item => {
+            const isExpanded = Boolean(expandedCardIds[item.id]);
             const isPwVisible = Boolean(visiblePasswords[item.id]);
+
             return (
               <div
                 key={item.id}
-                className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-4 flex flex-col justify-between gap-3 text-xs"
+                className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden ${
+                  isExpanded
+                    ? 'border-[#18457c]/40 shadow-sm ring-1 ring-[#18457c]/10'
+                    : 'border-slate-200/90 shadow-2xs hover:border-slate-300 hover:shadow-xs'
+                }`}
               >
-                <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 text-sm">{item.service}</span>
-                      <span className="px-2 py-0.5 rounded-md bg-blue-50 text-[#18457c] border border-blue-200/70 font-bold text-[10px]">
-                        {item.category || 'General'}
-                      </span>
+                {/* Collapsible Card Header - Always shows the Name; Click to expand/collapse */}
+                <button
+                  type="button"
+                  onClick={() => toggleCardExpand(item.id)}
+                  className="w-full text-left p-3.5 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                      isExpanded ? 'bg-[#18457c] text-white shadow-2xs' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      <KeyRound className="w-4 h-4" />
                     </div>
-                    {item.notes && (
-                      <p className="text-[11px] text-slate-400 mt-0.5">{item.notes}</p>
-                    )}
-                    {item.website && (
-                      <a
-                        href={item.website.startsWith('http') ? item.website : `https://${item.website}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] text-[#18457c] hover:underline font-semibold mt-1"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        <span className="truncate max-w-[200px]">{item.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</span>
-                      </a>
-                    )}
+                    <div className="min-w-0">
+                      <span className="font-bold text-slate-900 text-sm truncate block">{item.service}</span>
+                      {item.category && (
+                        <span className="text-[10px] font-semibold text-slate-400 block truncate">
+                          {item.category}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    {item.website && (
-                      <a
-                        href={item.website.startsWith('http') ? item.website : `https://${item.website}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-1 text-slate-400 hover:text-[#18457c] rounded"
-                        title="Open website"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleStartEdit(item)}
-                      className="p-1 text-slate-400 hover:text-slate-700 rounded cursor-pointer"
-                      title="Edit"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(item.id)}
-                      className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  {/* Username */}
-                  <div className="flex items-center justify-between bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200/60">
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[10px] text-slate-400 block">Username</span>
-                      <span className="font-mono font-semibold text-slate-800 truncate block">
-                        {item.username || '—'}
-                      </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className={`p-1 rounded-lg text-slate-400 transition-transform duration-200 ${
+                      isExpanded ? 'rotate-180 text-[#18457c] bg-blue-50' : ''
+                    }`}>
+                      <ChevronDown className="w-4 h-4" />
                     </div>
-                    {item.username && (
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(item.username, `${item.id}-user`, false)}
-                        className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                        title="Copy username"
-                      >
-                        {copiedKey === `${item.id}-user` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    )}
                   </div>
+                </button>
 
-                  {/* Password */}
-                  <div className="flex items-center justify-between bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200/60">
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[10px] text-slate-400 block">Password</span>
-                      <span className="font-mono font-semibold text-slate-800 truncate block">
-                        {item.password ? (isPwVisible ? item.password : '••••••••••') : '—'}
-                      </span>
-                    </div>
-                    {item.password && (
-                      <div className="flex items-center gap-1">
+                {/* Expanded Details Body */}
+                {isExpanded && (
+                  <div className="px-4 pb-4 pt-1 border-t border-slate-100 flex flex-col gap-3 text-xs bg-slate-50/30">
+                    {/* Website, Notes & Action Buttons */}
+                    <div className="flex items-start justify-between gap-2 pt-2">
+                      <div className="space-y-1 min-w-0">
+                        {item.website && (
+                          <div>
+                            <a
+                              href={item.website.startsWith('http') ? item.website : `https://${item.website}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs text-[#18457c] hover:underline font-semibold"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span className="truncate max-w-[200px]">
+                                {item.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+                              </span>
+                            </a>
+                          </div>
+                        )}
+                        {item.notes && (
+                          <p className="text-[11px] text-slate-500">{item.notes}</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                         <button
                           type="button"
-                          onClick={() => togglePasswordVisibility(item.id)}
-                          className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                          title={isPwVisible ? 'Hide password' : 'Show password'}
+                          onClick={() => handleStartEdit(item)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer transition-colors"
+                          title="Edit"
                         >
-                          {isPwVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          <Edit3 className="w-3 h-3" />
+                          <span>Edit</span>
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleCopy(item.password, `${item.id}-pw`, true)}
-                          className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                          title="Copy password (auto-clears in 30s)"
+                          onClick={() => handleDelete(item.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"
+                          title="Delete"
                         >
-                          {copiedKey === `${item.id}-pw` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Account Number */}
-                  <div className="flex items-center justify-between bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200/60">
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[10px] text-slate-400 block">Account #</span>
-                      <span className="font-mono font-semibold text-slate-800 truncate block">
-                        {item.accountNumber || '—'}
-                      </span>
                     </div>
-                    {item.accountNumber && (
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(item.accountNumber, `${item.id}-acct`, true)}
-                        className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                        title="Copy account number (auto-clears in 30s)"
-                      >
-                        {copiedKey === `${item.id}-acct` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    )}
+
+                    {/* Credentials Details Grid */}
+                    <div className="space-y-2">
+                      {/* Username */}
+                      <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] text-slate-400 block font-medium">Username / Login</span>
+                          <span className="font-mono font-semibold text-slate-800 truncate block">
+                            {item.username || '—'}
+                          </span>
+                        </div>
+                        {item.username && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopy(item.username, `${item.id}-user`, false);
+                            }}
+                            className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                            title="Copy username"
+                          >
+                            {copiedKey === `${item.id}-user` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Password */}
+                      <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] text-slate-400 block font-medium">Password</span>
+                          <span className="font-mono font-semibold text-slate-800 truncate block">
+                            {item.password ? (isPwVisible ? item.password : '••••••••••') : '—'}
+                          </span>
+                        </div>
+                        {item.password && (
+                          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => togglePasswordVisibility(item.id)}
+                              className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                              title={isPwVisible ? 'Hide password' : 'Show password'}
+                            >
+                              {isPwVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(item.password, `${item.id}-pw`, true)}
+                              className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                              title="Copy password (auto-clears in 30s)"
+                            >
+                              {copiedKey === `${item.id}-pw` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Account Number */}
+                      <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] text-slate-400 block font-medium">Account # / Member ID</span>
+                          <span className="font-mono font-semibold text-slate-800 truncate block">
+                            {item.accountNumber || '—'}
+                          </span>
+                        </div>
+                        {item.accountNumber && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopy(item.accountNumber, `${item.id}-acct`, true);
+                            }}
+                            className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                            title="Copy account number (auto-clears in 30s)"
+                          >
+                            {copiedKey === `${item.id}-acct` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             );
           })}
         </div>
       )}
+
     </div>
   );
 }
