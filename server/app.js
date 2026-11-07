@@ -3964,6 +3964,59 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
   }
 });
 
+// App Update & What's New APIs
+app.get('/api/app/whats-new', (req, res) => {
+  try {
+    const userDataDir = process.env.KLARITY_USER_DATA_DIR || path.join(__dirname, '..');
+    const file = path.join(userDataDir, 'whats_new.json');
+    if (fs.existsSync(file)) {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (data && data.shown === false) {
+        return res.json({ ok: true, whatsNew: data });
+      }
+    }
+  } catch {}
+  return res.json({ ok: true, whatsNew: null });
+});
+
+app.post('/api/app/dismiss-whats-new', (req, res) => {
+  try {
+    const userDataDir = process.env.KLARITY_USER_DATA_DIR || path.join(__dirname, '..');
+    const file = path.join(userDataDir, 'whats_new.json');
+    if (fs.existsSync(file)) {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      data.shown = true;
+      fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
+    }
+  } catch {}
+  return res.json({ ok: true });
+});
+
+app.get('/api/app/update-check', async (req, res) => {
+  try {
+    const ghRes = await fetch('https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5', {
+      headers: { 'User-Agent': 'KlarityApp' }
+    });
+    if (ghRes.ok) {
+      const commits = await ghRes.json();
+      if (Array.isArray(commits) && commits.length > 0) {
+        const latest = commits[0];
+        return res.json({
+          ok: true,
+          sha: latest.sha?.slice(0, 7),
+          fullSha: latest.sha,
+          message: latest.commit?.message?.split('\n')[0] || '',
+          date: latest.commit?.author?.date || '',
+          recentChanges: commits.map(c => c.commit?.message?.split('\n')[0]).filter(Boolean)
+        });
+      }
+    }
+    return res.json({ ok: false, error: 'Could not fetch GitHub updates' });
+  } catch (err) {
+    return res.json({ ok: false, error: err.message });
+  }
+});
+
 // Serve compiled frontend assets when running inside the Native Desktop App or local standalone server
 const clientDistPath = path.join(__dirname, '../client/dist');
 if (fs.existsSync(clientDistPath)) {

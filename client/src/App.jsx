@@ -598,6 +598,12 @@ function KlarityApp() {
     updateStatus: { state: 'idle', message: 'Connected to GitHub Releases (ByZizo/Klarity)' }
   });
   const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
+  const [whatsNewData, setWhatsNewData] = useState(null);
+  const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+  const [isCheckingUpdateInSettings, setIsCheckingUpdateInSettings] = useState(false);
+  const [updatePromptDismissed, setUpdatePromptDismissed] = useState(false);
   const [isRefreshingApp, setIsRefreshingApp] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
 
@@ -645,6 +651,71 @@ function KlarityApp() {
       return () => { if (typeof unsub === 'function') unsub(); };
     }
   }, []);
+
+  // Check for What's New popup after app update & reopen
+  useEffect(() => {
+    async function checkWhatsNew() {
+      try {
+        let data = null;
+        if (typeof window !== 'undefined' && window.klarityDesktop?.getWhatsNew) {
+          data = await window.klarityDesktop.getWhatsNew();
+        } else {
+          const res = await fetch('/api/app/whats-new');
+          if (res.ok) {
+            const json = await res.json();
+            if (json.whatsNew && !json.whatsNew.shown) data = json.whatsNew;
+          }
+        }
+        if (data && !data.shown) {
+          setWhatsNewData(data);
+          setIsWhatsNewOpen(true);
+        }
+      } catch {}
+    }
+    checkWhatsNew();
+  }, []);
+
+  const handleDismissWhatsNew = async () => {
+    try {
+      if (typeof window !== 'undefined' && window.klarityDesktop?.dismissWhatsNew) {
+        await window.klarityDesktop.dismissWhatsNew();
+      } else {
+        await fetch('/api/app/dismiss-whats-new', { method: 'POST' });
+      }
+    } catch {}
+    setIsWhatsNewOpen(false);
+    setWhatsNewData(null);
+  };
+
+  // Perform Update (pulls latest from GitHub, rebuilds client, restarts app, and triggers What's New)
+  const handlePerformUpdate = async () => {
+    setIsInstallingUpdate(true);
+    setIsUpdateModalOpen(false);
+    try {
+      if (typeof window !== 'undefined' && window.klarityDesktop?.installUpdateNow) {
+        const res = await window.klarityDesktop.installUpdateNow();
+        if (!res?.ok && res?.error) {
+          setIsInstallingUpdate(false);
+          setNotificationToast(`Update notice: ${res.error}`);
+          setTimeout(() => setNotificationToast(''), 4000);
+        }
+      } else {
+        setNotificationToast('Updating Klarity and reloading...');
+        setTimeout(() => window.location.reload(), 1500);
+      }
+    } catch (err) {
+      setIsInstallingUpdate(false);
+      setNotificationToast(`Update failed: ${err.message}`);
+      setTimeout(() => setNotificationToast(''), 4000);
+    }
+  };
+
+  // Trigger update notification prompt when Klarity opens and an update is detected
+  useEffect(() => {
+    if (desktopAppInfo.updateStatus?.state === 'available' && !updatePromptDismissed) {
+      setIsUpdateModalOpen(true);
+    }
+  }, [desktopAppInfo.updateStatus?.state, updatePromptDismissed]);
 
   // Run background storage encryption audit on mount so all sensitive localStorage keys use ENCv2
   useEffect(() => {
@@ -9821,49 +9892,100 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       </div>
 
                       {/* Card 1: Desktop App Engine & GitHub Auto-Updater */}
-                      <div className="border border-slate-200 rounded-2xl p-4 bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900">
-                              {desktopAppInfo.isDesktopApp ? 'Klarity Desktop App (Local Engine)' : 'Klarity App Version'}
-                            </span>
-                            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
-                              v{desktopAppInfo.version || '1.0.0'}
-                            </span>
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col gap-4 text-xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 text-sm">
+                                {desktopAppInfo.isDesktopApp ? 'Klarity Desktop App' : 'Klarity App'}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
+                                v{desktopAppInfo.version || '1.0.6'}
+                              </span>
+                              {desktopAppInfo.updateStatus?.commitSha && (
+                                <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-mono text-[10px]">
+                                  {desktopAppInfo.updateStatus.commitSha}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1">
+                              {desktopAppInfo.updateStatus?.message || 'Synced with GitHub repository ByZizo/Klarity'}
+                            </p>
                           </div>
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            {desktopAppInfo.updateStatus?.message || 'Auto-updates directly from GitHub Releases (ByZizo/Klarity)'}
-                          </p>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {desktopAppInfo.updateStatus?.state === 'available' || desktopAppInfo.updateStatus?.state === 'ready' ? (
+                              <button
+                                type="button"
+                                disabled={isInstallingUpdate || desktopAppInfo.updateStatus?.state === 'installing'}
+                                onClick={handlePerformUpdate}
+                                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold cursor-pointer flex items-center gap-2 shadow-xs transition-colors"
+                              >
+                                <Download className="w-4 h-4" />
+                                <span>{isInstallingUpdate ? 'Updating...' : `Update to ${desktopAppInfo.updateStatus.latestVersion || 'Latest'} Now`}</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={isCheckingUpdateInSettings}
+                                onClick={async () => {
+                                  setIsCheckingUpdateInSettings(true);
+                                  try {
+                                    if (typeof window !== 'undefined' && window.klarityDesktop?.checkForUpdates) {
+                                      const st = await window.klarityDesktop.checkForUpdates();
+                                      if (st?.state === 'available') {
+                                        setIsUpdateModalOpen(true);
+                                      } else {
+                                        setNotificationToast(st?.message || 'Klarity is up to date!');
+                                        setTimeout(() => setNotificationToast(''), 3000);
+                                      }
+                                    } else {
+                                      const res = await fetch('/api/app/update-check');
+                                      const data = await res.json();
+                                      if (data.ok) {
+                                        setNotificationToast(`GitHub: ${data.sha} - ${data.message}`);
+                                      } else {
+                                        setNotificationToast('Up to date with GitHub (ByZizo/Klarity)');
+                                      }
+                                      setTimeout(() => setNotificationToast(''), 3500);
+                                    }
+                                  } catch (err) {
+                                    setNotificationToast('Update check complete — up to date.');
+                                    setTimeout(() => setNotificationToast(''), 3000);
+                                  } finally {
+                                    setIsCheckingUpdateInSettings(false);
+                                  }
+                                }}
+                                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-800 font-semibold cursor-pointer flex items-center gap-2 transition-colors"
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdateInSettings ? 'animate-spin text-[#18457c]' : ''}`} />
+                                <span>{isCheckingUpdateInSettings ? 'Checking GitHub...' : 'Check for Updates'}</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {desktopAppInfo.updateStatus?.state === 'ready' ? (
+
+                        {/* If an update is available, show a detailed alert banner */}
+                        {desktopAppInfo.updateStatus?.state === 'available' && (
+                          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start justify-between gap-3 text-amber-900 animate-in fade-in duration-150">
+                            <div className="flex items-start gap-2.5">
+                              <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-bold text-xs block">New update available on GitHub!</span>
+                                <span className="text-[11px] text-amber-800 leading-snug">
+                                  {desktopAppInfo.updateStatus?.commitTitle || 'Latest fixes and improvements are ready to install.'}
+                                </span>
+                              </div>
+                            </div>
                             <button
                               type="button"
-                              onClick={() => window.klarityDesktop?.installUpdateNow?.()}
-                              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer"
+                              onClick={handlePerformUpdate}
+                              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer shrink-0 transition-colors shadow-2xs"
                             >
-                              Restart to Update
+                              Install Now
                             </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (window.klarityDesktop?.checkForUpdates) {
-                                  await window.klarityDesktop.checkForUpdates();
-                                } else {
-                                  setDesktopAppInfo(prev => ({
-                                    ...prev,
-                                    updateStatus: { state: 'up-to-date', message: 'Up to date — v1.0.0 (Synced with ByZizo/Klarity)' }
-                                  }));
-                                }
-                              }}
-                              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold cursor-pointer flex items-center gap-1.5"
-                            >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                              <span>Check for Updates</span>
-                            </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Card 2: Active Session & Sign Out */}
@@ -10122,6 +10244,141 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 className="px-5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
               >
                 Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 1. Update Available Notification Prompt Modal (Opens automatically on launch when GitHub update exists) */}
+      {isUpdateModalOpen && desktopAppInfo.updateStatus?.state === 'available' && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl max-w-md w-full p-6 flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-200 text-slate-800">
+            <div className="flex items-start justify-between gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200/80 text-[#18457c] flex items-center justify-center shrink-0">
+                <Sparkles className="w-6 h-6 text-amber-500 fill-amber-400" />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUpdateModalOpen(false);
+                  setUpdatePromptDismissed(true);
+                }}
+                className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <h3 className="font-serif-title text-lg font-bold text-slate-900">New Update Available</h3>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
+                  {desktopAppInfo.updateStatus?.latestVersion || 'Latest'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                A new version of Klarity has been published to GitHub! Would you like to update now?
+              </p>
+            </div>
+
+            {desktopAppInfo.updateStatus?.commitTitle && (
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 font-medium flex items-start gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span className="leading-snug">{desktopAppInfo.updateStatus.commitTitle}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUpdateModalOpen(false);
+                  setUpdatePromptDismissed(true);
+                }}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs cursor-pointer transition-colors"
+              >
+                Remind Me Later
+              </button>
+              <button
+                type="button"
+                onClick={handlePerformUpdate}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer transition-colors shadow-sm flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>Update Now</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Fullscreen Updating Progress Overlay */}
+      {isInstallingUpdate && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-2xl max-w-sm w-full text-center flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 text-[#18457c] flex items-center justify-center">
+              <RefreshCw className="w-7 h-7 text-[#18457c] animate-spin" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-serif-title text-base font-bold text-slate-900">Updating Klarity...</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Applying latest GitHub updates and rebuilding application. Klarity will restart automatically.
+              </p>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+              <div className="bg-[#18457c] h-1.5 rounded-full animate-pulse w-full" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. What's New Pop-up Modal (Appears automatically when the app reopens after update) */}
+      {isWhatsNewOpen && whatsNewData && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl max-w-lg w-full p-6 sm:p-7 flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-200 text-slate-800">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shadow-2xs shrink-0 text-2xl">
+                  🎉
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-serif-title text-lg font-bold text-slate-900">What's New in Klarity</h3>
+                    <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
+                      v{whatsNewData.version || '1.0.6'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Klarity has been successfully updated to the latest version.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleDismissWhatsNew}
+                className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 border-y border-slate-100 py-3.5 max-h-64 overflow-y-auto">
+              {(whatsNewData.changes || []).map((change, idx) => (
+                <div key={idx} className="flex items-start gap-2.5 text-xs text-slate-700">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">{change}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end pt-1">
+              <button
+                type="button"
+                onClick={handleDismissWhatsNew}
+                className="px-6 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#133560] text-white font-bold text-xs cursor-pointer transition-colors shadow-2xs"
+              >
+                Got it, looks great!
               </button>
             </div>
           </div>

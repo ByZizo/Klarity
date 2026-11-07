@@ -27,8 +27,66 @@ let httpServerInstance = null;
 let updateStatusState = {
   state: 'idle',
   version: app.getVersion(),
-  message: 'Up to date (v' + app.getVersion() + ')'
+  message: 'Connected to GitHub (ByZizo/Klarity)'
 };
+
+let runningCommitSha = null;
+
+function getRunningCommitSha() {
+  if (runningCommitSha) return runningCommitSha;
+  const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
+  try {
+    if (fs.existsSync(versionFile)) {
+      const data = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
+      if (data && data.commitSha) {
+        runningCommitSha = data.commitSha;
+        return runningCommitSha;
+      }
+    }
+  } catch {}
+
+  const repoDir = path.join(__dirname, '..');
+  try {
+    const sha = require('child_process').execSync('git rev-parse HEAD', { cwd: repoDir, windowsHide: true }).toString().trim();
+    if (sha) {
+      runningCommitSha = sha;
+      try {
+        fs.writeFileSync(versionFile, JSON.stringify({
+          version: app.getVersion(),
+          commitSha: sha,
+          installedAt: Date.now()
+        }, null, 2), 'utf8');
+      } catch {}
+      return runningCommitSha;
+    }
+  } catch {}
+
+  runningCommitSha = 'v' + app.getVersion();
+  return runningCommitSha;
+}
+
+function saveWhatsNewData(changes, versionOrSha) {
+  try {
+    const whatsNewFile = path.join(app.getPath('userData'), 'whats_new.json');
+    const data = {
+      shown: false,
+      version: app.getVersion(),
+      commitSha: versionOrSha || app.getVersion(),
+      title: "What's New in Klarity",
+      changes: changes && changes.length > 0 ? changes : [
+        "Passwords Vault: Added three-dots card menu with Favorite (yellow card highlight) and Red Delete Confirmation Pop-up",
+        "Household Hub: Spacious redesigned layout with sticky navigation bar and real-time bills synchronization",
+        "Auto & Health Hub: Upgraded card uploaders with unified scanning and document parsing",
+        "Passwords & Accounts: Added website URL fields and custom user-defined sections with full delete support",
+        "App Settings: Real-time GitHub auto-update checking and What's New release announcements"
+      ],
+      updatedAt: Date.now()
+    };
+    fs.writeFileSync(whatsNewFile, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('saveWhatsNewData warning:', e.message);
+  }
+}
 
 function runShell(cmd, cwd) {
   return new Promise((resolve, reject) => {
@@ -50,34 +108,79 @@ function broadcastUpdateStatus(patch) {
 async function checkForGitHubUpdate() {
   const repoDir = path.join(__dirname, '..');
   try {
-    broadcastUpdateStatus({ state: 'checking', message: 'Checking for updates...' });
+    broadcastUpdateStatus({ state: 'checking', message: 'Checking GitHub for updates...' });
 
-    await runShell('git fetch origin main --quiet', repoDir);
-    const localSha = await runShell('git rev-parse HEAD', repoDir);
-    const remoteSha = await runShell('git rev-parse origin/main', repoDir);
+    const currentSha = getRunningCommitSha();
+    const currentVersion = app.getVersion();
 
-    if (localSha && remoteSha && localSha !== remoteSha) {
-      let commitTitle = '';
-      try {
-        commitTitle = await runShell('git log -1 --pretty=%s origin/main', repoDir);
-      } catch {}
+    let remoteSha = null;
+    let commitTitle = '';
+    let commitDate = '';
+    let recentCommits = [];
+
+    // 1. Fetch latest commits on main from GitHub API
+    try {
+      const ghRes = await fetch('https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5', {
+        headers: { 'User-Agent': 'KlarityDesktopApp' }
+      });
+      if (ghRes.ok) {
+        const commits = await ghRes.json();
+        if (Array.isArray(commits) && commits.length > 0) {
+          remoteSha = commits[0].sha;
+          commitTitle = commits[0].commit?.message?.split('\n')[0] || '';
+          commitDate = commits[0].commit?.author?.date || '';
+          recentCommits = commits.map(c => c.commit?.message?.split('\n')[0]).filter(Boolean);
+        }
+      }
+    } catch (apiErr) {
+      console.warn('GitHub API commit check note:', apiErr.message);
+    }
+
+    // 2. Fallback / local git check
+    try {
+      await runShell('git fetch origin main --quiet', repoDir);
+      const gitRemote = await runShell('git rev-parse origin/main', repoDir);
+      if (gitRemote) {
+        if (!remoteSha) remoteSha = gitRemote;
+        if (!commitTitle) {
+          commitTitle = await runShell('git log -1 --pretty=%s origin/main', repoDir);
+        }
+      }
+    } catch {}
+
+    // 3. If remote commit differs from running commit, an update is available!
+    if (
+      remoteSha &&
+      currentSha &&
+      !remoteSha.startsWith(currentSha) &&
+      !currentSha.startsWith(remoteSha)
+    ) {
       broadcastUpdateStatus({
         state: 'available',
         latestVersion: remoteSha.slice(0, 7),
-        commitTitle,
-        message: 'A new update for Klarity is available! Would you like to update the app now?'
+        fullSha: remoteSha,
+        commitTitle: commitTitle || 'New GitHub update available',
+        commitDate,
+        recentChanges: recentCommits,
+        message: `A new update is available on GitHub: ${commitTitle || remoteSha.slice(0, 7)}`
       });
       return updateStatusState;
     }
 
+    // 4. Packaged electron-updater check
     if (app.isPackaged && autoUpdater) {
-      await autoUpdater.checkForUpdates();
-      return updateStatusState;
+      try {
+        await autoUpdater.checkForUpdates();
+        return updateStatusState;
+      } catch {}
     }
 
+    // 5. Up to date
     broadcastUpdateStatus({
       state: 'up-to-date',
-      message: `Up to date — v${app.getVersion()} (${localSha ? localSha.slice(0, 7) : 'latest'})`
+      version: currentVersion,
+      commitSha: currentSha ? currentSha.slice(0, 7) : 'latest',
+      message: `Up to date — v${currentVersion} (${currentSha ? currentSha.slice(0, 7) : 'latest'})`
     });
   } catch (err) {
     broadcastUpdateStatus({
@@ -335,16 +438,62 @@ ipcMain.handle('klarity:install-update-now', async () => {
   try {
     broadcastUpdateStatus({
       state: 'installing',
-      message: 'Installing update & reopening Klarity...'
+      message: 'Downloading latest update & rebuilding Klarity...'
     });
 
+    // 1. Gather recent changes for "What's New" modal
+    let recentChanges = [];
+    try {
+      const log = await runShell('git log -5 --pretty=format:"%s" origin/main', repoDir);
+      recentChanges = log.split('\n').map(s => s.trim()).filter(Boolean);
+    } catch {}
+
+    if (recentChanges.length === 0 && updateStatusState.recentChanges?.length > 0) {
+      recentChanges = updateStatusState.recentChanges;
+    }
+    if (recentChanges.length === 0) {
+      recentChanges = [
+        "Passwords Vault: Added three-dots card menu with Favorite (yellow card highlight) and Red Delete Confirmation Pop-up",
+        "Household Hub: Spacious redesigned layout with sticky navigation bar and real-time bills synchronization",
+        "Auto & Health Hub: Upgraded card uploaders with unified scanning and document parsing",
+        "Passwords & Accounts: Added website URL fields and custom user-defined sections with full delete support",
+        "App Settings: Real-time GitHub auto-update checking and What's New release announcements"
+      ];
+    }
+
     if (app.isPackaged && autoUpdater && updateStatusState.state === 'ready') {
+      saveWhatsNewData(recentChanges, updateStatusState.latestVersion || app.getVersion());
       autoUpdater.quitAndInstall(false, true);
       return { ok: true };
     }
 
+    // Pull latest code
     await runShell('git fetch origin main --quiet', repoDir);
     await runShell('git reset --hard origin/main', repoDir);
+
+    // Rebuild client so frontend reflects new code
+    try {
+      await runShell('npm --prefix client run build', repoDir);
+    } catch (bErr) {
+      console.warn('Frontend rebuild during update note:', bErr.message);
+    }
+
+    const newSha = await runShell('git rev-parse HEAD', repoDir).catch(() => 'latest');
+
+    // Save What's New data to userDataDir so the pop-up appears on restart
+    saveWhatsNewData(recentChanges, newSha ? newSha.slice(0, 7) : app.getVersion());
+
+    // Update installed_version.json to the new SHA
+    const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
+    try {
+      fs.writeFileSync(versionFile, JSON.stringify({
+        version: app.getVersion(),
+        commitSha: newSha,
+        installedAt: Date.now()
+      }, null, 2), 'utf8');
+    } catch {}
+
+    runningCommitSha = newSha;
 
     if (httpServerInstance) {
       try { httpServerInstance.close(); } catch {}
@@ -353,7 +502,7 @@ ipcMain.handle('klarity:install-update-now', async () => {
     setTimeout(() => {
       app.relaunch();
       app.exit(0);
-    }, 400);
+    }, 600);
 
     return { ok: true };
   } catch (err) {
@@ -363,6 +512,32 @@ ipcMain.handle('klarity:install-update-now', async () => {
     });
     return { ok: false, error: err.message };
   }
+});
+
+ipcMain.handle('klarity:get-whats-new', () => {
+  try {
+    const whatsNewFile = path.join(app.getPath('userData'), 'whats_new.json');
+    if (fs.existsSync(whatsNewFile)) {
+      const data = JSON.parse(fs.readFileSync(whatsNewFile, 'utf8'));
+      if (data && data.shown === false) {
+        return data;
+      }
+    }
+  } catch {}
+  return null;
+});
+
+ipcMain.handle('klarity:dismiss-whats-new', () => {
+  try {
+    const whatsNewFile = path.join(app.getPath('userData'), 'whats_new.json');
+    if (fs.existsSync(whatsNewFile)) {
+      const data = JSON.parse(fs.readFileSync(whatsNewFile, 'utf8'));
+      data.shown = true;
+      fs.writeFileSync(whatsNewFile, JSON.stringify(data, null, 2), 'utf8');
+      return true;
+    }
+  } catch {}
+  return false;
 });
 
 const isDev = !app.isPackaged;

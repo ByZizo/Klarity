@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('klarityDesktop', {
   getAppInfo: () => ipcRenderer.invoke('klarity:get-app-info'),
   checkForUpdates: () => ipcRenderer.invoke('klarity:check-for-updates'),
   installUpdateNow: () => ipcRenderer.invoke('klarity:install-update-now'),
+  getWhatsNew: () => ipcRenderer.invoke('klarity:get-whats-new'),
+  dismissWhatsNew: () => ipcRenderer.invoke('klarity:dismiss-whats-new'),
   signInWithGoogle: () => ipcRenderer.invoke('klarity:google-sign-in'),
   getSession: () => ipcRenderer.invoke('klarity:get-session'),
   saveSession: (session) => ipcRenderer.invoke('klarity:save-session', session),
