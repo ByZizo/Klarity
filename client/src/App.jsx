@@ -2474,8 +2474,16 @@ function KlarityApp() {
       const res = await fetch(`/api/data?household=${household}`);
       if (res.ok) {
         const json = await res.json();
+        const cleanMockBills = (list) => (list || []).filter(b => {
+          if (!b) return false;
+          const id = String(b.id || '').toLowerCase();
+          const acct = String(b.account || b.dueText || '').toLowerCase();
+          return !(id.startsWith('mock-') || id.startsWith('demo-') || id === 'bill-pge' || id === 'bill-rent' || id === 'bill-water' || acct.includes('4821'));
+        });
+        const cleanServerBills = cleanMockBills(json.bills);
+        const cleanLocalBills = cleanMockBills(localCachedBills);
         const mergedAccounts = (json.accounts && json.accounts.length > 0) ? json.accounts : localCachedAccounts;
-        const mergedBills = (json.bills && json.bills.length > 0) ? json.bills : localCachedBills;
+        const mergedBills = (cleanServerBills.length > 0) ? cleanServerBills : cleanLocalBills;
         const mergedSubs = (json.subscriptions && json.subscriptions.length > 0) ? json.subscriptions : localCachedSubs;
         const mergedTxs = (json.transactions && json.transactions.length > 0) ? json.transactions : localCachedTxs;
 
@@ -4075,11 +4083,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
     { id: 'mock-card-2', name: 'Travel Card', mask: '9082', balance: 662.00, limit: 2000, apr: 24.4, minPayment: 25, bgColor: 'bg-[#242e3d]' }
   ];
 
-  const DEFAULT_OVERVIEW_BILLS = [
-    { id: 'mock-b-1', name: 'PG&E Electric', category: 'Utilities', dueDay: 28, nextDueDate: 'Oct 28', dueText: 'Due Oct 28 · Checking', daysUntil: 3, expectedAmount: 128.40, amount: 128.40, status: 'due_soon', account: 'Checking •••• 4821' },
-    { id: 'mock-b-2', name: 'Rent', category: 'Housing', dueDay: 1, nextDueDate: 'Nov 1', dueText: 'Due Nov 1 · Checking', daysUntil: 7, expectedAmount: 650.00, amount: 650.00, status: 'upcoming', account: 'Checking •••• 4821' },
-    { id: 'mock-b-3', name: 'Water Service', category: 'Utilities', dueDay: 6, nextDueDate: 'Nov 6', dueText: 'Due Nov 6 · Checking', daysUntil: 12, expectedAmount: 63.75, amount: 63.75, status: 'upcoming', account: 'Checking •••• 4821' }
-  ];
+  const DEFAULT_OVERVIEW_BILLS = [];
 
   const DEFAULT_OVERVIEW_SUBS = [
     { id: 'mock-s-1', name: 'Netflix', category: 'Streaming', renewalDate: 'Nov 3', renewText: 'Renews Nov 3', amount: 15.49, billingCycle: 'monthly', account: 'Everyday Rewards •••• 4417', priceIncreased: 2.00 },

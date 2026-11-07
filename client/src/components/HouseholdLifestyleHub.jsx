@@ -649,8 +649,29 @@ export default function HouseholdLifestyleHub({
       'home insurance', 'hazard insurance', 'renters insurance', 'security', 'ring', 'adt'
     ];
     return bills.filter(b => {
-      // Strictly exclude any synthetic, placeholder, or estimated bills
-      if (b.isSimulated || b.isEstimate || b.isPlaceholder || (typeof b.id === 'string' && b.id.startsWith('bill-sync-'))) {
+      if (!b || !b.name) return false;
+      const id = String(b.id || '').toLowerCase();
+      // Strictly exclude any synthetic, placeholder, estimated, or fake mock/sample bills
+      if (
+        b.isSimulated ||
+        b.isEstimate ||
+        b.isPlaceholder ||
+        b.isMock ||
+        id.startsWith('mock-') ||
+        id.startsWith('demo-') ||
+        id.startsWith('sample-') ||
+        id.startsWith('seed-') ||
+        id === 'bill-pge' ||
+        id === 'bill-rent' ||
+        id === 'bill-water' ||
+        id.startsWith('bill-sync-')
+      ) {
+        return false;
+      }
+
+      // Strictly exclude fake demo accounts like Checking 4821
+      const acct = String(b.account || b.dueText || '').toLowerCase();
+      if (acct.includes('4821') || acct.includes('mock')) {
         return false;
       }
       const name = (b.name || '').toLowerCase();
