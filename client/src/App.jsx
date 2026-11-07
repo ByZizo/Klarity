@@ -855,7 +855,12 @@ function KlarityApp() {
       const cached = localStorage.getItem('klarity_finance_data');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (parsed && Array.isArray(parsed.accounts)) return parsed;
+        if (parsed && Array.isArray(parsed.accounts)) {
+          if (Array.isArray(parsed.bills)) {
+            parsed.bills = parsed.bills.filter(b => !b.isSimulated && !b.isEstimate && !(typeof b.id === 'string' && b.id.startsWith('bill-sync-')));
+          }
+          return parsed;
+        }
       }
     } catch (e) {}
     return {
@@ -1376,127 +1381,8 @@ function KlarityApp() {
   }, [vaultItems]);
 
   const handleSyncUtilitiesToBills = (calcMetrics) => {
-    if (!calcMetrics) return;
-
-    if (Array.isArray(calcMetrics.homeCostItems) && calcMetrics.homeCostItems.length > 0) {
-      setData(prev => {
-        const existingBills = [...(prev.bills || [])];
-        const upsertBill = (name, category, amount, dueDay) => {
-          if (!amount || amount <= 0) return;
-          const searchKey = name.toLowerCase().split(' ')[0];
-          const idx = existingBills.findIndex(b => (b.name || '').toLowerCase().includes(searchKey));
-          if (idx >= 0) {
-            existingBills[idx] = { ...existingBills[idx], name, expectedAmount: amount, category };
-          } else {
-            existingBills.push({
-              id: `bill-sync-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              name,
-              category,
-              expectedAmount: amount,
-              dueDay: dueDay || 15,
-              nextDueDate: `Monthly on Day ${dueDay || 15}`,
-              autopay: true,
-              status: 'upcoming'
-            });
-          }
-        };
-
-        const catMap = {
-          electricity: 'Utilities',
-          gas: 'Utilities',
-          waterTrash: 'Utilities',
-          internet: 'Internet & Tech',
-          mortgageRent: 'Housing',
-          propertyTax: 'Housing',
-          hoa: 'Housing',
-          homeInsurance: 'Insurance'
-        };
-
-        calcMetrics.homeCostItems.forEach(item => {
-          const cat = catMap[item.id] || 'Housing';
-          const billName = item.provider ? `${item.provider} (${item.label})` : item.label;
-          upsertBill(billName, cat, Number(item.amount) || 0, 15);
-        });
-
-        const insAmount = Number(calcMetrics.fleet?.totalMonthlyInsurance || 0);
-        if (insAmount > 0 && calcMetrics.fleet?.vehicles?.length > 0) {
-          upsertBill(`Auto Insurance (${calcMetrics.fleet.vehicles.length} Household Cars)`, 'Insurance', insAmount, 10);
-        }
-
-        const nextState = {
-          ...prev,
-          bills: existingBills,
-          metrics: {
-            ...prev.metrics,
-            totalMonthlyBills: existingBills.reduce((s, b) => s + Number(b.expectedAmount || 0), 0)
-          }
-        };
-        try {
-          localStorage.setItem('klarity_finance_data', JSON.stringify(nextState));
-          localStorage.setItem('klarity_bills', JSON.stringify(existingBills));
-        } catch (e) {}
-        return nextState;
-      });
-      return;
-    }
-
-    if (!calcMetrics.utilities) return;
-    const pgeAmount = Number(calcMetrics.utilities.totalPgeCombinedBill || 0);
-    const waterAmount = Number(calcMetrics.utilities.waterTrashTotalCost || 0);
-    const insAmount = Number(calcMetrics.fleet?.totalMonthlyInsurance || 0);
-    const gasFuelAmount = Number(calcMetrics.fleet?.totalMonthlyGasCost || 0);
-
-    setData(prev => {
-      const existingBills = [...(prev.bills || [])];
-      const upsertBill = (name, category, amount, dueDay) => {
-        if (amount <= 0) return;
-        const idx = existingBills.findIndex(b => (b.name || '').toLowerCase().includes(name.toLowerCase().split(' ')[0]));
-        if (idx >= 0) {
-          existingBills[idx] = { ...existingBills[idx], name, expectedAmount: amount, category };
-        } else {
-          existingBills.push({
-            id: `bill-sync-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            name,
-            category,
-            expectedAmount: amount,
-            dueDay,
-            nextDueDate: `Monthly on Day ${dueDay}`,
-            autopay: true,
-            status: 'upcoming'
-          });
-        }
-      };
-
-      upsertBill('PG&E Electric & Gas (Household Est.)', 'Utilities', pgeAmount, 15);
-      upsertBill('Municipal Water, Sewer & Trash', 'Utilities', waterAmount, 20);
-      if (insAmount > 0) {
-        upsertBill(`Auto Insurance (${calcMetrics.fleet.vehicles.length} Household Cars)`, 'Insurance', insAmount, 10);
-      }
-
-      const nextState = {
-        ...prev,
-        bills: existingBills,
-        metrics: {
-          ...prev.metrics,
-          totalMonthlyBills: existingBills.reduce((s, b) => s + Number(b.expectedAmount || 0), 0)
-        }
-      };
-      try {
-        localStorage.setItem('klarity_finance_data', JSON.stringify(nextState));
-        localStorage.setItem('klarity_bills', JSON.stringify(existingBills));
-      } catch (e) {}
-      return nextState;
-    });
-
-    if (gasFuelAmount > 0) {
-      setBudgets(prev => {
-        const exists = prev.find(b => (b.category || '').toLowerCase() === 'gas');
-        if (exists) {
-          return prev.map(b => b.id === exists.id ? { ...b, limit: gasFuelAmount } : b);
-        }
-        return [...prev, { id: `b-gas-${Date.now()}`, category: 'Gas', limit: gasFuelAmount, lastMonthSpent: gasFuelAmount }];
-      });
-    }
+    // Strictly actual bills from connected accounts/payments appear in bills
+    return;
   };
 
   // Modals & Editors for Budgets, Goals, Manual Accounts, Notes, Debt Planner

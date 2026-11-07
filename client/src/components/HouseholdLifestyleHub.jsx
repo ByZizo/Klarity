@@ -57,7 +57,6 @@ import {
   PROVIDER_SPECIFIC_PLANS,
   getPlansForProvider,
   getSuggestedProviders,
-  calculateHomeCostBreakdown,
   calculateHouseholdAndFleetMetrics,
   detectCarSpecs,
   FREE_EV_CHARGING_GUIDE,
@@ -593,18 +592,7 @@ export default function HouseholdLifestyleHub({
     }
   }, [householdProfile.zillowImportedAt]);
 
-  // Compute breakdown of the 8 monthly home cost rows
-  const homeCostItems = useMemo(
-    () => calculateHomeCostBreakdown(householdProfile, metrics, bills),
-    [householdProfile, metrics, bills]
-  );
-
-  const totalMonthlyHomeCost = useMemo(
-    () => homeCostItems.reduce((acc, item) => acc + (Number(item.amount) || 0), 0),
-    [homeCostItems]
-  );
-
-  // Extract only verified bills pulled from actual payments & connected accounts
+  // Extract only verified bills pulled from actual payments & connected accounts (strictly excluding any simulated or fake bills)
   const actualHouseholdBills = useMemo(() => {
     if (!Array.isArray(bills) || bills.length === 0) return [];
     const householdKeywords = [
@@ -619,9 +607,19 @@ export default function HouseholdLifestyleHub({
       'home insurance', 'hazard insurance', 'renters insurance', 'security', 'ring', 'adt'
     ];
     return bills.filter(b => {
+      // Strictly exclude any synthetic, placeholder, or estimated bills
+      if (b.isSimulated || b.isEstimate || b.isPlaceholder || (typeof b.id === 'string' && b.id.startsWith('bill-sync-'))) {
+        return false;
+      }
       const name = (b.name || '').toLowerCase();
       const cat = (b.category || '').toLowerCase();
-      const isHouseholdCat = ['utilities', 'housing', 'insurance', 'internet & tech', 'home'].includes(cat);
+
+      // Ensure vehicle / auto insurance does not appear in household
+      if ((cat.includes('insurance') || name.includes('insurance')) && (name.includes('auto') || name.includes('car') || name.includes('vehicle'))) {
+        return false;
+      }
+
+      const isHouseholdCat = ['utilities', 'housing', 'internet & tech', 'home'].includes(cat) || (cat === 'insurance' && !name.includes('auto') && !name.includes('car') && !name.includes('vehicle'));
       const matches = householdKeywords.some(kw => name.includes(kw));
       return (isHouseholdCat || matches) && Number(b.expectedAmount || b.amount || 0) > 0;
     });
@@ -652,23 +650,6 @@ export default function HouseholdLifestyleHub({
     () => getPlansForProvider('security', householdProfile.securityProvider),
     [householdProfile.securityProvider]
   );
-
-  const handleCostItemChange = (catId, field, value) => {
-    const currentCosts = { ...(householdProfile.monthlyCosts || {}) };
-    const existing = currentCosts[catId] || homeCostItems.find(i => i.id === catId) || {};
-    currentCosts[catId] = {
-      ...existing,
-      [field]: field === 'amount' ? (Number(value) || 0) : value,
-      source: 'user' // Any user typing immediately flips source tag to 'You entered'
-    };
-    handleFieldChange('monthlyCosts', currentCosts);
-  };
-
-  const handleResetCostItem = (catId) => {
-    const currentCosts = { ...(householdProfile.monthlyCosts || {}) };
-    delete currentCosts[catId];
-    handleFieldChange('monthlyCosts', currentCosts);
-  };
 
   const handleRefreshProperty = () => {
     const targetQuery = householdProfile.zillowUrl || householdProfile.address;
@@ -1285,17 +1266,6 @@ export default function HouseholdLifestyleHub({
     });
   };
 
-  const handleSyncToBills = () => {
-    if (onSyncUtilitiesToBills) {
-      onSyncUtilitiesToBills({
-        ...metrics,
-        homeCostItems
-      });
-      setSyncSuccess('Saved to Bills & Budgets');
-      setTimeout(() => setSyncSuccess(''), 3500);
-    }
-  };
-
   const netFinancedEvAmount = Math.max(0, simEvMsrp - simFedCredit - simStateRebate - simDownPayment);
   const zeroAprMonthlyPayment = Math.round(netFinancedEvAmount / simTermMonths);
   const currentGasSavedPerCar = metrics.fleet.vehicles.find(v => v.type !== 'ev')?.potentialEvSwitchSavings || 195;
@@ -1345,15 +1315,6 @@ export default function HouseholdLifestyleHub({
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>{syncSuccess}</span>
             </span>
-          )}
-          {section === 'household' && (
-            <button
-              type="button"
-              onClick={handleSyncToBills}
-              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
-            >
-              Save to Bills
-            </button>
           )}
         </div>
       </div>
