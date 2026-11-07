@@ -2841,429 +2841,433 @@ export default function HouseholdLifestyleHub({
                 </p>
               </div>
 
-              {/* Minimized Card Container */}
-              <section className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs overflow-hidden transition-all">
-                {/* Minimized Card Header Row: Clean Left-to-Right layout with arrow */}
+              {/* Restyled Household Card with Spacious Layout */}
+              <section className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-2xs overflow-hidden transition-all">
+                {/* 5. Card Header: Address, One Summary Line, Monthly Bills Total & Collapse Arrow */}
                 <div
                   onClick={() => setIsHouseholdExpanded(!isHouseholdExpanded)}
-                  className="w-full px-5 sm:px-6 py-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
+                  className="w-full px-6 sm:px-[36px] py-5 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors select-none"
                 >
-                  {/* Left content: Address, Dwelling Type, Specs, Badges, Bills */}
-                  <div className="flex items-center gap-3 flex-wrap min-w-0">
-                    {/* Name / Address */}
-                    <span className="font-bold text-slate-900 text-sm sm:text-base tracking-tight truncate max-w-[280px] sm:max-w-none">
+                  {/* Left: Address + One Summary Line */}
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base sm:text-lg tracking-tight truncate">
                       {householdProfile.address || 'Household Property'}
-                    </span>
-
-                    {/* Dwelling Type pill */}
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/70 shrink-0">
-                      {DWELLING_TYPES.find(d => d.id === householdProfile.dwellingType)?.label || 'Single-Family House'}
-                    </span>
-
-                    {/* Specs text */}
-                    <span className="text-xs text-slate-500 hidden sm:inline-block font-medium truncate">
-                      {householdProfile.bedrooms || 3} Beds · {householdProfile.bathrooms || 2} Baths · {Number(householdProfile.sqFt || 2100).toLocaleString()} sq ft
-                    </span>
-
-                    {/* Solar badge if present */}
-                    {Boolean(householdProfile.hasSolar) && (
-                      <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full hidden md:inline-flex items-center gap-1 shrink-0">
-                        <Sun className="w-3.5 h-3.5 text-amber-500" />
-                        <span>Solar</span>
-                      </span>
-                    )}
-
-                    {/* EV badge if present */}
-                    {householdProfile.hasEvAtHome !== false && (
-                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full hidden lg:inline-flex items-center gap-1 shrink-0">
-                        <Zap className="w-3.5 h-3.5 text-emerald-500" />
-                        <span>EV Ready</span>
-                      </span>
-                    )}
-
-                    {/* Verified actual bills pill */}
-                    {actualHouseholdBills.length > 0 ? (
-                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md hidden md:inline-flex items-center gap-1">
-                        <span>${totalActualBills.toLocaleString()} /mo from bills</span>
-                      </span>
-                    ) : (
-                      <span className="text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-md hidden md:inline-flex items-center gap-1">
-                        <span>No bills synced yet</span>
-                      </span>
-                    )}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                      {DWELLING_TYPES.find(d => d.id === householdProfile.dwellingType)?.label || 'Single-Family House'} · {householdProfile.bedrooms || 3} bd, {householdProfile.bathrooms || 2} ba · {Number(householdProfile.sqFt || 2100).toLocaleString()} sq ft
+                    </p>
                   </div>
 
-                  {/* Arrow on right */}
-                  <div className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 transition-colors shrink-0">
-                    {isHouseholdExpanded ? (
-                      <ChevronUp className="w-5 h-5 text-slate-600" />
+                  {/* Right: Monthly Bills Total on the Right + Collapse Arrow */}
+                  <div className="flex items-center gap-4 shrink-0">
+                    {actualHouseholdBills.length > 0 ? (
+                      <div className="text-right">
+                        <div className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
+                          ${totalActualBills.toLocaleString()}<span className="text-xs font-normal text-slate-400">/mo</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400">Monthly bills</div>
+                      </div>
                     ) : (
-                      <ChevronDown className="w-5 h-5 text-slate-600" />
+                      <div className="text-right text-xs text-slate-400">
+                        No bills synced
+                      </div>
                     )}
+
+                    <div className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                      {isHouseholdExpanded ? (
+                        <ChevronUp className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {/* Expanded Panels */}
+                {/* Expanded Sections Container with 36px horizontal padding and ~56px between sections */}
                 {isHouseholdExpanded && (
-                  <div className="border-t border-slate-100 p-5 sm:p-6 flex flex-col gap-6 bg-slate-50/40">
-                    {/* Action Bar inside Expanded View (Placed where it's natural and non-intrusive) */}
-                    <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-slate-200/80">
-                      <div>
-                        <span className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                          <Home className="w-4 h-4 text-[#18457c]" />
-                          <span>Property Specifications & Service Details</span>
-                        </span>
-                        <span className="text-[11px] text-slate-400 block mt-0.5">
-                          {householdProfile.zillowImportedAt ? `Zillow specs verified on ${new Date(householdProfile.zillowImportedAt).toLocaleDateString()}` : 'Custom property specifications'}
-                        </span>
-                      </div>
+                  <div className="border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 sm:px-[36px] pb-10 flex flex-col space-y-14">
+                    {/* 4. Sticky Nav Bar: Property, Home systems, Providers, Bills + "Update my answers" */}
+                    <div className="sticky top-0 z-10 -mx-6 sm:-mx-[36px] px-6 sm:px-[36px] py-3.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between flex-wrap gap-3">
+                      <nav className="flex items-center gap-6 overflow-x-auto text-xs font-semibold text-slate-600 dark:text-slate-400">
+                        <a
+                          href="#section-property"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            document.getElementById('section-property')?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="hover:text-[#18457c] dark:hover:text-blue-400 transition-colors cursor-pointer py-1"
+                        >
+                          Property
+                        </a>
+                        <a
+                          href="#section-systems"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            document.getElementById('section-systems')?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="hover:text-[#18457c] dark:hover:text-blue-400 transition-colors cursor-pointer py-1"
+                        >
+                          Home systems
+                        </a>
+                        <a
+                          href="#section-providers"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            document.getElementById('section-providers')?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="hover:text-[#18457c] dark:hover:text-blue-400 transition-colors cursor-pointer py-1"
+                        >
+                          Providers
+                        </a>
+                        <a
+                          href="#section-bills"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            document.getElementById('section-bills')?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="hover:text-[#18457c] dark:hover:text-blue-400 transition-colors cursor-pointer py-1"
+                        >
+                          Bills
+                        </a>
+                      </nav>
 
-                      {/* Better placed Questionnaire Action Buttons */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-2xs">
-                          <span className="text-[10px] font-bold text-slate-400 px-2 uppercase">Jump to:</span>
-                          <button
-                            type="button"
-                            onClick={() => { setWizardStep(1); setHouseholdView('wizard'); }}
-                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                          >
-                            Specs (Q1)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setWizardStep(4); setHouseholdView('wizard'); }}
-                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                          >
-                            EV (Q4)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setWizardStep(6); setHouseholdView('wizard'); }}
-                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                          >
-                            Solar (Q6)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setWizardStep(7); setHouseholdView('wizard'); }}
-                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                          >
-                            Plans (Q7)
-                          </button>
+                      <button
+                        type="button"
+                        onClick={() => { setWizardStep(1); setHouseholdView('wizard'); }}
+                        className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Sliders className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                        <span>Update my answers</span>
+                      </button>
+                    </div>
+
+                    {/* 1. SECTION 1: PROPERTY SPECS (Plain 4-column label/value grid, 19px value, no boxes) */}
+                    <div id="section-property" className="scroll-mt-16 pt-2">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-6">
+                        <div>
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                            Property
+                          </h4>
+                          <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 block">
+                            {householdProfile.zillowImportedAt
+                              ? `Zillow verified on ${new Date(householdProfile.zillowImportedAt).toLocaleDateString()}`
+                              : 'Property specifications'}
+                          </span>
                         </div>
-
                         <button
                           type="button"
                           onClick={() => { setWizardStep(1); setHouseholdView('wizard'); }}
-                          className="px-3.5 py-1.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                          className="text-xs font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
                         >
-                          <Sliders className="w-3.5 h-3.5" />
-                          <span>Re-answer Questions</span>
+                          Edit
                         </button>
                       </div>
-                    </div>
 
-                    {/* PANEL 1: PROPERTY SPECS TILES */}
-                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-4">
-                      {/* 8 Specs Tiles */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                        <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                          <span className="text-[10px] text-slate-400 font-semibold block uppercase">Bedrooms</span>
-                          <span className="font-bold text-slate-900 text-sm mt-0.5 block">{householdProfile.bedrooms || 3} Beds</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-7">
+                        <div>
+                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Bedrooms</span>
+                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                            {householdProfile.bedrooms || 3} Beds
+                          </span>
                         </div>
-                        <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                          <span className="text-[10px] text-slate-400 font-semibold block uppercase">Bathrooms</span>
-                          <span className="font-bold text-slate-900 text-sm mt-0.5 block">{householdProfile.bathrooms || 2} Baths</span>
+                        <div>
+                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Bathrooms</span>
+                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                            {householdProfile.bathrooms || 2} Baths
+                          </span>
                         </div>
-                        <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                          <span className="text-[10px] text-slate-400 font-semibold block uppercase">Living Area</span>
-                          <span className="font-bold text-slate-900 text-sm mt-0.5 block">{Number(householdProfile.sqFt || 2100).toLocaleString()} sq ft</span>
+                        <div>
+                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Living Area</span>
+                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                            {Number(householdProfile.sqFt || 2100).toLocaleString()} sq ft
+                          </span>
                         </div>
-                        <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                          <span className="text-[10px] text-slate-400 font-semibold block uppercase">Year Built</span>
-                          <span className="font-bold text-slate-900 text-sm mt-0.5 block">{householdProfile.yearBuilt || 2004}</span>
+                        <div>
+                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Year Built</span>
+                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                            {householdProfile.yearBuilt || 2004}
+                          </span>
                         </div>
-                        <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                          <span className="text-[10px] text-slate-400 font-semibold block uppercase">Lot Size</span>
-                          <span className="font-bold text-slate-900 text-sm mt-0.5 block">{householdProfile.lotSize || '6,500 sq ft'}</span>
+                        <div>
+                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Lot Size</span>
+                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                            {householdProfile.lotSize || '6,500 sq ft'}
+                          </span>
                         </div>
-                        <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                          <span className="text-[10px] text-slate-400 font-semibold block uppercase">Estimated Value</span>
-                          <span className="font-bold text-slate-900 text-sm mt-0.5 block">{householdProfile.estimatedValue || '$425,000'}</span>
+                        <div>
+                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Estimated Value</span>
+                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                            {householdProfile.estimatedValue || '$425,000'}
+                          </span>
                         </div>
-                        <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                          <span className="text-[10px] text-slate-400 font-semibold block uppercase">County</span>
-                          <span className="font-bold text-slate-900 text-sm mt-0.5 block">{householdProfile.county || 'Fresno County'}</span>
+                        <div>
+                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">County</span>
+                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                            {householdProfile.county || 'Fresno County'}
+                          </span>
                         </div>
-                        <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                          <span className="text-[10px] text-slate-400 font-semibold block uppercase">Garage</span>
-                          <span className="font-bold text-slate-900 text-sm mt-0.5 block">{householdProfile.garage || 'Attached 2-Car'}</span>
+                        <div>
+                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Garage</span>
+                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                            {householdProfile.garage || 'Attached 2-Car'}
+                          </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* PANEL 2: HOME SYSTEMS, EV & SOLAR */}
-                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-4">
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                        <span className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                          <Zap className="w-4 h-4 text-amber-500" />
-                          <span>Home Systems, Energy & EV Setup</span>
-                        </span>
+                    {/* 2. SECTION 2: HOME SYSTEMS (Simple rows, 1px lines, 20px padding, no pills, 'Add solar' link) */}
+                    <div id="section-systems" className="scroll-mt-16">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                          Home systems
+                        </h4>
                         <button
                           type="button"
                           onClick={() => { setWizardStep(4); setHouseholdView('wizard'); }}
-                          className="text-[11px] font-bold text-[#18457c] hover:underline cursor-pointer"
+                          className="text-xs font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
                         >
-                          Change EV / Solar Settings
+                          Edit
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 text-xs">
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
                         {/* Heating & Cooling */}
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Heating & Cooling</span>
-                            <span className="font-bold text-slate-900 block mt-1 capitalize">
-                              {(householdProfile.heatingType || 'natural_gas_furnace').replace(/_/g, ' ')}
+                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Heating & cooling</span>
+                          <div className="sm:text-right">
+                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 capitalize block">
+                              {(householdProfile.heatingType || 'natural_gas_furnace').replace(/_/g, ' ')} · {(householdProfile.coolingType || 'central_ac').replace(/_/g, ' ')}
                             </span>
-                            <span className="text-[11px] text-slate-500 block mt-0.5 capitalize">
-                              Cooling: {(householdProfile.coolingType || 'central_ac').replace(/_/g, ' ')}
+                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block capitalize">
+                              Water heater: {(householdProfile.waterHeaterType || 'natural_gas_tank').replace(/_/g, ' ')}
                             </span>
                           </div>
-                          <span className="text-[10px] text-slate-400 font-medium">
-                            Water Heater: {(householdProfile.waterHeaterType || 'natural_gas_tank').replace(/_/g, ' ')}
-                          </span>
                         </div>
 
-                        {/* EV at Home */}
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">EV Home Charging</span>
-                            <span className="font-bold text-slate-900 block mt-1">
+                        {/* EV Home Charging */}
+                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">EV home charging</span>
+                          <div className="sm:text-right">
+                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
                               {householdProfile.hasEvAtHome !== false
                                 ? (householdProfile.evChargerType === 'level2_240v' ? 'Level 2 (240V Dedicated)' : householdProfile.evChargerType === 'level1_120v' ? 'Level 1 (120V Outlet)' : 'No Home Charger')
                                 : 'No EV at Home'}
                             </span>
+                            {householdProfile.hasEvAtHome !== false && householdProfile.evHomeChargingFrequency !== 'never' && (
+                              <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
+                                {householdProfile.evDailyHomeMiles || 35} mi/day · {(householdProfile.evChargingSchedule || 'overnight').replace(/_/g, ' ')}
+                              </span>
+                            )}
                           </div>
-                          {householdProfile.hasEvAtHome !== false && householdProfile.evHomeChargingFrequency !== 'never' && (
-                            <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-semibold block truncate">
-                              {householdProfile.evDailyHomeMiles || 35} mi/day · {(householdProfile.evChargingSchedule || 'overnight').replace(/_/g, ' ')}
-                            </span>
-                          )}
                         </div>
 
-                        {/* Solar & Battery */}
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Rooftop Solar</span>
-                            <span className="font-bold text-slate-900 block mt-1">
-                              {Boolean(householdProfile.hasSolar)
-                                ? `${(((Number(householdProfile.solarPanelCount) || 20) * (Number(householdProfile.solarWattsPerPanel) || 400)) / 1000).toFixed(2)} kW System`
-                                : 'No Solar Installed'}
-                            </span>
+                        {/* Rooftop Solar (with 7. Add solar link when none is installed) */}
+                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Rooftop solar</span>
+                          <div className="sm:text-right">
+                            {Boolean(householdProfile.hasSolar) ? (
+                              <>
+                                <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
+                                  {(((Number(householdProfile.solarPanelCount) || 20) * (Number(householdProfile.solarWattsPerPanel) || 400)) / 1000).toFixed(2)} kW System
+                                </span>
+                                <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
+                                  {householdProfile.solarPanelCount || 20} Panels · {(householdProfile.solarOwnership || 'owned').toUpperCase()}
+                                </span>
+                              </>
+                            ) : (
+                              <div className="flex items-center gap-2 sm:justify-end">
+                                <span className="text-sm sm:text-base font-semibold text-slate-500 dark:text-slate-400">
+                                  None installed
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => { setWizardStep(6); setHouseholdView('wizard'); }}
+                                  className="text-xs font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
+                                >
+                                  Add solar
+                                </button>
+                              </div>
+                            )}
                           </div>
-                          {Boolean(householdProfile.hasSolar) && (
-                            <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-semibold block truncate">
-                              {householdProfile.solarPanelCount || 20} Panels · {(householdProfile.solarOwnership || 'owned').toUpperCase()}
-                            </span>
-                          )}
                         </div>
 
                         {/* Battery Storage */}
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Battery Storage</span>
-                            <span className="font-bold text-slate-900 block mt-1">
+                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Battery storage</span>
+                          <div className="sm:text-right">
+                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
                               {householdProfile.solarHasBattery
                                 ? `${householdProfile.solarBatteryCapacityKwh || 13.5} kWh Battery`
                                 : 'No Battery Backup'}
                             </span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
+                              Billing plan: {(householdProfile.solarBillingPlan || 'nem_2').toUpperCase()}
+                            </span>
                           </div>
-                          <span className="text-[10px] text-slate-500 font-medium block">
-                            Billing Plan: {(householdProfile.solarBillingPlan || 'nem_2').toUpperCase()}
-                          </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* PANEL 3: HOUSEHOLD PROVIDERS & PLAN NAMES */}
-                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-4">
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                        <span className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                          <Wifi className="w-4 h-4 text-[#18457c]" />
-                          <span>Household Service Providers & Plan Names</span>
-                        </span>
+                    {/* 2. SECTION 3: SERVICE PROVIDERS (Simple rows, 1px lines, 20px padding, no pills, never truncate plan names) */}
+                    <div id="section-providers" className="scroll-mt-16">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                          Providers
+                        </h4>
                         <button
                           type="button"
                           onClick={() => { setWizardStep(7); setHouseholdView('wizard'); }}
-                          className="text-[11px] font-bold text-[#18457c] hover:underline cursor-pointer"
+                          className="text-xs font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
                         >
-                          Change Providers & Plans
+                          Edit
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 text-xs">
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
                         {/* Internet */}
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block flex items-center gap-1">
-                              <Wifi className="w-3 h-3 text-indigo-500" />
-                              <span>Internet</span>
-                            </span>
-                            <span className="font-bold text-slate-900 text-sm block mt-1 truncate">
+                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Internet</span>
+                          <div className="sm:text-right">
+                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
                               {householdProfile.internetProvider || 'Xfinity'}
                             </span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
+                              {householdProfile.internetPlan || 'Gigabit Extra'}
+                            </span>
                           </div>
-                          <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded font-semibold block truncate">
-                            {householdProfile.internetPlan || 'Gigabit Extra'}
-                          </span>
                         </div>
 
-                        {/* Mobile */}
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block flex items-center gap-1">
-                              <Smartphone className="w-3 h-3 text-purple-500" />
-                              <span>Mobile Wireless</span>
-                            </span>
-                            <span className="font-bold text-slate-900 text-sm block mt-1 truncate">
+                        {/* Mobile Wireless */}
+                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Mobile wireless</span>
+                          <div className="sm:text-right">
+                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
                               {householdProfile.phoneProvider || 'T-Mobile'} ({householdProfile.phoneLines || 3} lines)
                             </span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
+                              {householdProfile.phonePlan || 'Go5G Plus'}
+                            </span>
                           </div>
-                          <span className="text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded font-semibold block truncate">
-                            {householdProfile.phonePlan || 'Go5G Plus'}
-                          </span>
                         </div>
 
-                        {/* Utility */}
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block flex items-center gap-1">
-                              <Zap className="w-3 h-3 text-amber-500" />
-                              <span>Utility Rate</span>
-                            </span>
-                            <span className="font-bold text-slate-900 text-sm block mt-1 truncate">
+                        {/* Electric & Gas */}
+                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Utility rate</span>
+                          <div className="sm:text-right">
+                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
                               {householdProfile.electricGasProvider || 'PG&E'}
                             </span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
+                              {householdProfile.electricGasPlan || 'EV2-A Home TOU'}
+                            </span>
                           </div>
-                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-semibold block truncate">
-                            {householdProfile.electricGasPlan || 'EV2-A Home TOU'}
-                          </span>
                         </div>
 
-                        {/* Trash */}
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block flex items-center gap-1">
-                              <Droplets className="w-3 h-3 text-blue-500" />
-                              <span>Trash & Recycling</span>
-                            </span>
-                            <span className="font-bold text-slate-900 text-sm block mt-1 truncate">
+                        {/* Trash & Recycling */}
+                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Trash & recycling</span>
+                          <div className="sm:text-right">
+                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
                               {householdProfile.trashProvider || 'City Utilities'}
                             </span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
+                              {householdProfile.trashPlan || '64-Gal Cart'}
+                            </span>
                           </div>
-                          <span className="text-[10px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-semibold block truncate">
-                            {householdProfile.trashPlan || '64-Gal Cart'}
-                          </span>
                         </div>
 
-                        {/* Security */}
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block flex items-center gap-1">
-                              <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                              <span>Home Security</span>
-                            </span>
-                            <span className="font-bold text-slate-900 text-sm block mt-1 truncate">
+                        {/* Home Security */}
+                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Home security</span>
+                          <div className="sm:text-right">
+                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
                               {householdProfile.securityProvider || 'Ring'}
                             </span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
+                              {householdProfile.securityPlan || 'Ring Protect Pro'}
+                            </span>
                           </div>
-                          <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-semibold block truncate">
-                            {householdProfile.securityPlan || 'Ring Protect Pro'}
-                          </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* PANEL 4: HOUSEHOLD BILLS FROM PAYMENTS ONLY */}
-                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col gap-4">
-                      <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100">
+                    {/* 6. SECTION 4: BILLS TABLE (Spacious rows, small green dot with 'From payments', bold total) */}
+                    <div id="section-bills" className="scroll-mt-16">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-2">
                         <div>
-                          <span className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                            <Receipt className="w-4 h-4 text-[#18457c]" />
-                            <span>Household Bills from Actual Payments</span>
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                            Bills
+                          </h4>
+                          <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 block">
+                            Actual bills pulled directly from payments
                           </span>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            Only verified bills pulled directly from your payment statements and accounts appear here.
-                          </p>
                         </div>
-
                         {actualHouseholdBills.length > 0 && (
                           <div className="text-right">
-                            <span className="text-xs font-bold text-slate-400 block uppercase">Total verified bills</span>
-                            <span className="text-lg font-black text-[#18457c]">
-                              ${totalActualBills.toLocaleString()} <span className="text-xs font-normal text-slate-500">/mo</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
+                              ${totalActualBills.toLocaleString()}
+                              <span className="text-xs font-normal text-slate-400"> /mo</span>
                             </span>
                           </div>
                         )}
                       </div>
 
                       {actualHouseholdBills.length > 0 ? (
-                        <div className="overflow-x-auto rounded-xl border border-slate-200">
+                        <div className="overflow-x-auto">
                           <table className="w-full text-left text-xs min-w-[550px]">
                             <thead>
-                              <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                <th className="py-3 px-4">Bill / Provider</th>
-                                <th className="py-3 px-4">Category</th>
-                                <th className="py-3 px-4">Due Date & Status</th>
-                                <th className="py-3 px-4">Source</th>
-                                <th className="py-3 px-4 text-right">Amount Paid</th>
+                              <tr className="border-b border-slate-100 dark:border-slate-800 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                                <th className="py-4 pr-4 font-medium">Bill / Provider</th>
+                                <th className="py-4 px-4 font-medium">Category</th>
+                                <th className="py-4 px-4 font-medium">Due date</th>
+                                <th className="py-4 px-4 font-medium">Source</th>
+                                <th className="py-4 pl-4 text-right font-medium">Amount</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100">
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                               {actualHouseholdBills.map((b) => (
-                                <tr key={b.id} className="hover:bg-slate-50/70 transition-colors">
-                                  <td className="py-3 px-4 font-bold text-slate-900">
-                                    <span>{b.name}</span>
+                                <tr key={b.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                                  <td className="py-4 pr-4 font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                                    {b.name}
                                   </td>
-                                  <td className="py-3 px-4">
-                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
-                                      {b.category || 'Utilities'}
+                                  <td className="py-4 px-4 text-slate-500 dark:text-slate-400">
+                                    {b.category || 'Utilities'}
+                                  </td>
+                                  <td className="py-4 px-4 text-slate-500 dark:text-slate-400">
+                                    {b.nextDueDate || `Monthly on Day ${b.dueDay || 15}`}
+                                  </td>
+                                  <td className="py-4 px-4">
+                                    <span className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                                      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block shrink-0" />
+                                      <span>From payments</span>
                                     </span>
                                   </td>
-                                  <td className="py-3 px-4 text-slate-600 font-medium">
-                                    <span>{b.nextDueDate || `Monthly on Day ${b.dueDay || 15}`}</span>
-                                  </td>
-                                  <td className="py-3 px-4">
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                      <span>Pulled from payments</span>
-                                    </span>
-                                  </td>
-                                  <td className="py-3 px-4 text-right font-black text-slate-900 text-sm">
-                                    ${Number(b.expectedAmount || b.amount || 0).toLocaleString()} <span className="text-slate-400 text-[11px] font-normal">/mo</span>
+                                  <td className="py-4 pl-4 text-right font-bold text-slate-900 dark:text-slate-100 text-sm">
+                                    ${Number(b.expectedAmount || b.amount || 0).toLocaleString()}
+                                    <span className="text-slate-400 text-xs font-normal"> /mo</span>
                                   </td>
                                 </tr>
                               ))}
                             </tbody>
                             <tfoot>
-                              <tr className="bg-slate-50 border-t-2 border-slate-200 font-bold">
-                                <td colSpan="4" className="py-3.5 px-4 text-sm text-slate-900">
-                                  Total Verified Monthly Household Bills
+                              <tr className="border-t-2 border-slate-200 dark:border-slate-700">
+                                <td colSpan="4" className="py-5 pr-4 text-sm font-bold text-slate-900 dark:text-slate-100">
+                                  Total monthly bills
                                 </td>
-                                <td className="py-3.5 px-4 text-right text-base font-black text-[#18457c]">
-                                  ${totalActualBills.toLocaleString()} <span className="text-xs font-normal text-slate-500">/mo</span>
+                                <td className="py-5 pl-4 text-right text-base font-bold text-slate-900 dark:text-slate-100">
+                                  ${totalActualBills.toLocaleString()}
+                                  <span className="text-xs font-normal text-slate-400"> /mo</span>
                                 </td>
                               </tr>
                             </tfoot>
                           </table>
                         </div>
                       ) : (
-                        <div className="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 flex flex-col items-center justify-center text-center gap-2.5">
-                          <Receipt className="w-8 h-8 text-slate-300" />
-                          <b className="text-xs font-bold text-slate-800">No household bills pulled from payments yet</b>
-                          <p className="text-xs text-slate-500 max-w-sm">
-                            Once your payment statements or connected bank accounts sync in Klarity, your verified utility and household provider bills will automatically appear here.
+                        <div className="py-12 flex flex-col items-center justify-center text-center gap-2">
+                          <Receipt className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                          <b className="text-xs font-bold text-slate-700 dark:text-slate-300">No household bills pulled from payments yet</b>
+                          <p className="text-xs text-slate-400 dark:text-slate-500 max-w-sm">
+                            Once your payment statements or connected bank accounts sync in Klarity, verified utility and household provider bills will appear here.
                           </p>
                         </div>
                       )}
