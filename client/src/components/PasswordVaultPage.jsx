@@ -17,7 +17,9 @@ import {
   Lock,
   AlertCircle,
   ArrowLeft,
-  ChevronDown
+  ChevronDown,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import {
   copySensitiveWithAutoClear,
@@ -118,6 +120,35 @@ export default function PasswordVaultPage({
   const [isCreatingNewSection, setIsCreatingNewSection] = useState(false);
   const [showFormPassword, setShowFormPassword] = useState(false);
   const [expandedCardIds, setExpandedCardIds] = useState({});
+
+  // View layout and card size preferences (persisted to localStorage)
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_vault_view_mode') || 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  const [cardSize, setCardSize] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_vault_card_size') || 'medium';
+    } catch {
+      return 'medium';
+    }
+  });
+
+  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+
+  const handleSetViewMode = (mode) => {
+    setViewMode(mode);
+    try { localStorage.setItem('klarity_vault_view_mode', mode); } catch {}
+  };
+
+  const handleSetCardSize = (size) => {
+    setCardSize(size);
+    try { localStorage.setItem('klarity_vault_card_size', size); } catch {}
+  };
 
   const toggleCardExpand = (id) => {
     setExpandedCardIds(prev => ({ ...prev, [id]: !prev[id] }));
@@ -715,7 +746,139 @@ export default function PasswordVaultPage({
           <p className="text-xs text-slate-500 mt-0.5">Logins, passwords & account numbers</p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap sm:ml-auto">
+          {/* View Options: Layout (Grid/List) & Card Size (Small/Medium/Large) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors border ${
+                isViewMenuOpen
+                  ? 'bg-slate-200 text-slate-900 border-slate-300 shadow-2xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-transparent'
+              }`}
+              title="Change view layout and card size"
+            >
+              {viewMode === 'list' ? (
+                <List className="w-3.5 h-3.5 text-slate-600" />
+              ) : (
+                <LayoutGrid className="w-3.5 h-3.5 text-slate-600" />
+              )}
+              <span className="capitalize">{viewMode}</span>
+              <span className="text-[10px] text-slate-400 font-normal capitalize">({cardSize})</span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isViewMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown Popover Menu */}
+            {isViewMenuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-20"
+                  onClick={() => setIsViewMenuOpen(false)}
+                />
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl border border-slate-200 shadow-xl p-3 z-30 flex flex-col gap-3 text-xs animate-in fade-in zoom-in-95 duration-100 select-none">
+                  {/* Layout Option */}
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 px-1">
+                      View Layout
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => handleSetViewMode('grid')}
+                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg font-bold text-xs cursor-pointer transition-all ${
+                          viewMode === 'grid'
+                            ? 'bg-white text-[#18457c] shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                        <span>Grid</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetViewMode('list')}
+                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg font-bold text-xs cursor-pointer transition-all ${
+                          viewMode === 'list'
+                            ? 'bg-white text-[#18457c] shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <List className="w-3.5 h-3.5" />
+                        <span>List</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Card Size Option */}
+                  <div className="border-t border-slate-100 pt-2.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 px-1">
+                      Card Size
+                    </span>
+                    <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => handleSetCardSize('small')}
+                        className={`py-1.5 px-1 rounded-lg font-bold text-xs text-center cursor-pointer transition-all ${
+                          cardSize === 'small'
+                            ? 'bg-white text-[#18457c] shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Small
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetCardSize('medium')}
+                        className={`py-1.5 px-1 rounded-lg font-bold text-xs text-center cursor-pointer transition-all ${
+                          cardSize === 'medium'
+                            ? 'bg-white text-[#18457c] shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Medium
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetCardSize('large')}
+                        className={`py-1.5 px-1 rounded-lg font-bold text-xs text-center cursor-pointer transition-all ${
+                          cardSize === 'large'
+                            ? 'bg-white text-[#18457c] shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Large
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Bulk expand / collapse */}
+                  <div className="border-t border-slate-100 pt-2 flex items-center justify-between text-[11px] text-slate-500 px-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allExp = {};
+                        (vaultItems || []).forEach(i => { allExp[i.id] = true; });
+                        setExpandedCardIds(allExp);
+                      }}
+                      className="hover:text-[#18457c] font-semibold cursor-pointer underline"
+                    >
+                      Expand all
+                    </button>
+                    <span>•</span>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedCardIds({})}
+                      className="hover:text-slate-800 font-semibold cursor-pointer underline"
+                    >
+                      Collapse all
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
           {vaultLockType === 'none' ? (
             <button
               type="button"
@@ -1070,7 +1233,21 @@ export default function PasswordVaultPage({
           No saved accounts in this section yet. Click <strong>Add Account</strong> to get started.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+        <div
+          className={
+            viewMode === 'list'
+              ? (cardSize === 'small'
+                  ? 'flex flex-col gap-2 w-full max-w-4xl mx-auto'
+                  : cardSize === 'large'
+                  ? 'flex flex-col gap-4 w-full max-w-5xl mx-auto'
+                  : 'flex flex-col gap-3 w-full max-w-4xl mx-auto')
+              : (cardSize === 'small'
+                  ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5'
+                  : cardSize === 'large'
+                  ? 'grid grid-cols-1 md:grid-cols-2 gap-4'
+                  : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5')
+          }
+        >
           {filteredItems.map(item => {
             const isExpanded = Boolean(expandedCardIds[item.id]);
             const isPwVisible = Boolean(visiblePasswords[item.id]);
@@ -1088,19 +1265,39 @@ export default function PasswordVaultPage({
                 <button
                   type="button"
                   onClick={() => toggleCardExpand(item.id)}
-                  className="w-full p-3.5 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
+                  className={`w-full flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/70 transition-colors select-none ${
+                    cardSize === 'small'
+                      ? 'p-2.5'
+                      : cardSize === 'large'
+                      ? 'p-4 sm:p-5'
+                      : 'p-3.5'
+                  }`}
                 >
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                  <div className={`rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                    cardSize === 'small'
+                      ? 'w-7 h-7'
+                      : cardSize === 'large'
+                      ? 'w-10 h-10'
+                      : 'w-8 h-8'
+                  } ${
                     isExpanded ? 'bg-[#18457c] text-white shadow-2xs' : 'bg-slate-100 text-slate-600'
                   }`}>
-                    <KeyRound className="w-4 h-4" />
+                    <KeyRound className={
+                      cardSize === 'small' ? 'w-3.5 h-3.5' : cardSize === 'large' ? 'w-5 h-5' : 'w-4 h-4'
+                    } />
                   </div>
 
                   {/* Main Name in the Middle */}
                   <div className="flex-1 text-center min-w-0 px-2">
-                    <span className="font-bold text-slate-900 text-sm truncate block">{item.service}</span>
+                    <span className={`font-bold text-slate-900 truncate block ${
+                      cardSize === 'small' ? 'text-xs' : cardSize === 'large' ? 'text-base' : 'text-sm'
+                    }`}>
+                      {item.service}
+                    </span>
                     {item.category && (
-                      <span className="text-[10px] font-semibold text-slate-400 block truncate">
+                      <span className={`font-semibold text-slate-400 block truncate ${
+                        cardSize === 'small' ? 'text-[9px]' : cardSize === 'large' ? 'text-xs' : 'text-[10px]'
+                      }`}>
                         {item.category}
                       </span>
                     )}
@@ -1110,14 +1307,22 @@ export default function PasswordVaultPage({
                     <div className={`p-1 rounded-lg text-slate-400 transition-transform duration-200 ${
                       isExpanded ? 'rotate-180 text-[#18457c] bg-blue-50' : ''
                     }`}>
-                      <ChevronDown className="w-4 h-4" />
+                      <ChevronDown className={
+                        cardSize === 'small' ? 'w-3.5 h-3.5' : cardSize === 'large' ? 'w-5 h-5' : 'w-4 h-4'
+                      } />
                     </div>
                   </div>
                 </button>
 
                 {/* Expanded Details Body */}
                 {isExpanded && (
-                  <div className="px-4 pb-4 pt-1 border-t border-slate-100 flex flex-col gap-3 text-xs bg-slate-50/30">
+                  <div className={`border-t border-slate-100 flex flex-col gap-3 text-xs bg-slate-50/30 ${
+                    cardSize === 'small'
+                      ? 'px-3 pb-3 pt-1'
+                      : cardSize === 'large'
+                      ? 'px-5 pb-5 pt-2'
+                      : 'px-4 pb-4 pt-1'
+                  }`}>
                     {/* Website, Notes & Action Buttons */}
                     <div className="flex items-start justify-between gap-2 pt-2">
                       <div className="space-y-1 min-w-0">
@@ -1166,10 +1371,14 @@ export default function PasswordVaultPage({
                     {/* Credentials Details Grid */}
                     <div className="space-y-2">
                       {/* Username */}
-                      <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                      <div className={`flex items-center justify-between bg-white rounded-xl border border-slate-200/70 shadow-2xs ${
+                        cardSize === 'small' ? 'px-2 py-1' : cardSize === 'large' ? 'px-3.5 py-2' : 'px-2.5 py-1.5'
+                      }`}>
                         <div className="min-w-0 flex-1">
                           <span className="text-[10px] text-slate-400 block font-medium">Username / Login</span>
-                          <span className="font-mono font-semibold text-slate-800 truncate block">
+                          <span className={`font-mono font-semibold text-slate-800 truncate block ${
+                            cardSize === 'large' ? 'text-sm' : 'text-xs'
+                          }`}>
                             {item.username || '—'}
                           </span>
                         </div>
@@ -1189,10 +1398,14 @@ export default function PasswordVaultPage({
                       </div>
 
                       {/* Password */}
-                      <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                      <div className={`flex items-center justify-between bg-white rounded-xl border border-slate-200/70 shadow-2xs ${
+                        cardSize === 'small' ? 'px-2 py-1' : cardSize === 'large' ? 'px-3.5 py-2' : 'px-2.5 py-1.5'
+                      }`}>
                         <div className="min-w-0 flex-1">
                           <span className="text-[10px] text-slate-400 block font-medium">Password</span>
-                          <span className="font-mono font-semibold text-slate-800 truncate block">
+                          <span className={`font-mono font-semibold text-slate-800 truncate block ${
+                            cardSize === 'large' ? 'text-sm' : 'text-xs'
+                          }`}>
                             {item.password ? (isPwVisible ? item.password : '••••••••••') : '—'}
                           </span>
                         </div>
@@ -1219,10 +1432,14 @@ export default function PasswordVaultPage({
                       </div>
 
                       {/* Account Number */}
-                      <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                      <div className={`flex items-center justify-between bg-white rounded-xl border border-slate-200/70 shadow-2xs ${
+                        cardSize === 'small' ? 'px-2 py-1' : cardSize === 'large' ? 'px-3.5 py-2' : 'px-2.5 py-1.5'
+                      }`}>
                         <div className="min-w-0 flex-1">
                           <span className="text-[10px] text-slate-400 block font-medium">Account # / Member ID</span>
-                          <span className="font-mono font-semibold text-slate-800 truncate block">
+                          <span className={`font-mono font-semibold text-slate-800 truncate block ${
+                            cardSize === 'large' ? 'text-sm' : 'text-xs'
+                          }`}>
                             {item.accountNumber || '—'}
                           </span>
                         </div>
