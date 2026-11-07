@@ -686,18 +686,33 @@ export default function PasswordVaultPage({
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Top Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-[#18457c] text-white flex items-center justify-center shrink-0">
-            <KeyRound className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-serif-title text-xl font-bold text-slate-900">Passwords & Accounts</h2>
+      {/* Top Bar with Main Name in the Middle */}
+      <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-1">
+        {/* Left Side (Back button if available or spacer) */}
+        <div className="flex items-center gap-2 min-w-[40px]">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back</span>
+            </button>
+          )}
+        </div>
+
+        {/* Center: Main Name in the Middle */}
+        <div className="flex flex-col items-center text-center justify-center sm:absolute sm:left-1/2 sm:-translate-x-1/2">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-[#18457c] text-white flex items-center justify-center shrink-0 shadow-2xs">
+              <KeyRound className="w-4 h-4" />
             </div>
-            <p className="text-xs text-slate-500">Logins, passwords & account numbers</p>
+            <h2 className="font-serif-title text-xl font-bold text-slate-900 tracking-tight">
+              Passwords & Accounts
+            </h2>
           </div>
+          <p className="text-xs text-slate-500 mt-0.5">Logins, passwords & account numbers</p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -1069,26 +1084,26 @@ export default function PasswordVaultPage({
                     : 'border-slate-200/90 shadow-2xs hover:border-slate-300 hover:shadow-xs'
                 }`}
               >
-                {/* Collapsible Card Header - Always shows the Name; Click to expand/collapse */}
+                {/* Collapsible Card Header - Main Name in the middle; Click to expand/collapse */}
                 <button
                   type="button"
                   onClick={() => toggleCardExpand(item.id)}
-                  className="w-full text-left p-3.5 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
+                  className="w-full p-3.5 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                      isExpanded ? 'bg-[#18457c] text-white shadow-2xs' : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      <KeyRound className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="font-bold text-slate-900 text-sm truncate block">{item.service}</span>
-                      {item.category && (
-                        <span className="text-[10px] font-semibold text-slate-400 block truncate">
-                          {item.category}
-                        </span>
-                      )}
-                    </div>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                    isExpanded ? 'bg-[#18457c] text-white shadow-2xs' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+
+                  {/* Main Name in the Middle */}
+                  <div className="flex-1 text-center min-w-0 px-2">
+                    <span className="font-bold text-slate-900 text-sm truncate block">{item.service}</span>
+                    {item.category && (
+                      <span className="text-[10px] font-semibold text-slate-400 block truncate">
+                        {item.category}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
