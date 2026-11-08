@@ -8,6 +8,26 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Klarity</title>
+    <script>
+      (function() {
+        try {
+          var theme = localStorage.getItem('klarity_theme') || 'system';
+          var root = document.documentElement;
+          root.classList.remove('dark', 'high-contrast', 'high-contrast-light');
+          var effective = theme;
+          if (theme === 'system') {
+            effective = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          if (effective === 'dark') {
+            root.classList.add('dark');
+          } else if (effective === 'high-contrast') {
+            root.classList.add('dark', 'high-contrast');
+          } else if (effective === 'high-contrast-light') {
+            root.classList.add('high-contrast-light');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

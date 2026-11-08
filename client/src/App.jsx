@@ -68,7 +68,12 @@ import {
   Square,
   Copy,
   PhoneCall,
-  Shield
+  Shield,
+  Sun,
+  Moon,
+  Contrast,
+  Laptop,
+  Palette
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -966,7 +971,60 @@ function KlarityApp() {
   // Settings & Plaid state
   const [settings, setSettings] = useState({ hasPlaidKeys: false, plaidEnv: 'development' });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsActiveTab, setSettingsActiveTab] = useState('profile'); // 'profile' | 'ai' | 'plaid' | 'session'
+  const [settingsActiveTab, setSettingsActiveTab] = useState('profile'); // 'profile' | 'appearance' | 'sidebar' | 'ai' | 'plaid' | 'security' | 'session'
+
+  // Theme state: 'system' | 'light' | 'dark' | 'high-contrast' | 'high-contrast-light'
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_theme') || 'system';
+    } catch (e) {
+      return 'system';
+    }
+  });
+
+  const applyTheme = (themeName) => {
+    try {
+      const root = document.documentElement;
+      root.classList.remove('dark', 'high-contrast', 'high-contrast-light');
+      let effective = themeName;
+      if (themeName === 'system') {
+        effective = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      if (effective === 'dark') {
+        root.classList.add('dark');
+      } else if (effective === 'high-contrast') {
+        root.classList.add('dark', 'high-contrast');
+      } else if (effective === 'high-contrast-light') {
+        root.classList.add('high-contrast-light');
+      }
+    } catch (e) {
+      console.error('Failed to apply theme', e);
+    }
+  };
+
+  const handleSelectTheme = (themeName) => {
+    setCurrentTheme(themeName);
+    try {
+      localStorage.setItem('klarity_theme', themeName);
+    } catch (e) {}
+    applyTheme(themeName);
+  };
+
+  useEffect(() => {
+    applyTheme(currentTheme);
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => {
+      const stored = localStorage.getItem('klarity_theme') || 'system';
+      if (stored === 'system') {
+        applyTheme('system');
+      }
+    };
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+  }, [currentTheme]);
   const [settingsDisplayName, setSettingsDisplayName] = useState(currentUser?.name || 'Ziyad Elmahi');
   const getInitialUserStorage = (key, fallback = '') => {
     try {
@@ -4785,19 +4843,43 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
         {/* Left Sidebar Footer: Refresh App + User Profile */}
         <div className="flex flex-col gap-2 pt-3 border-t border-slate-200/80">
+          {/* Quick Actions: Refresh & Theme */}
           {!isSidebarCompact ? (
-            <button
-              type="button"
-              onClick={handleRefreshApp}
-              disabled={isRefreshingApp}
-              className="w-full inline-flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] text-xs font-semibold shadow-2xs cursor-pointer transition-all"
-              title="Refresh app data & check for updates"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-[#18457c] shrink-0 ${isRefreshingApp ? 'animate-spin' : ''}`} />
-              <span>{isRefreshingApp ? 'Refreshing...' : 'Refresh'}</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleRefreshApp}
+                disabled={isRefreshingApp}
+                className="flex-1 px-2.5 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer transition-all disabled:opacity-50"
+                title="Refresh all data and check for updates"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-[#18457c] shrink-0 ${isRefreshingApp ? 'animate-spin' : ''}`} />
+                <span className="truncate">{isRefreshingApp ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const themes = ['light', 'dark', 'high-contrast', 'system'];
+                  const nextIdx = (themes.indexOf(currentTheme) + 1) % themes.length;
+                  handleSelectTheme(themes[nextIdx]);
+                }}
+                className="px-2.5 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer transition-all shrink-0"
+                title={`Current theme: ${currentTheme}. Click to cycle.`}
+              >
+                {currentTheme === 'dark' ? (
+                  <Moon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                ) : currentTheme === 'high-contrast' || currentTheme === 'high-contrast-light' ? (
+                  <Contrast className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                ) : currentTheme === 'system' ? (
+                  <Laptop className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                ) : (
+                  <Sun className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                )}
+                <span className="capitalize">{currentTheme === 'high-contrast' ? 'Contrast' : currentTheme}</span>
+              </button>
+            </div>
           ) : (
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-1.5">
               <button
                 type="button"
                 onClick={handleRefreshApp}
@@ -4808,6 +4890,29 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 <RefreshCw className={`w-4 h-4 text-[#18457c] ${isRefreshingApp ? 'animate-spin' : ''}`} />
                 <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
                   Refresh
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const themes = ['light', 'dark', 'high-contrast', 'system'];
+                  const nextIdx = (themes.indexOf(currentTheme) + 1) % themes.length;
+                  handleSelectTheme(themes[nextIdx]);
+                }}
+                className="w-10 h-10 flex items-center justify-center rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] shadow-2xs cursor-pointer transition-all relative group"
+                title={`Theme: ${currentTheme}. Click to cycle.`}
+              >
+                {currentTheme === 'dark' ? (
+                  <Moon className="w-4 h-4 text-blue-500" />
+                ) : currentTheme === 'high-contrast' || currentTheme === 'high-contrast-light' ? (
+                  <Contrast className="w-4 h-4 text-amber-500" />
+                ) : currentTheme === 'system' ? (
+                  <Laptop className="w-4 h-4 text-slate-500" />
+                ) : (
+                  <Sun className="w-4 h-4 text-amber-500" />
+                )}
+                <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap capitalize">
+                  Theme: {currentTheme}
                 </span>
               </button>
             </div>
@@ -4910,14 +5015,36 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       <KlarityLogo className="w-7 h-7 text-[#18457c] shrink-0" />
                       <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">Overview</h1>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsSettingsOpen(true)}
-                      className="w-9 h-9 rounded-full bg-[#18457c] text-white flex items-center justify-center font-bold text-xs shadow-2xs cursor-pointer"
-                      title="Open Settings"
-                    >
-                      {userInitials}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const themes = ['light', 'dark', 'high-contrast', 'system'];
+                          const nextIdx = (themes.indexOf(currentTheme) + 1) % themes.length;
+                          handleSelectTheme(themes[nextIdx]);
+                        }}
+                        className="w-9 h-9 rounded-full bg-white border border-slate-200/90 text-slate-700 flex items-center justify-center shadow-2xs cursor-pointer"
+                        title={`Current theme: ${currentTheme}. Click to cycle.`}
+                      >
+                        {currentTheme === 'dark' ? (
+                          <Moon className="w-4 h-4 text-blue-500" />
+                        ) : currentTheme === 'high-contrast' || currentTheme === 'high-contrast-light' ? (
+                          <Contrast className="w-4 h-4 text-amber-500" />
+                        ) : currentTheme === 'system' ? (
+                          <Laptop className="w-4 h-4 text-slate-600" />
+                        ) : (
+                          <Sun className="w-4 h-4 text-amber-500" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsSettingsOpen(true)}
+                        className="w-9 h-9 rounded-full bg-[#18457c] text-white flex items-center justify-center font-bold text-xs shadow-2xs cursor-pointer"
+                        title="Open Settings"
+                      >
+                        {userInitials}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Available Cash Hero Card */}
@@ -8669,6 +8796,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <nav className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
                     {[
                       { id: 'profile', label: 'Profile', dot: false },
+                      { id: 'appearance', label: 'Appearance', dot: false },
                       { id: 'sidebar', label: 'Sidebar', dot: false },
                       { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' },
                       { id: 'plaid', label: 'Bank connection', dot: settingsPlaidStatus !== 'connected' },
@@ -8882,6 +9010,124 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           >
                             Save profile
                           </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB: APPEARANCE & THEME */}
+                  {settingsActiveTab === 'appearance' && (
+                    <div key="settings-tab-appearance" className="flex flex-col gap-6">
+                      <div>
+                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Appearance & Theme</h2>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Customize how Klarity looks. Choose between classic light mode, sleek dark mode, high contrast modes for accessibility, or match your system settings.
+                        </p>
+                      </div>
+
+                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-5 bg-white shadow-2xs">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-bold text-slate-900">Theme Selection</h3>
+                          <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full capitalize">
+                            Active: {currentTheme === 'high-contrast' ? 'High Contrast (Dark)' : currentTheme === 'high-contrast-light' ? 'High Contrast (Light)' : currentTheme}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                          {[
+                            {
+                              id: 'system',
+                              label: 'Match System',
+                              desc: 'Syncs automatically with your operating system light/dark theme preference.',
+                              icon: Laptop,
+                              badge: 'Auto',
+                              previewBg: 'bg-gradient-to-r from-slate-100 to-slate-900',
+                              previewCard: 'bg-white border-slate-200 text-slate-900'
+                            },
+                            {
+                              id: 'light',
+                              label: 'Light Mode',
+                              desc: 'Clean, classic daylight palette with soft contrast and crisp typography.',
+                              icon: Sun,
+                              badge: 'Default',
+                              previewBg: 'bg-[#f8fafc]',
+                              previewCard: 'bg-white border-slate-200 text-slate-900'
+                            },
+                            {
+                              id: 'dark',
+                              label: 'Dark Mode',
+                              desc: 'Sleek low-light theme designed to reduce eye strain in darker environments.',
+                              icon: Moon,
+                              badge: 'Night',
+                              previewBg: 'bg-[#0b1120]',
+                              previewCard: 'bg-[#111827] border-slate-700 text-slate-100'
+                            },
+                            {
+                              id: 'high-contrast',
+                              label: 'High Contrast (Dark)',
+                              desc: 'WCAG AAA pitch-black background with bold white borders and maximum text contrast.',
+                              icon: Contrast,
+                              badge: 'WCAG AAA',
+                              previewBg: 'bg-black',
+                              previewCard: 'bg-black border-2 border-white text-white'
+                            },
+                            {
+                              id: 'high-contrast-light',
+                              label: 'High Contrast (Light)',
+                              desc: 'WCAG AAA pure white canvas with strong solid black outlines and prominent text.',
+                              icon: Contrast,
+                              badge: 'Accessible',
+                              previewBg: 'bg-white',
+                              previewCard: 'bg-white border-2 border-black text-black'
+                            }
+                          ].map(t => {
+                            const isSelected = currentTheme === t.id;
+                            const IconComp = t.icon;
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => handleSelectTheme(t.id)}
+                                className={`flex flex-col text-left p-4 rounded-xl border transition-all cursor-pointer relative ${
+                                  isSelected
+                                    ? 'border-[#18457c] ring-2 ring-[#18457c]/20 bg-blue-50/20 shadow-sm'
+                                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/60 shadow-2xs'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-[#18457c] text-white' : 'bg-slate-100 text-slate-700'}`}>
+                                      <IconComp className="w-4 h-4" />
+                                    </div>
+                                    <span className="text-xs font-bold text-slate-900">{t.label}</span>
+                                  </div>
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                                    {t.badge}
+                                  </span>
+                                </div>
+
+                                {/* Preview Box */}
+                                <div className={`w-full h-14 rounded-lg p-2 flex items-center gap-2 mb-2.5 overflow-hidden ${t.previewBg} border border-slate-200/50`}>
+                                  <div className={`h-full flex-1 rounded p-1.5 flex flex-col justify-between text-[9px] ${t.previewCard}`}>
+                                    <div className="w-8 h-1.5 rounded-full bg-current opacity-40"></div>
+                                    <div className="w-12 h-1.5 rounded-full bg-current opacity-70"></div>
+                                  </div>
+                                  <div className={`h-full w-8 rounded p-1 flex flex-col items-center justify-center text-[9px] ${t.previewCard}`}>
+                                    <div className="w-3 h-3 rounded-full bg-current opacity-60"></div>
+                                  </div>
+                                </div>
+
+                                <p className="text-[11px] text-slate-500 leading-relaxed">{t.desc}</p>
+
+                                {isSelected && (
+                                  <div className="mt-2.5 flex items-center gap-1.5 text-[11px] font-bold text-[#18457c]">
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Selected</span>
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
