@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
 @layer base {
   body {
     background-color: #f8fafc;
@@ -12,80 +10,6 @@
   .font-serif-title {
     font-family: 'Source Serif 4', Georgia, serif;
   }
-}
-
-/* ========================================================================== */
-/* DARK MODE BASE SETTINGS & ELEVATED SURFACES (Like YouTube & Amazon)        */
-/* Canvas background: #0b1120                                                */
-/* Elevated surface: #131d32 (slate-900 tone, distinct from canvas)          */
-/* Recessed / sub-box surface: #0e1628                                       */
-/* Distinct borders: #22324e                                                  */
-/* ========================================================================== */
-html.dark {
-  color-scheme: dark;
-}
-html.dark body {
-  background-color: #0b1120;
-  color: #f1f5f9;
-}
-
-/* Elevated card surfaces */
-html.dark .bg-white:not([data-force-light]):not(.light-preview) {
-  background-color: #131d32;
-  border-color: #22324e;
-  color: #f1f5f9;
-}
-
-/* Recessed sub-boxes and card footers */
-html.dark .bg-slate-50:not([data-force-light]):not(.light-preview),
-html.dark .bg-slate-50\/80:not([data-force-light]):not(.light-preview),
-html.dark .bg-slate-50\/50:not([data-force-light]):not(.light-preview) {
-  background-color: #0e1628;
-  border-color: #22324e;
-}
-
-/* Dark mode borders and dividers */
-html.dark .border-slate-200,
-html.dark .border-slate-200\/90,
-html.dark .border-slate-200\/80,
-html.dark .border-slate-200\/70,
-html.dark .border-slate-100 {
-  border-color: #22324e;
-}
-
-html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
-html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #22324e;
-}
-
-/* Clean legible dark mode typography */
-html.dark .text-slate-900:not([data-force-light]):not(.light-preview *) {
-  color: #f8fafc;
-}
-html.dark .text-slate-800:not([data-force-light]):not(.light-preview *) {
-  color: #f1f5f9;
-}
-html.dark .text-slate-700:not([data-force-light]):not(.light-preview *) {
-  color: #cbd5e1;
-}
-html.dark .text-slate-600:not([data-force-light]):not(.light-preview *) {
-  color: #94a3b8;
-}
-html.dark .text-slate-500:not([data-force-light]):not(.light-preview *) {
-  color: #8b9bb4;
-}
-
-/* Dark mode form elements */
-html.dark input:not([type="checkbox"]):not([type="radio"]):not([data-force-light]),
-html.dark textarea:not([data-force-light]),
-html.dark select:not([data-force-light]) {
-  background-color: #0e1628;
-  color: #f8fafc;
-  border-color: #22324e;
-}
-html.dark input::placeholder,
-html.dark textarea::placeholder {
-  color: #64748b;
 }
 
 /* Custom scrollbars */
@@ -102,13 +26,6 @@ html.dark textarea::placeholder {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
-}
-
-html.dark ::-webkit-scrollbar-thumb {
-  background: #334155;
-}
-html.dark ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
 }
 
 /* ========================================================================== */
@@ -148,10 +65,6 @@ html.high-focus *:focus-visible {
   outline: 3px solid #18457c !important;
   outline-offset: 2px !important;
 }
-html.dark.high-focus *:focus-visible {
-  outline: 3px solid #60a5fa !important;
-  outline-offset: 2px !important;
-}
 
 html.privacy-mask .privacy-sensitive {
   filter: blur(6.5px);
@@ -168,9 +81,6 @@ html.privacy-mask .privacy-sensitive:hover {
   font-size: 0.875rem;
   line-height: 1.65;
   color: #1e293b;
-}
-.dark .gemini-markdown {
-  color: #e2e8f0;
 }
 .gemini-markdown > *:first-child {
   margin-top: 0 !important;
@@ -192,12 +102,6 @@ html.privacy-mask .privacy-sensitive:hover {
   margin-bottom: 0.4rem !important;
   color: #0f172a !important;
 }
-.dark .gemini-markdown h1,
-.dark .gemini-markdown h2,
-.dark .gemini-markdown h3,
-.dark .gemini-markdown h4 {
-  color: #f8fafc !important;
-}
 .gemini-markdown h1 { font-size: 1.05rem !important; }
 .gemini-markdown h2 { font-size: 0.975rem !important; }
 .gemini-markdown h3 { font-size: 0.925rem !important; }
@@ -207,10 +111,6 @@ html.privacy-mask .privacy-sensitive:hover {
 .gemini-markdown b {
   font-weight: 700 !important;
   color: #0f172a !important;
-}
-.dark .gemini-markdown strong,
-.dark .gemini-markdown b {
-  color: #f8fafc !important;
 }
 
 .gemini-markdown ul,
@@ -235,9 +135,6 @@ html.privacy-mask .privacy-sensitive:hover {
   color: #18457c !important;
   font-weight: bold;
 }
-.dark .gemini-markdown li::marker {
-  color: #60a5fa !important;
-}
 
 .gemini-markdown code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -247,10 +144,6 @@ html.privacy-mask .privacy-sensitive:hover {
   background-color: rgba(15, 23, 42, 0.08);
   color: #0f172a;
   font-weight: 500;
-}
-.dark .gemini-markdown code {
-  background-color: rgba(255, 255, 255, 0.12);
-  color: #f1f5f9;
 }
 .gemini-markdown pre {
   margin: 0.65rem 0;
@@ -276,17 +169,11 @@ html.privacy-mask .privacy-sensitive:hover {
 .gemini-markdown a:hover {
   color: #0f2c52;
 }
-.dark .gemini-markdown a {
-  color: #60a5fa;
-}
 
 .gemini-markdown hr {
   margin: 0.85rem 0;
   border: 0;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
-}
-.dark .gemini-markdown hr {
-  border-top-color: rgba(255, 255, 255, 0.12);
 }
 
 .gemini-markdown blockquote {
@@ -297,11 +184,6 @@ html.privacy-mask .privacy-sensitive:hover {
   font-style: italic;
   background: rgba(24, 69, 124, 0.04);
   border-radius: 0 0.4rem 0.4rem 0;
-}
-.dark .gemini-markdown blockquote {
-  border-left-color: #60a5fa;
-  color: #94a3b8;
-  background: rgba(96, 165, 250, 0.08);
 }
 
 .gemini-markdown table {
@@ -318,16 +200,8 @@ html.privacy-mask .privacy-sensitive:hover {
   padding: 0.45rem 0.65rem;
   text-align: left;
 }
-.dark .gemini-markdown th,
-.dark .gemini-markdown td {
-  border-color: rgba(255, 255, 255, 0.12);
-}
 .gemini-markdown th {
   background-color: rgba(24, 69, 124, 0.08);
   font-weight: 600;
   color: #0f172a;
-}
-.dark .gemini-markdown th {
-  background-color: rgba(255, 255, 255, 0.08);
-  color: #f8fafc;
 }

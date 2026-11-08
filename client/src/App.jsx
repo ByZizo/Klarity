@@ -68,12 +68,7 @@ import {
   Square,
   Copy,
   PhoneCall,
-  Shield,
-  Sun,
-  Moon,
-  Contrast,
-  Laptop,
-  Palette
+  Shield
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -1027,16 +1022,6 @@ function KlarityApp() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsActiveTab, setSettingsActiveTab] = useState('profile'); // 'profile' | 'appearance' | 'sidebar' | 'ai' | 'plaid' | 'security' | 'session'
 
-  // Theme state: 'system' | 'light' | 'dark'
-  const [currentTheme, setCurrentTheme] = useState(() => {
-    try {
-      const saved = localStorage.getItem('klarity_theme') || 'system';
-      return (saved === 'dark' || saved === 'light' || saved === 'system') ? saved : 'system';
-    } catch (e) {
-      return 'system';
-    }
-  });
-
   // UI & Accessibility states: font scale, density, reduce motion, high focus, privacy mask
   const [uiFontScale, setUiFontScale] = useState(() => {
     try { return localStorage.getItem('klarity_ui_font_scale') || 'normal'; } catch (e) { return 'normal'; }
@@ -1057,7 +1042,7 @@ function KlarityApp() {
   const applyUiPreferences = (scale, dens, motion, focus, mask) => {
     try {
       const root = document.documentElement;
-      root.classList.remove('font-scale-large', 'font-scale-xlarge', 'ui-density-compact', 'reduce-motion', 'high-focus', 'privacy-mask');
+      root.classList.remove('font-scale-large', 'font-scale-xlarge', 'ui-density-compact', 'reduce-motion', 'high-focus', 'privacy-mask', 'dark', 'high-contrast', 'high-contrast-light');
       if (scale === 'large') root.classList.add('font-scale-large');
       if (scale === 'xlarge') root.classList.add('font-scale-xlarge');
       if (dens === 'compact') root.classList.add('ui-density-compact');
@@ -1101,48 +1086,12 @@ function KlarityApp() {
   };
 
   useEffect(() => {
+    try {
+      localStorage.removeItem('klarity_theme');
+      document.documentElement.classList.remove('dark', 'high-contrast', 'high-contrast-light');
+    } catch (e) {}
     applyUiPreferences(uiFontScale, uiDensity, uiReduceMotion, uiHighFocus, uiPrivacyMask);
   }, []);
-
-  const applyTheme = (themeName) => {
-    try {
-      const root = document.documentElement;
-      root.classList.remove('dark', 'high-contrast', 'high-contrast-light');
-      let effective = themeName;
-      if (themeName === 'system') {
-        effective = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      }
-      if (effective === 'dark') {
-        root.classList.add('dark');
-      }
-    } catch (e) {
-      console.error('Failed to apply theme', e);
-    }
-  };
-
-  const handleSelectTheme = (themeName) => {
-    setCurrentTheme(themeName);
-    try {
-      localStorage.setItem('klarity_theme', themeName);
-    } catch (e) {}
-    applyTheme(themeName);
-  };
-
-  useEffect(() => {
-    applyTheme(currentTheme);
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = () => {
-      const stored = localStorage.getItem('klarity_theme') || 'system';
-      if (stored === 'system') {
-        applyTheme('system');
-      }
-    };
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener('change', handleChange);
-      return () => mediaQuery.removeEventListener('change', handleChange);
-    }
-  }, [currentTheme]);
   const [settingsDisplayName, setSettingsDisplayName] = useState(currentUser?.name || 'Ziyad Elmahi');
   const getInitialUserStorage = (key, fallback = '') => {
     try {
@@ -5098,27 +5047,27 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   </div>
 
                   {/* Available Cash Hero Card */}
-                  <div className="bg-white dark:bg-[#131d32] rounded-2xl border border-slate-200/80 dark:border-[#22324e] p-5 shadow-2xs">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Available cash</p>
-                    <p className="font-serif-title text-[34px] leading-tight font-bold text-slate-900 dark:text-slate-100 mt-1">
+                  <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs">
+                    <p className="text-xs text-slate-500">Available cash</p>
+                    <p className="font-serif-title text-[34px] leading-tight font-bold text-slate-900 mt-1">
                       {fmtMoney(displayCash)}
                     </p>
-                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mt-1.5">
+                    <p className="text-xs font-medium text-emerald-700 mt-1.5">
                       Covers all bills due in 14 days
                     </p>
                   </div>
 
                   {/* Two Side-by-Side Metric Cards */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white dark:bg-[#131d32] rounded-2xl border border-slate-200/80 dark:border-[#22324e] p-4 shadow-2xs">
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Card balances</p>
-                      <p className="font-serif-title text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">
+                    <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs">
+                      <p className="text-xs text-slate-500">Card balances</p>
+                      <p className="font-serif-title text-xl font-bold text-slate-900 mt-1">
                         {fmtMoney(displayCardBalances)}
                       </p>
                     </div>
-                    <div className="bg-white dark:bg-[#131d32] rounded-2xl border border-slate-200/80 dark:border-[#22324e] p-4 shadow-2xs">
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Due in 14 days</p>
-                      <p className="font-serif-title text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">
+                    <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs">
+                      <p className="text-xs text-slate-500">Due in 14 days</p>
+                      <p className="font-serif-title text-xl font-bold text-slate-900 mt-1">
                         {fmtMoney(displayDue14Sum || 842.15)}
                       </p>
                     </div>
@@ -5126,13 +5075,13 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
                   {/* Mobile Retirement Prompt (when on, no plans, not dismissed) */}
                   {featureFlags.retirement !== false && retirementPlans.length === 0 && !retirementPromptDismissed && (
-                    <div className="bg-white dark:bg-[#131d32] rounded-2xl border border-blue-200/80 dark:border-blue-900/60 p-4 shadow-2xs flex flex-col gap-3">
+                    <div className="bg-white rounded-2xl border border-blue-200/80 p-4 shadow-2xs flex flex-col gap-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-[#18457c] dark:text-blue-400 flex items-center justify-center shrink-0">
+                          <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#18457c] flex items-center justify-center shrink-0">
                             <Landmark className="w-4 h-4" />
                           </div>
-                          <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Planning for retirement?</span>
+                          <span className="text-sm font-bold text-slate-900">Planning for retirement?</span>
                         </div>
                         <button
                           type="button"
@@ -5820,10 +5769,10 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             {/* Top Greeting Message */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <h1 className="font-serif-title text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                <h1 className="font-serif-title text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
                   Good {getTimeGreeting()}, {firstName}
                 </h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Here's where your money stands today.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Here's where your money stands today.</p>
               </div>
               
             </div>
@@ -5836,12 +5785,12 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                     key={alert.id}
                     className={`rounded-xl border p-3.5 flex items-center justify-between gap-3 text-xs shadow-2xs ${
                       alert.type === 'urgent'
-                        ? 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/60 text-rose-900 dark:text-rose-200'
-                        : 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/60 text-amber-900 dark:text-amber-200'
+                        ? 'bg-rose-50/80 border-rose-200 text-rose-900'
+                        : 'bg-amber-50/80 border-amber-200 text-amber-900'
                     }`}
                   >
                     <div className="flex items-start gap-2.5 min-w-0">
-                      <AlertCircle className={`w-4 h-4 shrink-0 mt-0.5 ${alert.type === 'urgent' ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`} />
+                      <AlertCircle className={`w-4 h-4 shrink-0 mt-0.5 ${alert.type === 'urgent' ? 'text-rose-600' : 'text-amber-600'}`} />
                       <div className="min-w-0">
                         <p className="font-bold truncate">{alert.title}</p>
                         <p className="text-[11px] opacity-80 truncate">{alert.detail}</p>
@@ -5850,7 +5799,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                     <button
                       type="button"
                       onClick={() => setActiveTab(alert.actionTab)}
-                      className="px-2.5 py-1 rounded-lg bg-white/80 hover:bg-white text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 font-semibold text-[11px] border border-black/10 dark:border-slate-700 shrink-0 cursor-pointer transition-colors"
+                      className="px-2.5 py-1 rounded-lg bg-white/80 hover:bg-white text-slate-800 font-semibold text-[11px] border border-black/10 shrink-0 cursor-pointer transition-colors"
                     >
                       {alert.actionLabel}
                     </button>
@@ -5860,34 +5809,34 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             )}
 
             {/* 1. Top 3-Metric Summary Card */}
-            <div className="bg-white dark:bg-[#131d32] rounded-xl border border-slate-200/90 dark:border-[#22324e] shadow-2xs p-5 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 dark:divide-[#22324e] gap-4 md:gap-6">
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 gap-4 md:gap-6">
               <div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Available cash</div>
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1 tracking-tight">
+                <div className="text-xs text-slate-500 font-medium">Available cash</div>
+                <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
                   {fmtMoney(displayCash)}
                 </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 flex items-center gap-1">
-                  <span className="text-emerald-700 dark:text-emerald-400 font-bold">Covers</span>
+                <div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
+                  <span className="text-emerald-700 font-bold">Covers</span>
                   <span>all bills due in the next 14 days ({fmtMoney(projectedCashAfterBills)} left after bills)</span>
                 </div>
               </div>
 
               <div className="pt-4 md:pt-0 md:pl-6">
-                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Card balances</div>
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1 tracking-tight">
+                <div className="text-xs text-slate-500 font-medium">Card balances</div>
+                <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
                   {fmtMoney(displayCardBalances)}
                 </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                <div className="text-[11px] text-slate-500 mt-1.5">
                   Across {displayCards.length} cards
                 </div>
               </div>
 
               <div className="pt-4 md:pt-0 md:pl-6">
-                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Due in 14 days</div>
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1 tracking-tight">
+                <div className="text-xs text-slate-500 font-medium">Due in 14 days</div>
+                <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
                   {fmtMoney(displayDue14Sum)}
                 </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                <div className="text-[11px] text-slate-500 mt-1.5">
                   {displayDue14Count} bills
                 </div>
               </div>
@@ -5895,14 +5844,14 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
             {/* Desktop Retirement Prompt (when on, no plans, not dismissed) */}
             {featureFlags.retirement !== false && retirementPlans.length === 0 && !retirementPromptDismissed && (
-              <div className="rounded-xl border border-blue-200/80 dark:border-blue-900/60 bg-gradient-to-r from-blue-50/90 via-sky-50/70 to-blue-50/90 dark:from-blue-950/40 dark:via-slate-900/50 dark:to-blue-950/40 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs shadow-2xs">
+              <div className="rounded-xl border border-blue-200/80 bg-gradient-to-r from-blue-50/90 via-sky-50/70 to-blue-50/90 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs shadow-2xs">
                 <div className="flex items-center gap-3.5 min-w-0">
                   <div className="w-10 h-10 rounded-xl bg-[#18457c] text-white flex items-center justify-center shadow-2xs shrink-0">
                     <Landmark className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">Planning for retirement?</p>
-                    <p className="text-slate-600 dark:text-slate-400 text-xs mt-0.5">
+                    <p className="font-bold text-slate-900 text-sm">Planning for retirement?</p>
+                    <p className="text-slate-600 text-xs mt-0.5">
                       Forecast your public pensions (CalPERS, CalSTRS, FERS), 401(k), IRAs, and Social Security estimates.
                     </p>
                   </div>
@@ -5922,7 +5871,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       try { localStorage.setItem('klarity_retirement_prompt_dismissed', 'true'); } catch {}
                       handleHideRetirement();
                     }}
-                    className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium text-xs border border-slate-200 dark:border-slate-700 cursor-pointer transition-colors shadow-2xs"
+                    className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-600 font-medium text-xs border border-slate-200 cursor-pointer transition-colors shadow-2xs"
                   >
                     Not for me
                   </button>
@@ -5932,7 +5881,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       setRetirementPromptDismissed(true);
                       try { localStorage.setItem('klarity_retirement_prompt_dismissed', 'true'); } catch {}
                     }}
-                    className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg cursor-pointer transition-colors"
+                    className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer transition-colors"
                     title="Dismiss"
                   >
                     <X className="w-4 h-4" />
@@ -5945,25 +5894,25 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             {featureFlags.retirement !== false && retirementPlans.length > 0 && (
               <div
                 onClick={() => setActiveTab('retirement')}
-                className="bg-white dark:bg-[#131d32] rounded-xl border border-slate-200/90 dark:border-[#22324e] shadow-2xs p-5 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-xs transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 hover:border-blue-300 hover:shadow-xs transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-100 dark:border-emerald-900/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-2xs">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
                     <Landmark className="w-6 h-6" />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 font-medium flex items-center gap-2">
+                    <div className="text-xs text-slate-500 font-medium flex items-center gap-2">
                       <span>Projected retirement income</span>
-                      <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md">
+                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">
                         {retirementPlans.length} {retirementPlans.length === 1 ? 'plan' : 'plans'} tracked
                       </span>
                     </div>
-                    <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1 tracking-tight">
-                      ${Math.round(projectedRetirementMonthlyIncome).toLocaleString('en-US')}<span className="text-xs font-normal text-slate-500 dark:text-slate-400">/mo</span>
+                    <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
+                      ${Math.round(projectedRetirementMonthlyIncome).toLocaleString('en-US')}<span className="text-xs font-normal text-slate-500">/mo</span>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900">
                   <span>View retirement forecast</span>
                   <ChevronRight className="w-4 h-4" />
                 </div>
@@ -5971,14 +5920,14 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             )}
 
             {/* Net Worth & Cash Flow Forecast Card */}
-            <div className="bg-white dark:bg-[#131d32] rounded-xl border border-slate-200/90 dark:border-[#22324e] shadow-2xs p-5 grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
               <div className="lg:col-span-3 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Net Worth</span>
+                    <span className="text-xs font-semibold text-slate-500">Total Net Worth</span>
                     <div className="flex items-baseline gap-2.5 mt-0.5">
-                      <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">{fmtMoney(totalNetWorth)}</span>
-                      <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                      <span className="text-2xl font-bold text-slate-900">{fmtMoney(totalNetWorth)}</span>
+                      <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
                         +4.2% this month
                       </span>
                     </div>
@@ -5986,7 +5935,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <button
                     type="button"
                     onClick={() => setIsAddManualAssetOpen(true)}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold cursor-pointer"
+                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
                   >
                     + Manual account
                   </button>
@@ -5997,8 +5946,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <svg viewBox="0 0 420 90" className="w-full h-24 overflow-visible">
                     <defs>
                       <linearGradient id="nwGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.25" />
-                        <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.0" />
+                        <stop offset="0%" stopColor="#18457c" stopOpacity="0.18" />
+                        <stop offset="100%" stopColor="#18457c" stopOpacity="0.0" />
                       </linearGradient>
                     </defs>
                     {(() => {
@@ -6017,7 +5966,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           <polygon points={areaPoints} fill="url(#nwGrad)" />
                           <polyline
                             fill="none"
-                            stroke="#38bdf8"
+                            stroke="#18457c"
                             strokeWidth="2.5"
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -6025,8 +5974,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           />
                           {pts.map((p, idx) => (
                             <g key={p.month}>
-                              <circle cx={p.x} cy={p.y} r={idx === pts.length - 1 ? 4 : 3} fill="#38bdf8" />
-                              <text x={p.x} y={86} textAnchor="middle" className="fill-slate-400 dark:fill-slate-500 text-[10px]">
+                              <circle cx={p.x} cy={p.y} r={idx === pts.length - 1 ? 4 : 3} fill="#18457c" />
+                              <text x={p.x} y={86} textAnchor="middle" className="fill-slate-400 text-[10px]">
                                 {p.month}
                               </text>
                             </g>
@@ -6039,28 +5988,28 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               </div>
 
               {/* Right Column: Cash Flow Forecast & Manual Assets Summary */}
-              <div className="lg:col-span-2 bg-slate-50/80 dark:bg-[#0e1628] border border-slate-200/70 dark:border-[#22324e] rounded-xl p-4 flex flex-col justify-between gap-3 text-xs">
+              <div className="lg:col-span-2 bg-slate-50/80 border border-slate-200/70 rounded-xl p-4 flex flex-col justify-between gap-3 text-xs">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-slate-800 dark:text-slate-200">14-Day Cash Flow Forecast</span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300">Safe</span>
+                    <span className="font-bold text-slate-800">14-Day Cash Flow Forecast</span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">Safe</span>
                   </div>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                    You'll be at <strong className="text-slate-900 dark:text-slate-100">{fmtMoney(projectedCashAfterBills)}</strong> after upcoming bills ({fmtMoney(displayDue14Sum)} due over the next 14 days).
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    You'll be at <strong className="text-slate-900">{fmtMoney(projectedCashAfterBills)}</strong> after upcoming bills ({fmtMoney(displayDue14Sum)} due over the next 14 days).
                   </p>
                 </div>
-                <div className="pt-2.5 border-t border-slate-200/70 dark:border-[#22324e] flex flex-col gap-1.5">
+                <div className="pt-2.5 border-t border-slate-200/70 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500 dark:text-slate-400">Checking & Cash</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">{fmtMoney(displayCash)}</span>
+                    <span className="text-slate-500">Checking & Cash</span>
+                    <span className="font-semibold text-slate-800">{fmtMoney(displayCash)}</span>
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500 dark:text-slate-400">Savings & Investments</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">{fmtMoney(manualPositiveAssets)}</span>
+                    <span className="text-slate-500">Savings & Investments</span>
+                    <span className="font-semibold text-slate-800">{fmtMoney(manualPositiveAssets)}</span>
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500 dark:text-slate-400">Credit Debt & Loans</span>
-                    <span className="font-semibold text-rose-700 dark:text-rose-400">-{fmtMoney(displayCardBalances + manualLoans)}</span>
+                    <span className="text-slate-500">Credit Debt & Loans</span>
+                    <span className="font-semibold text-rose-700">-{fmtMoney(displayCardBalances + manualLoans)}</span>
                   </div>
                 </div>
               </div>
@@ -6068,7 +6017,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
             {/* 2. Cards Section */}
             <div>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">Cards</h2>
+              <h2 className="text-sm font-bold text-slate-900 mb-3">Cards</h2>
               <div className="flex items-center gap-4 flex-wrap">
                 {displayCards.map((card) => {
                   const util = card.limit > 0 ? Math.round((card.balance / card.limit) * 100) : 0;
@@ -6109,7 +6058,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 <button
                   type="button"
                   onClick={() => setIsAddAccountOpen(true)}
-                  className="w-[185px] h-[185px] rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-[#131d32]/60 hover:bg-slate-100/70 dark:hover:bg-[#18253f] flex flex-col items-center justify-center text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer group"
+                  className="w-[185px] h-[185px] rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 hover:bg-slate-100/70 flex flex-col items-center justify-center text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors cursor-pointer group"
                 >
                   <span className="group-hover:scale-105 transition-transform">+ Add card</span>
                 </button>
@@ -6117,39 +6066,37 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             </div>
 
             {/* 3. Upcoming bills Card */}
-            <div className="bg-white dark:bg-[#131d32] rounded-xl border border-slate-200/90 dark:border-[#22324e] shadow-2xs p-5 overflow-hidden flex flex-col justify-between">
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 overflow-hidden flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-xs font-bold text-slate-900 dark:text-slate-100">Upcoming bills</h2>
+                  <h2 className="text-xs font-bold text-slate-900">Upcoming bills</h2>
                   <button
                     type="button"
                     onClick={() => setIsAddBillOpen(true)}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium cursor-pointer"
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                   >
                     Add bill
                   </button>
                 </div>
 
-                <div className="divide-y divide-slate-100 dark:divide-[#22324e]">
+                <div className="divide-y divide-slate-100">
                   {displayBills.slice(0, 3).map((bill) => {
                     const isUrgent = bill.daysUntil != null && bill.daysUntil <= 3;
                     return (
                       <div key={bill.id} className="py-3 flex items-center justify-between gap-4 first:pt-1">
                         <div>
-                          <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">{bill.name}</p>
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{bill.dueText}</p>
+                          <p className="text-xs font-semibold text-slate-900">{bill.name}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{bill.dueText}</p>
                         </div>
                         <div className="flex items-center gap-4 shrink-0">
                           <span
                             className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${
-                              isUrgent
-                                ? 'bg-[#fef3c7] dark:bg-amber-950/60 text-[#92400e] dark:text-amber-300'
-                                : 'bg-[#e0e7ff] dark:bg-indigo-950/60 text-[#3730a3] dark:text-indigo-300'
+                              isUrgent ? 'bg-[#fef3c7] text-[#92400e]' : 'bg-[#e0e7ff] text-[#3730a3]'
                             }`}
                           >
                             In {bill.daysUntil} days
                           </span>
-                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 min-w-16 text-right">
+                          <span className="text-xs font-bold text-slate-900 min-w-16 text-right">
                             {fmtMoney(bill.amount)}
                           </span>
                         </div>
@@ -6160,9 +6107,9 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               </div>
 
               {/* Shaded Total Section */}
-              <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 dark:bg-[#0e1628] border-t border-slate-100 dark:border-[#22324e] rounded-b-xl flex items-center justify-between text-xs mt-3.5">
-                <span className="text-slate-500 dark:text-slate-400 font-medium">Monthly bills</span>
-                <span className="font-bold text-slate-900 dark:text-slate-100">
+              <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-3.5">
+                <span className="text-slate-500 font-medium">Monthly bills</span>
+                <span className="font-bold text-slate-900">
                   {fmtMoney(displayTotalMonthlyBills)}
                 </span>
               </div>
@@ -6171,27 +6118,27 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             {/* 4. Bottom 2-Column Row for Subscriptions & Recent purchases */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* Subscriptions Card */}
-              <div className="bg-white dark:bg-[#131d32] rounded-xl border border-slate-200/90 dark:border-[#22324e] shadow-2xs p-5 flex flex-col justify-between overflow-hidden">
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between overflow-hidden">
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-xs font-bold text-slate-900 dark:text-slate-100">Subscriptions</h2>
+                    <h2 className="text-xs font-bold text-slate-900">Subscriptions</h2>
                     <button
                       type="button"
                       onClick={() => setIsAddSubOpen(true)}
-                      className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium cursor-pointer"
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                     >
                       Add
                     </button>
                   </div>
 
-                  <div className="divide-y divide-slate-100 dark:divide-[#22324e]">
+                  <div className="divide-y divide-slate-100">
                     {displaySubs.slice(0, 4).map((sub) => (
                       <div key={sub.id} className="py-2.5 flex items-center justify-between gap-3 first:pt-1">
                         <div>
-                          <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">{sub.name}</p>
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{sub.renewText}</p>
+                          <p className="text-xs font-semibold text-slate-900">{sub.name}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{sub.renewText}</p>
                         </div>
-                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                        <span className="text-xs font-bold text-slate-900">
                           {fmtMoney(sub.amount)}
                         </span>
                       </div>
@@ -6200,39 +6147,39 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 </div>
 
                 {/* Shaded Total Section */}
-                <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 dark:bg-[#0e1628] border-t border-slate-100 dark:border-[#22324e] rounded-b-xl flex items-center justify-between text-xs mt-4">
-                  <span className="text-slate-500 dark:text-slate-400 font-medium">Total per month</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">
+                <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-4">
+                  <span className="text-slate-500 font-medium">Total per month</span>
+                  <span className="font-bold text-slate-900">
                     {fmtMoney(displayTotalSubs)}
                   </span>
                 </div>
               </div>
 
               {/* Recent purchases Card */}
-              <div className="bg-white dark:bg-[#131d32] rounded-xl border border-slate-200/90 dark:border-[#22324e] shadow-2xs p-5 flex flex-col justify-between overflow-hidden">
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between overflow-hidden">
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-xs font-bold text-slate-900 dark:text-slate-100">Recent purchases</h2>
+                    <h2 className="text-xs font-bold text-slate-900">Recent purchases</h2>
                     <button
                       type="button"
                       onClick={() => setActiveTab('transactions')}
-                      className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium cursor-pointer"
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                     >
                       View all
                     </button>
                   </div>
 
-                  <div className="divide-y divide-slate-100 dark:divide-[#22324e]">
+                  <div className="divide-y divide-slate-100">
                     {displayTxs.slice(0, 3).map((tx) => {
                       const isDeposit = Number(tx.amount) > 0 && ((tx.category || '').toLowerCase() === 'income' || (tx.name || '').toLowerCase().includes('deposit'));
                       const absAmount = Math.abs(Number(tx.amount));
                       return (
                         <div key={tx.id} className="py-2.5 flex items-center justify-between gap-3 first:pt-1">
                           <div>
-                            <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">{tx.name}</p>
-                            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{tx.subText}</p>
+                            <p className="text-xs font-semibold text-slate-900">{tx.name}</p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">{tx.subText}</p>
                           </div>
-                          <span className={`text-xs font-bold ${isDeposit ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                          <span className={`text-xs font-bold ${isDeposit ? 'text-emerald-700' : 'text-slate-900'}`}>
                             {isDeposit ? `+${fmtMoney(absAmount)}` : `-${fmtMoney(absAmount)}`}
                           </span>
                         </div>
@@ -6242,9 +6189,9 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 </div>
 
                 {/* Shaded Total Section */}
-                <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 dark:bg-[#0e1628] border-t border-slate-100 dark:border-[#22324e] rounded-b-xl flex items-center justify-between text-xs mt-4">
-                  <span className="text-slate-500 dark:text-slate-400 font-medium">Recent transactions</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">
+                <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-4">
+                  <span className="text-slate-500 font-medium">Recent transactions</span>
+                  <span className="font-bold text-slate-900">
                     {sourceTxsList.length} total recorded
                   </span>
                 </div>
@@ -8834,16 +8781,16 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           <div
             ref={settingsModalRef}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xl max-w-[880px] w-full min-h-[580px] h-[640px] flex flex-col overflow-hidden cursor-default"
+            className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-[880px] w-full min-h-[580px] h-[640px] flex flex-col overflow-hidden cursor-default"
           >
             
             {/* Modal Body: Left Tabs + Right Content */}
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
               
               {/* Left Sidebar Tabs */}
-              <div className="w-full md:w-56 lg:w-60 shrink-0 border-b md:border-b-0 md:border-r border-slate-200/80 dark:border-[#22324e] p-5 sm:p-6 flex flex-col justify-between bg-slate-50 dark:bg-[#0c1322]">
+              <div className="w-full md:w-56 lg:w-60 shrink-0 border-b md:border-b-0 md:border-r border-slate-200/80 p-5 sm:p-6 flex flex-col justify-between bg-slate-50/80">
                 <div>
-                  <h3 className="font-serif-title text-xl font-bold text-slate-900 dark:text-slate-100 mb-6 hidden md:block">Settings</h3>
+                  <h3 className="font-serif-title text-xl font-bold text-slate-900 mb-6 hidden md:block">Settings</h3>
                   
                   <nav className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
                     {[
@@ -8863,8 +8810,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           onClick={() => setSettingsActiveTab(tab.id)}
                           className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-between transition-colors duration-100 cursor-pointer shrink-0 ${
                             isActive
-                              ? 'bg-white dark:bg-[#18457c] text-[#1B4B91] dark:text-white font-semibold border border-slate-200/90 dark:border-blue-500/50 shadow-2xs'
-                              : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/60 font-medium'
+                              ? 'bg-white text-[#1B4B91] font-semibold border border-slate-200/90 shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 font-medium'
                           }`}
                         >
                           <span>{tab.label}</span>
@@ -8881,7 +8828,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               </div>
 
               {/* Right Content Panel */}
-              <div className="flex-1 p-6 sm:p-8 flex flex-col justify-between overflow-y-auto bg-white dark:bg-[#131d32] text-slate-800 dark:text-slate-100">
+              <div className="flex-1 p-6 sm:p-8 flex flex-col justify-between overflow-y-auto bg-white text-slate-800">
                 <div>
                   {/* TAB: SIDEBAR & NAVIGATION */}
                   {settingsActiveTab === 'sidebar' && (
@@ -9073,103 +9020,11 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       <div>
                         <h2 className="font-serif-title text-2xl font-bold text-slate-900">UI Settings</h2>
                         <p className="text-xs text-slate-500 mt-1">
-                          Customize themes, visual contrast, text scaling, layout density, and accessibility features designed to enhance your experience.
+                          Customize text scaling, layout density, and accessibility features designed to enhance your experience.
                         </p>
                       </div>
 
-                      {/* 1. Theme Modes */}
-                      <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-6 flex flex-col gap-5 bg-white dark:bg-slate-900/60 shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Theme</h3>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Select your preferred color appearance.</p>
-                          </div>
-                          <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full capitalize shrink-0">
-                            Active: {currentTheme === 'system' ? 'Match System' : currentTheme === 'dark' ? 'Dark Mode' : 'Light Mode'}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                          {[
-                            {
-                              id: 'system',
-                              label: 'Match System',
-                              desc: 'Syncs automatically with your operating system light/dark theme preference.',
-                              icon: Laptop,
-                              badge: 'Auto',
-                              previewBg: 'bg-gradient-to-r from-slate-100 via-slate-500 to-slate-900',
-                              previewCard: 'bg-white dark:bg-[#131d32] border-slate-200 dark:border-[#22324e] text-slate-900 dark:text-slate-100'
-                            },
-                            {
-                              id: 'light',
-                              label: 'Light Mode',
-                              desc: 'Clean, classic daylight palette with soft contrast and crisp typography.',
-                              icon: Sun,
-                              badge: 'Default',
-                              previewBg: 'bg-[#f8fafc]',
-                              previewCard: 'light-preview bg-white border-slate-200 text-slate-900'
-                            },
-                            {
-                              id: 'dark',
-                              label: 'Dark Mode',
-                              desc: 'Sleek low-light theme designed to reduce eye strain in darker environments.',
-                              icon: Moon,
-                              badge: 'Night',
-                              previewBg: 'bg-[#0b1120]',
-                              previewCard: 'bg-[#131d32] border-[#22324e] text-slate-100'
-                            }
-                          ].map(t => {
-                            const isSelected = currentTheme === t.id;
-                            const IconComp = t.icon;
-                            return (
-                              <button
-                                key={t.id}
-                                type="button"
-                                onClick={() => handleSelectTheme(t.id)}
-                                className={`flex flex-col text-left p-4 rounded-xl border transition-all cursor-pointer relative ${
-                                  isSelected
-                                    ? 'border-[#18457c] dark:border-blue-500 ring-2 ring-[#18457c]/20 dark:ring-blue-500/20 bg-blue-50/20 dark:bg-blue-950/30 shadow-sm'
-                                    : 'border-slate-200 dark:border-[#22324e] hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/60 dark:hover:bg-[#162238] bg-white dark:bg-[#11192b] shadow-2xs'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-3">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-[#18457c] dark:bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
-                                      <IconComp className="w-4 h-4" />
-                                    </div>
-                                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{t.label}</span>
-                                  </div>
-                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                                    {t.badge}
-                                  </span>
-                                </div>
-
-                                {/* Preview Box */}
-                                <div className={`w-full h-14 rounded-lg p-2 flex items-center gap-2 mb-2.5 overflow-hidden ${t.previewBg} border border-slate-200/50 dark:border-[#22324e]`}>
-                                  <div className={`h-full flex-1 rounded p-1.5 flex flex-col justify-between text-[9px] border ${t.previewCard}`}>
-                                    <div className="w-8 h-1.5 rounded-full bg-current opacity-40"></div>
-                                    <div className="w-12 h-1.5 rounded-full bg-current opacity-70"></div>
-                                  </div>
-                                  <div className={`h-full w-8 rounded p-1 flex flex-col items-center justify-center text-[9px] border ${t.previewCard}`}>
-                                    <div className="w-3 h-3 rounded-full bg-current opacity-60"></div>
-                                  </div>
-                                </div>
-
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">{t.desc}</p>
-
-                                {isSelected && (
-                                  <div className="mt-2.5 flex items-center gap-1.5 text-[11px] font-bold text-[#18457c] dark:text-blue-400">
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    <span>Selected</span>
-                                  </div>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* 2. Text Sizing & Font Scaling */}
+                      {/* 1. Text Sizing & Font Scaling */}
                       <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-4 bg-white shadow-2xs">
                         <div>
                           <h3 className="text-sm font-bold text-slate-900">Text & Content Scaling</h3>
