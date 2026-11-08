@@ -488,6 +488,60 @@ function PlaidLauncher({ token, onSuccess, onExit }) {
   return null;
 }
 
+// Helper to format release highlights: only major features, minor items become "Bug fixes"
+function formatWhatsNewHighlights(changes) {
+  if (!Array.isArray(changes) || changes.length === 0) {
+    return [
+      "Latest feature enhancements & visual improvements",
+      "Bug fixes & performance improvements"
+    ];
+  }
+
+  const isMinor = (text) => {
+    return /(fix|bug|typo|patch|minor|tweak|adjust|chore|test|clean|format|style|spacing|padding|margin|remove.*button|remove.*message|bump|deps|refactor)/i.test(text);
+  };
+
+  const isMajor = (text) => {
+    return /(dark mode|high contrast|theme|appearance|household|vault|password|retirement|ai advisor|report|statement|upload|overview|budget|bills|redesign|add.*feature|introduce)/i.test(text);
+  };
+
+  const majorItems = [];
+
+  for (const raw of changes) {
+    if (typeof raw !== 'string') continue;
+    const clean = raw.trim();
+    if (!clean) continue;
+
+    if (isMajor(clean)) {
+      let formatted = clean;
+      if (formatted.toLowerCase().startsWith('feat:')) formatted = formatted.slice(5).trim();
+      if (formatted.toLowerCase().startsWith('feature:')) formatted = formatted.slice(8).trim();
+      formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+
+      if (!majorItems.some(item => item.toLowerCase() === formatted.toLowerCase())) {
+        majorItems.push(formatted);
+      }
+    }
+  }
+
+  if (majorItems.length === 0) {
+    for (const raw of changes) {
+      if (typeof raw === 'string' && raw.trim() && !isMinor(raw)) {
+        majorItems.push(raw.trim());
+        if (majorItems.length >= 2) break;
+      }
+    }
+  }
+
+  const finalHighlights = majorItems.slice(0, 3);
+  if (finalHighlights.length === 0) {
+    finalHighlights.push("Latest feature updates & interface upgrades");
+  }
+
+  finalHighlights.push("Bug fixes & performance improvements");
+  return finalHighlights;
+}
+
 export default function App() {
   return <KlarityApp />;
 }
@@ -10217,9 +10271,9 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                             <div className="flex items-start gap-2.5">
                               <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                               <div>
-                                <span className="font-bold text-xs block">New update available on GitHub!</span>
+                                <span className="font-bold text-xs block">Update available</span>
                                 <span className="text-[11px] text-amber-800 leading-snug">
-                                  {desktopAppInfo.updateStatus?.commitTitle || 'Latest fixes and improvements are ready to install.'}
+                                  A new version is ready to install.
                                 </span>
                               </div>
                             </div>
@@ -10518,22 +10572,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <h3 className="font-serif-title text-lg font-bold text-slate-900">New Update Available</h3>
+                <h3 className="font-serif-title text-lg font-bold text-slate-900">Update Available</h3>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
                   {desktopAppInfo.updateStatus?.latestVersion || 'Latest'}
                 </span>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                A new version of Klarity has been published to GitHub! Would you like to update now?
+                A new version of Klarity is available. Would you like to update now?
               </p>
             </div>
-
-            {desktopAppInfo.updateStatus?.commitTitle && (
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 font-medium flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <span className="leading-snug">{desktopAppInfo.updateStatus.commitTitle}</span>
-              </div>
-            )}
 
             <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
               <button
@@ -10609,11 +10656,11 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               </button>
             </div>
 
-            <div className="space-y-2 border-y border-slate-100 py-3.5 max-h-64 overflow-y-auto">
-              {(whatsNewData.changes || []).map((change, idx) => (
+            <div className="space-y-2.5 border-y border-slate-100 py-3.5 max-h-64 overflow-y-auto">
+              {formatWhatsNewHighlights(whatsNewData.changes).map((change, idx) => (
                 <div key={idx} className="flex items-start gap-2.5 text-xs text-slate-700">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span className="leading-relaxed">{change}</span>
+                  <span className="leading-relaxed font-medium">{change}</span>
                 </div>
               ))}
             </div>

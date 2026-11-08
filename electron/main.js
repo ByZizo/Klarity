@@ -65,6 +65,61 @@ function getRunningCommitSha() {
   return runningCommitSha;
 }
 
+function formatWhatsNewHighlights(changes) {
+  if (!Array.isArray(changes) || changes.length === 0) {
+    return [
+      "Visual theme system with Dark Mode & High Contrast",
+      "Household Hub & Statements Management",
+      "Password Vault enhancements",
+      "Bug fixes & performance improvements"
+    ];
+  }
+
+  const isMinor = (text) => {
+    return /(fix|bug|typo|patch|minor|tweak|adjust|chore|test|clean|format|style|spacing|padding|margin|remove.*button|remove.*message|bump|deps|refactor)/i.test(text);
+  };
+
+  const isMajor = (text) => {
+    return /(dark mode|high contrast|theme|appearance|household|vault|password|retirement|ai advisor|report|statement|upload|overview|budget|bills|redesign|add.*feature|introduce)/i.test(text);
+  };
+
+  const majorItems = [];
+
+  for (const raw of changes) {
+    if (typeof raw !== 'string') continue;
+    const clean = raw.trim();
+    if (!clean) continue;
+
+    if (isMajor(clean)) {
+      let formatted = clean;
+      if (formatted.toLowerCase().startsWith('feat:')) formatted = formatted.slice(5).trim();
+      if (formatted.toLowerCase().startsWith('feature:')) formatted = formatted.slice(8).trim();
+      formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+
+      if (!majorItems.some(item => item.toLowerCase() === formatted.toLowerCase())) {
+        majorItems.push(formatted);
+      }
+    }
+  }
+
+  if (majorItems.length === 0) {
+    for (const raw of changes) {
+      if (typeof raw === 'string' && raw.trim() && !isMinor(raw)) {
+        majorItems.push(raw.trim());
+        if (majorItems.length >= 2) break;
+      }
+    }
+  }
+
+  const finalHighlights = majorItems.slice(0, 3);
+  if (finalHighlights.length === 0) {
+    finalHighlights.push("Latest feature enhancements & interface upgrades");
+  }
+
+  finalHighlights.push("Bug fixes & performance improvements");
+  return finalHighlights;
+}
+
 function saveWhatsNewData(changes, versionOrSha) {
   try {
     const whatsNewFile = path.join(app.getPath('userData'), 'whats_new.json');
@@ -73,13 +128,7 @@ function saveWhatsNewData(changes, versionOrSha) {
       version: app.getVersion(),
       commitSha: versionOrSha || app.getVersion(),
       title: "What's New in Klarity",
-      changes: changes && changes.length > 0 ? changes : [
-        "Passwords Vault: Added three-dots card menu with Favorite (yellow card highlight) and Red Delete Confirmation Pop-up",
-        "Household Hub: Spacious redesigned layout with sticky navigation bar and real-time bills synchronization",
-        "Auto & Health Hub: Upgraded card uploaders with unified scanning and document parsing",
-        "Passwords & Accounts: Added website URL fields and custom user-defined sections with full delete support",
-        "App Settings: Real-time GitHub auto-update checking and What's New release announcements"
-      ],
+      changes: formatWhatsNewHighlights(changes),
       updatedAt: Date.now()
     };
     fs.writeFileSync(whatsNewFile, JSON.stringify(data, null, 2), 'utf8');
@@ -162,7 +211,7 @@ async function checkForGitHubUpdate() {
         commitTitle: commitTitle || 'New GitHub update available',
         commitDate,
         recentChanges: recentCommits,
-        message: `A new update is available on GitHub: ${commitTitle || remoteSha.slice(0, 7)}`
+        message: 'A new version of Klarity is available!'
       });
       return updateStatusState;
     }
