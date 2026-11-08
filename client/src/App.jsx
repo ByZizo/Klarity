@@ -1036,6 +1036,73 @@ function KlarityApp() {
     }
   });
 
+  // UI & Accessibility states: font scale, density, reduce motion, high focus, privacy mask
+  const [uiFontScale, setUiFontScale] = useState(() => {
+    try { return localStorage.getItem('klarity_ui_font_scale') || 'normal'; } catch (e) { return 'normal'; }
+  });
+  const [uiDensity, setUiDensity] = useState(() => {
+    try { return localStorage.getItem('klarity_ui_density') || 'comfortable'; } catch (e) { return 'comfortable'; }
+  });
+  const [uiReduceMotion, setUiReduceMotion] = useState(() => {
+    try { return localStorage.getItem('klarity_ui_reduce_motion') === 'true'; } catch (e) { return false; }
+  });
+  const [uiHighFocus, setUiHighFocus] = useState(() => {
+    try { return localStorage.getItem('klarity_ui_high_focus') === 'true'; } catch (e) { return false; }
+  });
+  const [uiPrivacyMask, setUiPrivacyMask] = useState(() => {
+    try { return localStorage.getItem('klarity_ui_privacy_mask') === 'true'; } catch (e) { return false; }
+  });
+
+  const applyUiPreferences = (scale, dens, motion, focus, mask) => {
+    try {
+      const root = document.documentElement;
+      root.classList.remove('font-scale-large', 'font-scale-xlarge', 'ui-density-compact', 'reduce-motion', 'high-focus', 'privacy-mask');
+      if (scale === 'large') root.classList.add('font-scale-large');
+      if (scale === 'xlarge') root.classList.add('font-scale-xlarge');
+      if (dens === 'compact') root.classList.add('ui-density-compact');
+      if (motion) root.classList.add('reduce-motion');
+      if (focus) root.classList.add('high-focus');
+      if (mask) root.classList.add('privacy-mask');
+    } catch (e) {}
+  };
+
+  const handleSetFontScale = (scale) => {
+    setUiFontScale(scale);
+    try { localStorage.setItem('klarity_ui_font_scale', scale); } catch (e) {}
+    applyUiPreferences(scale, uiDensity, uiReduceMotion, uiHighFocus, uiPrivacyMask);
+  };
+
+  const handleSetDensity = (dens) => {
+    setUiDensity(dens);
+    try { localStorage.setItem('klarity_ui_density', dens); } catch (e) {}
+    applyUiPreferences(uiFontScale, dens, uiReduceMotion, uiHighFocus, uiPrivacyMask);
+  };
+
+  const handleToggleReduceMotion = () => {
+    const nextVal = !uiReduceMotion;
+    setUiReduceMotion(nextVal);
+    try { localStorage.setItem('klarity_ui_reduce_motion', String(nextVal)); } catch (e) {}
+    applyUiPreferences(uiFontScale, uiDensity, nextVal, uiHighFocus, uiPrivacyMask);
+  };
+
+  const handleToggleHighFocus = () => {
+    const nextVal = !uiHighFocus;
+    setUiHighFocus(nextVal);
+    try { localStorage.setItem('klarity_ui_high_focus', String(nextVal)); } catch (e) {}
+    applyUiPreferences(uiFontScale, uiDensity, uiReduceMotion, nextVal, uiPrivacyMask);
+  };
+
+  const handleTogglePrivacyMask = () => {
+    const nextVal = !uiPrivacyMask;
+    setUiPrivacyMask(nextVal);
+    try { localStorage.setItem('klarity_ui_privacy_mask', String(nextVal)); } catch (e) {}
+    applyUiPreferences(uiFontScale, uiDensity, uiReduceMotion, uiHighFocus, nextVal);
+  };
+
+  useEffect(() => {
+    applyUiPreferences(uiFontScale, uiDensity, uiReduceMotion, uiHighFocus, uiPrivacyMask);
+  }, []);
+
   const applyTheme = (themeName) => {
     try {
       const root = document.documentElement;
@@ -8850,7 +8917,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <nav className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
                     {[
                       { id: 'profile', label: 'Profile', dot: false },
-                      { id: 'appearance', label: 'Appearance', dot: false },
+                      { id: 'ui', label: 'UI', dot: false },
                       { id: 'sidebar', label: 'Sidebar', dot: false },
                       { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' },
                       { id: 'plaid', label: 'Bank connection', dot: settingsPlaidStatus !== 'connected' },
@@ -9069,20 +9136,24 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                     </div>
                   )}
 
-                  {/* TAB: APPEARANCE & THEME */}
-                  {settingsActiveTab === 'appearance' && (
-                    <div key="settings-tab-appearance" className="flex flex-col gap-6">
+                  {/* TAB: UI & ACCESSIBILITY */}
+                  {settingsActiveTab === 'ui' && (
+                    <div key="settings-tab-ui" className="flex flex-col gap-6">
                       <div>
-                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Appearance & Theme</h2>
+                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">UI Settings</h2>
                         <p className="text-xs text-slate-500 mt-1">
-                          Customize how Klarity looks. Choose between classic light mode, sleek dark mode, high contrast modes for accessibility, or match your system settings.
+                          Customize themes, visual contrast, text scaling, layout density, and accessibility features designed to enhance your experience.
                         </p>
                       </div>
 
+                      {/* 1. Theme & Contrast Modes */}
                       <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-5 bg-white shadow-2xs">
                         <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-bold text-slate-900">Theme Selection</h3>
-                          <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full capitalize">
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-900">Themes & Contrast Modes</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Choose your preferred visual mode or contrast standard.</p>
+                          </div>
+                          <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full capitalize shrink-0">
                             Active: {currentTheme === 'high-contrast' ? 'High Contrast (Dark)' : currentTheme === 'high-contrast-light' ? 'High Contrast (Light)' : currentTheme}
                           </span>
                         </div>
@@ -9182,6 +9253,162 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                               </button>
                             );
                           })}
+                        </div>
+                      </div>
+
+                      {/* 2. Text Sizing & Font Scaling */}
+                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-4 bg-white shadow-2xs">
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900">Text & Content Scaling</h3>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Scale typography and interface elements for easier reading.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {[
+                            { id: 'normal', label: 'Default (100%)', desc: 'Standard compact text size' },
+                            { id: 'large', label: 'Large (110%)', desc: 'Enhanced legibility for comfortable reading' },
+                            { id: 'xlarge', label: 'Extra Large (125%)', desc: 'High readability for larger displays' }
+                          ].map(scale => {
+                            const isSelected = uiFontScale === scale.id;
+                            return (
+                              <button
+                                key={scale.id}
+                                type="button"
+                                onClick={() => handleSetFontScale(scale.id)}
+                                className={`p-4 rounded-xl border text-left cursor-pointer transition-all ${
+                                  isSelected
+                                    ? 'border-[#18457c] ring-2 ring-[#18457c]/20 bg-blue-50/25'
+                                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-bold text-slate-900">{scale.label}</span>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-[#18457c]" />}
+                                </div>
+                                <p className="text-[11px] text-slate-500">{scale.desc}</p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* 3. Interface Density */}
+                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-4 bg-white shadow-2xs">
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900">Interface Density</h3>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Control spacing between cards, tables, and list rows.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {[
+                            { id: 'comfortable', label: 'Comfortable', desc: 'Generous padding and relaxed breathing room' },
+                            { id: 'compact', label: 'Compact', desc: 'Condenses cards and lists to view more data on screen' }
+                          ].map(dens => {
+                            const isSelected = uiDensity === dens.id;
+                            return (
+                              <button
+                                key={dens.id}
+                                type="button"
+                                onClick={() => handleSetDensity(dens.id)}
+                                className={`p-4 rounded-xl border text-left cursor-pointer transition-all ${
+                                  isSelected
+                                    ? 'border-[#18457c] ring-2 ring-[#18457c]/20 bg-blue-50/25'
+                                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-bold text-slate-900">{dens.label}</span>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-[#18457c]" />}
+                                </div>
+                                <p className="text-[11px] text-slate-500">{dens.desc}</p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* 4. Accessibility & Visual Helpers */}
+                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-4 bg-white shadow-2xs">
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900">Accessibility & Visual Assistance</h3>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Additional visual preferences to help you navigate comfortably.
+                          </p>
+                        </div>
+
+                        <div className="divide-y divide-slate-100">
+                          {/* Reduced Motion */}
+                          <div className="py-3.5 flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-xs font-bold text-slate-900">Reduce Motion & Animations</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                Disables UI animations and transitions for improved comfort and snappier performance.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleToggleReduceMotion}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                uiReduceMotion ? 'bg-[#18457c]' : 'bg-slate-200'
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  uiReduceMotion ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+
+                          {/* High Focus Rings */}
+                          <div className="py-3.5 flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-xs font-bold text-slate-900">High-Visibility Focus Indicators</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                Enhances outlines around clickable buttons, cards, and inputs for easier keyboard navigation.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleToggleHighFocus}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                uiHighFocus ? 'bg-[#18457c]' : 'bg-slate-200'
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  uiHighFocus ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+
+                          {/* Privacy Mask Mode */}
+                          <div className="py-3.5 flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-xs font-bold text-slate-900">Privacy Mask (Blur Sensitive Balances)</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                Automatically blurs sensitive balances until hovered to protect privacy in public spaces.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleTogglePrivacyMask}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                uiPrivacyMask ? 'bg-[#18457c]' : 'bg-slate-200'
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  uiPrivacyMask ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>

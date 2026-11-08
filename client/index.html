@@ -12,11 +12,18 @@
       (function() {
         try {
           var theme = localStorage.getItem('klarity_theme') || 'system';
+          var fontScale = localStorage.getItem('klarity_ui_font_scale') || 'normal';
+          var density = localStorage.getItem('klarity_ui_density') || 'comfortable';
+          var reduceMotion = localStorage.getItem('klarity_ui_reduce_motion') === 'true';
+          var highFocus = localStorage.getItem('klarity_ui_high_focus') === 'true';
+          var privacyMask = localStorage.getItem('klarity_ui_privacy_mask') === 'true';
+
           var root = document.documentElement;
-          root.classList.remove('dark', 'high-contrast', 'high-contrast-light');
+          root.classList.remove('dark', 'high-contrast', 'high-contrast-light', 'font-scale-large', 'font-scale-xlarge', 'ui-density-compact', 'reduce-motion', 'high-focus', 'privacy-mask');
+          
           var effective = theme;
           if (theme === 'system') {
-            effective = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            effective = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
           }
           if (effective === 'dark') {
             root.classList.add('dark');
@@ -25,6 +32,13 @@
           } else if (effective === 'high-contrast-light') {
             root.classList.add('high-contrast-light');
           }
+
+          if (fontScale === 'large') root.classList.add('font-scale-large');
+          if (fontScale === 'xlarge') root.classList.add('font-scale-xlarge');
+          if (density === 'compact') root.classList.add('ui-density-compact');
+          if (reduceMotion) root.classList.add('reduce-motion');
+          if (highFocus) root.classList.add('high-focus');
+          if (privacyMask) root.classList.add('privacy-mask');
         } catch (e) {}
       })();
     </script>
