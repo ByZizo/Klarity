@@ -4784,7 +4784,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
       {linkToken && (
         <PlaidLauncher
           token={linkToken}
@@ -4813,7 +4813,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       {/* ======================================================================= */}
       {/* 1. LEFT SIDEBAR (Overview, Transactions, Budgets, Bills, Subscriptions, Cards) */}
       {/* ======================================================================= */}
-      <aside className={`shrink-0 border-r border-slate-200/80 dark:border-slate-800 bg-[#f8fafc] dark:bg-slate-950 flex flex-col justify-between h-screen sticky top-0 hidden md:flex transition-all duration-200 ease-in-out relative z-30 ${
+      <aside className={`shrink-0 border-r border-slate-200/80 bg-[#f8fafc] flex flex-col justify-between h-screen sticky top-0 hidden md:flex transition-all duration-200 ease-in-out relative z-30 ${
         isSidebarCompact ? 'w-[72px] px-2.5 py-5' : 'w-60 p-5'
       }`}>
         <div>
@@ -5387,7 +5387,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           className={`max-w-[90%] rounded-2xl p-3.5 text-xs leading-relaxed flex flex-col gap-2 ${
                             msg.role === 'user'
                               ? 'bg-[#18457c] text-white shadow-2xs'
-                              : 'bg-white dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 shadow-2xs'
+                              : 'bg-white text-slate-800 border border-slate-200/80 shadow-2xs'
                           }`}
                         >
                           {msg.text && <FormattedChatMessage text={msg.text} isUser={msg.role === 'user'} />}
@@ -5705,7 +5705,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       {/* ======================================================================= */}
       {/* 2B. DESKTOP CENTER MAIN CONTENT (>= 768px) */}
       {/* ======================================================================= */}
-      <main className="hidden md:flex flex-1 min-w-0 p-6 lg:p-8 flex-col gap-5 overflow-y-auto relative bg-[#f8fafc] dark:bg-slate-950 text-slate-800 dark:text-slate-100">
+      <main className="hidden md:flex flex-1 min-w-0 p-6 lg:p-8 flex-col gap-5 overflow-y-auto relative bg-[#f8fafc] text-slate-800">
 
         {/* Top-of-App Auto-Update Banner (Appears whenever an update is pushed out) */}
         {!updateBannerDismissed && (
@@ -7395,7 +7395,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                     className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed flex flex-col gap-2 ${
                       msg.role === 'user'
                         ? 'bg-[#18457c] text-white shadow-2xs'
-                        : 'bg-[#eff4f9] dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 border border-slate-200/60 dark:border-slate-700 shadow-2xs'
+                        : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
                     }`}
                   >
                     {/* Render multiple attachments (images as thumbnails, non-images as File Cards) */}
@@ -7665,7 +7665,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       {activeTab !== 'advisor' && !isAdvisorCollapsed && (
       <aside
         style={{ width: `${advisorWidth}px` }}
-        className={`shrink-0 border-l border-slate-200/80 dark:border-slate-800 bg-[#f8fafc] dark:bg-slate-950 p-5 xl:p-6 flex flex-col h-screen sticky top-0 hidden lg:flex relative transition-[width] duration-75 ${
+        className={`shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-5 xl:p-6 flex flex-col h-screen sticky top-0 hidden lg:flex relative transition-[width] duration-75 ${
           isResizingAdvisor ? 'select-none cursor-col-resize !transition-none' : ''
         }`}
       >
@@ -7782,7 +7782,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 className={`max-w-[90%] rounded-2xl p-3 text-xs leading-relaxed flex flex-col gap-2 ${
                   msg.role === 'user'
                     ? 'bg-[#18457c] text-white shadow-2xs'
-                    : 'bg-[#eff4f9] dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 border border-slate-200/60 dark:border-slate-700 shadow-2xs'
+                    : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
                 }`}
               >
                 {/* Render multiple attachments (images as thumbnails, non-images as File Cards) */}
@@ -8965,7 +8965,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         <p className="text-xs text-slate-500 mt-1">How you appear in Klarity.</p>
                       </div>
 
-                      <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-6 flex flex-col gap-6 bg-white dark:bg-slate-900/60 shadow-2xs">
+                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-6 bg-white shadow-2xs">
                         <div className="flex items-center gap-3.5">
                           <div className="w-12 h-12 rounded-full bg-[#1B4B91] text-white flex items-center justify-center font-bold text-base shadow-2xs shrink-0">
                             {userInitials}

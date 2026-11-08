@@ -5,30 +5,23 @@
     <link rel="icon" type="image/svg+xml" href="/klarity-logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#f8fafc" />
+    <meta name="color-scheme" content="light" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Klarity</title>
     <script>
       (function() {
         try {
-          var savedTheme = localStorage.getItem('klarity_theme') || 'system';
-          var theme = (savedTheme === 'dark' || savedTheme === 'light' || savedTheme === 'system') ? savedTheme : 'system';
+          localStorage.removeItem('klarity_theme');
+          var root = document.documentElement;
+          root.classList.remove('dark', 'high-contrast', 'high-contrast-light');
+          if (document.body) document.body.classList.remove('dark');
+
           var fontScale = localStorage.getItem('klarity_ui_font_scale') || 'normal';
           var density = localStorage.getItem('klarity_ui_density') || 'comfortable';
           var reduceMotion = localStorage.getItem('klarity_ui_reduce_motion') === 'true';
           var highFocus = localStorage.getItem('klarity_ui_high_focus') === 'true';
           var privacyMask = localStorage.getItem('klarity_ui_privacy_mask') === 'true';
-
-          var root = document.documentElement;
-          root.classList.remove('dark', 'high-contrast', 'high-contrast-light', 'font-scale-large', 'font-scale-xlarge', 'ui-density-compact', 'reduce-motion', 'high-focus', 'privacy-mask');
-          
-          var effective = theme;
-          if (theme === 'system') {
-            effective = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-          }
-          if (effective === 'dark') {
-            root.classList.add('dark');
-          }
 
           if (fontScale === 'large') root.classList.add('font-scale-large');
           if (fontScale === 'xlarge') root.classList.add('font-scale-xlarge');

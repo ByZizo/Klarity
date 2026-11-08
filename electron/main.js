@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, session } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, session, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -11,6 +11,7 @@ if (!fs.existsSync(userDataDir)) {
 app.setPath('userData', userDataDir);
 process.env.KLARITY_USER_DATA_DIR = userDataDir;
 process.env.KLARITY_DESKTOP_APP = 'true';
+try { if (nativeTheme) nativeTheme.themeSource = 'light'; } catch (e) {}
 const http = require('http');
 const { exec } = require('child_process');
 
