@@ -15,7 +15,11 @@
 }
 
 /* ========================================================================== */
-/* DARK MODE BASE SETTINGS                                                   */
+/* DARK MODE BASE SETTINGS & ELEVATED SURFACES (Like YouTube & Amazon)        */
+/* Canvas background: #0b1120                                                */
+/* Elevated surface: #131d32 (slate-900 tone, distinct from canvas)          */
+/* Recessed / sub-box surface: #0e1628                                       */
+/* Distinct borders: #22324e                                                  */
 /* ========================================================================== */
 html.dark {
   color-scheme: dark;
@@ -23,6 +27,65 @@ html.dark {
 html.dark body {
   background-color: #0b1120;
   color: #f1f5f9;
+}
+
+/* Elevated card surfaces */
+html.dark .bg-white:not([data-force-light]):not(.light-preview) {
+  background-color: #131d32;
+  border-color: #22324e;
+  color: #f1f5f9;
+}
+
+/* Recessed sub-boxes and card footers */
+html.dark .bg-slate-50:not([data-force-light]):not(.light-preview),
+html.dark .bg-slate-50\/80:not([data-force-light]):not(.light-preview),
+html.dark .bg-slate-50\/50:not([data-force-light]):not(.light-preview) {
+  background-color: #0e1628;
+  border-color: #22324e;
+}
+
+/* Dark mode borders and dividers */
+html.dark .border-slate-200,
+html.dark .border-slate-200\/90,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-200\/70,
+html.dark .border-slate-100 {
+  border-color: #22324e;
+}
+
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #22324e;
+}
+
+/* Clean legible dark mode typography */
+html.dark .text-slate-900:not([data-force-light]):not(.light-preview *) {
+  color: #f8fafc;
+}
+html.dark .text-slate-800:not([data-force-light]):not(.light-preview *) {
+  color: #f1f5f9;
+}
+html.dark .text-slate-700:not([data-force-light]):not(.light-preview *) {
+  color: #cbd5e1;
+}
+html.dark .text-slate-600:not([data-force-light]):not(.light-preview *) {
+  color: #94a3b8;
+}
+html.dark .text-slate-500:not([data-force-light]):not(.light-preview *) {
+  color: #8b9bb4;
+}
+
+/* Dark mode form elements */
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([data-force-light]),
+html.dark textarea:not([data-force-light]),
+html.dark select:not([data-force-light]) {
+  background-color: #0e1628;
+  color: #f8fafc;
+  border-color: #22324e;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b;
 }
 
 /* Custom scrollbars */
