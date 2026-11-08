@@ -27,7 +27,7 @@ let httpServerInstance = null;
 let updateStatusState = {
   state: 'idle',
   version: app.getVersion(),
-  message: 'Connected to GitHub (ByZizo/Klarity)'
+  message: 'Up to date'
 };
 
 let runningCommitSha = null;

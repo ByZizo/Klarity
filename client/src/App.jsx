@@ -595,7 +595,7 @@ function KlarityApp() {
   const [desktopAppInfo, setDesktopAppInfo] = useState({
     isDesktopApp: Boolean(typeof window !== 'undefined' && window.klarityDesktop?.isDesktopApp),
     version: '1.0.0',
-    updateStatus: { state: 'idle', message: 'Connected to GitHub Releases (ByZizo/Klarity)' }
+    updateStatus: { state: 'idle', message: 'Up to date' }
   });
   const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
   const [whatsNewData, setWhatsNewData] = useState(null);
@@ -9909,7 +9909,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                               )}
                             </div>
                             <p className="text-xs text-slate-500 mt-1">
-                              {desktopAppInfo.updateStatus?.message || 'Synced with GitHub repository ByZizo/Klarity'}
+                              {desktopAppInfo.updateStatus?.message && !desktopAppInfo.updateStatus.message.includes('Connected to GitHub') && !desktopAppInfo.updateStatus.message.includes('ByZizo') ? desktopAppInfo.updateStatus.message : 'Up to date'}
                             </p>
                           </div>
 
@@ -9945,7 +9945,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                                       if (data.ok) {
                                         setNotificationToast(`GitHub: ${data.sha} - ${data.message}`);
                                       } else {
-                                        setNotificationToast('Up to date with GitHub (ByZizo/Klarity)');
+                                        setNotificationToast('Klarity is up to date');
                                       }
                                       setTimeout(() => setNotificationToast(''), 3500);
                                     }
