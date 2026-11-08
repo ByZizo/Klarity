@@ -4498,13 +4498,7 @@ export default function HouseholdLifestyleHub({
 
                                 <div>
                                   <div className="text-lg font-mono font-medium tracking-wider tabular-nums">
-                                    {policy.memberId ? (
-                                      isMemberIdShown
-                                        ? policy.memberId
-                                        : (policy.memberId.length > 4
-                                            ? `•••• •••• ${policy.memberId.slice(-4)}`
-                                            : policy.memberId)
-                                    ) : (
+                                    {policy.memberId || (
                                       <span className="text-xs opacity-60 font-sans tracking-normal">No Member ID</span>
                                     )}
                                   </div>
@@ -4521,33 +4515,7 @@ export default function HouseholdLifestyleHub({
                               </div>
                             )}
 
-                            {/* Member ID mini controls */}
-                            <div className="flex items-center gap-2 mt-2.5">
-                              <button
-                                type="button"
-                                onClick={() => setRevealedMemberIds(p => ({ ...p, [policy.id]: !p[policy.id] }))}
-                                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer"
-                              >
-                                {isMemberIdShown ? 'Hide' : 'Show'} member ID
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyMemberId(policy)}
-                                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
-                              >
-                                {isCopied ? (
-                                  <>
-                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>Copied</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="w-3.5 h-3.5" />
-                                    <span>Copy</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
+
 
                             {/* Pharmacy RX pills if available */}
                             {(policy.rxBin || policy.rxPcn || policy.rxGrp) && (
