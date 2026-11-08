@@ -31,6 +31,8 @@ import {
   Gauge,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
+  UploadCloud,
   FileText,
   Copy,
   Pencil,
@@ -127,6 +129,125 @@ function InsuranceCardFlip({ front, back, flipped, onFlip, onOpen }) {
     </div>
   );
 }
+
+
+export const HOUSEHOLD_PROVIDER_CONFIGS = {
+  internet: {
+    key: 'internet',
+    label: 'Internet',
+    title: 'Home Internet & WiFi',
+    category: 'Connectivity & WiFi',
+    icon: 'Wifi',
+    colorClass: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800',
+    providerField: 'internetProvider',
+    planField: 'internetPlan',
+    accountField: 'internetAccount',
+    costField: 'internetMonthlyCost',
+    notesField: 'internetNotes',
+    defaultProvider: 'Xfinity',
+    defaultPlan: 'Gigabit Extra',
+    placeholderProvider: 'e.g. Xfinity, AT&T Fiber, Spectrum, Verizon Fios...',
+    placeholderPlan: 'e.g. Gigabit Extra, Fast 300, 1000 Mbps Fiber...',
+    quickProviders: ['Xfinity', 'AT&T Fiber', 'Spectrum', 'Verizon Fios', 'Frontier', 'Starlink', 'Cox'],
+    quickPlans: ['Gigabit Extra (1200 Mbps)', 'Fast 300 (300 Mbps)', 'Performance Pro (500 Mbps)', 'Fiber 500', 'Fiber 1000']
+  },
+  phone: {
+    key: 'phone',
+    label: 'Mobile wireless',
+    title: 'Mobile Wireless & Cellular',
+    category: 'Cellular & Mobile',
+    icon: 'Smartphone',
+    colorClass: 'text-purple-600 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800',
+    providerField: 'phoneProvider',
+    planField: 'phonePlan',
+    accountField: 'phoneAccount',
+    costField: 'phoneMonthlyCost',
+    notesField: 'phoneNotes',
+    extraField: 'phoneLines',
+    defaultProvider: 'T-Mobile',
+    defaultPlan: 'Go5G Plus',
+    placeholderProvider: 'e.g. T-Mobile, AT&T, Verizon, Mint Mobile...',
+    placeholderPlan: 'e.g. Go5G Plus, Magenta MAX, Unlimited Plus...',
+    quickProviders: ['T-Mobile', 'AT&T', 'Verizon', 'Mint Mobile', 'Google Fi', 'Visible'],
+    quickPlans: ['Go5G Plus', 'Experience Beyond', 'Magenta MAX', 'Unlimited Plus', 'Unlimited Starter']
+  },
+  electric: {
+    key: 'electric',
+    label: 'Utility rate',
+    title: 'Electric & Gas Utility',
+    category: 'Power & Natural Gas',
+    icon: 'Zap',
+    colorClass: 'text-amber-500 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800',
+    providerField: 'electricGasProvider',
+    planField: 'electricGasPlan',
+    accountField: 'electricGasAccount',
+    costField: 'electricGasMonthlyCost',
+    notesField: 'electricGasNotes',
+    defaultProvider: 'PG&E',
+    defaultPlan: 'EV2-A Home TOU',
+    placeholderProvider: 'e.g. PG&E, SCE, SDG&E, SoCalGas, SMUD...',
+    placeholderPlan: 'e.g. EV2-A, E-TOU-C, Tiered E-1, E-ELEC...',
+    quickProviders: ['PG&E', 'SCE', 'SDG&E', 'SoCalGas', 'SMUD'],
+    quickPlans: ['EV2-A (Home EV TOU)', 'E-TOU-C (Peak 4-9 PM)', 'E-ELEC (Heat Pump/EV)', 'Tiered E-1 Standard', 'CARE Discount']
+  },
+  trash: {
+    key: 'trash',
+    label: 'Trash & recycling',
+    title: 'Municipal Trash & Recycling',
+    category: 'Sanitation & Recycling',
+    icon: 'Droplets',
+    colorClass: 'text-blue-500 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800',
+    providerField: 'trashProvider',
+    planField: 'trashPlan',
+    accountField: 'trashAccount',
+    costField: 'trashMonthlyCost',
+    notesField: 'trashNotes',
+    defaultProvider: 'City Utilities',
+    defaultPlan: '64-Gal Cart',
+    placeholderProvider: 'e.g. City Utilities, Waste Management, Republic Services...',
+    placeholderPlan: 'e.g. 64-Gal Standard Cart, 96-Gal Large, 32-Gal Eco...',
+    quickProviders: ['City Utilities', 'Waste Management', 'Republic Services', 'Recology'],
+    quickPlans: ['64-Gallon Standard Cart', '96-Gallon Large Cart', '32-Gallon Eco Cart']
+  },
+  security: {
+    key: 'security',
+    label: 'Home security',
+    title: 'Home Security & Smart Home',
+    category: 'Protection & Monitoring',
+    icon: 'ShieldCheck',
+    colorClass: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800',
+    providerField: 'securityProvider',
+    planField: 'securityPlan',
+    accountField: 'securityAccount',
+    costField: 'securityMonthlyCost',
+    notesField: 'securityNotes',
+    defaultProvider: 'Ring',
+    defaultPlan: 'Ring Protect Pro',
+    placeholderProvider: 'e.g. Ring, ADT, SimpliSafe, Nest, Vivint...',
+    placeholderPlan: 'e.g. Ring Protect Pro, Ring Protect Basic, Command & Control...',
+    quickProviders: ['Ring', 'ADT', 'SimpliSafe', 'Vivint', 'Nest / Google Home'],
+    quickPlans: ['Ring Protect Pro ($20/mo)', 'Ring Protect Basic ($4/mo)', 'ADT Command & Control', 'SimpliSafe Fast Protect']
+  },
+  water: {
+    key: 'water',
+    label: 'Water service',
+    title: 'Municipal Water & Sewer',
+    category: 'Water & Utilities',
+    icon: 'Droplets',
+    colorClass: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800',
+    providerField: 'waterProvider',
+    planField: 'waterPlan',
+    accountField: 'waterAccount',
+    costField: 'waterMonthlyCost',
+    notesField: 'waterNotes',
+    defaultProvider: 'City Water Works',
+    defaultPlan: 'Standard Residential Meter',
+    placeholderProvider: 'e.g. City Water Works, California Water Service...',
+    placeholderPlan: 'e.g. Standard Residential Meter, Tiered Conservation...',
+    quickProviders: ['City Water Works', 'County Water District', 'California Water Service', 'American Water'],
+    quickPlans: ['Standard Residential Meter', 'Tiered Conservation Rate', 'Flat Residential Rate']
+  }
+};
 
 export default function HouseholdLifestyleHub({
   householdProfile,
@@ -601,6 +722,205 @@ export default function HouseholdLifestyleHub({
   // Multi-step question wizard state
   const hasHouseholdSpecs = Boolean(householdProfile.address || householdProfile.dwellingType);
   const [householdView, setHouseholdView] = useState(hasHouseholdSpecs ? 'saved' : 'wizard');
+  const [selectedProviderKey, setSelectedProviderKey] = useState(null);
+  const [isScanningProviderDoc, setIsScanningProviderDoc] = useState(false);
+  const [providerScanProgress, setProviderScanProgress] = useState('');
+  const [providerScanSuccess, setProviderScanSuccess] = useState('');
+  const [providerEditForm, setProviderEditForm] = useState(null);
+  const providerDocInputRef = useRef(null);
+
+  const handleOpenProvider = (pKey) => {
+    setSelectedProviderKey(pKey);
+    const cfg = HOUSEHOLD_PROVIDER_CONFIGS[pKey];
+    if (cfg) {
+      setProviderEditForm({
+        provider: householdProfile[cfg.providerField] || cfg.defaultProvider,
+        plan: householdProfile[cfg.planField] || cfg.defaultPlan,
+        accountNumber: householdProfile[cfg.accountField] || '',
+        monthlyCost: householdProfile[cfg.costField] || '',
+        notes: householdProfile[cfg.notesField] || ''
+      });
+    }
+    setProviderScanSuccess('');
+    setHouseholdView('providerDetail');
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+  };
+
+  const handleSaveProviderDetails = () => {
+    if (!selectedProviderKey || !providerEditForm) return;
+    const cfg = HOUSEHOLD_PROVIDER_CONFIGS[selectedProviderKey];
+    if (!cfg) return;
+
+    const nextProfile = {
+      ...householdProfile,
+      [cfg.providerField]: providerEditForm.provider,
+      [cfg.planField]: providerEditForm.plan,
+      [cfg.accountField]: providerEditForm.accountNumber,
+      [cfg.costField]: providerEditForm.monthlyCost,
+      [cfg.notesField]: providerEditForm.notes
+    };
+    onUpdateProfile(nextProfile);
+    try {
+      localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
+      localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
+    } catch {}
+    setProviderScanSuccess('Provider details saved successfully!');
+    setTimeout(() => setProviderScanSuccess(''), 3000);
+  };
+
+  const handleUploadProviderDocument = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedProviderKey) return;
+
+    setIsScanningProviderDoc(true);
+    setProviderScanProgress('Reading document and extracting statement details...');
+    setProviderScanSuccess('');
+
+    try {
+      let displayUrl = '';
+      let extractedText = '';
+
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        try {
+          const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+          const workerUrl = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default;
+          pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+
+          const data = new Uint8Array(await file.arrayBuffer());
+          const pdf = await pdfjsLib.getDocument({ data }).promise;
+          const numPages = Math.min(pdf.numPages, 4);
+
+          for (let i = 1; i <= numPages; i++) {
+            const page = await pdf.getPage(i);
+            const tc = await page.getTextContent();
+            extractedText += tc.items.map(it => it.str).join(' ') + '\n';
+          }
+
+          const p1 = await pdf.getPage(1);
+          const viewport = p1.getViewport({ scale: 1 });
+          const canvas = document.createElement('canvas');
+          const maxW = 600;
+          canvas.width = Math.min(viewport.width, maxW);
+          canvas.height = Math.round(canvas.width * (viewport.height / viewport.width));
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          await p1.render({ canvasContext: ctx, viewport: p1.getViewport({ scale: canvas.width / viewport.width }) }).promise;
+          displayUrl = canvas.toDataURL('image/jpeg', 0.85);
+        } catch (pdfErr) {
+          console.warn('PDF extract note:', pdfErr);
+        }
+      }
+
+      if (!displayUrl) {
+        displayUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      const cfg = HOUSEHOLD_PROVIDER_CONFIGS[selectedProviderKey];
+      const extracted = {};
+
+      const acctMatch = extractedText.match(/(?:account|acct|billing\s*account|customer\s*id)[\s:#]+([A-Z0-9\-]{5,20})/i);
+      if (acctMatch) extracted.accountNumber = acctMatch[1].trim();
+
+      const amountMatch = extractedText.match(/(?:total\s*due|amount\s*due|total\s*amount|current\s*charges|new\s*charges|monthly\s*total)[\s:$]+([0-9,]+\.[0-9]{2})/i);
+      if (amountMatch) extracted.amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+
+      const dueMatch = extractedText.match(/(?:due\s*date|payment\s*due|due\s*by|pay\s*by)[\s:]+([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+      if (dueMatch) extracted.dueDate = dueMatch[1].trim();
+
+      if (cfg) {
+        for (const p of cfg.quickProviders) {
+          if (extractedText.toLowerCase().includes(p.toLowerCase()) || file.name.toLowerCase().includes(p.toLowerCase())) {
+            extracted.provider = p;
+            break;
+          }
+        }
+        for (const pl of cfg.quickPlans) {
+          const baseName = pl.split('(')[0].trim();
+          if (extractedText.toLowerCase().includes(baseName.toLowerCase())) {
+            extracted.plan = pl;
+            break;
+          }
+        }
+      }
+
+      const newDoc = {
+        id: 'pdoc-' + Date.now(),
+        name: file.name,
+        type: file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image',
+        dataUrl: displayUrl,
+        size: (file.size / 1024).toFixed(0) + ' KB',
+        uploadedAt: new Date().toISOString(),
+        extracted
+      };
+
+      const existingDocs = householdProfile.providerDocuments?.[selectedProviderKey] || [];
+      const updatedDocs = [newDoc, ...existingDocs];
+
+      const nextProfile = {
+        ...householdProfile,
+        providerDocuments: {
+          ...(householdProfile.providerDocuments || {}),
+          [selectedProviderKey]: updatedDocs
+        }
+      };
+
+      if (cfg) {
+        if (extracted.accountNumber) nextProfile[cfg.accountField] = extracted.accountNumber;
+        if (extracted.provider) nextProfile[cfg.providerField] = extracted.provider;
+        if (extracted.plan) nextProfile[cfg.planField] = extracted.plan;
+        if (extracted.amount != null) nextProfile[cfg.costField] = extracted.amount;
+      }
+
+      onUpdateProfile(nextProfile);
+      try {
+        localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
+        localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
+      } catch {}
+
+      setProviderEditForm(prev => ({
+        ...prev,
+        provider: nextProfile[cfg.providerField] || prev?.provider,
+        plan: nextProfile[cfg.planField] || prev?.plan,
+        accountNumber: nextProfile[cfg.accountField] || prev?.accountNumber,
+        monthlyCost: nextProfile[cfg.costField] || prev?.monthlyCost
+      }));
+
+      setProviderScanSuccess(
+        extracted.accountNumber || extracted.amount
+          ? `Statement verified! Extracted ${extracted.accountNumber ? `Account #${extracted.accountNumber}` : ''}${extracted.amount ? ` ($${extracted.amount.toFixed(2)})` : ''}.`
+          : 'Statement document uploaded successfully!'
+      );
+    } catch (err) {
+      console.error('Provider document upload error:', err);
+    } finally {
+      setIsScanningProviderDoc(false);
+      setProviderScanProgress('');
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleDeleteProviderDocument = (docId) => {
+    if (!selectedProviderKey) return;
+    const existingDocs = householdProfile.providerDocuments?.[selectedProviderKey] || [];
+    const updatedDocs = existingDocs.filter(d => d.id !== docId);
+    const nextProfile = {
+      ...householdProfile,
+      providerDocuments: {
+        ...(householdProfile.providerDocuments || {}),
+        [selectedProviderKey]: updatedDocs
+      }
+    };
+    onUpdateProfile(nextProfile);
+    try {
+      localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
+      localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
+    } catch {}
+  };
   const [isHouseholdExpanded, setIsHouseholdExpanded] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const totalWizardSteps = 7;
@@ -3145,68 +3465,195 @@ export default function HouseholdLifestyleHub({
                       </div>
 
                       <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {/* Internet */}
-                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
-                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Internet</span>
-                          <div className="sm:text-right">
-                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                              {householdProfile.internetProvider || 'Xfinity'}
-                            </span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
-                              {householdProfile.internetPlan || 'Gigabit Extra'}
-                            </span>
+                        {/* 1. Internet */}
+                        <div
+                          onClick={() => handleOpenProvider('internet')}
+                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          title="Click to view details and upload statements"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-900/40 shadow-2xs">
+                              <Wifi className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Internet
+                              </span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                                {householdProfile.internetProvider || 'Xfinity'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 text-right">
+                            <div>
+                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
+                                {householdProfile.internetPlan || 'Gigabit Extra'}
+                              </span>
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
+                                {householdProfile.providerDocuments?.internet?.length ? `${householdProfile.providerDocuments.internet.length} statement on file` : 'Upload statement'}
+                              </span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
                           </div>
                         </div>
 
-                        {/* Mobile Wireless */}
-                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
-                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Mobile wireless</span>
-                          <div className="sm:text-right">
-                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                              {householdProfile.phoneProvider || 'T-Mobile'} ({householdProfile.phoneLines || 3} lines)
-                            </span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
-                              {householdProfile.phonePlan || 'Go5G Plus'}
-                            </span>
+                        {/* 2. Mobile Wireless */}
+                        <div
+                          onClick={() => handleOpenProvider('phone')}
+                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          title="Click to view details and upload statements"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-100 dark:border-purple-900/40 shadow-2xs">
+                              <Smartphone className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Mobile wireless
+                              </span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                                {householdProfile.phoneProvider || 'T-Mobile'} ({householdProfile.phoneLines || 3} lines)
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 text-right">
+                            <div>
+                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
+                                {householdProfile.phonePlan || 'Go5G Plus'}
+                              </span>
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
+                                {householdProfile.providerDocuments?.phone?.length ? `${householdProfile.providerDocuments.phone.length} statement on file` : 'Upload statement'}
+                              </span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
                           </div>
                         </div>
 
-                        {/* Electric & Gas */}
-                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
-                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Utility rate</span>
-                          <div className="sm:text-right">
-                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                              {householdProfile.electricGasProvider || 'PG&E'}
-                            </span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
-                              {householdProfile.electricGasPlan || 'EV2-A Home TOU'}
-                            </span>
+                        {/* 3. Electric & Gas Utility */}
+                        <div
+                          onClick={() => handleOpenProvider('electric')}
+                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          title="Click to view details and upload statements"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-100 dark:border-amber-900/40 shadow-2xs">
+                              <Zap className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Utility rate
+                              </span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                                {householdProfile.electricGasProvider || 'PG&E'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 text-right">
+                            <div>
+                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
+                                {householdProfile.electricGasPlan || 'EV2-A Home TOU'}
+                              </span>
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
+                                {householdProfile.providerDocuments?.electric?.length ? `${householdProfile.providerDocuments.electric.length} statement on file` : 'Upload statement'}
+                              </span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
                           </div>
                         </div>
 
-                        {/* Trash & Recycling */}
-                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
-                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Trash & recycling</span>
-                          <div className="sm:text-right">
-                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                              {householdProfile.trashProvider || 'City Utilities'}
-                            </span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
-                              {householdProfile.trashPlan || '64-Gal Cart'}
-                            </span>
+                        {/* 4. Trash & Recycling */}
+                        <div
+                          onClick={() => handleOpenProvider('trash')}
+                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          title="Click to view details and upload statements"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-900/40 shadow-2xs">
+                              <Droplets className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Trash & recycling
+                              </span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                                {householdProfile.trashProvider || 'City Utilities'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 text-right">
+                            <div>
+                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
+                                {householdProfile.trashPlan || '64-Gal Cart'}
+                              </span>
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
+                                {householdProfile.providerDocuments?.trash?.length ? `${householdProfile.providerDocuments.trash.length} statement on file` : 'Upload statement'}
+                              </span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
                           </div>
                         </div>
 
-                        {/* Home Security */}
-                        <div className="py-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-4">
-                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Home security</span>
-                          <div className="sm:text-right">
-                            <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                              {householdProfile.securityProvider || 'Ring'}
-                            </span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
-                              {householdProfile.securityPlan || 'Ring Protect Pro'}
-                            </span>
+                        {/* 5. Home Security */}
+                        <div
+                          onClick={() => handleOpenProvider('security')}
+                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          title="Click to view details and upload statements"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100 dark:border-emerald-900/40 shadow-2xs">
+                              <ShieldCheck className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Home security
+                              </span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                                {householdProfile.securityProvider || 'Ring'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 text-right">
+                            <div>
+                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
+                                {householdProfile.securityPlan || 'Ring Protect Pro'}
+                              </span>
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
+                                {householdProfile.providerDocuments?.security?.length ? `${householdProfile.providerDocuments.security.length} statement on file` : 'Upload statement'}
+                              </span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
+                          </div>
+                        </div>
+
+                        {/* 6. Water Service */}
+                        <div
+                          onClick={() => handleOpenProvider('water')}
+                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          title="Click to view details and upload statements"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-100 dark:border-cyan-900/40 shadow-2xs">
+                              <Droplets className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Water service
+                              </span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                                {householdProfile.waterProvider || 'City Water Works'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 text-right">
+                            <div>
+                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
+                                {householdProfile.waterPlan || 'Standard Residential Meter'}
+                              </span>
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
+                                {householdProfile.providerDocuments?.water?.length ? `${householdProfile.providerDocuments.water.length} statement on file` : 'Upload statement'}
+                              </span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
                           </div>
                         </div>
                       </div>
@@ -3298,6 +3745,403 @@ export default function HouseholdLifestyleHub({
               </section>
             </div>
           )}
+          {/* ============================================================= */}
+          {/* VIEW C: PROVIDER DETAIL & STATEMENT UPLOADER PAGE             */}
+          {/* ============================================================= */}
+          {householdView === 'providerDetail' && selectedProviderKey && (() => {
+            const cfg = HOUSEHOLD_PROVIDER_CONFIGS[selectedProviderKey];
+            if (!cfg) return null;
+
+            const currentProvider = householdProfile[cfg.providerField] || cfg.defaultProvider;
+            const currentPlan = householdProfile[cfg.planField] || cfg.defaultPlan;
+            const currentAccount = householdProfile[cfg.accountField] || '';
+            const currentCost = householdProfile[cfg.costField] || '';
+            const currentNotes = householdProfile[cfg.notesField] || '';
+            const docs = householdProfile.providerDocuments?.[selectedProviderKey] || [];
+
+            // Match actual bills from payments for this provider
+            const matchingBills = actualHouseholdBills.filter(b =>
+              (b.name && currentProvider && b.name.toLowerCase().includes(currentProvider.toLowerCase())) ||
+              (currentProvider && b.name && currentProvider.toLowerCase().includes(b.name.toLowerCase()))
+            );
+
+            return (
+              <div className="flex flex-col gap-6 animate-in fade-in duration-200">
+                {/* Top Navigation Bar: Back to Household */}
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHouseholdView('saved');
+                      setSelectedProviderKey(null);
+                    }}
+                    className="inline-flex items-center gap-2 text-xs font-bold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer bg-slate-100 dark:bg-slate-800 px-3.5 py-2 rounded-xl transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back to Household</span>
+                  </button>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
+                    Household Service Provider
+                  </span>
+                </div>
+
+                {/* Main Card: Provider Header & Quick Stats */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xs flex flex-col gap-6">
+                  {/* Header Title & Badges */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-2xs border ${cfg.colorClass}`}>
+                        {cfg.icon === 'Wifi' && <Wifi className="w-7 h-7" />}
+                        {cfg.icon === 'Smartphone' && <Smartphone className="w-7 h-7" />}
+                        {cfg.icon === 'Zap' && <Zap className="w-7 h-7" />}
+                        {cfg.icon === 'Droplets' && <Droplets className="w-7 h-7" />}
+                        {cfg.icon === 'ShieldCheck' && <ShieldCheck className="w-7 h-7" />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <h2 className="font-serif text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                            {currentProvider}
+                          </h2>
+                          <span className="px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-[#18457c] dark:text-blue-400 font-bold text-[10px] border border-blue-200 dark:border-blue-800">
+                            {cfg.title}
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+                          {currentPlan} {currentAccount ? `· Account #${currentAccount}` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 font-semibold">
+                        {docs.length} Statement{docs.length === 1 ? '' : 's'} on file
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 4-Column Specs Grid (matching Household aesthetic) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-2">
+                    <div>
+                      <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">
+                        Provider
+                      </span>
+                      <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 block mt-0.5 truncate">
+                        {currentProvider}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">
+                        Plan / Rate
+                      </span>
+                      <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 block mt-0.5 truncate">
+                        {currentPlan}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">
+                        Account #
+                      </span>
+                      <span className="text-base sm:text-lg font-mono font-bold text-slate-900 dark:text-slate-100 block mt-0.5 truncate">
+                        {currentAccount || '—'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">
+                        Billing Cost
+                      </span>
+                      <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 block mt-0.5 truncate">
+                        {matchingBills[0]?.amount ? `$${matchingBills[0].amount} /mo` : (currentCost ? `$${currentCost} /mo` : '—')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* ======================================================== */}
+                  {/* STATEMENT & DOCUMENT UPLOADER                           */}
+                  {/* ======================================================== */}
+                  <div className="mt-2 p-6 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/90 dark:border-slate-800 flex flex-col gap-5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <FileText className="w-5 h-5 text-[#18457c] dark:text-blue-400" />
+                        <div>
+                          <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                            Provider Statements & Verification Documents
+                          </h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Upload bill statements, contracts, or rate sheets (PDF or Image) to give Klarity exact plan and pricing info.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Scan feedback alert */}
+                    {providerScanSuccess && (
+                      <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="font-medium">{providerScanSuccess}</span>
+                      </div>
+                    )}
+
+                    {/* Drag and Drop Zone */}
+                    <div
+                      onClick={() => providerDocInputRef.current?.click()}
+                      className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-[#18457c] dark:hover:border-blue-400 rounded-2xl p-6 sm:p-8 text-center bg-white dark:bg-slate-900 cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group"
+                    >
+                      <input
+                        ref={providerDocInputRef}
+                        type="file"
+                        accept=".pdf,image/png,image/jpeg,image/jpg"
+                        onChange={handleUploadProviderDocument}
+                        className="hidden"
+                      />
+
+                      <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-[#18457c] dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform shadow-2xs">
+                        {isScanningProviderDoc ? (
+                          <RefreshCw className="w-6 h-6 animate-spin" />
+                        ) : (
+                          <UploadCloud className="w-6 h-6" />
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 block">
+                          {isScanningProviderDoc ? providerScanProgress : `Click to upload ${currentProvider} statement or bill`}
+                        </span>
+                        <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
+                          Supports PDF, PNG, JPG (statement text and account numbers will be read automatically)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Uploaded Documents List */}
+                    {docs.length > 0 && (
+                      <div className="space-y-3 pt-2">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                          Saved Statements ({docs.length})
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {docs.map(doc => (
+                            <div
+                              key={doc.id}
+                              className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-3 shadow-2xs"
+                            >
+                              <div className="flex items-start gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                                  <FileText className="w-5 h-5 text-slate-500" />
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs block truncate" title={doc.name}>
+                                    {doc.name}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                                    {new Date(doc.uploadedAt).toLocaleDateString()} · {doc.size || 'PDF'}
+                                  </span>
+                                  {doc.extracted?.accountNumber && (
+                                    <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold block mt-1">
+                                      Acct: {doc.extracted.accountNumber}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {doc.dataUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setViewingCardPhoto(doc.dataUrl);
+                                      setViewingCardTitle(doc.name);
+                                    }}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                    title="View Statement"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteProviderDocument(doc.id)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                                  title="Delete Document"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ======================================================== */}
+                  {/* EDIT PROVIDER DETAILS FORM                               */}
+                  {/* ======================================================== */}
+                  <div className="mt-2 p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex flex-col gap-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                      <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                        Edit Provider & Plan Details
+                      </h3>
+                      <span className="text-[11px] text-slate-400">
+                        Changes save directly to your Household profile
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      {/* Provider Name */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-semibold text-slate-700 dark:text-slate-300">
+                          Provider Name
+                        </label>
+                        <input
+                          type="text"
+                          value={providerEditForm?.provider || ''}
+                          onChange={e => setProviderEditForm({ ...providerEditForm, provider: e.target.value })}
+                          placeholder={cfg.placeholderProvider}
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#18457c]"
+                        />
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          {cfg.quickProviders.map(p => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => setProviderEditForm({ ...providerEditForm, provider: p })}
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition-colors cursor-pointer ${
+                                providerEditForm?.provider === p
+                                  ? 'bg-[#18457c] text-white border-[#18457c]'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Plan Name */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-semibold text-slate-700 dark:text-slate-300">
+                          Plan / Rate Name
+                        </label>
+                        <input
+                          type="text"
+                          value={providerEditForm?.plan || ''}
+                          onChange={e => setProviderEditForm({ ...providerEditForm, plan: e.target.value })}
+                          placeholder={cfg.placeholderPlan}
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#18457c]"
+                        />
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          {cfg.quickPlans.map(pl => (
+                            <button
+                              key={pl}
+                              type="button"
+                              onClick={() => setProviderEditForm({ ...providerEditForm, plan: pl })}
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition-colors cursor-pointer ${
+                                providerEditForm?.plan === pl
+                                  ? 'bg-[#18457c] text-white border-[#18457c]'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                              }`}
+                            >
+                              {pl}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Account Number */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-semibold text-slate-700 dark:text-slate-300">
+                          Account / Customer ID Number
+                        </label>
+                        <input
+                          type="text"
+                          value={providerEditForm?.accountNumber || ''}
+                          onChange={e => setProviderEditForm({ ...providerEditForm, accountNumber: e.target.value })}
+                          placeholder="e.g. 8495-201-9481"
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#18457c]"
+                        />
+                      </div>
+
+                      {/* Monthly Cost */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-semibold text-slate-700 dark:text-slate-300">
+                          Monthly Bill Amount ($)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={providerEditForm?.monthlyCost || ''}
+                          onChange={e => setProviderEditForm({ ...providerEditForm, monthlyCost: e.target.value })}
+                          placeholder="e.g. 85.00"
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#18457c]"
+                        />
+                      </div>
+
+                      {/* Notes / Specs */}
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <label className="font-semibold text-slate-700 dark:text-slate-300">
+                          Notes / Contract Details
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={providerEditForm?.notes || ''}
+                          onChange={e => setProviderEditForm({ ...providerEditForm, notes: e.target.value })}
+                          placeholder="Add any contract terms, renewal dates, modem rentals, or plan options..."
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#18457c]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={handleSaveProviderDetails}
+                        className="px-5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#133560] text-white font-bold text-xs cursor-pointer shadow-2xs transition-colors flex items-center gap-2"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>Save Provider Info</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Connected Bills from Payments */}
+                  {matchingBills.length > 0 && (
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/90 dark:border-slate-800 flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900 dark:text-slate-100 text-xs flex items-center gap-2">
+                          <Receipt className="w-4 h-4 text-emerald-600" />
+                          <span>Connected Bills from Payments</span>
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          {matchingBills.length} matched payment
+                        </span>
+                      </div>
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {matchingBills.map(b => (
+                          <div key={b.id} className="py-2.5 flex items-center justify-between text-xs">
+                            <div>
+                              <span className="font-bold text-slate-900 dark:text-slate-100 block">{b.name}</span>
+                              <span className="text-[10px] text-slate-400">{b.category || 'Utility'} · {b.dueDate ? `Due ${b.dueDate}` : 'Active'}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-bold text-slate-900 dark:text-slate-100 text-sm block">${b.amount}</span>
+                              <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 justify-end">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                                From payments
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
         </div>
       )}
       {section === 'auto' && (
