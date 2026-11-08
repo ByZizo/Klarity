@@ -1027,10 +1027,11 @@ function KlarityApp() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsActiveTab, setSettingsActiveTab] = useState('profile'); // 'profile' | 'appearance' | 'sidebar' | 'ai' | 'plaid' | 'security' | 'session'
 
-  // Theme state: 'system' | 'light' | 'dark' | 'high-contrast' | 'high-contrast-light'
+  // Theme state: 'system' | 'light' | 'dark'
   const [currentTheme, setCurrentTheme] = useState(() => {
     try {
-      return localStorage.getItem('klarity_theme') || 'system';
+      const saved = localStorage.getItem('klarity_theme') || 'system';
+      return (saved === 'dark' || saved === 'light' || saved === 'system') ? saved : 'system';
     } catch (e) {
       return 'system';
     }
@@ -1113,10 +1114,6 @@ function KlarityApp() {
       }
       if (effective === 'dark') {
         root.classList.add('dark');
-      } else if (effective === 'high-contrast') {
-        root.classList.add('dark', 'high-contrast');
-      } else if (effective === 'high-contrast-light') {
-        root.classList.add('high-contrast-light');
       }
     } catch (e) {
       console.error('Failed to apply theme', e);
@@ -4964,43 +4961,20 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
         {/* Left Sidebar Footer: Refresh App + User Profile */}
         <div className="flex flex-col gap-2 pt-3 border-t border-slate-200/80">
-          {/* Quick Actions: Refresh & Theme */}
+          {/* Refresh App Data Button */}
           {!isSidebarCompact ? (
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={handleRefreshApp}
-                disabled={isRefreshingApp}
-                className="flex-1 px-2.5 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer transition-all disabled:opacity-50"
-                title="Refresh all data and check for updates"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-[#18457c] shrink-0 ${isRefreshingApp ? 'animate-spin' : ''}`} />
-                <span className="truncate">{isRefreshingApp ? 'Refreshing...' : 'Refresh'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const themes = ['light', 'dark', 'high-contrast', 'system'];
-                  const nextIdx = (themes.indexOf(currentTheme) + 1) % themes.length;
-                  handleSelectTheme(themes[nextIdx]);
-                }}
-                className="px-2.5 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer transition-all shrink-0"
-                title={`Current theme: ${currentTheme}. Click to cycle.`}
-              >
-                {currentTheme === 'dark' ? (
-                  <Moon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                ) : currentTheme === 'high-contrast' || currentTheme === 'high-contrast-light' ? (
-                  <Contrast className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                ) : currentTheme === 'system' ? (
-                  <Laptop className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                ) : (
-                  <Sun className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                )}
-                <span className="capitalize">{currentTheme === 'high-contrast' ? 'Contrast' : currentTheme}</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleRefreshApp}
+              disabled={isRefreshingApp}
+              className="w-full inline-flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] text-xs font-semibold shadow-2xs cursor-pointer transition-all disabled:opacity-50"
+              title="Refresh app data & check for updates"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-[#18457c] shrink-0 ${isRefreshingApp ? 'animate-spin' : ''}`} />
+              <span>{isRefreshingApp ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
           ) : (
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex justify-center">
               <button
                 type="button"
                 onClick={handleRefreshApp}
@@ -5011,29 +4985,6 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 <RefreshCw className={`w-4 h-4 text-[#18457c] ${isRefreshingApp ? 'animate-spin' : ''}`} />
                 <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
                   Refresh
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const themes = ['light', 'dark', 'high-contrast', 'system'];
-                  const nextIdx = (themes.indexOf(currentTheme) + 1) % themes.length;
-                  handleSelectTheme(themes[nextIdx]);
-                }}
-                className="w-10 h-10 flex items-center justify-center rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] shadow-2xs cursor-pointer transition-all relative group"
-                title={`Theme: ${currentTheme}. Click to cycle.`}
-              >
-                {currentTheme === 'dark' ? (
-                  <Moon className="w-4 h-4 text-blue-500" />
-                ) : currentTheme === 'high-contrast' || currentTheme === 'high-contrast-light' ? (
-                  <Contrast className="w-4 h-4 text-amber-500" />
-                ) : currentTheme === 'system' ? (
-                  <Laptop className="w-4 h-4 text-slate-500" />
-                ) : (
-                  <Sun className="w-4 h-4 text-amber-500" />
-                )}
-                <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap capitalize">
-                  Theme: {currentTheme}
                 </span>
               </button>
             </div>
@@ -5136,36 +5087,14 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       <KlarityLogo className="w-7 h-7 text-[#18457c] shrink-0" />
                       <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">Overview</h1>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const themes = ['light', 'dark', 'high-contrast', 'system'];
-                          const nextIdx = (themes.indexOf(currentTheme) + 1) % themes.length;
-                          handleSelectTheme(themes[nextIdx]);
-                        }}
-                        className="w-9 h-9 rounded-full bg-white border border-slate-200/90 text-slate-700 flex items-center justify-center shadow-2xs cursor-pointer"
-                        title={`Current theme: ${currentTheme}. Click to cycle.`}
-                      >
-                        {currentTheme === 'dark' ? (
-                          <Moon className="w-4 h-4 text-blue-500" />
-                        ) : currentTheme === 'high-contrast' || currentTheme === 'high-contrast-light' ? (
-                          <Contrast className="w-4 h-4 text-amber-500" />
-                        ) : currentTheme === 'system' ? (
-                          <Laptop className="w-4 h-4 text-slate-600" />
-                        ) : (
-                          <Sun className="w-4 h-4 text-amber-500" />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsSettingsOpen(true)}
-                        className="w-9 h-9 rounded-full bg-[#18457c] text-white flex items-center justify-center font-bold text-xs shadow-2xs cursor-pointer"
-                        title="Open Settings"
-                      >
-                        {userInitials}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsSettingsOpen(true)}
+                      className="w-9 h-9 rounded-full bg-[#18457c] text-white flex items-center justify-center font-bold text-xs shadow-2xs cursor-pointer"
+                      title="Open Settings"
+                    >
+                      {userInitials}
+                    </button>
                   </div>
 
                   {/* Available Cash Hero Card */}
@@ -9146,19 +9075,19 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         </p>
                       </div>
 
-                      {/* 1. Theme & Contrast Modes */}
+                      {/* 1. Theme Modes */}
                       <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-5 bg-white shadow-2xs">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="text-sm font-bold text-slate-900">Themes & Contrast Modes</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">Choose your preferred visual mode or contrast standard.</p>
+                            <h3 className="text-sm font-bold text-slate-900">Theme</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Select your preferred color appearance.</p>
                           </div>
                           <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full capitalize shrink-0">
-                            Active: {currentTheme === 'high-contrast' ? 'High Contrast (Dark)' : currentTheme === 'high-contrast-light' ? 'High Contrast (Light)' : currentTheme}
+                            Active: {currentTheme === 'system' ? 'Match System' : currentTheme === 'dark' ? 'Dark Mode' : 'Light Mode'}
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                           {[
                             {
                               id: 'system',
@@ -9186,24 +9115,6 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                               badge: 'Night',
                               previewBg: 'bg-[#0b1120]',
                               previewCard: 'bg-[#111827] border-slate-700 text-slate-100'
-                            },
-                            {
-                              id: 'high-contrast',
-                              label: 'High Contrast (Dark)',
-                              desc: 'WCAG AAA pitch-black background with bold white borders and maximum text contrast.',
-                              icon: Contrast,
-                              badge: 'WCAG AAA',
-                              previewBg: 'bg-black',
-                              previewCard: 'bg-black border-2 border-white text-white'
-                            },
-                            {
-                              id: 'high-contrast-light',
-                              label: 'High Contrast (Light)',
-                              desc: 'WCAG AAA pure white canvas with strong solid black outlines and prominent text.',
-                              icon: Contrast,
-                              badge: 'Accessible',
-                              previewBg: 'bg-white',
-                              previewCard: 'bg-white border-2 border-black text-black'
                             }
                           ].map(t => {
                             const isSelected = currentTheme === t.id;

@@ -1,7 +1,6 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
-@custom-variant high-contrast (&:where(.high-contrast, .high-contrast *));
 
 @layer base {
   body {
@@ -80,101 +79,6 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 }
 
 /* ========================================================================== */
-/* HIGH CONTRAST (DARK) - WCAG AAA PURE BLACK & WHITE BORDERS                */
-/* ========================================================================== */
-html.high-contrast {
-  color-scheme: dark;
-}
-html.high-contrast body {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-}
-html.high-contrast .bg-white,
-html.high-contrast .bg-slate-50,
-html.high-contrast .bg-slate-100,
-html.high-contrast .bg-slate-800,
-html.high-contrast .bg-slate-900,
-html.high-contrast .bg-gray-50,
-html.high-contrast .bg-gray-100,
-html.high-contrast .bg-\[\#f8fafc\],
-html.high-contrast .bg-\[\#111827\] {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-}
-html.high-contrast .border,
-html.high-contrast [class*="border-"] {
-  border-color: #ffffff !important;
-  border-width: 1.5px !important;
-}
-html.high-contrast .text-slate-900,
-html.high-contrast .text-slate-800,
-html.high-contrast .text-slate-700,
-html.high-contrast .text-slate-600,
-html.high-contrast .text-slate-500,
-html.high-contrast .text-slate-400,
-html.high-contrast .text-gray-900,
-html.high-contrast .text-gray-700,
-html.high-contrast .text-gray-600,
-html.high-contrast .text-gray-500 {
-  color: #ffffff !important;
-}
-html.high-contrast input,
-html.high-contrast textarea,
-html.high-contrast select {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border: 2px solid #ffffff !important;
-}
-html.high-contrast button {
-  border-width: 1.5px !important;
-}
-html.high-contrast a {
-  text-decoration: underline !important;
-}
-
-/* ========================================================================== */
-/* HIGH CONTRAST (LIGHT) - WCAG AAA PURE WHITE & HIGH DENSITY BLACK BORDERS  */
-/* ========================================================================== */
-html.high-contrast-light {
-  color-scheme: light;
-}
-html.high-contrast-light body {
-  background-color: #ffffff !important;
-  color: #000000 !important;
-}
-html.high-contrast-light .bg-slate-50,
-html.high-contrast-light .bg-slate-100,
-html.high-contrast-light .bg-gray-50,
-html.high-contrast-light .bg-gray-100,
-html.high-contrast-light .bg-\[\#f8fafc\] {
-  background-color: #ffffff !important;
-  color: #000000 !important;
-}
-html.high-contrast-light .border,
-html.high-contrast-light [class*="border-"] {
-  border-color: #000000 !important;
-  border-width: 1.5px !important;
-}
-html.high-contrast-light .text-slate-900,
-html.high-contrast-light .text-slate-800,
-html.high-contrast-light .text-slate-700,
-html.high-contrast-light .text-slate-600,
-html.high-contrast-light .text-slate-500,
-html.high-contrast-light .text-slate-400,
-html.high-contrast-light .text-gray-900,
-html.high-contrast-light .text-gray-700,
-html.high-contrast-light .text-gray-600 {
-  color: #000000 !important;
-}
-html.high-contrast-light input,
-html.high-contrast-light textarea,
-html.high-contrast-light select {
-  background-color: #ffffff !important;
-  color: #000000 !important;
-  border: 2px solid #000000 !important;
-}
-
-/* ========================================================================== */
 /* ACCESSIBILITY & UI PREFERENCES (Font Scale, Density, Motion, Focus)        */
 /* ========================================================================== */
 html.font-scale-large {
@@ -211,8 +115,7 @@ html.high-focus *:focus-visible {
   outline: 3px solid #18457c !important;
   outline-offset: 2px !important;
 }
-html.dark.high-focus *:focus-visible,
-html.high-contrast.high-focus *:focus-visible {
+html.dark.high-focus *:focus-visible {
   outline: 3px solid #60a5fa !important;
   outline-offset: 2px !important;
 }

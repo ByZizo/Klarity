@@ -11,7 +11,8 @@
     <script>
       (function() {
         try {
-          var theme = localStorage.getItem('klarity_theme') || 'system';
+          var savedTheme = localStorage.getItem('klarity_theme') || 'system';
+          var theme = (savedTheme === 'dark' || savedTheme === 'light' || savedTheme === 'system') ? savedTheme : 'system';
           var fontScale = localStorage.getItem('klarity_ui_font_scale') || 'normal';
           var density = localStorage.getItem('klarity_ui_density') || 'comfortable';
           var reduceMotion = localStorage.getItem('klarity_ui_reduce_motion') === 'true';
@@ -27,10 +28,6 @@
           }
           if (effective === 'dark') {
             root.classList.add('dark');
-          } else if (effective === 'high-contrast') {
-            root.classList.add('dark', 'high-contrast');
-          } else if (effective === 'high-contrast-light') {
-            root.classList.add('high-contrast-light');
           }
 
           if (fontScale === 'large') root.classList.add('font-scale-large');
