@@ -15,62 +15,32 @@
 }
 
 /* ========================================================================== */
-/* DARK MODE THEME BASE OVERRIDES                                            */
+/* DARK MODE BASE SETTINGS                                                   */
 /* ========================================================================== */
 html.dark {
   color-scheme: dark;
 }
 html.dark body {
-  background-color: #0b1120 !important;
-  color: #f1f5f9 !important;
-}
-
-/* Default dark backgrounds for common light containers */
-html.dark .bg-\[\#f8fafc\],
-html.dark .bg-slate-50,
-html.dark .bg-gray-50 {
-  background-color: #0b1120 !important;
-}
-html.dark .bg-white {
-  background-color: #111827 !important;
+  background-color: #0b1120;
   color: #f1f5f9;
 }
-html.dark .border-slate-200,
-html.dark .border-slate-200\/80,
-html.dark .border-slate-200\/90,
-html.dark .border-gray-200,
-html.dark .border-slate-100 {
-  border-color: #1f2937 !important;
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
 }
-html.dark .text-slate-900,
-html.dark .text-slate-800,
-html.dark .text-gray-900 {
-  color: #f9fafb !important;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-html.dark .text-slate-700,
-html.dark .text-slate-600,
-html.dark .text-slate-500,
-html.dark .text-gray-600 {
-  color: #94a3b8 !important;
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
 }
-html.dark .text-slate-400 {
-  color: #64748b !important;
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
-/* Dark mode inputs and textareas */
-html.dark input,
-html.dark textarea,
-html.dark select {
-  background-color: #1e293b !important;
-  color: #f8fafc !important;
-  border-color: #334155 !important;
-}
-html.dark input::placeholder,
-html.dark textarea::placeholder {
-  color: #64748b !important;
-}
-
-/* Dark mode scrollbars */
 html.dark ::-webkit-scrollbar-thumb {
   background: #334155;
 }
@@ -127,22 +97,6 @@ html.privacy-mask .privacy-sensitive {
 }
 html.privacy-mask .privacy-sensitive:hover {
   filter: none;
-}
-
-/* Custom scrollbars */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
 }
 
 /* Gemini-style Markdown Chat Formatting */

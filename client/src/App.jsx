@@ -4835,7 +4835,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
       {linkToken && (
         <PlaidLauncher
           token={linkToken}
@@ -4864,7 +4864,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       {/* ======================================================================= */}
       {/* 1. LEFT SIDEBAR (Overview, Transactions, Budgets, Bills, Subscriptions, Cards) */}
       {/* ======================================================================= */}
-      <aside className={`shrink-0 border-r border-slate-200/80 bg-[#f8fafc] flex flex-col justify-between h-screen sticky top-0 hidden md:flex transition-all duration-200 ease-in-out relative z-30 ${
+      <aside className={`shrink-0 border-r border-slate-200/80 dark:border-slate-800 bg-[#f8fafc] dark:bg-slate-950 flex flex-col justify-between h-screen sticky top-0 hidden md:flex transition-all duration-200 ease-in-out relative z-30 ${
         isSidebarCompact ? 'w-[72px] px-2.5 py-5' : 'w-60 p-5'
       }`}>
         <div>
@@ -5438,7 +5438,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           className={`max-w-[90%] rounded-2xl p-3.5 text-xs leading-relaxed flex flex-col gap-2 ${
                             msg.role === 'user'
                               ? 'bg-[#18457c] text-white shadow-2xs'
-                              : 'bg-white text-slate-800 border border-slate-200/80 shadow-2xs'
+                              : 'bg-white dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 shadow-2xs'
                           }`}
                         >
                           {msg.text && <FormattedChatMessage text={msg.text} isUser={msg.role === 'user'} />}
@@ -5756,7 +5756,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       {/* ======================================================================= */}
       {/* 2B. DESKTOP CENTER MAIN CONTENT (>= 768px) */}
       {/* ======================================================================= */}
-      <main className="hidden md:flex flex-1 min-w-0 p-6 lg:p-8 flex-col gap-5 overflow-y-auto relative">
+      <main className="hidden md:flex flex-1 min-w-0 p-6 lg:p-8 flex-col gap-5 overflow-y-auto relative bg-[#f8fafc] dark:bg-slate-950 text-slate-800 dark:text-slate-100">
 
         {/* Top-of-App Auto-Update Banner (Appears whenever an update is pushed out) */}
         {!updateBannerDismissed && (
@@ -7446,7 +7446,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                     className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed flex flex-col gap-2 ${
                       msg.role === 'user'
                         ? 'bg-[#18457c] text-white shadow-2xs'
-                        : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
+                        : 'bg-[#eff4f9] dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 border border-slate-200/60 dark:border-slate-700 shadow-2xs'
                     }`}
                   >
                     {/* Render multiple attachments (images as thumbnails, non-images as File Cards) */}
@@ -7716,7 +7716,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       {activeTab !== 'advisor' && !isAdvisorCollapsed && (
       <aside
         style={{ width: `${advisorWidth}px` }}
-        className={`shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-5 xl:p-6 flex flex-col h-screen sticky top-0 hidden lg:flex relative transition-[width] duration-75 ${
+        className={`shrink-0 border-l border-slate-200/80 dark:border-slate-800 bg-[#f8fafc] dark:bg-slate-950 p-5 xl:p-6 flex flex-col h-screen sticky top-0 hidden lg:flex relative transition-[width] duration-75 ${
           isResizingAdvisor ? 'select-none cursor-col-resize !transition-none' : ''
         }`}
       >
@@ -7833,7 +7833,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 className={`max-w-[90%] rounded-2xl p-3 text-xs leading-relaxed flex flex-col gap-2 ${
                   msg.role === 'user'
                     ? 'bg-[#18457c] text-white shadow-2xs'
-                    : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
+                    : 'bg-[#eff4f9] dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 border border-slate-200/60 dark:border-slate-700 shadow-2xs'
                 }`}
               >
                 {/* Render multiple attachments (images as thumbnails, non-images as File Cards) */}
@@ -8832,16 +8832,16 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           <div
             ref={settingsModalRef}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-[880px] w-full min-h-[580px] h-[640px] flex flex-col overflow-hidden cursor-default"
+            className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xl max-w-[880px] w-full min-h-[580px] h-[640px] flex flex-col overflow-hidden cursor-default"
           >
             
             {/* Modal Body: Left Tabs + Right Content */}
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
               
               {/* Left Sidebar Tabs */}
-              <div className="w-full md:w-56 lg:w-60 shrink-0 border-b md:border-b-0 md:border-r border-slate-200/80 p-5 sm:p-6 flex flex-col justify-between bg-slate-50/60">
+              <div className="w-full md:w-56 lg:w-60 shrink-0 border-b md:border-b-0 md:border-r border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 flex flex-col justify-between bg-slate-50/80 dark:bg-slate-950/70">
                 <div>
-                  <h3 className="font-serif-title text-xl font-bold text-slate-900 mb-6 hidden md:block">Settings</h3>
+                  <h3 className="font-serif-title text-xl font-bold text-slate-900 dark:text-slate-100 mb-6 hidden md:block">Settings</h3>
                   
                   <nav className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
                     {[
@@ -8861,8 +8861,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           onClick={() => setSettingsActiveTab(tab.id)}
                           className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-between transition-colors duration-100 cursor-pointer shrink-0 ${
                             isActive
-                              ? 'bg-white text-[#1B4B91] font-semibold border border-slate-200/90 shadow-2xs'
-                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 font-medium'
+                              ? 'bg-white dark:bg-slate-800 text-[#1B4B91] dark:text-blue-400 font-semibold border border-slate-200/90 dark:border-slate-700 shadow-2xs'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 font-medium'
                           }`}
                         >
                           <span>{tab.label}</span>
@@ -8879,7 +8879,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               </div>
 
               {/* Right Content Panel */}
-              <div className="flex-1 p-6 sm:p-8 flex flex-col justify-between overflow-y-auto bg-white">
+              <div className="flex-1 p-6 sm:p-8 flex flex-col justify-between overflow-y-auto bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                 <div>
                   {/* TAB: SIDEBAR & NAVIGATION */}
                   {settingsActiveTab === 'sidebar' && (
@@ -9016,7 +9016,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         <p className="text-xs text-slate-500 mt-1">How you appear in Klarity.</p>
                       </div>
 
-                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-6 bg-white shadow-2xs">
+                      <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-6 flex flex-col gap-6 bg-white dark:bg-slate-900/60 shadow-2xs">
                         <div className="flex items-center gap-3.5">
                           <div className="w-12 h-12 rounded-full bg-[#1B4B91] text-white flex items-center justify-center font-bold text-base shadow-2xs shrink-0">
                             {userInitials}
@@ -9076,13 +9076,13 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       </div>
 
                       {/* 1. Theme Modes */}
-                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-5 bg-white shadow-2xs">
+                      <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-6 flex flex-col gap-5 bg-white dark:bg-slate-900/60 shadow-2xs">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="text-sm font-bold text-slate-900">Theme</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">Select your preferred color appearance.</p>
+                            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Theme</h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Select your preferred color appearance.</p>
                           </div>
-                          <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full capitalize shrink-0">
+                          <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full capitalize shrink-0">
                             Active: {currentTheme === 'system' ? 'Match System' : currentTheme === 'dark' ? 'Dark Mode' : 'Light Mode'}
                           </span>
                         </div>

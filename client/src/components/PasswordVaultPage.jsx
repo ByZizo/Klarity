@@ -592,17 +592,17 @@ export default function PasswordVaultPage({
           </button>
         )}
 
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col gap-5">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col gap-5">
           <div className="flex flex-col items-center text-center gap-2">
             <div className="w-12 h-12 rounded-2xl bg-[#18457c] text-white flex items-center justify-center shadow-2xs">
               <Lock className="w-6 h-6" />
             </div>
-            <h2 className="font-serif-title text-xl font-bold text-slate-900">
+            <h2 className="font-serif-title text-xl font-bold text-slate-900 dark:text-slate-100">
               {hasPin
                 ? (isPasswordMode ? 'Enter Master Password' : 'Enter Security PIN')
                 : (isPasswordMode ? 'Set Up Master Password' : 'Set Up Security PIN')}
             </h2>
-            <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed">
               {hasPin
                 ? `Enter your ${isPasswordMode ? 'master password' : 'security PIN'} to access your passwords and account credentials.`
                 : `Create a ${isPasswordMode ? 'master password (min 4 characters)' : '4-6 digit security PIN'} to protect your vault.`}
@@ -610,7 +610,7 @@ export default function PasswordVaultPage({
           </div>
 
           {pinError && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2">
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span className="leading-snug">{pinError}</span>
             </div>
@@ -618,7 +618,7 @@ export default function PasswordVaultPage({
 
           <form onSubmit={hasPin ? handleUnlockWithPin : handleCreatePin} className="flex flex-col gap-4">
             <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
                 {hasPin
                   ? (isPasswordMode ? 'Master Password' : 'Security PIN')
                   : (isPasswordMode ? 'New Password' : 'New PIN (4-6 digits)')}
@@ -632,7 +632,7 @@ export default function PasswordVaultPage({
                   placeholder={isPasswordMode ? 'Enter your master password' : '••••'}
                   value={pinInput}
                   onChange={e => setPinInput(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-[#18457c] transition-colors"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-[#18457c] dark:focus:border-blue-500 transition-colors"
                 />
                 <button
                   type="button"
@@ -657,7 +657,7 @@ export default function PasswordVaultPage({
                     placeholder={isPasswordMode ? 'Re-enter your master password' : '••••'}
                     value={pinConfirmInput}
                     onChange={e => setPinConfirmInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-[#18457c] transition-colors"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-[#18457c] dark:focus:border-blue-500 transition-colors"
                   />
                 </div>
               </div>
