@@ -11051,14 +11051,20 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 </div>
 
                 {/* Modal Footer */}
-                <div className="pt-6 border-t border-slate-200/80 flex items-center justify-between mt-auto">
-                  <span className="text-xs text-slate-400">Changes in this section save when you press its button.</span>
+                <div className="pt-6 border-t border-slate-200/80 flex items-center justify-end mt-auto">
                   <button
                     type="button"
-                    onClick={() => setIsSettingsOpen(false)}
-                    className="border border-slate-200 rounded-xl px-4 py-2 hover:bg-slate-50 text-slate-800 text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
+                    onClick={() => {
+                      if (settingsTab === 'profile' && settingsDisplayName?.trim()) {
+                        handleSaveProfile();
+                      }
+                      setNotificationToast('Settings saved');
+                      setTimeout(() => setNotificationToast(''), 2500);
+                      setIsSettingsOpen(false);
+                    }}
+                    className="px-5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
                   >
-                    Close
+                    Save
                   </button>
                 </div>
               </div>
