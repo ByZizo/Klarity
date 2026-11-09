@@ -25,17 +25,19 @@ export default function InteractivePayoffComparison({
   const [selectedCardId, setSelectedCardId] = useState('all'); // 'all' or card id
   const [selectedScenario, setSelectedScenario] = useState('B'); // 'A' | 'B' | 'C' | 'D'
 
+  const safeCards = Array.isArray(cards) ? cards : [];
+
   // Compute selected card or total debt balance & weighted APR from real cards
   const targetCards = selectedCardId === 'all' 
-    ? cards 
-    : cards.filter(c => c.id === selectedCardId);
+    ? safeCards 
+    : safeCards.filter(c => c && c.id === selectedCardId);
 
-  const totalBalance = targetCards.reduce((sum, c) => sum + (Number(c.balance) || 0), 0);
+  const totalBalance = targetCards.reduce((sum, c) => sum + (Number(c?.balance) || 0), 0);
   
   // Calculate weighted average APR from actual cards
   let weightedApr = 21.0;
   if (totalBalance > 0 && targetCards.length > 0) {
-    const totalAprWeight = targetCards.reduce((sum, c) => sum + ((Number(c.balance) || 0) * (Number(c.apr) || 21.0)), 0);
+    const totalAprWeight = targetCards.reduce((sum, c) => sum + ((Number(c?.balance) || 0) * (Number(c?.apr) || 21.0)), 0);
     weightedApr = Math.round((totalAprWeight / totalBalance) * 10) / 10;
   }
 
@@ -45,51 +47,92 @@ export default function InteractivePayoffComparison({
 
   const sim = simulatePayoffScenarios(totalBalance, weightedApr, customFixedPayment);
 
+  const scenA = sim?.scenarioA || {
+    initialMonthlyPayment: 0,
+    monthOneInterest: 0,
+    monthOnePrincipal: 0,
+    interestSplitPercent: 0,
+    yearsToFreedom: 0,
+    totalInterestPaid: 0,
+    totalPaid: 0,
+    summary: 'No card debt balance carrying.'
+  };
+
+  const scenB = sim?.scenarioB || {
+    monthlyPayment: 0,
+    monthsToFreedom: 0,
+    yearsToFreedom: 0,
+    totalInterestPaid: 0,
+    totalPaid: 0,
+    interestSavedVsA: 0,
+    summary: 'No card debt balance carrying.'
+  };
+
+  const scenC = sim?.scenarioC || {
+    monthlyPayment: 0,
+    monthsToFreedom: 0,
+    totalInterestPaid: 0,
+    totalPaid: 0,
+    interestSavedVsA: 0,
+    summary: 'No card debt balance carrying.'
+  };
+
+  const scenD = sim?.scenarioD || {
+    monthlyPayment: 0,
+    monthsToFreedom: 0,
+    totalInterestPaid: 0,
+    totalPaid: 0,
+    interestSavedVsA: 0,
+    summary: 'No card debt balance carrying.'
+  };
+
+  const fmt = (v) => Number(v || 0).toLocaleString();
+
   const getPlanDetails = (scen) => {
     switch (scen) {
       case 'A':
         return {
           id: 'A',
           title: 'Minimum Payment Trap',
-          monthlyPayment: sim.scenarioA.initialMonthlyPayment,
-          monthsToFreedom: sim.scenarioA.yearsToFreedom * 12,
-          yearsToFreedom: sim.scenarioA.yearsToFreedom,
-          totalInterest: sim.scenarioA.totalInterestPaid,
+          monthlyPayment: scenA.initialMonthlyPayment || 0,
+          monthsToFreedom: (scenA.yearsToFreedom || 0) * 12,
+          yearsToFreedom: scenA.yearsToFreedom || 0,
+          totalInterest: scenA.totalInterestPaid || 0,
           interestSaved: 0,
-          summary: `Paying ~$${sim.scenarioA.initialMonthlyPayment}/mo minimums. Takes ${sim.scenarioA.yearsToFreedom} years and costs $${sim.scenarioA.totalInterestPaid.toLocaleString()} in interest.`
+          summary: `Paying ~$${scenA.initialMonthlyPayment || 0}/mo minimums. Takes ${scenA.yearsToFreedom || 0} years and costs $${fmt(scenA.totalInterestPaid)} in interest.`
         };
       case 'B':
         return {
           id: 'B',
           title: 'Fixed Accelerated Payoff',
-          monthlyPayment: sim.scenarioB.monthlyPayment,
-          monthsToFreedom: sim.scenarioB.monthsToFreedom,
-          yearsToFreedom: sim.scenarioB.yearsToFreedom,
-          totalInterest: sim.scenarioB.totalInterestPaid,
-          interestSaved: sim.scenarioB.interestSavedVsA,
-          summary: `Fixed $${sim.scenarioB.monthlyPayment}/mo target. Debt-free in ${sim.scenarioB.monthsToFreedom} months, saving $${sim.scenarioB.interestSavedVsA.toLocaleString()} in interest.`
+          monthlyPayment: scenB.monthlyPayment || 0,
+          monthsToFreedom: scenB.monthsToFreedom || 0,
+          yearsToFreedom: scenB.yearsToFreedom || 0,
+          totalInterest: scenB.totalInterestPaid || 0,
+          interestSaved: scenB.interestSavedVsA || 0,
+          summary: `Fixed $${scenB.monthlyPayment || 0}/mo target. Debt-free in ${scenB.monthsToFreedom || 0} months, saving $${fmt(scenB.interestSavedVsA)} in interest.`
         };
       case 'C':
         return {
           id: 'C',
           title: '0% Bank Hardship / NFCC',
-          monthlyPayment: Math.round(sim.scenarioC.monthlyPayment),
-          monthsToFreedom: sim.scenarioC.monthsToFreedom,
+          monthlyPayment: Math.round(scenC.monthlyPayment || 0),
+          monthsToFreedom: scenC.monthsToFreedom || 0,
           yearsToFreedom: 3,
           totalInterest: 0,
-          interestSaved: sim.scenarioC.interestSavedVsA,
-          summary: `Concession 0% APR via workout plan. $${Math.round(sim.scenarioC.monthlyPayment)}/mo, debt-free in 36 months, saves $${sim.scenarioC.interestSavedVsA.toLocaleString()} in interest.`
+          interestSaved: scenC.interestSavedVsA || 0,
+          summary: `Concession 0% APR via workout plan. $${Math.round(scenC.monthlyPayment || 0)}/mo, debt-free in 36 months, saves $${fmt(scenC.interestSavedVsA)} in interest.`
         };
       case 'D':
         return {
           id: 'D',
           title: 'Family 0% Pool / 457 Loan',
-          monthlyPayment: Math.round(sim.scenarioD.monthlyPayment),
-          monthsToFreedom: sim.scenarioD.monthsToFreedom,
-          yearsToFreedom: Math.round((sim.scenarioD.monthsToFreedom / 12) * 10) / 10,
+          monthlyPayment: Math.round(scenD.monthlyPayment || 0),
+          monthsToFreedom: scenD.monthsToFreedom || 0,
+          yearsToFreedom: Math.round(((scenD.monthsToFreedom || 0) / 12) * 10) / 10,
           totalInterest: 0,
-          interestSaved: sim.scenarioA.totalInterestPaid,
-          summary: `Structured interest-free payoff. $${Math.round(sim.scenarioD.monthlyPayment)}/mo with 100% of dollars staying in the family/pension.`
+          interestSaved: scenA.totalInterestPaid || 0,
+          summary: `Structured interest-free payoff. $${Math.round(scenD.monthlyPayment || 0)}/mo with 100% of dollars staying in the family/pension.`
         };
       default:
         return getPlanDetails('B');
@@ -97,6 +140,10 @@ export default function InteractivePayoffComparison({
   };
 
   const activePlan = getPlanDetails(selectedScenario);
+
+  const minSlider = Math.max(25, Math.round((scenA.monthOneInterest || 0) + 25));
+  const maxSlider = Math.max(minSlider + 50, Math.min(2500, Math.round(totalBalance || 1000)));
+  const safeFixedPayment = Math.min(maxSlider, Math.max(minSlider, customFixedPayment || defaultFixedTarget));
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden flex flex-col">
@@ -122,10 +169,10 @@ export default function InteractivePayoffComparison({
             onChange={e => setSelectedCardId(e.target.value)}
             className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-medium outline-none cursor-pointer"
           >
-            <option value="all">Total Card Debt (${Math.round(totalBalance).toLocaleString()} @ {weightedApr}% avg APR)</option>
-            {cards.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.name || 'Card'} •••• {c.mask || '4417'} (${Math.round(c.balance || 0).toLocaleString()} @ {c.apr || 24.99}%)
+            <option value="all">Total Card Debt (${fmt(Math.round(totalBalance))} @ {weightedApr}% avg APR)</option>
+            {safeCards.map((c, idx) => (
+              <option key={c.id || `card-${c.mask || idx}`} value={c.id}>
+                {c.name || 'Card'} •••• {c.mask || '4417'} (${fmt(Math.round(c.balance || 0))} @ {c.apr || 21.0}%)
               </option>
             ))}
           </select>
@@ -137,15 +184,15 @@ export default function InteractivePayoffComparison({
         <div className="flex items-center gap-2">
           <Sliders className="w-4 h-4 text-[#18457c]" />
           <span className="font-semibold text-slate-700">Scenario B Fixed Target:</span>
-          <span className="font-bold text-[#18457c] font-mono text-sm">${customFixedPayment}/mo</span>
+          <span className="font-bold text-[#18457c] font-mono text-sm">${safeFixedPayment}/mo</span>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-64">
           <input
             type="range"
-            min={Math.max(25, Math.round(sim.scenarioA.monthOneInterest + 25))}
-            max={Math.max(100, Math.min(2500, Math.round(totalBalance)))}
+            min={minSlider}
+            max={maxSlider}
             step="25"
-            value={customFixedPayment}
+            value={safeFixedPayment}
             onChange={e => setUserFixedPayment(Number(e.target.value))}
             className="w-full accent-[#18457c] cursor-pointer"
           />
@@ -159,7 +206,7 @@ export default function InteractivePayoffComparison({
           <div className="flex items-center gap-2 min-w-0">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span className="truncate">
-              Available Cash: <strong>${Math.round(availableCash).toLocaleString()}</strong> covers your entire <strong>${Math.round(totalBalance).toLocaleString()}</strong> card debt today with zero interest.
+              Available Cash: <strong>${fmt(Math.round(availableCash))}</strong> covers your entire <strong>${fmt(Math.round(totalBalance))}</strong> card debt today with zero interest.
             </span>
           </div>
         </div>
@@ -194,12 +241,12 @@ export default function InteractivePayoffComparison({
             <div className="mt-3 flex flex-col gap-1.5 bg-white/90 p-3 rounded-xl border border-rose-200/60">
               <div className="flex justify-between items-baseline">
                 <span className="text-[11px] text-slate-500">Initial Monthly:</span>
-                <span className="font-bold text-slate-900 font-mono text-sm">${sim.scenarioA.initialMonthlyPayment}/mo</span>
+                <span className="font-bold text-slate-900 font-mono text-sm">${scenA.initialMonthlyPayment || 0}/mo</span>
               </div>
               <div className="flex justify-between items-baseline">
                 <span className="text-[11px] text-slate-500">Month 1 Interest:</span>
                 <span className="font-semibold text-rose-700 font-mono text-xs">
-                  ${sim.scenarioA.monthOneInterest} ({sim.scenarioA.interestSplitPercent}%)
+                  ${scenA.monthOneInterest || 0} ({scenA.interestSplitPercent || 0}%)
                 </span>
               </div>
             </div>
@@ -207,21 +254,21 @@ export default function InteractivePayoffComparison({
             <div className="mt-3 space-y-1 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-500">Time to Freedom:</span>
-                <span className="font-bold text-rose-700">{sim.scenarioA.yearsToFreedom} Years</span>
+                <span className="font-bold text-rose-700">{scenA.yearsToFreedom || 0} Years</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Total Interest:</span>
-                <span className="font-bold text-rose-700 font-mono">${sim.scenarioA.totalInterestPaid.toLocaleString()}</span>
+                <span className="font-bold text-rose-700 font-mono">${fmt(scenA.totalInterestPaid)}</span>
               </div>
               <div className="flex justify-between font-bold border-t border-rose-200/60 pt-1 text-slate-900">
                 <span>Total Paid:</span>
-                <span className="font-mono">${sim.scenarioA.totalPaid.toLocaleString()}</span>
+                <span className="font-mono">${fmt(scenA.totalPaid)}</span>
               </div>
             </div>
           </div>
 
           <p className="mt-3 text-[10px] text-rose-800 bg-rose-100/60 p-2 rounded-lg leading-relaxed">
-            {sim.scenarioA.interestSplitPercent}% of your check disappears into interest. Takes 20+ years.
+            {scenA.interestSplitPercent || 0}% of your check disappears into interest. Takes 20+ years.
           </p>
         </div>
 
@@ -252,32 +299,32 @@ export default function InteractivePayoffComparison({
             <div className="mt-3 flex flex-col gap-1.5 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
               <div className="flex justify-between items-baseline">
                 <span className="text-[11px] text-slate-500">Fixed Monthly:</span>
-                <span className="font-bold text-slate-900 font-mono text-sm">${sim.scenarioB.monthlyPayment}/mo</span>
+                <span className="font-bold text-slate-900 font-mono text-sm">${scenB.monthlyPayment || 0}/mo</span>
               </div>
               <div className="flex justify-between items-baseline">
                 <span className="text-[11px] text-slate-500">Interest Saved:</span>
-                <span className="font-bold text-emerald-600 font-mono text-xs">+${sim.scenarioB.interestSavedVsA.toLocaleString()}</span>
+                <span className="font-bold text-emerald-600 font-mono text-xs">+${fmt(scenB.interestSavedVsA)}</span>
               </div>
             </div>
 
             <div className="mt-3 space-y-1 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-500">Time to Freedom:</span>
-                <span className="font-bold text-slate-800">{sim.scenarioB.monthsToFreedom} Mos ({sim.scenarioB.yearsToFreedom} yrs)</span>
+                <span className="font-bold text-slate-800">{scenB.monthsToFreedom || 0} Mos ({scenB.yearsToFreedom || 0} yrs)</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Total Interest:</span>
-                <span className="font-bold text-slate-800 font-mono">${sim.scenarioB.totalInterestPaid.toLocaleString()}</span>
+                <span className="font-bold text-slate-800 font-mono">${fmt(scenB.totalInterestPaid)}</span>
               </div>
               <div className="flex justify-between font-bold border-t border-slate-200 pt-1 text-slate-900">
                 <span>Total Paid:</span>
-                <span className="font-mono">${sim.scenarioB.totalPaid.toLocaleString()}</span>
+                <span className="font-mono">${fmt(scenB.totalPaid)}</span>
               </div>
             </div>
           </div>
 
           <p className="mt-3 text-[10px] text-slate-600 bg-slate-100 p-2 rounded-lg leading-relaxed">
-            Eliminates debt rapidly and saves ${sim.scenarioB.interestSavedVsA.toLocaleString()} vs minimums.
+            Eliminates debt rapidly and saves ${fmt(scenB.interestSavedVsA)} vs minimums.
           </p>
         </div>
 
@@ -308,7 +355,7 @@ export default function InteractivePayoffComparison({
             <div className="mt-3 flex flex-col gap-1.5 bg-white/90 p-3 rounded-xl border border-emerald-200">
               <div className="flex justify-between items-baseline">
                 <span className="text-[11px] text-slate-500">Target Monthly:</span>
-                <span className="font-bold text-emerald-800 font-mono text-sm">${Math.round(sim.scenarioC.monthlyPayment)}/mo</span>
+                <span className="font-bold text-emerald-800 font-mono text-sm">${Math.round(scenC.monthlyPayment || 0)}/mo</span>
               </div>
               <div className="flex justify-between items-baseline">
                 <span className="text-[11px] text-slate-500">Concession Rate:</span>
@@ -319,7 +366,7 @@ export default function InteractivePayoffComparison({
             <div className="mt-3 space-y-1 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-500">Time to Freedom:</span>
-                <span className="font-bold text-emerald-800">{sim.scenarioC.monthsToFreedom} Mos (3 Yrs)</span>
+                <span className="font-bold text-emerald-800">{scenC.monthsToFreedom || 0} Mos (3 Yrs)</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Total Interest:</span>
@@ -327,7 +374,7 @@ export default function InteractivePayoffComparison({
               </div>
               <div className="flex justify-between font-bold border-t border-emerald-200 pt-1 text-slate-900">
                 <span>Total Paid:</span>
-                <span className="font-mono">${sim.scenarioC.totalPaid.toLocaleString()}</span>
+                <span className="font-mono">${fmt(scenC.totalPaid)}</span>
               </div>
             </div>
           </div>
@@ -372,7 +419,7 @@ export default function InteractivePayoffComparison({
             <div className="mt-3 flex flex-col gap-1.5 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
               <div className="flex justify-between items-baseline">
                 <span className="text-[11px] text-slate-500">Structured Monthly:</span>
-                <span className="font-bold text-slate-900 font-mono text-sm">${Math.round(sim.scenarioD.monthlyPayment)}/mo</span>
+                <span className="font-bold text-slate-900 font-mono text-sm">${Math.round(scenD.monthlyPayment || 0)}/mo</span>
               </div>
               <div className="flex justify-between items-baseline">
                 <span className="text-[11px] text-slate-500">Commercial Bank APR:</span>
@@ -383,7 +430,7 @@ export default function InteractivePayoffComparison({
             <div className="mt-3 space-y-1 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-500">Time to Freedom:</span>
-                <span className="font-bold text-slate-800">{sim.scenarioD.monthsToFreedom} Months</span>
+                <span className="font-bold text-slate-800">{scenD.monthsToFreedom || 0} Months</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Total Interest to Banks:</span>
@@ -391,7 +438,7 @@ export default function InteractivePayoffComparison({
               </div>
               <div className="flex justify-between font-bold border-t border-slate-200 pt-1 text-slate-900">
                 <span>Total Paid:</span>
-                <span className="font-mono">${sim.scenarioD.totalPaid.toLocaleString()}</span>
+                <span className="font-mono">${fmt(scenD.totalPaid)}</span>
               </div>
             </div>
           </div>

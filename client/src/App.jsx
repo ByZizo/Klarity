@@ -69,7 +69,8 @@ import {
   Copy,
   PhoneCall,
   Shield,
-  MoreVertical
+  MoreVertical,
+  ArrowUpCircle
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -592,7 +593,7 @@ function PlaidLauncher({ token, onSuccess, onExit }) {
 function formatVersionString(version) {
   if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.14';
   const str = String(version).trim();
-  if (/^[0-9a-f]{7,40}$/i.test(str)) {
+  if (/^[0-9a-f]{6,40}$/i.test(str) || str.toLowerCase().includes('commit')) {
     return 'v3.12.14';
   }
   return str.startsWith('v') ? str : `v${str}`;
