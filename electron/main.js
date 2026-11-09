@@ -198,6 +198,34 @@ async function checkForGitHubUpdate() {
       }
     } catch {}
 
+    // Fetch remote package.json to get semantic version (e.g. 1.8.10)
+    let remoteVersion = null;
+    try {
+      const pkgRes = await fetch('https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json', {
+        headers: { 'User-Agent': 'KlarityDesktopApp' }
+      });
+      if (pkgRes.ok) {
+        const pkgData = await pkgRes.json();
+        if (pkgData && pkgData.version) {
+          remoteVersion = pkgData.version;
+        }
+      }
+    } catch (pkgErr) {}
+
+    if (!remoteVersion) {
+      try {
+        const localPkgStr = await runShell('git show origin/main:package.json', repoDir);
+        if (localPkgStr) {
+          const pkgData = JSON.parse(localPkgStr);
+          if (pkgData && pkgData.version) remoteVersion = pkgData.version;
+        }
+      } catch (e) {}
+    }
+
+    const versionNum = remoteVersion || currentVersion || '1.8.10';
+    const cleanSemVer = versionNum.startsWith('v') ? versionNum.slice(1) : versionNum;
+    const formattedSemVer = `v${cleanSemVer}`;
+
     // 3. If remote commit differs from running commit, an update is available!
     if (
       remoteSha &&
@@ -207,12 +235,13 @@ async function checkForGitHubUpdate() {
     ) {
       broadcastUpdateStatus({
         state: 'available',
-        latestVersion: remoteSha.slice(0, 7),
+        latestVersion: formattedSemVer,
         fullSha: remoteSha,
+        commitSha: remoteSha.slice(0, 7),
         commitTitle: commitTitle || 'New GitHub update available',
         commitDate,
         recentChanges: recentCommits,
-        message: 'A new version of Klarity is available!'
+        message: `A new version of Klarity (${formattedSemVer}) is available!`
       });
       return updateStatusState;
     }

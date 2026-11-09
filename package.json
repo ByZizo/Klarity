@@ -1,6 +1,6 @@
 {
   "name": "klarity",
-  "version": "1.0.6",
+  "version": "1.8.10",
   "description": "A clean, private finance tracker with a built-in AI assistant to help you manage your money, cards, and bills.",
   "main": "electron/main.js",
   "scripts": {
