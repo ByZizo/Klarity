@@ -68,7 +68,8 @@ import {
   Square,
   Copy,
   PhoneCall,
-  Shield
+  Shield,
+  MoreVertical
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -153,6 +154,108 @@ marked.setOptions({
   breaks: true,
   gfm: true
 });
+
+
+// Universal Subpage Header: Centered title, leveled Back to Overview, and 3-dot dropdown actions menu
+function SubpageHeader({
+  title,
+  subtitle,
+  onBack,
+  backLabel = 'Back to Overview',
+  actions = []
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className="relative flex items-center justify-between gap-3 min-h-[42px]">
+      {/* Left: Back button (aligned on the same row, lowering it so page starts higher) */}
+      <div className="flex items-center justify-start flex-1 min-w-[130px] z-10">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200/90 hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold shadow-2xs cursor-pointer transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
+            <span>{backLabel}</span>
+          </button>
+        )}
+      </div>
+
+      {/* Center: Title & optional subtitle centered on page */}
+      <div className="flex flex-col items-center justify-center text-center shrink-0 px-2 max-w-xl">
+        <h2 className="font-serif-title text-2xl font-bold text-slate-900 tracking-tight leading-tight">
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="text-xs text-slate-500 mt-0.5 truncate">{subtitle}</p>
+        )}
+      </div>
+
+      {/* Right: Three-dot dropdown menu */}
+      <div className="flex items-center justify-end flex-1 min-w-[130px] z-10">
+        {actions && actions.length > 0 ? (
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => setIsOpen(!isOpen)}
+              className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-colors cursor-pointer shadow-2xs ${
+                isOpen
+                  ? 'bg-slate-100 border-slate-300 text-slate-900'
+                  : 'bg-white border-slate-200/90 hover:bg-slate-50 text-slate-600 hover:text-slate-900'
+              }`}
+              aria-label="Options menu"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+
+            {isOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-slate-200/90 rounded-2xl shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100">
+                <div className="py-1">
+                  {actions.map((act, idx) => {
+                    const Icon = act.icon;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setIsOpen(false);
+                          act.onClick();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 text-left cursor-pointer transition-colors"
+                      >
+                        {Icon && <Icon className="w-4 h-4 text-[#18457c] shrink-0" />}
+                        <span>{act.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="w-9" />
+        )}
+      </div>
+    </div>
+  );
+}
 
 // Multi-select Card & Account Filter Dropdown shared across Transactions, Bills, Subscriptions, and Budgets
 function MultiCardFilterDropdown({ cards, selectedCardIds, onChangeSelectedCards }) {
@@ -4834,7 +4937,6 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   type="button"
                   onClick={() => setIsSidebarCompact(true)}
                   className="p-2 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 cursor-pointer transition-colors"
-                  title="Compact sidebar"
                   aria-label="Compact sidebar"
                 >
                   <PanelLeftClose className="w-5 h-5" />
@@ -4846,19 +4948,24 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               <button
                 type="button"
                 onClick={() => setActiveTab('dashboard')}
-                className="p-1.5 rounded-xl hover:bg-slate-200/60 cursor-pointer transition-transform hover:scale-105"
-                title="Klarity Overview"
+                className="p-1.5 rounded-xl hover:bg-slate-200/60 cursor-pointer transition-transform hover:scale-105 relative group"
+                aria-label="Klarity Overview"
               >
                 <KlarityLogo className="w-7 h-7 text-[#18457c]" />
+                <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
+                  Overview
+                </span>
               </button>
               <button
                 type="button"
                 onClick={() => setIsSidebarCompact(false)}
-                className="p-2 rounded-xl text-slate-500 hover:text-[#183b6b] hover:bg-slate-200/60 cursor-pointer transition-colors"
-                title="Expand sidebar"
+                className="p-2 rounded-xl text-slate-500 hover:text-[#183b6b] hover:bg-slate-200/60 cursor-pointer transition-colors relative group"
                 aria-label="Expand sidebar"
               >
                 <PanelLeftOpen className="w-5 h-5 text-[#183b6b]" />
+                <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
+                  Expand sidebar
+                </span>
               </button>
             </div>
           )}
@@ -4890,7 +4997,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                     key={item.id}
                     type="button"
                     onClick={() => setActiveTab(item.id)}
-                    title={item.label}
+                    aria-label={item.label}
                     className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all cursor-pointer relative group ${
                       isActive
                         ? 'bg-[#e8edf5] text-[#1e3a8a] shadow-2xs'
@@ -4917,7 +5024,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               onClick={handleRefreshApp}
               disabled={isRefreshingApp}
               className="w-full inline-flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] text-xs font-semibold shadow-2xs cursor-pointer transition-all disabled:opacity-50"
-              title="Refresh app data & check for updates"
+              aria-label="Refresh app data & check for updates"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-[#18457c] shrink-0 ${isRefreshingApp ? 'animate-spin' : ''}`} />
               <span>{isRefreshingApp ? 'Refreshing...' : 'Refresh'}</span>
@@ -4929,7 +5036,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 onClick={handleRefreshApp}
                 disabled={isRefreshingApp}
                 className="w-10 h-10 flex items-center justify-center rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] shadow-2xs cursor-pointer transition-all relative group"
-                title="Refresh app data & check for updates"
+                aria-label="Refresh app data & check for updates"
               >
                 <RefreshCw className={`w-4 h-4 text-[#18457c] ${isRefreshingApp ? 'animate-spin' : ''}`} />
                 <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
@@ -4961,10 +5068,13 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               <button
                 type="button"
                 onClick={() => setIsSettingsOpen(true)}
-                title={`Settings (${currentUser?.name || 'User'})`}
-                className="w-9 h-9 rounded-full bg-[#183b6b] hover:ring-2 hover:ring-[#183b6b]/40 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs cursor-pointer transition-all"
+                aria-label={`Settings (${currentUser?.name || 'User'})`}
+                className="w-9 h-9 rounded-full bg-[#183b6b] hover:ring-2 hover:ring-[#183b6b]/40 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs cursor-pointer transition-all relative group"
               >
                 {userInitials}
+                <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
+                  Settings
+                </span>
               </button>
             </div>
           )}
@@ -6217,36 +6327,14 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         {/* --------------------------------------------------------------------- */}
         {activeTab === 'budgets' && (
           <div className="flex flex-col gap-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1.5 mb-1 font-semibold cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Back to Overview</span>
-                </button>
-                <h2 className="font-serif-title text-2xl font-bold text-slate-900">Budgets & Savings Goals</h2>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setIsAddGoalOpen(true)}
-                  className="px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Target className="w-4 h-4 text-emerald-600" />
-                  <span>+ Savings Goal</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAddBudgetOpen(true)}
-                  className="px-4 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Set Category Budget</span>
-                </button>
-              </div>
-            </div>
+            <SubpageHeader
+              title="Budgets & Savings Goals"
+              onBack={() => setActiveTab('dashboard')}
+              actions={[
+                { label: 'Set Category Budget', icon: Plus, onClick: () => setIsAddBudgetOpen(true) },
+                { label: '+ Savings Goal', icon: Target, onClick: () => setIsAddGoalOpen(true) }
+              ]}
+            />
 
             {/* Filter Bar with Multi-Card Filter Dropdown */}
             <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -6536,36 +6624,14 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         {/* --------------------------------------------------------------------- */}
         {activeTab === 'bills' && (
           <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1.5 mb-1 font-semibold cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Back to Overview</span>
-                </button>
-                <h2 className="font-serif-title text-2xl font-bold text-slate-900">Upcoming Bills</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsScanBillOpen(true)}
-                  className="px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <FileText className="w-4 h-4 text-blue-600" />
-                  <span>Scan PDF</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAddBillOpen(true)}
-                  className="px-4 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Bill</span>
-                </button>
-              </div>
-            </div>
+            <SubpageHeader
+              title="Upcoming Bills"
+              onBack={() => setActiveTab('dashboard')}
+              actions={[
+                { label: 'Add Bill', icon: Plus, onClick: () => setIsAddBillOpen(true) },
+                { label: 'Scan PDF', icon: FileText, onClick: () => setIsScanBillOpen(true) }
+              ]}
+            />
 
 
 
@@ -6662,40 +6728,21 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         {/* --------------------------------------------------------------------- */}
         {activeTab === 'subscriptions' && (
           <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1.5 mb-1 font-semibold cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Back to Overview</span>
-                </button>
-                <h2 className="font-serif-title text-2xl font-bold text-slate-900">Subscriptions</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
+            <SubpageHeader
+              title="Subscriptions"
+              onBack={() => setActiveTab('dashboard')}
+              actions={[
+                { label: 'Add Subscription', icon: Plus, onClick: () => setIsAddSubOpen(true) },
+                {
+                  label: 'AI Subscription Audit',
+                  icon: Sparkles,
+                  onClick: () =>
                     handleSendChatMessage(
-                      `Please perform a full Subscription Audit on my ${sourceSubsList.length} subscriptions totaling $${displayTotalSubs.toFixed(2)}/mo (${sourceSubsList.map(s => `${s.name}: $${s.amount}`).join(', ')}). Flag any price increases, duplicate services, or ways to save.`
+                      `Please perform a full Subscription Audit on my ${sourceSubsList.length} subscriptions totaling ${displayTotalSubs.toFixed(2)}/mo (${sourceSubsList.map(s => `${s.name}: ${s.amount}`).join(', ')}). Flag any price increases, duplicate services, or ways to save.`
                     )
-                  }
-                  className="px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-[#18457c]" />
-                  <span>AI Subscription Audit</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAddSubOpen(true)}
-                  className="px-4 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Subscription</span>
-                </button>
-              </div>
-            </div>
+                }
+              ]}
+            />
 
             {/* Recurring Detection & Price Increase Alert */}
             <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900">
@@ -6803,35 +6850,14 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         {/* --------------------------------------------------------------------- */}
         {activeTab === 'cards' && (
           <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div>
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1.5 mb-1 font-semibold cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Back to Overview</span>
-                </button>
-                <h2 className="font-serif-title text-2xl font-bold text-slate-900">Cards & Household</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddManualAssetOpen(true)}
-                  className="px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs cursor-pointer"
-                >
-                  + Manual Account / Loan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAddAccountOpen(true)}
-                  className="px-4 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Card</span>
-                </button>
-              </div>
-            </div>
+            <SubpageHeader
+              title="Cards & Household"
+              onBack={() => setActiveTab('dashboard')}
+              actions={[
+                { label: 'Add Card', icon: Plus, onClick: () => setIsAddAccountOpen(true) },
+                { label: '+ Manual Account / Loan', icon: CreditCard, onClick: () => setIsAddManualAssetOpen(true) }
+              ]}
+            />
 
             {/* Shaded Total Summary Card for Cards */}
             <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
@@ -7077,20 +7103,11 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         {/* TAB: HOUSEHOLD, AUTO & LIFESTYLE */}
         {activeTab === 'household' && featureFlags.household !== false && (
           <div className="flex flex-col gap-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('dashboard')}
-                  className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1.5 mb-1 font-semibold cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Back to Overview</span>
-                </button>
-                <h1 className="font-serif-title text-2xl font-bold text-slate-900 tracking-tight">Lifestyle</h1>
-                <p className="text-xs text-slate-500 mt-0.5">Manage home utilities, vehicles, health coverage, and lifestyle expenses.</p>
-              </div>
-            </div>
+            <SubpageHeader
+              title="Lifestyle"
+              subtitle="Manage home utilities, vehicles, health coverage, and lifestyle expenses."
+              onBack={() => setActiveTab('dashboard')}
+            />
 
             <HouseholdLifestyleHub
                     bills={data.bills || []}
@@ -7109,44 +7126,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         {/* --------------------------------------------------------------------- */}
         {activeTab === 'transactions' && (
           <div className="flex flex-col gap-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1.5 mb-1 font-semibold cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Back to Overview</span>
-                </button>
-                <h2 className="font-serif-title text-2xl font-bold text-slate-900">Transactions & Purchases</h2>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => csvInputRef.current?.click()}
-                  className="px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Upload className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Import CSV</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleExportCsv(filteredTransactions)}
-                  className="px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Download className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Export CSV</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAddTxOpen(true)}
-                  className="px-4 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Purchase</span>
-                </button>
-              </div>
-            </div>
+            <SubpageHeader
+              title="Transactions"
+              onBack={() => setActiveTab('dashboard')}
+              actions={[
+                { label: 'Add Purchase', icon: Plus, onClick: () => setIsAddTxOpen(true) },
+                { label: 'Import CSV', icon: Upload, onClick: () => csvInputRef.current?.click() },
+                { label: 'Export CSV', icon: Download, onClick: () => handleExportCsv(filteredTransactions) }
+              ]}
+            />
 
             {/* Search, Category Filter, and Multi-Card Filter Dropdown */}
             <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
@@ -7222,7 +7210,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       <tr className="border-b border-slate-100 text-slate-400 text-[11px] font-semibold uppercase tracking-wider bg-slate-50/50">
                         <th className="py-3 px-4">Date</th>
                         <th className="py-3 px-4">Description & Notes</th>
-                        <th className="py-3 px-4">Category (Auto-Remembered)</th>
+                        <th className="py-3 px-4">Category</th>
                         <th className="py-3 px-4">Card / Account</th>
                         <th className="py-3 px-4 text-right">Amount</th>
                         <th className="py-3 px-4 text-right">Action</th>
@@ -7329,59 +7317,17 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         {/* --------------------------------------------------------------------- */}
         {activeTab === 'advisor' && (
           <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col h-[650px] justify-between">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('dashboard')}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
-                    title="Back to Overview"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-serif-title text-xl font-bold text-slate-900">Advisor</h2>
-                    <span
-                      title={isAdvisorOnline ? 'Connected to the internet' : 'Connected locally only (Web search disabled)'}
-                      className={`inline-flex items-center justify-center w-5 h-5 rounded-full border ${
-                        isAdvisorOnline
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
-                          : 'bg-blue-50 border-blue-200 text-blue-600'
-                      }`}
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-500">Reads your bills, cards and spending to answer questions.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleGenerateWeeklySummary}
-                  className="px-3 py-1.5 rounded-lg bg-[#eff4f9] hover:bg-blue-100 text-xs font-semibold text-[#18457c] border border-[#18457c]/20 flex items-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-[#18457c]" />
-                  <span>Weekly Summary</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPastChatsOpen(true)}
-                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <History className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Past Chats</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsMemoryModalOpen(true)}
-                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Brain className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Memory ({aiMemory.length})</span>
-                </button>
-              </div>
+            <div className="pb-3 border-b border-slate-100">
+              <SubpageHeader
+                title="Advisor"
+                subtitle="Reads your bills, cards and spending to answer questions."
+                onBack={() => setActiveTab('dashboard')}
+                actions={[
+                  { label: 'Weekly Summary', icon: Sparkles, onClick: handleGenerateWeeklySummary },
+                  { label: 'Past Chats', icon: History, onClick: () => setIsPastChatsOpen(true) },
+                  { label: `Memory (${aiMemory.length})`, icon: Brain, onClick: () => setIsMemoryModalOpen(true) }
+                ]}
+              />
             </div>
 
             {/* Chat Thread */}

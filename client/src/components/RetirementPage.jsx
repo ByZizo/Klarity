@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Landmark,
   ShieldCheck,
@@ -24,7 +24,8 @@ import {
   ArrowLeft,
   Building,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  MoreVertical
 } from 'lucide-react';
 
 const PLAN_TYPE_CONFIG = {
@@ -488,62 +489,98 @@ export default function RetirementPage({
         </div>
       )}
 
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
+      {/* Page Header with Centered Title, Leveled Back Button, and 3-Dot Dropdown Menu */}
+      <div className="relative flex items-center justify-between gap-3 min-h-[42px]">
+        {/* Left: Back button */}
+        <div className="flex items-center justify-start flex-1 min-w-[130px] z-10">
           {onNavigateBack && (
             <button
+              type="button"
               onClick={onNavigateBack}
-              className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1.5 mb-1.5 font-semibold cursor-pointer transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200/90 hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold shadow-2xs cursor-pointer transition-colors"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
+              <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
               <span>Back to Overview</span>
             </button>
           )}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#18457c] text-white flex items-center justify-center shadow-md">
-              <Landmark className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="font-serif-title text-2xl sm:text-3xl font-bold text-slate-900">
-                Retirement & Pension Tracker
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-500">
-                Public pensions (CalPERS, CalSTRS, FERS), 401(k), IRAs, and Social Security estimates.
-              </p>
-            </div>
-          </div>
         </div>
 
-        {/* Action Buttons */}
-        {plans.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => handleOpenAddModal('pension')}
-              className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Pension</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleOpenAddModal('401k')}
-              className="px-3.5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add 401(k) / IRA</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleOpenAddModal('social_security')}
-              className="px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-2 transition-all"
-            >
-              <ShieldCheck className="w-4 h-4 text-sky-600" />
-              <span>Add Social Security</span>
-            </button>
+        {/* Center: Title & Subtitle */}
+        <div className="flex flex-col items-center justify-center text-center shrink-0 px-2 max-w-xl">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-[#18457c] text-white flex items-center justify-center shadow-xs shrink-0">
+              <Landmark className="w-4 h-4" />
+            </div>
+            <h1 className="font-serif-title text-2xl font-bold text-slate-900 tracking-tight leading-tight">
+              Retirement & Pension Tracker
+            </h1>
           </div>
-        )}
+          <p className="text-xs text-slate-500 mt-0.5 truncate">
+            Public pensions (CalPERS, CalSTRS, FERS), 401(k), IRAs, and Social Security estimates.
+          </p>
+        </div>
+
+        {/* Right: Three-dot dropdown menu */}
+        <div className="flex items-center justify-end flex-1 min-w-[130px] z-10">
+          {plans.length > 0 ? (
+            <div className="relative" ref={headerMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsHeaderMenuOpen(!isHeaderMenuOpen)}
+                className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-colors cursor-pointer shadow-2xs ${
+                  isHeaderMenuOpen
+                    ? 'bg-slate-100 border-slate-300 text-slate-900'
+                    : 'bg-white border-slate-200/90 hover:bg-slate-50 text-slate-600 hover:text-slate-900'
+                }`}
+                aria-label="Retirement options"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+
+              {isHeaderMenuOpen && (
+                <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-slate-200/90 rounded-2xl shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100">
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsHeaderMenuOpen(false);
+                        handleOpenAddModal('pension');
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 text-left cursor-pointer transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Add Pension</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsHeaderMenuOpen(false);
+                        handleOpenAddModal('401k');
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 text-left cursor-pointer transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-[#18457c] shrink-0" />
+                      <span>Add 401(k) / IRA</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsHeaderMenuOpen(false);
+                        handleOpenAddModal('social_security');
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 text-left cursor-pointer transition-colors"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-sky-600 shrink-0" />
+                      <span>Add Social Security</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="w-9" />
+          )}
+        </div>
       </div>
 
       {plans.length === 0 ? (

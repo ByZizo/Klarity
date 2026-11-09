@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, session, nativeTheme } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, session, nativeTheme, Menu, MenuItem } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -337,6 +337,22 @@ async function createDesktopWindow() {
       nodeIntegration: false,
       sandbox: true,
       spellcheck: true
+    }
+  });
+
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    const menu = new Menu();
+    if (params.selectionText && params.selectionText.trim().length > 0) {
+      menu.append(new MenuItem({ label: 'Copy', role: 'copy', accelerator: 'CmdOrCtrl+C' }));
+    }
+    if (params.isEditable) {
+      if (params.selectionText && params.selectionText.trim().length > 0) {
+        menu.append(new MenuItem({ label: 'Cut', role: 'cut', accelerator: 'CmdOrCtrl+X' }));
+      }
+      menu.append(new MenuItem({ label: 'Paste', role: 'paste', accelerator: 'CmdOrCtrl+V' }));
+    }
+    if (menu.items.length > 0) {
+      menu.popup();
     }
   });
 
