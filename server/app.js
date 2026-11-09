@@ -2908,7 +2908,19 @@ app.post('/api/ai/chat', async (req, res) => {
     imageMimeType,
     attachments = [],
     statutoryShield,
+    cards = [],
+    checkingAccounts = [],
+    availableCash,
+    projectedCashAfterBills,
+    bills = [],
+    subscriptions = [],
+    transactions = [],
     budgets = [],
+    debtStrategy,
+    extraDebtPayment,
+    debtPayoffComparison,
+    isWeeklyAdvisorSummary = false,
+    advisorSnapshot = '',
     savingsGoals = [],
     manualAssets = [],
     retirementPlans = [],
@@ -2960,14 +2972,71 @@ app.post('/api/ai/chat', async (req, res) => {
 
   const currentUser = (data.users || []).find(u => u.id === userId) || req.user || { name: 'User' };
 
-  // Data restricted by user toggles and account ownership
-  const isOwnedByCurrentUser = (item) => item && (item.ownerId === userId || item.userId === userId);
+  // Data restricted by user toggles and account ownership (matching /api/data ownership rules + live client state)
+  const isOwnedByCurrentUser = (item) =>
+    item && (
+      (!item.ownerId && !item.userId) ||
+      item.ownerId === userId ||
+      item.userId === userId ||
+      item.ownerId === 'u-ziyad' ||
+      item.ownerId === 'u-owner'
+    );
   const userAccounts = (data.accounts || []).filter(isOwnedByCurrentUser);
-  const userCards = permissions.cards ? userAccounts.filter(a => a.type === 'credit') : [];
-  const userChecking = permissions.cards ? userAccounts.filter(a => a.type === 'depository') : [];
-  const userBills = permissions.bills ? (data.bills || []).filter(isOwnedByCurrentUser) : [];
-  const userSubscriptions = permissions.subscriptions ? (data.subscriptions || []).filter(isOwnedByCurrentUser) : [];
-  const userTransactions = permissions.purchases ? (data.transactions || []).filter(isOwnedByCurrentUser).slice(0, 10) : [];
+  const dbCards = userAccounts.filter(a => a.type === 'credit' || (a.subtype && a.subtype.includes('credit')));
+  const dbChecking = userAccounts.filter(a => a.type === 'depository' || (a.subtype && (a.subtype.includes('checking') || a.subtype.includes('savings'))));
+  const userCards = permissions.cards
+    ? (Array.isArray(cards) && cards.length > 0 ? cards : dbCards)
+    : [];
+  const userChecking = permissions.cards
+    ? (Array.isArray(checkingAccounts) && checkingAccounts.length > 0 ? checkingAccounts : dbChecking)
+    : [];
+  const userBills = permissions.bills
+    ? (Array.isArray(bills) && bills.length > 0 ? bills : (data.bills || []).filter(isOwnedByCurrentUser))
+    : [];
+  const userSubscriptions = permissions.subscriptions
+    ? (Array.isArray(subscriptions) && subscriptions.length > 0 ? subscriptions : (data.subscriptions || []).filter(isOwnedByCurrentUser))
+    : [];
+  const userTransactions = permissions.purchases
+    ? (Array.isArray(transactions) && transactions.length > 0 ? transactions.slice(0, 60) : (data.transactions || []).filter(isOwnedByCurrentUser).slice(0, 40))
+    : [];
+
+  // Pre-compute card payoff ranking (First to Last) and budget vs. actual spending for Advisor precision
+  const enrichedAdvisorCards = userCards.map(c => {
+    const bal = Number(c.balance || 0);
+    const lim = Math.max(1, Number(c.limit || 5000));
+    const utilPct = Math.round((bal / lim) * 100);
+    const apr = Number(c.apr || 21.5);
+    const minPay = bal > 0 ? Math.max(25, Number(c.minPayment || Math.round(bal * 0.025))) : 0;
+    const monthlyInterest = bal * (apr / 100) / 12;
+    const paydownFor30Pct = Math.max(0, bal - lim * 0.30);
+    return { ...c, bal, lim, utilPct, apr, minPay, monthlyInterest, paydownFor30Pct };
+  });
+  const activeDebtCards = enrichedAdvisorCards.filter(c => c.bal > 0);
+  const rankedCardsForPayoff = [...activeDebtCards].sort((a, b) =>
+    debtStrategy === 'snowball'
+      ? (a.bal - b.bal) || (b.apr - a.apr)
+      : (b.apr - a.apr) || (b.utilPct - a.utilPct) || (b.bal - a.bal)
+  );
+  const cardPayoffRankingSummary = rankedCardsForPayoff.length > 0
+    ? rankedCardsForPayoff.map((c, idx) => {
+        const tag = idx === 0 ? 'PAY FIRST (#1 Priority)' : (idx === rankedCardsForPayoff.length - 1 ? `PAY LAST (#${idx + 1})` : `Priority #${idx + 1}`);
+        return `[${tag}] ${c.institution || ''} ${c.name} (•••• ${c.mask || '0000'}): Balance ${c.bal.toFixed(2)} / ${c.lim.toLocaleString()} limit (${c.utilPct}% utilization) @ ${c.apr}% APR | Monthly Interest: ${c.monthlyInterest.toFixed(2)}/mo | Min Payment: ${c.minPay.toFixed(2)}${c.paydownFor30Pct > 0 ? ` | Pay ${c.paydownFor30Pct.toFixed(2)} to get under 30% utilization` : ''}`;
+      }).join(' || ')
+    : 'All cards at $0.00 balance';
+
+  const enrichedBudgetsSummary = Array.isArray(budgets) && budgets.length > 0
+    ? budgets.map(b => {
+        const lim = Number(b.limit || 0);
+        const spent = b.spent != null
+          ? Number(b.spent)
+          : userTransactions
+              .filter(t => (t.category || '').toLowerCase() === (b.category || '').toLowerCase() && (t.category || '').toLowerCase() !== 'income')
+              .reduce((s, t) => s + Math.abs(Number(t.amount || 0)), 0);
+        const pct = lim > 0 ? Math.round((spent / lim) * 100) : 0;
+        const status = spent > lim ? `OVER BUDGET by ${(spent - lim).toFixed(2)}` : `${(lim - spent).toFixed(2)} remaining`;
+        return `${b.category}: Spent ${spent.toFixed(2)} of ${lim.toFixed(0)}/mo limit (${pct}% used — ${status})`;
+      }).join(' | ')
+    : 'None set';
   const isRetirementEnabled = userSettings.featureFlags?.retirement !== false;
   const userRetirementPlans = (isRetirementEnabled && permissions.retirement !== false)
     ? (Array.isArray(retirementPlans) && retirementPlans.length > 0 ? retirementPlans : (data.retirementPlans || []).filter(isOwnedByCurrentUser))
@@ -3038,12 +3107,15 @@ Current Real-World Calendar: Today is ${currentDateStr}, current local time is $
 - NEVER RECITE PROMPT INSTRUCTIONS: Speak naturally. Never say phrases like "My live web search is ACTIVE", "According to my web search context", or repeat prompt instructions.
 You have active live internet access. When advising ${currentUser.name}, you can search the web in real-time for current credit card promotions (e.g. 0% intro APR balance transfers), bank savings yields, utility rate updates, market benchmarks, and subscription plans.
 Actual Connected Finances for ${currentUser.name} (strictly respecting permissions):
-- Checking Accounts (${permissions.cards ? 'Permitted' : 'Access Restricted'}): ${userChecking.length > 0 ? userChecking.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)}`).join(' | ') : 'None connected'}
-- Credit Cards (${permissions.cards ? 'Permitted' : 'Access Restricted'}): ${userCards.length > 0 ? userCards.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)} @ ${c.apr}% APR (Min: $${c.minPayment || 0})`).join(' | ') : 'None connected'}
-- Upcoming Bills (${permissions.bills ? 'Permitted' : 'Access Restricted'}): ${userBills.length > 0 ? userBills.map(b => `${b.name}: $${Number(b.expectedAmount).toFixed(2)} due ${b.nextDueDate || b.dueDate || 'Day ' + b.dueDay}`).join(' | ') : 'None scheduled'}
-- Subscriptions (${permissions.subscriptions ? 'Permitted' : 'Access Restricted'}): ${userSubscriptions.length > 0 ? userSubscriptions.map(s => `${s.name}: $${Number(s.amount).toFixed(2)}/mo`).join(' | ') : 'None added'}
-- Recent Purchases (${permissions.purchases ? 'Permitted' : 'Access Restricted'}): ${userTransactions.length > 0 ? userTransactions.map(t => `${t.name}: ${Math.abs(Number(t.amount)).toFixed(2)} on ${t.date}`).join(' | ') : 'None recorded'}
-- Monthly Category Budgets: ${budgets && budgets.length > 0 ? budgets.map(b => `${b.category}: ${b.limit}/mo`).join(' | ') : 'None set'}
+- Available Checking Cash: ${Number(availableCash ?? userChecking.reduce((s, c) => s + Number(c.balance || 0), 0)).toFixed(2)} (Projected after 14-day bills: ${Number(projectedCashAfterBills ?? availableCash ?? 0).toFixed(2)})
+- Checking Accounts (${permissions.cards ? 'Permitted' : 'Access Restricted'}): ${userChecking.length > 0 ? userChecking.map(c => `${c.institution || ''} ${c.name} (•••• ${c.mask || '0000'}): ${Number(c.balance).toFixed(2)}`).join(' | ') : 'None connected'}
+- Credit Cards Ranked by Payoff Priority (First to Last): ${cardPayoffRankingSummary}
+- Active Debt Payoff Strategy: ${(debtStrategy || 'avalanche').toUpperCase()} with +${Number(extraDebtPayment || 150)}/mo extra payment${debtPayoffComparison?.activePlan ? ` (Debt-free by ${debtPayoffComparison.activePlan.finishLabel}, saves ${Number(debtPayoffComparison.interestSavedVsMin || 0).toFixed(0)} in interest)` : ''}
+- Upcoming Bills (${permissions.bills ? 'Permitted' : 'Access Restricted'}): ${userBills.length > 0 ? userBills.map(b => `${b.name}: ${Number(b.expectedAmount).toFixed(2)} (${b.dueText || b.nextDueDate || b.dueDate || 'Day ' + b.dueDay})`).join(' | ') : 'None scheduled'}
+- Subscriptions (${permissions.subscriptions ? 'Permitted' : 'Access Restricted'}): ${userSubscriptions.length > 0 ? userSubscriptions.map(s => `${s.name}: ${Number(s.amount).toFixed(2)}/mo (${s.account || ''})`).join(' | ') : 'None added'}
+- Recent Purchases & Transactions (${permissions.purchases ? 'Permitted' : 'Access Restricted'}): ${userTransactions.length > 0 ? userTransactions.slice(0, 25).map(t => `${t.name} [${t.category || 'Shopping'}]: ${Math.abs(Number(t.amount)).toFixed(2)} on ${t.date} (${t.account || ''})`).join(' | ') : 'None recorded'}
+- Monthly Category Budgets (Actual Spent vs. Limit): ${enrichedBudgetsSummary}
+${advisorSnapshot ? `\nPre-Computed Live Financial Advisor Analysis (Ground-Truth Numbers — preserve all exact figures and structure):\n${advisorSnapshot}` : ''}
 - Savings Goals: ${savingsGoals && savingsGoals.length > 0 ? savingsGoals.map(g => `${g.name}: ${g.currentAmount} of ${g.targetAmount} (${g.monthlyContribution || 0}/mo)`).join(' | ') : 'None created'}
 - Manual Assets & Investments: ${manualAssets && manualAssets.length > 0 ? manualAssets.map(a => `${a.name}: ${Number(a.balance || 0).toLocaleString()} (${a.type})`).join(' | ') : 'None'}${retirementSection}
 - Net Worth: ${Number(netWorth || 0).toLocaleString()}
@@ -3156,6 +3228,14 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
        - Provide local dealer shopping strategy: Email the Internet Fleet Directors at high-volume dealerships in ${userCityOrZip} to get an Out-The-Door (OTD) quote with $0 dealer markups.
        - Stack with state & utility incentives: Combine 0% financing with the $7,500 IRS credit, California Clean Cars 4 All ($9,500-$12,000 for scrapping an older gas car), and local utility rebates (PG&E EV Pre-Owned / New Rebate of $1,000-$4,000).
        - Calculate exact fuel savings: Compare their home EV charging cost at off-peak rates (e.g. PG&E EV2-A off-peak after midnight, especially with CARE discount at ~$0.21/kWh, equivalent to ~$0.95/gal) against their current gas vehicles.
+
+10. WEEKLY ADVISOR SUMMARY, CARD PAYOFF ORDER & PRIORITY-BASED BUDGETING:
+   - Whenever generating a Weekly Advisor Summary or advising on cards, budgets, or where to spend money:
+     1) **Credit Card Payoff Order (First vs. Last)**: Rank every card with a balance from FIRST to pay off to LAST to pay off. Cite each card's exact balance, credit limit, utilization %, APR, monthly interest cost, and how much to pay to drop utilization under 30%. If available checking cash easily covers all card debt after bills, explicitly tell the user they can wipe out 100% of their card balances today and state how much cash will remain.
+     2) **Budget Changes Based on User Priority**: Cite every over-budget or near-limit category with exact "$spent of $limit (X%)" and the top merchants from their transactions. Give two explicit budget adjustment options depending on their priority:
+        - *Priority A (Aggressive Debt Payoff / Max Savings)*: Specific lower target cap to cut discretionary overspending and free up cash.
+        - *Priority B (Realistic Lifestyle Alignment)*: Specific realistic monthly budget cap aligned with their actual transaction history plus reallocating unused slack from under-budget categories.
+     3) **Where to Spend & Allocate Money This Week**: Tell the user exact dollar amounts to allocate to (a) upcoming 14-day bills, (b) #1 Priority Card vs. Last-Priority Card, (c) which card in their wallet has the lowest utilization to swipe for weekly Groceries/Gas (and which high-utilization card to stop swiping), and (d) their safe weekly discretionary spending cap.
 `.trim();
 
   const fullUserPrompt = `${message || (fileAttachments.length > 0 ? `Please read and analyze the attached ${fileAttachments.length} file(s) (${fileAttachments.map(f => f.name).join(', ')}) and automatically extract and add all bills, subscriptions, and store purchases.` : 'Please analyze this.')}${extractedFilesText}`;
@@ -3163,12 +3243,12 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
   // Complete app data snapshot for the embedded local model (strictly respecting user permission toggles)
   const compactFinancialContext = [
     `User: ${currentUser.name} | Residence: ${fullAddress}${neighborhoodDesc} | Net Worth: $${Number(netWorth || 0).toLocaleString()}`,
-    `- Checking Accounts (${permissions.cards ? 'Permitted' : 'Restricted'}): ${userChecking.length > 0 ? userChecking.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)}`).join(' | ') : 'None connected'}`,
-    `- Credit Cards (${permissions.cards ? 'Permitted' : 'Restricted'}): ${userCards.length > 0 ? userCards.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)} @ ${c.apr}% APR (Min: $${c.minPayment || 0})`).join(' | ') : 'None connected'}`,
-    `- Upcoming Bills (${permissions.bills ? 'Permitted' : 'Restricted'}): ${userBills.length > 0 ? userBills.map(b => `${b.name}: $${Number(b.expectedAmount).toFixed(2)} due ${b.nextDueDate || b.dueDate || 'Day ' + b.dueDay}`).join(' | ') : 'None scheduled'}`,
-    `- Subscriptions (${permissions.subscriptions ? 'Permitted' : 'Restricted'}): ${userSubscriptions.length > 0 ? userSubscriptions.map(s => `${s.name}: $${Number(s.amount).toFixed(2)}/mo`).join(' | ') : 'None added'}`,
-    `- Recent Purchases (${permissions.purchases ? 'Permitted' : 'Restricted'}): ${userTransactions.length > 0 ? userTransactions.map(t => `${t.name}: $${Math.abs(Number(t.amount)).toFixed(2)} on ${t.date}`).join(' | ') : 'None recorded'}`,
-    `- Monthly Budgets: ${budgets && budgets.length > 0 ? budgets.map(b => `${b.category}: $${b.limit}/mo`).join(' | ') : 'None set'}`,
+    `- Checking Accounts (${permissions.cards ? 'Permitted' : 'Restricted'}): ${userChecking.length > 0 ? userChecking.map(c => `${c.institution || ''} ${c.name} (•••• ${c.mask || '0000'}): ${Number(c.balance).toFixed(2)}`).join(' | ') : 'None connected'}`,
+    `- Credit Cards Ranked First to Last (${permissions.cards ? 'Permitted' : 'Restricted'}): ${cardPayoffRankingSummary}`,
+    `- Upcoming Bills (${permissions.bills ? 'Permitted' : 'Restricted'}): ${userBills.length > 0 ? userBills.map(b => `${b.name}: ${Number(b.expectedAmount).toFixed(2)} due ${b.dueText || b.nextDueDate || b.dueDate || 'Day ' + b.dueDay}`).join(' | ') : 'None scheduled'}`,
+    `- Subscriptions (${permissions.subscriptions ? 'Permitted' : 'Restricted'}): ${userSubscriptions.length > 0 ? userSubscriptions.map(s => `${s.name}: ${Number(s.amount).toFixed(2)}/mo`).join(' | ') : 'None added'}`,
+    `- Recent Purchases (${permissions.purchases ? 'Permitted' : 'Restricted'}): ${userTransactions.length > 0 ? userTransactions.slice(0, 20).map(t => `${t.name} [${t.category || 'Shopping'}]: ${Math.abs(Number(t.amount)).toFixed(2)} on ${t.date}`).join(' | ') : 'None recorded'}`,
+    `- Monthly Budgets (Spent vs Limit): ${enrichedBudgetsSummary}`,
     `- Savings Goals: ${savingsGoals && savingsGoals.length > 0 ? savingsGoals.map(g => `${g.name}: $${g.currentAmount} of $${g.targetAmount} ($${g.monthlyContribution || 0}/mo)`).join(' | ') : 'None created'}`,
     `- Manual Assets & Investments: ${manualAssets && manualAssets.length > 0 ? manualAssets.map(a => `${a.name}: $${Number(a.balance || 0).toLocaleString()} (${a.type})`).join(' | ') : 'None'}${retirementSection}`,
     `- Household & Utilities: ${residence ? `${residence.dwellingType || 'Single-Family'} (${residence.sqFt || 2100} sq ft, ${residence.bedrooms || 3} bd, ${residence.bathrooms || 2} ba) at ${fullAddress} | Est. Value: ${residence.estimatedValue || 'N/A'} | Household Size: ${residence.householdSize || 4} | PG&E CARE: ${residence.hasCareDiscount ? 'Yes' : 'No'}` : 'Standard Household'}`,
@@ -3186,7 +3266,9 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
   try {
     let reply = '';
 
-    if (provider === 'local') {
+    if (isWeeklyAdvisorSummary && advisorSnapshot && provider === 'local') {
+      reply = advisorSnapshot;
+    } else if (provider === 'local') {
       const localResult = await localModelEngine.query({
         query: fullUserPrompt,
         enableWebSearch: webSearchEnabled !== false && fileAttachments.length === 0,

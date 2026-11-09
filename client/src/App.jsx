@@ -3853,7 +3853,17 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             ...calculateJudgmentProofRatio(incomeStreams),
             incomeStreams: incomeStreams
           },
-          budgets: featureFlags.budgets ? budgets : [],
+          cards: displayCards,
+          checkingAccounts: checkingAccounts,
+          availableCash: displayCash,
+          projectedCashAfterBills: projectedCashAfterBills,
+          bills: sourceBillsList,
+          subscriptions: sourceSubsList,
+          transactions: sourceTxsList.slice(0, 60),
+          budgets: featureFlags.budgets ? computedBudgets : [],
+          debtStrategy: debtStrategy,
+          extraDebtPayment: extraDebtPayment,
+          debtPayoffComparison: debtPayoffComparison,
           savingsGoals: (featureFlags.budgets && featureFlags.savingsGoals) ? savingsGoals : [],
           manualAssets: manualAssets,
           retirementPlans: featureFlags.retirement ? retirementPlans : [],
@@ -4777,9 +4787,9 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         minPayment: Math.max(25, Number(c.minPayment || Math.round(c.balance * 0.025)))
       }));
       if (strategy === 'avalanche') {
-        clones.sort((a, b) => b.apr - a.apr);
+        clones.sort((a, b) => (b.apr - a.apr) || ((b.balance / (b.limit || 1)) - (a.balance / (a.limit || 1))) || (b.balance - a.balance));
       } else {
-        clones.sort((a, b) => a.balance - b.balance);
+        clones.sort((a, b) => (a.balance - b.balance) || (b.apr - a.apr));
       }
       let months = 0;
       let totalInterest = 0;
@@ -4821,40 +4831,407 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
     };
   })();
 
-  // Generate AI Advisor Weekly Summary citing actual numbers
-  const handleGenerateWeeklySummary = () => {
-    const topCat = [...computedBudgets].sort((a, b) => b.spent - a.spent)[0];
-    const highestUtilCard = [...displayCards].sort((a, b) => (b.balance / (b.limit || 1)) - (a.balance / (a.limit || 1)))[0];
-    const highestUtilPct = highestUtilCard ? Math.round((highestUtilCard.balance / (highestUtilCard.limit || 1)) * 100) : 0;
+  // Build comprehensive, data-driven Weekly Financial Advisor Analysis pulling live Cards, Transactions, Budgets, Bills & Subscriptions
+  const buildPersonalizedAdvisorBriefing = () => {
+    const money = (n) => `${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const money0 = (n) => `${Math.round(Number(n || 0)).toLocaleString('en-US')}`;
 
-    const summaryMd =
-      `### **Weekly Financial Briefing**\n\n` +
-      `**What Changed This Week**\n` +
-      `* **Net Worth:** Currently **$${totalNetWorth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}** across cash, savings, and cards.\n` +
-      `* **Category Spending:** You have spent **$${totalBudgetSpent.toFixed(2)}** of your **$${totalBudgetLimit.toFixed(0)}** monthly budget (${Math.round((totalBudgetSpent / (totalBudgetLimit || 1)) * 100)}% used).${topCat ? ` Your top category is **${topCat.category}** at **$${topCat.spent.toFixed(2)}** (${topCat.diffFromLastMonth >= 0 ? `+$${Math.abs(topCat.diffFromLastMonth).toFixed(0)} more` : `$${Math.abs(topCat.diffFromLastMonth).toFixed(0)} less`} than last month).` : ''}\n` +
-      `* **Recurring Subscriptions:** Tracking **${sourceSubsList.length} active subscriptions** totaling **$${displayTotalSubs.toFixed(2)}/mo**.\n\n` +
-      `**What to Watch**\n` +
-      `* **Cash Flow Forecast:** After **$${displayDue14Sum.toFixed(2)}** in bills due over the next 14 days, your projected checking balance will be **$${projectedCashAfterBills.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}**.\n` +
-      (highestUtilCard ? `* **Credit Utilization:** **${highestUtilCard.name} (•••• ${highestUtilCard.mask})** is at **${highestUtilPct}%** utilization ($${highestUtilCard.balance.toFixed(2)} / $${highestUtilCard.limit.toLocaleString()} limit at ${highestUtilCard.apr}% APR).\n\n` : '\n') +
-      `**One Thing to Do Right Now**\n` +
-      (highestAprCard || highestUtilCard
-        ? `1. **Target High-APR Debt:** Direct an extra **$${extraDebtPayment}/mo** toward **${(highestAprCard || highestUtilCard).name}** (${(highestAprCard || highestUtilCard).apr}% APR) using the Avalanche plan to become debt-free by **${debtPayoffComparison?.avalanche?.finishLabel || 'next year'}** and save **$${(debtPayoffComparison?.interestSavedVsMin || 184).toFixed(0)}** in interest.`
-        : `1. **Boost Your Emergency Fund:** Transfer **$250** from checking into your **Emergency Fund** goal to stay on track.`);
+    // 1. Analyze all credit cards (unfiltered across portfolio)
+    const enrichedCards = displayCards.map(c => {
+      const bal = Number(c.balance || 0);
+      const lim = Math.max(1, Number(c.limit || 5000));
+      const utilPct = Math.round((bal / lim) * 100);
+      const apr = Number(c.apr || 21.5);
+      const minPay = bal > 0 ? Math.max(25, Number(c.minPayment || Math.round(bal * 0.025))) : 0;
+      const monthlyInterest = bal * (apr / 100) / 12;
+      const target30Bal = lim * 0.30;
+      const paydownFor30Pct = Math.max(0, bal - target30Bal);
+      return {
+        ...c,
+        balance: bal,
+        limit: lim,
+        utilPct,
+        apr,
+        minPay,
+        monthlyInterest,
+        target30Bal,
+        paydownFor30Pct,
+        label: `${c.name} (•••• ${c.mask})`
+      };
+    });
 
-    const updated = [
+    const cardsWithBalance = enrichedCards.filter(c => c.balance > 0);
+    const zeroBalanceCards = enrichedCards.filter(c => c.balance <= 0);
+    const totalCardDebt = cardsWithBalance.reduce((s, c) => s + c.balance, 0);
+    const totalMinPayments = cardsWithBalance.reduce((s, c) => s + c.minPay, 0);
+    const totalMonthlyInterest = cardsWithBalance.reduce((s, c) => s + c.monthlyInterest, 0);
+
+    // Rank cards from FIRST to LAST to pay off:
+    // Avalanche: highest APR first, breaking ties by highest utilization % and highest monthly interest cost
+    const avalancheRanked = [...cardsWithBalance].sort(
+      (a, b) => (b.apr - a.apr) || (b.utilPct - a.utilPct) || (b.balance - a.balance)
+    );
+    // Snowball: smallest balance first for fastest account elimination
+    const snowballRanked = [...cardsWithBalance].sort(
+      (a, b) => (a.balance - b.balance) || (b.apr - a.apr)
+    );
+    const primaryRanked = debtStrategy === 'snowball' ? snowballRanked : avalancheRanked;
+    const firstCard = primaryRanked[0] || null;
+    const lastCard = primaryRanked.length > 1 ? primaryRanked[primaryRanked.length - 1] : null;
+    const lowestUtilCard = [...enrichedCards].sort((a, b) => (a.utilPct - b.utilPct) || (a.apr - b.apr))[0] || null;
+
+    // 2. Analyze all transactions & budgets (unfiltered across portfolio so no card filter hides data)
+    const expenseTxs = sourceTxsList.filter(t => {
+      const cat = (t.category || '').toLowerCase();
+      const name = (t.name || '').toLowerCase();
+      return cat !== 'income' && !name.includes('paycheck') && !name.includes('deposit');
+    });
+    const incomeTxs = sourceTxsList.filter(t => {
+      const cat = (t.category || '').toLowerCase();
+      const name = (t.name || '').toLowerCase();
+      return cat === 'income' || name.includes('paycheck') || name.includes('deposit');
+    });
+    const totalRecordedSpend = expenseTxs.reduce((s, t) => s + Math.abs(Number(t.amount || 0)), 0);
+    const totalRecordedIncome = incomeTxs.reduce((s, t) => s + Math.abs(Number(t.amount || 0)), 0);
+
+    // Category & Merchant aggregation from live transactions
+    const catStatsMap = {};
+    const merchantStatsMap = {};
+    for (const tx of expenseTxs) {
+      const cat = tx.category || 'Shopping';
+      const amt = Math.abs(Number(tx.amount || 0));
+      if (!catStatsMap[cat]) catStatsMap[cat] = { category: cat, spent: 0, count: 0, merchants: {} };
+      catStatsMap[cat].spent += amt;
+      catStatsMap[cat].count += 1;
+      const mName = tx.name || 'Purchase';
+      catStatsMap[cat].merchants[mName] = (catStatsMap[cat].merchants[mName] || 0) + amt;
+
+      if (!merchantStatsMap[mName]) {
+        merchantStatsMap[mName] = { name: mName, total: 0, count: 0, category: cat, account: tx.account || '' };
+      }
+      merchantStatsMap[mName].total += amt;
+      merchantStatsMap[mName].count += 1;
+    }
+
+    const topMerchants = Object.values(merchantStatsMap).sort((a, b) => b.total - a.total);
+
+    // Evaluate full-portfolio budgets
+    const portfolioBudgets = budgets.map(b => {
+      const catLower = (b.category || '').toLowerCase();
+      let spent = expenseTxs
+        .filter(t => (t.category || '').toLowerCase() === catLower)
+        .reduce((s, t) => s + Math.abs(Number(t.amount || 0)), 0);
+      if (catLower === 'utilities' || catLower === 'housing' || catLower === 'bills') {
+        const billsToCount = catLower === 'bills'
+          ? sourceBillsList.filter(bill => bill.status === 'due_soon' || (bill.daysUntil != null && bill.daysUntil <= 5))
+          : sourceBillsList.filter(bill => (bill.category || '').toLowerCase() === catLower);
+        spent += billsToCount.reduce((s, bill) => s + Number(bill.expectedAmount || 0), 0);
+      }
+      if ((catLower === 'entertainment' || catLower === 'subscriptions') && spent === 0) {
+        spent += sourceSubsList.reduce((s, sub) => s + Number(sub.amount || 0), 0);
+      }
+      const limit = Math.max(1, Number(b.limit || 1));
+      const pct = Math.round((spent / limit) * 100);
+      const topCatMerchants = Object.entries(catStatsMap[b.category]?.merchants || {})
+        .sort((x, y) => y[1] - x[1])
+        .slice(0, 2)
+        .map(([m, val]) => `${m} (${money(val)})`);
+      return {
+        ...b,
+        spent,
+        limit,
+        pct,
+        overAmount: Math.max(0, spent - limit),
+        remaining: Math.max(0, limit - spent),
+        isOver: spent > limit,
+        isNear: pct >= 80 && spent <= limit,
+        topMerchantsText: topCatMerchants.length > 0 ? topCatMerchants.join(', ') : ''
+      };
+    });
+
+    const overBudgets = [...portfolioBudgets].filter(b => b.isOver).sort((a, b) => b.overAmount - a.overAmount);
+    const nearBudgets = [...portfolioBudgets].filter(b => b.isNear).sort((a, b) => b.pct - a.pct);
+    const underBudgets = [...portfolioBudgets].filter(b => !b.isOver && !b.isNear && (b.limit - b.spent) >= 25).sort((a, b) => b.remaining - a.remaining);
+    const budgetedCatNames = new Set(portfolioBudgets.map(b => (b.category || '').toLowerCase()));
+    const unbudgetedCats = Object.values(catStatsMap)
+      .filter(c => !budgetedCatNames.has(c.category.toLowerCase()) && c.spent > 0)
+      .sort((a, b) => b.spent - a.spent);
+
+    // 3. Upcoming Bills & Subscriptions
+    const due14Bills = sourceBillsList.filter(b => b.status !== 'paid' && b.daysUntil != null && b.daysUntil <= 14);
+    const unpaidBills = sourceBillsList.filter(b => b.status !== 'paid');
+    const topSubs = [...sourceSubsList].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
+
+    // --- BUILD SECTION 1: CREDIT CARD PAYOFF ORDER (FIRST TO LAST) ---
+    let cardSection = `### **1. Credit Card Payoff Order (What to Pay First vs. Last)**\n`;
+    if (cardsWithBalance.length === 0) {
+      cardSection += `* **Debt-Free Status:** All **${enrichedCards.length}** connected credit cards currently carry a **$0.00** balance! Keep paying statements in full each month to maintain 0% interest.\n\n`;
+    } else {
+      const canPayAllInFull = projectedCashAfterBills > (totalCardDebt + 2000);
+      cardSection += `You are carrying **${money(totalCardDebt)}** across **${cardsWithBalance.length} card${cardsWithBalance.length > 1 ? 's' : ''}**, costing **${money(totalMonthlyInterest)}/mo** (**${money(totalMonthlyInterest * 12)}/yr**) in interest against **${money(displayCash)}** in available checking cash.\n`;
+
+      primaryRanked.forEach((c, idx) => {
+        const rankTag = idx === 0
+          ? `PAY FIRST (Priority #1)`
+          : (idx === primaryRanked.length - 1 ? `PAY LAST (Priority #${idx + 1})` : `Priority #${idx + 1}`);
+        const reasonText = idx === 0
+          ? (c.utilPct >= 30
+              ? `Highest credit score impact at **${c.utilPct}% utilization** (${money(c.balance)} of ${money0(c.limit)} limit) and burning **${money(c.monthlyInterest)}/mo** at **${c.apr}% APR**. Paying at least **${money(c.paydownFor30Pct)}** immediately drops utilization to the 30% credit-score threshold (${money0(c.target30Bal)}).`
+              : `Costs **${money(c.monthlyInterest)}/mo** in interest at **${c.apr}% APR** (${c.utilPct}% utilization on ${money0(c.limit)} limit). Target all extra debt payments here first.`)
+          : (idx === primaryRanked.length - 1
+              ? `Lower priority (**${c.utilPct}% utilization** on ${money0(c.limit)} limit, **${c.apr}% APR**, **${money(c.monthlyInterest)}/mo** interest). Pay only the **${money(c.minPay)}** minimum until Priority #1 is eliminated, then roll payments into this card.`
+              : ` Carrying **${money(c.balance)}** (${c.utilPct}% utilization at **${c.apr}% APR**). Maintain the **${money(c.minPay)}** minimum payment until higher-priority cards are cleared.`);
+        cardSection += `* **${rankTag} — ${c.label}:** **${money(c.balance)}** balance — ${reasonText}\n`;
+      });
+
+      if (zeroBalanceCards.length > 0) {
+        cardSection += `* **$0 Balance Cards:** ${zeroBalanceCards.map(c => `**${c.label}** ($0.00 / ${money0(c.limit)} limit)`).join(', ')} — no payment needed.\n`;
+      }
+
+      if (canPayAllInFull) {
+        const cashLeftAfterFullPayoff = projectedCashAfterBills - totalCardDebt;
+        cardSection += `* **Advisor Liquidity Recommendation:** Because you have **${money(projectedCashAfterBills)}** in checking after upcoming 14-day bills, you can pay off **100% of your ${money(totalCardDebt)} card debt today** (${primaryRanked.map(c => `**${money(c.balance)}** to **${c.name} •••• ${c.mask}**`).join(' + ')}), still retain **${money(cashLeftAfterFullPayoff)}** in cash reserves, and immediately save **${money(totalMonthlyInterest)}/mo** in interest!\n`;
+      } else if (firstCard) {
+        const recommendedFirstCardPay = firstCard.minPay + Number(extraDebtPayment || 150);
+        cardSection += `* **Monthly Payoff Plan (${debtStrategy === 'snowball' ? 'Snowball' : 'Avalanche'}):** Send **${money(recommendedFirstCardPay)}/mo** (${money(firstCard.minPay)} min + ${money0(extraDebtPayment)} extra) to **${firstCard.label}**${lastCard ? ` and **${money(lastCard.minPay)}/mo** minimum to **${lastCard.label}**` : ''} to become debt-free by **${debtPayoffComparison?.activePlan?.finishLabel || 'next year'}** and save **${money0(debtPayoffComparison?.interestSavedVsMin || totalMonthlyInterest * 6)}** in interest.\n`;
+      }
+
+      if (cardsWithBalance.length > 1 && avalancheRanked[0].id !== snowballRanked[0].id) {
+        const snowFirst = snowballRanked[0];
+        cardSection += `* **Quick-Win Alternative (Snowball Priority):** If your priority is clearing an entire card statement fast, pay **${money(snowFirst.balance)}** to wipe out **${snowFirst.label}** in one shot, then focus 100% on **${avalancheRanked[0].label}**.\n`;
+      }
+      cardSection += `\n`;
+    }
+
+    // --- BUILD SECTION 2: BUDGET & TRANSACTION AUDIT (WHAT TO CHANGE BY PRIORITY) ---
+    let budgetSection = `### **2. Budget vs. Actual Spending Audit (What to Change Based on Your Priority)**\n`;
+    budgetSection += `Across **${expenseTxs.length} recorded purchases** totaling **${money(totalRecordedSpend)}**${totalRecordedIncome > 0 ? ` (and **${money(totalRecordedIncome)}** in recorded deposits)` : ''}, your tracked category spending is **${money(totalBudgetSpent)}** against your **${money0(totalBudgetLimit)}/mo** total budget (**${Math.round((totalBudgetSpent / Math.max(1, totalBudgetLimit)) * 100)}%** used):\n`;
+
+    if (overBudgets.length > 0) {
+      for (const ob of overBudgets) {
+        const aggressiveTarget = Math.max(ob.limit + 25, Math.ceil((ob.spent * 0.7) / 25) * 25);
+        const realisticTarget = Math.max(aggressiveTarget + 25, Math.ceil((ob.spent * 0.95) / 25) * 25);
+        budgetSection += `* **Over Budget — ${ob.category} (${ob.pct}% used):** Spent **${money(ob.spent)}** on a **${money0(ob.limit)}/mo** budget (**${money(ob.overAmount)} over limit**)${ob.topMerchantsText ? `, driven by ${ob.topMerchantsText}` : ''}.\n`;
+        budgetSection += `  * *If Priority = Debt Payoff / Max Savings:* Change **${ob.category}** budget from **${money0(ob.limit)}** to **${money0(aggressiveTarget)}/mo** (cuts current category spend by 30% and frees up **+${money0(Math.max(25, ob.spent - aggressiveTarget))}/mo** for debt/savings).\n`;
+        budgetSection += `  * *If Priority = Realistic Lifestyle Alignment:* Change **${ob.category}** budget from **${money0(ob.limit)}** to **${money0(realisticTarget)}/mo** so your budget reflects actual household spending without false alerts.\n`;
+      }
+    }
+
+    if (nearBudgets.length > 0) {
+      for (const nb of nearBudgets) {
+        budgetSection += `* **Near Limit — ${nb.category} (${nb.pct}% used):** Spent **${money(nb.spent)}** of **${money0(nb.limit)}/mo** (**${money(nb.remaining)}** left this month${nb.topMerchantsText ? ` — top spend: ${nb.topMerchantsText}` : ''}). Hold weekly **${nb.category}** spend under **${money(nb.remaining / 2)}/wk**.\n`;
+      }
+    }
+
+    if (underBudgets.length > 0) {
+      const topUnder = underBudgets.slice(0, 3);
+      const totalSlack = topUnder.reduce((s, b) => s + b.remaining, 0);
+      budgetSection += `* **Under-Budget Slack to Reallocate:** ${topUnder.map(b => `**${b.category}** (${money(b.spent)} of ${money0(b.limit)} — **${money0(b.remaining)} unused**)`).join(', ')}. You can lower these caps by **${money0(Math.round(totalSlack * 0.5))}/mo** and shift that room to cover over-budget categories or extra card payments.\n`;
+    }
+
+    if (unbudgetedCats.length > 0) {
+      const topUnb = unbudgetedCats.slice(0, 3);
+      budgetSection += `* **Unbudgeted Transaction Categories:** You spent ${topUnb.map(u => `**${money(u.spent)}** in **${u.category}** (${u.count} tx${u.count > 1 ? 's' : ''})`).join(', ')} with no monthly cap set. Recommended: create a **${money0(Math.ceil((topUnb[0].spent * 0.85) / 25) * 25)}/mo ${topUnb[0].category}** budget.\n`;
+    }
+
+    if (topMerchants.length > 0) {
+      budgetSection += `* **Top Spending Merchants:** ${topMerchants.slice(0, 4).map(m => `**${m.name}** (${money(m.total)} across ${m.count} purchase${m.count > 1 ? 's' : ''} • ${m.category})`).join(' | ')}.\n`;
+    }
+    budgetSection += `\n`;
+
+    // --- BUILD SECTION 3: WHERE TO SPEND & ALLOCATE YOUR MONEY THIS WEEK ---
+    let spendPlanSection = `### **3. Where You Should Spend & Allocate Your Money This Week**\n`;
+    // 3a. Bills in next 14 days
+    if (due14Bills.length > 0) {
+      spendPlanSection += `1. **Cover Upcoming 14-Day Bills First (${money(displayDue14Sum)}):** Pay ${due14Bills.map(b => `**${b.name}** (${money(b.expectedAmount)}, ${b.dueText || 'due soon'})`).join(', ')} from checking, leaving **${money(projectedCashAfterBills)}** in available cash.\n`;
+    } else if (unpaidBills.length > 0) {
+      const nextB = unpaidBills[0];
+      spendPlanSection += `1. **Upcoming Bills ($0.00 due in next 14 days):** Your next scheduled bill is **${nextB.name}** (**${money(nextB.expectedAmount)}**, ${nextB.dueText || `Day ${nextB.dueDay}`}). Your full **${money(displayCash)}** checking balance is clear for the next two weeks.\n`;
+    } else {
+      spendPlanSection += `1. **Upcoming Bills ($0.00 due in next 14 days):** No unpaid bills due over the next 14 days; **${money(displayCash)}** is available in checking.\n`;
+    }
+
+    // 3b. Card payment execution
+    if (firstCard) {
+      const immediatePay = projectedCashAfterBills > (totalCardDebt + 2000)
+        ? firstCard.balance
+        : (firstCard.paydownFor30Pct > 0 ? Math.max(firstCard.minPay + Number(extraDebtPayment || 150), firstCard.paydownFor30Pct) : firstCard.minPay + Number(extraDebtPayment || 150));
+      spendPlanSection += `2. **Execute Priority Card Payment (${money(immediatePay)}):** Send **${money(immediatePay)}** to **${firstCard.label}** first${lastCard ? `, and keep **${lastCard.label}** on its **${money(lastCard.minPay)}** minimum (or pay its remaining **${money(lastCard.balance)}** once **${firstCard.name}** is $0)` : ''}.\n`;
+    } else {
+      spendPlanSection += `2. **Grow High-Yield Savings:** With $0 in credit card debt, transfer **${money0(Math.max(250, extraDebtPayment))}** from checking into your **Emergency Fund / Savings Goal**.\n`;
+    }
+
+    // 3c. Which card to swipe this week
+    if (lowestUtilCard) {
+      const highUtilCards = enrichedCards.filter(c => c.utilPct >= 30 && c.id !== lowestUtilCard.id);
+      spendPlanSection += `3. **Which Card to Use for Purchases This Week:** Put necessary Groceries, Gas, and everyday expenses on **${lowestUtilCard.label}** (**${lowestUtilCard.utilPct}% utilization**, ${money0(lowestUtilCard.limit - lowestUtilCard.balance)} available headroom)${highUtilCards.length > 0 ? ` and **stop swiping ${highUtilCards.map(c => `${c.name} (•••• ${c.mask} at ${c.utilPct}%)`).join(', ')}** until its balance is paid below 30% (${money0(highUtilCards[0].target30Bal)})` : ''}.\n`;
+    }
+
+    // 3d. Safe weekly discretionary allowance & subscriptions check
+    const remainingMonthlyBudget = Math.max(0, underBudgets.reduce((s, b) => s + b.remaining, 0) + nearBudgets.reduce((s, b) => s + b.remaining, 0));
+    const safeWeeklyAllowance = Math.max(75, Math.round((remainingMonthlyBudget > 0 ? remainingMonthlyBudget / 2 : totalBudgetLimit * 0.2) / 5) * 5);
+    const subsSummaryText = topSubs.length > 0
+      ? ` Also review your **${sourceSubsList.length} active subscriptions (${money(displayTotalSubs)}/mo)** — top charges: ${topSubs.slice(0, 3).map(s => `**${s.name}** (${money(s.amount)}/mo)`).join(', ')}.`
+      : '';
+    spendPlanSection += `4. **Weekly Discretionary Spending Cap (${money0(safeWeeklyAllowance)}/week):** Keep non-bill spending under **${money0(safeWeeklyAllowance)}** this week${overBudgets.length > 0 ? ` and pause non-essential **${overBudgets.map(o => o.category).join(' & ')}** purchases` : ''}.${subsSummaryText}`;
+
+    const fullBriefingMd =
+      `### **Weekly Financial Advisor Summary**\n\n` +
+      cardSection +
+      budgetSection +
+      spendPlanSection;
+
+    // Build dynamic, personalized suggestedActions based on actual user state
+    const dynamicActions = [];
+    if (overBudgets.length > 0) {
+      const topOver = overBudgets[0];
+      const recommendedLimit = Math.max(topOver.limit + 25, Math.ceil((topOver.spent * 0.75) / 25) * 25);
+      dynamicActions.push({
+        label: `Change ${topOver.category} budget to ${recommendedLimit}/mo`,
+        type: 'set_budget',
+        category: topOver.category,
+        limit: recommendedLimit
+      });
+    } else if (unbudgetedCats.length > 0) {
+      const topUnb = unbudgetedCats[0];
+      const recLim = Math.max(100, Math.ceil((topUnb.spent * 0.85) / 25) * 25);
+      dynamicActions.push({
+        label: `Set ${recLim}/mo ${topUnb.category} budget`,
+        type: 'set_budget',
+        category: topUnb.category,
+        limit: recLim
+      });
+    } else if (portfolioBudgets.length > 0) {
+      dynamicActions.push({ label: 'Review & Edit Budgets', type: 'navigate', tab: 'budgets' });
+    }
+
+    if (cardsWithBalance.length > 0) {
+      dynamicActions.push({ label: 'Open Debt Payoff Planner', type: 'navigate', tab: 'cards' });
+    } else {
+      dynamicActions.push({ label: 'View Connected Cards', type: 'navigate', tab: 'cards' });
+    }
+
+    dynamicActions.push({
+      label: 'Where can I cut spending this week?',
+      type: 'prompt',
+      prompt: 'Based on my recent transactions, subscriptions, and budgets, what specific expenses should I cut or change this week?'
+    });
+
+    return { fullBriefingMd, dynamicActions };
+  };
+
+  // Generate AI Advisor Weekly Summary citing actual live cards, transactions, budgets, and priorities
+  const handleGenerateWeeklySummary = async () => {
+    if (isAiTyping) return;
+    const { fullBriefingMd, dynamicActions } = buildPersonalizedAdvisorBriefing();
+    const userPromptText = 'Generate my Weekly Advisor Summary: tell me which cards to pay off first or last, what I should change my budgets to based on my priority, and where I should spend my money this week.';
+
+    const userStepMessages = [
       ...chatMessages,
-      { role: 'user', text: 'Generate my weekly financial summary.' },
+      { role: 'user', text: userPromptText }
+    ];
+    updateActiveSession(userStepMessages);
+    scrollChatToBottom();
+
+    // If an external cloud AI provider is connected, allow the live AI model to enrich the advisor summary
+    // while passing the exact pre-computed snapshot so every card, budget, and transaction figure is 100% accurate.
+    let cachedProvider = '';
+    let cachedModel = '';
+    try {
+      const rawCfg = localStorage.getItem('klarity_ai_config');
+      if (rawCfg) {
+        const parsedCfg = JSON.parse(rawCfg);
+        cachedProvider = parsedCfg.provider || '';
+        cachedModel = parsedCfg.model || '';
+      }
+    } catch (e) {}
+
+    if (settingsAiStatus === 'connected' && cachedProvider && cachedProvider !== 'local') {
+      setIsAiTyping(true);
+      const controller = new AbortController();
+      aiAbortControllerRef.current = controller;
+      try {
+        const res = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            message: userPromptText,
+            isWeeklyAdvisorSummary: true,
+            advisorSnapshot: fullBriefingMd,
+            userMemory: aiMemory,
+            clientProvider: cachedProvider,
+            clientModel: cachedModel,
+            responseLength: 'detailed',
+            webSearchEnabled: aiWebSearchEnabled,
+            cards: displayCards,
+            checkingAccounts: checkingAccounts,
+            availableCash: displayCash,
+            projectedCashAfterBills: projectedCashAfterBills,
+            bills: sourceBillsList,
+            subscriptions: sourceSubsList,
+            transactions: sourceTxsList.slice(0, 60),
+            budgets: featureFlags.budgets ? computedBudgets : [],
+            debtStrategy: debtStrategy,
+            extraDebtPayment: extraDebtPayment,
+            debtPayoffComparison: debtPayoffComparison,
+            savingsGoals: (featureFlags.budgets && featureFlags.savingsGoals) ? savingsGoals : [],
+            manualAssets: manualAssets,
+            retirementPlans: featureFlags.retirement ? retirementPlans : [],
+            netWorth: totalNetWorth || 0,
+            householdProfile: householdProfile,
+            householdMetrics: calculateHouseholdAndFleetMetrics(householdProfile)
+          })
+        });
+        const json = await res.json();
+        const rawReply = (json.reply || '')
+          .replace(/\[NAVIGATE:[\s\S]*?\]/gi, '')
+          .replace(/\[ACTION:[\s\S]*?\]/gi, '')
+          .trim();
+        const isErrorReply =
+          !rawReply ||
+          rawReply.includes('rate limit') ||
+          rawReply.includes('API error') ||
+          rawReply.includes('API key') ||
+          rawReply.includes('quota') ||
+          rawReply.includes('unable to retrieve') ||
+          rawReply.includes('connection notice');
+
+        const finalAdvisorText = isErrorReply ? fullBriefingMd : rawReply;
+        updateActiveSession([
+          ...userStepMessages,
+          {
+            role: 'assistant',
+            text: finalAdvisorText,
+            suggestedActions: dynamicActions
+          }
+        ]);
+      } catch (e) {
+        updateActiveSession([
+          ...userStepMessages,
+          {
+            role: 'assistant',
+            text: fullBriefingMd,
+            suggestedActions: dynamicActions
+          }
+        ]);
+      } finally {
+        aiAbortControllerRef.current = null;
+        setIsAiTyping(false);
+        scrollChatToBottom();
+      }
+      return;
+    }
+
+    // Instant, 100% live-data Advisor Briefing when using local engine or no external key
+    updateActiveSession([
+      ...userStepMessages,
       {
         role: 'assistant',
-        text: summaryMd,
-        suggestedActions: [
-          { label: 'Create a $400 Groceries budget', type: 'set_budget', category: 'Groceries', limit: 400 },
-          { label: 'View Debt Payoff Planner', type: 'navigate', tab: 'cards' },
-          { label: 'Audit Subscriptions', type: 'navigate', tab: 'subscriptions' }
-        ]
+        text: fullBriefingMd,
+        suggestedActions: dynamicActions
       }
-    ];
-    updateActiveSession(updated);
+    ]);
     scrollChatToBottom();
   };
 
@@ -4879,7 +5256,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         return [...prev, { id: `b-${Date.now()}`, category: cat, limit: lim, lastMonthSpent: Math.round(lim * 0.8) }];
       });
       setActiveTab('budgets');
-      setNotificationToast(`Created $${lim}/mo ${cat} budget!`);
+      setNotificationToast(`Updated ${cat} budget to ${lim}/mo!`);
       setTimeout(() => setNotificationToast(''), 3500);
     } else if (act.type === 'payment_reminder') {
       const nextDueBill = sourceBillsList.find(b => b.status !== 'paid') || sourceBillsList[0];
