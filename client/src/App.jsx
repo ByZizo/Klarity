@@ -10695,16 +10695,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-slate-900 text-sm">
-                                {desktopAppInfo.isDesktopApp ? 'Klarity Desktop App' : 'Klarity App'}
+                                Klarity
                               </span>
-                              <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
-                                {formatVersionString(desktopAppInfo.version || '3.12.14')}
-                              </span>
-                              {desktopAppInfo.updateStatus?.commitSha && (
-                                <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-mono text-[10px]">
-                                  {desktopAppInfo.updateStatus.commitSha}
-                                </span>
-                              )}
                             </div>
                             <p className="text-xs text-slate-500 mt-1">
                               {desktopAppInfo.updateStatus?.message && !desktopAppInfo.updateStatus.message.includes('Connected to GitHub') && !desktopAppInfo.updateStatus.message.includes('ByZizo') ? desktopAppInfo.updateStatus.message : 'Up to date'}
@@ -10720,7 +10712,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                                 className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold cursor-pointer flex items-center gap-2 shadow-xs transition-colors"
                               >
                                 <Download className="w-4 h-4" />
-                                <span>{isInstallingUpdate ? 'Updating...' : `Update to ${formatVersionString(desktopAppInfo.updateStatus?.latestVersion)} Now`}</span>
+                                <span>{isInstallingUpdate ? 'Updating...' : 'Update Now'}</span>
                               </button>
                             ) : (
                               <button
@@ -10741,7 +10733,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                                       const res = await fetch('/api/app/update-check');
                                       const data = await res.json();
                                       if (data.ok) {
-                                        setNotificationToast(`GitHub: ${data.sha} - ${data.message}`);
+                                        setNotificationToast('Klarity is up to date');
                                       } else {
                                         setNotificationToast('Klarity is up to date');
                                       }
@@ -10767,7 +10759,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         {desktopAppInfo.updateStatus?.state === 'available' && (
                           <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start justify-between gap-3 text-amber-900 animate-in fade-in duration-150">
                             <div className="flex items-start gap-2.5">
-                              <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                              <ArrowUpCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                               <div>
                                 <span className="font-bold text-xs block">Update available</span>
                                 <span className="text-[11px] text-amber-800 leading-snug">
@@ -10830,7 +10822,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 mt-0.5">
-                              {desktopAppInfo.isDesktopApp ? 'Klarity Desktop App (Windows)' : 'Klarity Web Application'}
+                              {desktopAppInfo.isDesktopApp ? 'Klarity (Windows)' : 'Klarity Web Application'}
                             </p>
                           </div>
                         </div>
