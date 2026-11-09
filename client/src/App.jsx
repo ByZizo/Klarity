@@ -6755,14 +6755,16 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
             {/* Household, Utility (PG&E / Water / Gas) & EV Fleet Intelligence Hub */}
             <HouseholdLifestyleHub
-                    bills={data.bills || []}
-                    householdProfile={householdProfile}
+              bills={data.bills || []}
+              householdProfile={householdProfile}
               onUpdateProfile={setHouseholdProfile}
               onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
               onAskAiAdvisor={(promptText) => {
                 setIsAiDrawerOpen(true);
                 handleSendChatMessage(promptText);
               }}
+              isOverview={true}
+              onNavigateToLifestyle={() => setActiveTab('household')}
             />
           </div>
         )}
@@ -7702,14 +7704,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             />
 
             <HouseholdLifestyleHub
-                    bills={data.bills || []}
-                    householdProfile={householdProfile}
+              bills={data.bills || []}
+              householdProfile={householdProfile}
               onUpdateProfile={setHouseholdProfile}
               onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
               onAskAiAdvisor={(promptText) => {
                 setIsAiDrawerOpen(true);
                 handleSendChatMessage(promptText);
               }}
+              isOverview={false}
             />
           </div>
         )}
