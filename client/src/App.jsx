@@ -589,7 +589,7 @@ function PlaidLauncher({ token, onSuccess, onExit }) {
 // Helper to format release highlights: only major features, minor items become "Bug fixes"
 
 function formatVersionString(version) {
-  if (!version) return 'v3.12.14';
+  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.14';
   const str = String(version).trim();
   if (/^[0-9a-f]{7,40}$/i.test(str)) {
     return 'v3.12.14';
@@ -9133,7 +9133,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' },
                       { id: 'plaid', label: 'Bank connection', dot: settingsPlaidStatus !== 'connected' },
                       { id: 'security', label: 'Security', dot: false },
-                      { id: 'session', label: 'Session', dot: false }
+                      { id: 'session', label: 'Session', dot: false },
+                      { id: 'about', label: 'About', dot: false }
                     ].map(tab => {
                       const isActive = settingsActiveTab === tab.id;
                       return (
@@ -10637,6 +10638,141 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       </div>
                     </div>
                   )}
+
+                  {/* TAB 6: ABOUT & LAST UPDATES */}
+                  {settingsActiveTab === 'about' && (
+                    <div key="settings-tab-about" className="flex flex-col gap-6">
+                      <div>
+                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">About Klarity</h2>
+                        <p className="text-xs text-slate-500 mt-1">Software information, current version, and recent release updates.</p>
+                      </div>
+
+                      {/* Card 1: App Version & System Summary */}
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-12 h-12 rounded-2xl bg-[#eff4f9] border border-[#18457c]/20 flex items-center justify-center shrink-0 shadow-2xs">
+                            <KlarityLogo className="w-7 h-7 text-[#18457c]" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-bold text-slate-900 text-sm">Klarity Finance</h3>
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
+                                {formatVersionString(desktopAppInfo.version || '3.12.14')}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {desktopAppInfo.isDesktopApp ? 'Klarity Desktop App (Windows)' : 'Klarity Web Application'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={isCheckingUpdateInSettings}
+                            onClick={async () => {
+                              setIsCheckingUpdateInSettings(true);
+                              try {
+                                if (typeof window !== 'undefined' && window.klarityDesktop?.checkForUpdates) {
+                                  const st = await window.klarityDesktop.checkForUpdates();
+                                  if (st?.state === 'available') {
+                                    setIsUpdateModalOpen(true);
+                                  } else {
+                                    setNotificationToast('You are running the latest version of Klarity.');
+                                    setTimeout(() => setNotificationToast(''), 3000);
+                                  }
+                                } else {
+                                  setNotificationToast('You are running the latest version of Klarity.');
+                                  setTimeout(() => setNotificationToast(''), 3000);
+                                }
+                              } catch {
+                                setNotificationToast('Update check complete — up to date.');
+                                setTimeout(() => setNotificationToast(''), 3000);
+                              } finally {
+                                setIsCheckingUpdateInSettings(false);
+                              }
+                            }}
+                            className="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs cursor-pointer transition-colors shadow-2xs flex items-center gap-2"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isCheckingUpdateInSettings ? 'animate-spin' : ''}`} />
+                            <span>{isCheckingUpdateInSettings ? 'Checking...' : 'Check for Updates'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Card 2: Last Updates (Release History & Changelog) */}
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-bold text-slate-900 text-sm">Last Updates & Release Notes</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Recent features, improvements, and bug fixes added to Klarity.</p>
+                          </div>
+                          <span className="text-[11px] font-semibold text-slate-400">Chronological</span>
+                        </div>
+
+                        <div className="space-y-4 pt-2">
+                          {/* Release 3.12.14 (Latest) */}
+                          <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/60 flex flex-col gap-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs text-slate-900">Version 3.12.14</span>
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">Current</span>
+                              </div>
+                              <span className="text-[10px] text-slate-400">Latest Release</span>
+                            </div>
+                            <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                              <li><strong className="text-slate-800">Weekly Financial Advisor Engine:</strong> Analyzes actual cards, transactions, and budgets to recommend card payoff order (first vs. last), priority-based budget adjustments, and weekly money allocations.</li>
+                              <li><strong className="text-slate-800">Subpage Three-Dot Dropdown Menus:</strong> Quick action menus added to Transactions, Budgets, Bills, Subscriptions, Cards, and Lifestyle headers.</li>
+                              <li><strong className="text-slate-800">Right-Click Copy:</strong> Added context menu to copy any highlighted text across the app.</li>
+                              <li><strong className="text-slate-800">Subpage Layout Elevate:</strong> Centered subpage titles and leveled Back to Overview button to optimize vertical screen room.</li>
+                              <li><strong className="text-slate-800">Session Settings Update:</strong> Clean single-row layout with Sign Out directly next to signed-in email.</li>
+                              <li><strong className="text-slate-800">Bug Fixes:</strong> Removed duplicate sidebar tooltips, eliminated dark mode white box anomalies, restored 100% clean Light theme, and updated semantic versioning.</li>
+                            </ul>
+                          </div>
+
+                          {/* Release 3.11.13 */}
+                          <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs text-slate-900">Version 3.11.13</span>
+                              </div>
+                              <span className="text-[10px] text-slate-400">Previous</span>
+                            </div>
+                            <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                              <li><strong className="text-slate-800">UI Settings Section:</strong> Added dedicated UI section with text scaling (Default, Large, Extra Large), interface density, and accessibility helpers.</li>
+                              <li><strong className="text-slate-800">Household Clickable Providers:</strong> Direct access to provider detail view with statement upload and history.</li>
+                            </ul>
+                          </div>
+
+                          {/* Release 3.10.12 */}
+                          <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs text-slate-900">Version 3.10.12</span>
+                              </div>
+                              <span className="text-[10px] text-slate-400">Previous</span>
+                            </div>
+                            <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                              <li><strong className="text-slate-800">Passwords & Accounts Vault:</strong> Custom sections, website URL fields, Grid/List layout controls, Small/Medium/Large card view sizes, and 3-dots card actions with delete confirmation.</li>
+                            </ul>
+                          </div>
+
+                          {/* Release 3.9.11 */}
+                          <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs text-slate-900">Version 3.9.11</span>
+                              </div>
+                              <span className="text-[10px] text-slate-400">Previous</span>
+                            </div>
+                            <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                              <li><strong className="text-slate-800">Lifestyle Hub Suite:</strong> Household interactive property questions and PG&E solar estimator, Auto garage with trim selection and per-car insurance card upload, Health insurance OCR card scanner with front/back 3D flip card.</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Modal Footer */}
@@ -10961,7 +11097,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <div className="flex items-center gap-2">
                     <h3 className="font-serif-title text-lg font-bold text-slate-900">What's New in Klarity</h3>
                     <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
-                      v{whatsNewData.version || '1.0.6'}
+                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.14'))}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">

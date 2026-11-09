@@ -121,13 +121,24 @@ function formatWhatsNewHighlights(changes) {
   return finalHighlights;
 }
 
-function saveWhatsNewData(changes, versionOrSha) {
+function saveWhatsNewData(changes, versionOrSha, explicitVersion) {
   try {
     const whatsNewFile = path.join(app.getPath('userData'), 'whats_new.json');
+    const repoDir = path.join(__dirname, '..');
+    let ver = explicitVersion;
+    if (!ver) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
+        if (pkg && pkg.version) ver = pkg.version;
+      } catch {}
+    }
+    if (!ver || ver === '1.8.10') ver = '3.12.14';
+    const cleanVer = ver.startsWith('v') ? ver.slice(1) : ver;
+
     const data = {
       shown: false,
-      version: app.getVersion(),
-      commitSha: versionOrSha || app.getVersion(),
+      version: cleanVer,
+      commitSha: versionOrSha || cleanVer,
       title: "What's New in Klarity",
       changes: formatWhatsNewHighlights(changes),
       updatedAt: Date.now()
@@ -575,8 +586,14 @@ ipcMain.handle('klarity:install-update-now', async () => {
 
     const newSha = await runShell('git rev-parse HEAD', repoDir).catch(() => 'latest');
 
+    let updatedVersion = null;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
+      if (pkg && pkg.version) updatedVersion = pkg.version;
+    } catch {}
+
     // Save What's New data to userDataDir so the pop-up appears on restart
-    saveWhatsNewData(recentChanges, newSha ? newSha.slice(0, 7) : app.getVersion());
+    saveWhatsNewData(recentChanges, newSha ? newSha.slice(0, 7) : app.getVersion(), updatedVersion);
 
     // Update installed_version.json to the new SHA
     const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
