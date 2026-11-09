@@ -773,6 +773,43 @@ function KlarityApp() {
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
   const [isCheckingUpdateInSettings, setIsCheckingUpdateInSettings] = useState(false);
   const [updatePromptDismissed, setUpdatePromptDismissed] = useState(false);
+  const [isReleaseNotesOpen, setIsReleaseNotesOpen] = useState(false);
+  const [feedbackType, setFeedbackType] = useState('General Feedback');
+  const [feedbackText, setFeedbackText] = useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+
+  const handleSendFeedback = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!feedbackText.trim()) return;
+    setIsSubmittingFeedback(true);
+    try {
+      const payload = {
+        type: feedbackType,
+        text: feedbackText.trim(),
+        user: currentUser?.email || 'Anonymous',
+        version: '3.12.14',
+        createdAt: new Date().toISOString()
+      };
+      try {
+        await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch {}
+      try {
+        const list = JSON.parse(localStorage.getItem('klarity_user_feedback') || '[]');
+        list.push(payload);
+        localStorage.setItem('klarity_user_feedback', JSON.stringify(list));
+      } catch {}
+      setFeedbackSubmitted(true);
+      setFeedbackText('');
+      setTimeout(() => setFeedbackSubmitted(false), 4000);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
   const [isRefreshingApp, setIsRefreshingApp] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
 
@@ -10843,76 +10880,154 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         </div>
                       </div>
 
-                      {/* Card 2: Last Updates (Release History & Changelog) */}
+                      {/* Card 2: Release Notes (Collapsible) */}
+                      <div className="border border-slate-200 rounded-2xl bg-white shadow-2xs overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setIsReleaseNotesOpen(prev => !prev)}
+                          className="w-full p-5 flex items-center justify-between cursor-pointer hover:bg-slate-50/60 transition-colors text-left"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <h3 className="font-bold text-slate-900 text-sm">Release Notes</h3>
+                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200">
+                              v3.12.14
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-500">
+                              {isReleaseNotesOpen ? 'Hide' : 'View'}
+                            </span>
+                            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isReleaseNotesOpen ? 'rotate-180' : ''}`} />
+                          </div>
+                        </button>
+
+                        {isReleaseNotesOpen && (
+                          <div className="px-5 pb-5 pt-1 border-t border-slate-100">
+                            <div className="space-y-4 pt-3">
+                              {/* Release 3.12.14 (Latest) */}
+                              <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/60 flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.14</span>
+                                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">Current</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400">Latest Release</span>
+                                </div>
+                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                                  <li><strong className="text-slate-800">Weekly Financial Advisor Engine:</strong> Analyzes actual cards, transactions, and budgets to recommend card payoff order (first vs. last), priority-based budget adjustments, and weekly money allocations.</li>
+                                  <li><strong className="text-slate-800">Subpage Three-Dot Dropdown Menus:</strong> Quick action menus added to Transactions, Budgets, Bills, Subscriptions, Cards, and Lifestyle headers.</li>
+                                  <li><strong className="text-slate-800">Right-Click Copy:</strong> Added context menu to copy any highlighted text across the app.</li>
+                                  <li><strong className="text-slate-800">Subpage Layout Elevate:</strong> Centered subpage titles and leveled Back to Overview button to optimize vertical screen room.</li>
+                                  <li><strong className="text-slate-800">Session Settings Update:</strong> Clean single-row layout with Sign Out directly next to signed-in email.</li>
+                                  <li><strong className="text-slate-800">Bug Fixes:</strong> Removed duplicate sidebar tooltips, eliminated dark mode white box anomalies, restored 100% clean Light theme, and updated semantic versioning.</li>
+                                </ul>
+                              </div>
+
+                              {/* Release 3.11.13 */}
+                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-xs text-slate-900">Version 3.11.13</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400">Previous</span>
+                                </div>
+                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                                  <li><strong className="text-slate-800">UI Settings Section:</strong> Added dedicated UI section with text scaling (Default, Large, Extra Large), interface density, and accessibility helpers.</li>
+                                  <li><strong className="text-slate-800">Household Clickable Providers:</strong> Direct access to provider detail view with statement upload and history.</li>
+                                </ul>
+                              </div>
+
+                              {/* Release 3.10.12 */}
+                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-xs text-slate-900">Version 3.10.12</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400">Previous</span>
+                                </div>
+                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                                  <li><strong className="text-slate-800">Passwords & Accounts Vault:</strong> Custom sections, website URL fields, Grid/List layout controls, Small/Medium/Large card view sizes, and 3-dots card actions with delete confirmation.</li>
+                                </ul>
+                              </div>
+
+                              {/* Release 3.9.11 */}
+                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-xs text-slate-900">Version 3.9.11</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400">Previous</span>
+                                </div>
+                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                                  <li><strong className="text-slate-800">Lifestyle Hub Suite:</strong> Household interactive property questions and PG&E solar estimator, Auto garage with trim selection and per-car insurance card upload, Health insurance OCR card scanner with front/back 3D flip card.</li>
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Card 3: Feedback Section */}
                       <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col gap-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-bold text-slate-900 text-sm">Last Updates & Release Notes</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">Recent features, improvements, and bug fixes added to Klarity.</p>
+                            <h3 className="font-bold text-slate-900 text-sm">Feedback</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Share thoughts, report bugs, or request features to help improve Klarity.</p>
                           </div>
-                          <span className="text-[11px] font-semibold text-slate-400">Chronological</span>
+                          <span className="px-2.5 py-1 rounded-xl bg-blue-50 text-[#18457c] font-semibold text-[11px] border border-blue-100">
+                            User Feedback
+                          </span>
                         </div>
 
-                        <div className="space-y-4 pt-2">
-                          {/* Release 3.12.14 (Latest) */}
-                          <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/60 flex flex-col gap-2.5">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-xs text-slate-900">Version 3.12.14</span>
-                                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">Current</span>
-                              </div>
-                              <span className="text-[10px] text-slate-400">Latest Release</span>
-                            </div>
-                            <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                              <li><strong className="text-slate-800">Weekly Financial Advisor Engine:</strong> Analyzes actual cards, transactions, and budgets to recommend card payoff order (first vs. last), priority-based budget adjustments, and weekly money allocations.</li>
-                              <li><strong className="text-slate-800">Subpage Three-Dot Dropdown Menus:</strong> Quick action menus added to Transactions, Budgets, Bills, Subscriptions, Cards, and Lifestyle headers.</li>
-                              <li><strong className="text-slate-800">Right-Click Copy:</strong> Added context menu to copy any highlighted text across the app.</li>
-                              <li><strong className="text-slate-800">Subpage Layout Elevate:</strong> Centered subpage titles and leveled Back to Overview button to optimize vertical screen room.</li>
-                              <li><strong className="text-slate-800">Session Settings Update:</strong> Clean single-row layout with Sign Out directly next to signed-in email.</li>
-                              <li><strong className="text-slate-800">Bug Fixes:</strong> Removed duplicate sidebar tooltips, eliminated dark mode white box anomalies, restored 100% clean Light theme, and updated semantic versioning.</li>
-                            </ul>
+                        <form onSubmit={handleSendFeedback} className="flex flex-col gap-3 pt-1">
+                          {/* Feedback Type Selector */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {['General Feedback', 'Feature Request', 'Bug Report'].map(type => (
+                              <button
+                                key={type}
+                                type="button"
+                                onClick={() => setFeedbackType(type)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                                  feedbackType === type
+                                    ? 'bg-[#18457c] text-white border-[#18457c] shadow-2xs'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                {type}
+                              </button>
+                            ))}
                           </div>
 
-                          {/* Release 3.11.13 */}
-                          <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-xs text-slate-900">Version 3.11.13</span>
-                              </div>
-                              <span className="text-[10px] text-slate-400">Previous</span>
-                            </div>
-                            <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                              <li><strong className="text-slate-800">UI Settings Section:</strong> Added dedicated UI section with text scaling (Default, Large, Extra Large), interface density, and accessibility helpers.</li>
-                              <li><strong className="text-slate-800">Household Clickable Providers:</strong> Direct access to provider detail view with statement upload and history.</li>
-                            </ul>
-                          </div>
+                          {/* Message Textarea */}
+                          <textarea
+                            value={feedbackText}
+                            onChange={(e) => setFeedbackText(e.target.value)}
+                            rows={3}
+                            placeholder="What can we improve? Let us know what you'd like to see..."
+                            className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:border-[#18457c] focus:ring-1 focus:ring-[#18457c] outline-none text-slate-800 placeholder:text-slate-400 resize-none bg-slate-50/50"
+                          />
 
-                          {/* Release 3.10.12 */}
-                          <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-xs text-slate-900">Version 3.10.12</span>
-                              </div>
-                              <span className="text-[10px] text-slate-400">Previous</span>
-                            </div>
-                            <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                              <li><strong className="text-slate-800">Passwords & Accounts Vault:</strong> Custom sections, website URL fields, Grid/List layout controls, Small/Medium/Large card view sizes, and 3-dots card actions with delete confirmation.</li>
-                            </ul>
-                          </div>
+                          <div className="flex items-center justify-between pt-1">
+                            {feedbackSubmitted ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Thank you! Your feedback has been received.
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400">
+                                Your feedback directly shapes upcoming updates.
+                              </span>
+                            )}
 
-                          {/* Release 3.9.11 */}
-                          <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-xs text-slate-900">Version 3.9.11</span>
-                              </div>
-                              <span className="text-[10px] text-slate-400">Previous</span>
-                            </div>
-                            <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                              <li><strong className="text-slate-800">Lifestyle Hub Suite:</strong> Household interactive property questions and PG&E solar estimator, Auto garage with trim selection and per-car insurance card upload, Health insurance OCR card scanner with front/back 3D flip card.</li>
-                            </ul>
+                            <button
+                              type="submit"
+                              disabled={!feedbackText.trim() || isSubmittingFeedback}
+                              className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold cursor-pointer transition-colors shadow-2xs flex items-center gap-1.5"
+                            >
+                              <span>{isSubmittingFeedback ? 'Sending...' : 'Send Feedback'}</span>
+                            </button>
                           </div>
-                        </div>
+                        </form>
                       </div>
                     </div>
                   )}
