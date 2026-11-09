@@ -466,7 +466,15 @@ async function requireAuth(req, res, next) {
     '/api/auth/session',
     '/api/household/zillow-lookup',
     '/api/household/scan-insurance-card',
-    '/api/household'
+    '/api/household',
+    '/api/feedback',
+    '/feedback',
+    '/api/app/whats-new',
+    '/app/whats-new',
+    '/api/app/dismiss-whats-new',
+    '/app/dismiss-whats-new',
+    '/api/app/update-check',
+    '/app/update-check'
   ]);
 
   const reqPath = (req.path || '').split('?')[0];
