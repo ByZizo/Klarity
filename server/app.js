@@ -4074,6 +4074,60 @@ app.post('/api/app/dismiss-whats-new', (req, res) => {
   return res.json({ ok: true });
 });
 
+// User Feedback Storage & Retrieval API
+app.post('/api/feedback', (req, res) => {
+  try {
+    const feedbackItem = {
+      id: 'fb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      type: req.body?.type || 'General Feedback',
+      text: req.body?.text || '',
+      user: req.body?.user || 'Anonymous',
+      version: req.body?.version || '3.12.14',
+      createdAt: req.body?.createdAt || new Date().toISOString()
+    };
+
+    const userDataDir = process.env.KLARITY_USER_DATA_DIR || path.join(__dirname, '..');
+    const feedbackFile = path.join(userDataDir, 'feedback.json');
+    let list = [];
+    if (fs.existsSync(feedbackFile)) {
+      try {
+        list = JSON.parse(fs.readFileSync(feedbackFile, 'utf8'));
+        if (!Array.isArray(list)) list = [];
+      } catch {}
+    }
+    list.unshift(feedbackItem);
+    fs.writeFileSync(feedbackFile, JSON.stringify(list, null, 2), 'utf8');
+
+    // Also persist in server folder for direct developer inspection
+    const localFile = path.join(__dirname, 'feedback.json');
+    try {
+      fs.writeFileSync(localFile, JSON.stringify(list, null, 2), 'utf8');
+    } catch {}
+
+    console.log(`[Klarity Feedback] Received ${feedbackItem.type} from ${feedbackItem.user}: "${feedbackItem.text.slice(0, 60)}..."`);
+    return res.json({ ok: true, feedback: feedbackItem });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/feedback', (req, res) => {
+  try {
+    const userDataDir = process.env.KLARITY_USER_DATA_DIR || path.join(__dirname, '..');
+    const feedbackFile = path.join(userDataDir, 'feedback.json');
+    if (fs.existsSync(feedbackFile)) {
+      const list = JSON.parse(fs.readFileSync(feedbackFile, 'utf8'));
+      return res.json({ ok: true, feedback: list });
+    }
+    const localFile = path.join(__dirname, 'feedback.json');
+    if (fs.existsSync(localFile)) {
+      const list = JSON.parse(fs.readFileSync(localFile, 'utf8'));
+      return res.json({ ok: true, feedback: list });
+    }
+  } catch {}
+  return res.json({ ok: true, feedback: [] });
+});
+
 app.get('/api/app/update-check', async (req, res) => {
   try {
     const ghRes = await fetch('https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5', {
