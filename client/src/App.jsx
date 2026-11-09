@@ -7259,23 +7259,23 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 ]}
               />
 
-              {/* 1. TOP OVERVIEW & FILTER BAR (All Accounts, Cards, Checking, Loans) */}
+              {/* 1. TOP OVERVIEW & FILTER BAR */}
               <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs flex flex-col gap-4">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
                   <div className="flex flex-col">
                     <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Card Debt</span>
                     <span className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">{fmtMoney(displayCardBalances)}</span>
-                    <span className="text-[11px] text-slate-400 mt-0.5">{displayCards.length} {displayCards.length === 1 ? 'card' : 'cards'} carrying balances</span>
+                    <span className="text-[11px] text-slate-400 mt-0.5">{displayCards.length} {displayCards.length === 1 ? 'card' : 'cards'}</span>
                   </div>
                   <div className="flex flex-col pt-3 sm:pt-0 sm:pl-4">
                     <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Available Cash</span>
                     <span className="text-xl sm:text-2xl font-bold text-emerald-700 mt-0.5">{fmtMoney(displayCash)}</span>
-                    <span className="text-[11px] text-emerald-600 font-medium mt-0.5">Liquid checking & deposits</span>
+                    <span className="text-[11px] text-slate-400 mt-0.5">{rawCheckingList.length} checking</span>
                   </div>
                   <div className="flex flex-col pt-3 sm:pt-0 sm:pl-4">
                     <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Credit Headroom</span>
                     <span className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">{fmtMoney(totalAvailHeadroom, 0)}</span>
-                    <span className="text-[11px] text-slate-400 mt-0.5">of {fmtMoney(totalLimitAll, 0)} total credit</span>
+                    <span className="text-[11px] text-slate-400 mt-0.5">of {fmtMoney(totalLimitAll, 0)} limit</span>
                   </div>
                   <div className="flex flex-col pt-3 sm:pt-0 sm:pl-4">
                     <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Cash vs Debt</span>
@@ -7283,7 +7283,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       {displayCash >= displayCardBalances ? `+${fmtMoney(displayCash - displayCardBalances)}` : `-${fmtMoney(displayCardBalances - displayCash)}`}
                     </span>
                     <span className="text-[11px] text-slate-400 mt-0.5">
-                      {displayCash >= displayCardBalances ? 'Full debt payoff covered' : 'Debt exceeds cash'}
+                      {displayCash >= displayCardBalances ? 'Cash covers debt' : 'Debt exceeds cash'}
                     </span>
                   </div>
                 </div>
@@ -7291,10 +7291,10 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 {/* Filter Selector Tabs */}
                 <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100 overflow-x-auto pb-1">
                   {[
-                    { id: 'all', label: `All Accounts (${allCount})` },
-                    { id: 'credit', label: `Credit Cards (${displayCards.length})` },
-                    { id: 'checking', label: `Checking & Cash (${rawCheckingList.length})` },
-                    ...(manualAssets.length > 0 ? [{ id: 'loans', label: `Loans & Manual (${manualAssets.length})` }] : [])
+                    { id: 'all', label: `All (${allCount})` },
+                    { id: 'credit', label: `Credit (${displayCards.length})` },
+                    { id: 'checking', label: `Debit (${rawCheckingList.length})` },
+                    ...(manualAssets.length > 0 ? [{ id: 'loans', label: `Loans (${manualAssets.length})` }] : [])
                   ].map(tab => (
                     <button
                       key={tab.id}
@@ -7312,7 +7312,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 </div>
               </div>
 
-              {/* 2. UNIFIED CARDS & ACCOUNTS GRID (All shown together cleanly!) */}
+              {/* 2. UNIFIED CARDS & ACCOUNTS GRID */}
               <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                 {/* Credit Cards */}
                 {(cardsFilter === 'all' || cardsFilter === 'credit') && displayCards.map(card => {
@@ -7329,15 +7329,11 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                             <p className="text-[11px] text-slate-400 font-mono mt-0.5">•••• {card.mask}</p>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60">
-                              {card.apr || 0}% APR
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] border border-blue-200">
+                              Credit
                             </span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                              isHighUtil
-                                ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                            }`}>
-                              {Math.round(util)}% Used
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200/70">
+                              {card.apr || 0}% APR
                             </span>
                           </div>
                         </div>
@@ -7354,8 +7350,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                             ></div>
                           </div>
                           <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5">
-                            <span>{fmtMoney(Math.max(0, card.limit - card.balance), 0)} Available credit</span>
-                            {isHighUtil && <span className="text-amber-700 font-semibold">Over 30% limit</span>}
+                            <span>{fmtMoney(Math.max(0, card.limit - card.balance), 0)} Available</span>
+                            <span>{Math.round(util)}% Used</span>
                           </div>
                         </div>
                       </div>
@@ -7369,7 +7365,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           }}
                           className="text-[#18457c] hover:underline font-semibold cursor-pointer"
                         >
-                          View payments on card →
+                          View payments →
                         </button>
                         {!String(card.id).startsWith('mock-') && (
                           <button
@@ -7390,28 +7386,19 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <div key={acc.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between gap-4 hover:border-slate-300 transition-all">
                     <div>
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
-                            <Building2 className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-900 truncate">{acc.institution ? `${acc.institution} ` : ''}{acc.name}</p>
-                            <p className="text-[11px] text-slate-400 font-mono mt-0.5">•••• {acc.mask || '4821'} · {acc.subtype || 'Depository'}</p>
-                          </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-900 truncate">
+                            {acc.institution ? `${acc.institution} ` : ''}{acc.name}
+                          </p>
+                          <p className="text-[11px] text-slate-400 font-mono mt-0.5">•••• {acc.mask || '4821'}</p>
                         </div>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
-                          Available Cash
+                          Debit
                         </span>
                       </div>
 
                       <div className="mt-4">
-                        <div className="flex items-baseline justify-between mb-1">
-                          <span className="text-2xl font-bold text-emerald-700">{fmtMoney(acc.balance)}</span>
-                          <span className="text-xs text-slate-400 font-medium">Liquid reserve</span>
-                        </div>
-                        <p className="text-[11px] text-slate-500 mt-1">
-                          Available immediately for bill payments and everyday expenses.
-                        </p>
+                        <span className="text-2xl font-bold text-slate-900">{fmtMoney(acc.balance)}</span>
                       </div>
                     </div>
 
@@ -7421,9 +7408,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         onClick={() => setActiveTab('transactions')}
                         className="text-[#18457c] hover:underline font-semibold cursor-pointer"
                       >
-                        View account activity →
+                        View payments →
                       </button>
-                      <span className="text-slate-400 text-[11px] font-mono">Verified Depository</span>
                     </div>
                   </div>
                 ))}
@@ -7435,31 +7421,25 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-900 truncate">{ma.name}</p>
-                          <p className="text-[11px] text-slate-400 capitalize mt-0.5">Manual {ma.type}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5 capitalize">{ma.type === 'loan' ? 'Loan' : 'Asset'}</p>
                         </div>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
                           ma.type === 'loan'
                             ? 'bg-rose-50 text-rose-700 border-rose-200'
                             : 'bg-slate-100 text-slate-700 border-slate-200'
                         }`}>
-                          {ma.type === 'loan' ? 'Liability' : 'Asset'}
+                          {ma.type === 'loan' ? 'Loan' : 'Asset'}
                         </span>
                       </div>
 
                       <div className="mt-4">
-                        <div className="flex items-baseline justify-between mb-1">
-                          <span className={`text-2xl font-bold ${ma.type === 'loan' ? 'text-rose-600' : 'text-slate-900'}`}>
-                            {ma.type === 'loan' ? `-${fmtMoney(ma.balance)}` : fmtMoney(ma.balance)}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-500 mt-1">
-                          {ma.type === 'loan' ? 'Account liability tracked in net worth' : 'Manual asset counted in portfolio'}
-                        </p>
+                        <span className={`text-2xl font-bold ${ma.type === 'loan' ? 'text-rose-600' : 'text-slate-900'}`}>
+                          {ma.type === 'loan' ? `-${fmtMoney(ma.balance)}` : fmtMoney(ma.balance)}
+                        </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
-                      <span className="text-slate-400 text-[11px]">User added</span>
+                    <div className="flex items-center justify-end pt-3 border-t border-slate-100 text-xs">
                       <button
                         type="button"
                         onClick={() => handleDeleteManualAsset(ma.id, ma.name)}
