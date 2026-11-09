@@ -45,12 +45,12 @@ export default function HardshipPlaybookModal({
   const matchedCard = cards.find(c => c.id === selectedCardId) || 
     cards.find(c => (c.name || '').toLowerCase().includes(currentCreditor.slug)) || 
     cards[0] || 
-    { mask: '4417', balance: 8000, name: 'Card' };
+    { mask: '4417', balance: 0, name: 'Card' };
 
   const scriptText = currentCreditor.hardshipPhoneScript(
     userName, 
     matchedCard.mask || '4417', 
-    matchedCard.balance || 8000
+    Number(matchedCard.balance || 0)
   );
 
   const handleCopy = () => {

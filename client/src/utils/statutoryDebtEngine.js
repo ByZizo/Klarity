@@ -250,10 +250,35 @@ export function calculateDTI(debtAccounts = [], incomeStreams = [], mode = 'indi
  *   }
  * }}
  */
-export function simulatePayoffScenarios(totalBalance, apr = 24.0, customFixedPayment = 400) {
-  const balance = Math.max(100, Number(totalBalance) || 8000);
-  const nominalApr = Math.max(1.0, Number(apr) || 24.0);
+export function simulatePayoffScenarios(totalBalance, apr = 21.0, customFixedPayment = null) {
+  const balance = Math.max(0, Number(totalBalance) || 0);
+  const nominalApr = Math.max(0.1, Number(apr) || 21.0);
   const monthlyRate = (nominalApr / 100) / 12;
+
+  if (balance <= 0) {
+    const zeroScen = {
+      title: 'Debt Free',
+      initialMonthlyPayment: 0,
+      monthlyPayment: 0,
+      monthOneInterest: 0,
+      monthOnePrincipal: 0,
+      interestSplitPercent: 0,
+      monthsToFreedom: 0,
+      yearsToFreedom: 0,
+      totalInterestPaid: 0,
+      totalPaid: 0,
+      interestSavedVsA: 0,
+      summary: 'No debt balance carrying on this selection.'
+    };
+    return {
+      balance: 0,
+      apr: nominalApr,
+      scenarioA: zeroScen,
+      scenarioB: zeroScen,
+      scenarioC: zeroScen,
+      scenarioD: zeroScen
+    };
+  }
 
   // -------------------------------------------------------------
   // Scenario A: Minimum Payment Trap
@@ -304,8 +329,9 @@ export function simulatePayoffScenarios(totalBalance, apr = 24.0, customFixedPay
   // -------------------------------------------------------------
   // Scenario B: Fixed Accelerated Repayment
   // -------------------------------------------------------------
-  const minRequiredB = monthOneInterest + 25;
-  const fixedPayB = Math.max(minRequiredB, Number(customFixedPayment) || 400);
+  const minRequiredB = Math.max(25, Math.round(monthOneInterest + 25));
+  const defaultTargetB = Math.max(minRequiredB, Math.round(balance / 18));
+  const fixedPayB = Math.max(minRequiredB, Number(customFixedPayment) || defaultTargetB);
 
   let curBalB = balance;
   let monthsB = 0;
@@ -358,8 +384,8 @@ export function simulatePayoffScenarios(totalBalance, apr = 24.0, customFixedPay
   // -------------------------------------------------------------
   // Scenario D: Family Qard Hasan / CalPERS 457 Loan
   // -------------------------------------------------------------
-  // 40-month zero-interest family pool ($200/mo on $8,000) or CalPERS 457 loan
-  const monthsD = Math.max(12, Math.round(balance / 200));
+  // Zero-interest family pool or structured 457 relief on real balance
+  const monthsD = Math.max(6, Math.min(60, Math.round(balance / 150) || 24));
   const fixedPayD = Math.round((balance / monthsD) * 100) / 100;
 
   const scenarioD = {
@@ -369,7 +395,7 @@ export function simulatePayoffScenarios(totalBalance, apr = 24.0, customFixedPay
     totalInterestPaid: 0,
     totalPaid: balance,
     interestSavedVsA: Math.round(totalInterestA),
-    summary: `100% interest-free family pool (Qard Hasan) or CalPERS 457 loan (any interest paid goes back into retiree's own account). Zero dollars paid to commercial banks.`
+    summary: `100% interest-free structured payoff. Zero dollars paid to commercial banks.`
   };
 
   return {

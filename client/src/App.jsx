@@ -7599,7 +7599,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 {cardsPayoffTab === 'options' && (
                   <div className="p-4 sm:p-5">
                     <InteractivePayoffComparison 
-                      cards={allFilterableCards.filter(c => c.type === 'credit')} 
+                      cards={displayCards} 
+                      availableCash={displayCash}
                       onOpenHardshipPlaybook={() => setIsHardshipModalOpen(true)} 
                       onSendPlanToAi={(plan) => handleSendPayoffPlanToAi(plan)}
                     />
@@ -8864,7 +8865,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       <HardshipPlaybookModal
         isOpen={isHardshipModalOpen}
         onClose={() => setIsHardshipModalOpen(false)}
-        cards={allFilterableCards.filter(c => c.type === 'credit')}
+        cards={displayCards}
         userName={currentUser?.name || 'Cardholder'}
       />
 

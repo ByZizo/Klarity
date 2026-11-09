@@ -18,26 +18,30 @@ import { simulatePayoffScenarios } from '../utils/statutoryDebtEngine';
 
 export default function InteractivePayoffComparison({ 
   cards = [], 
+  availableCash = 0,
   onOpenHardshipPlaybook,
   onSendPlanToAi
 }) {
   const [selectedCardId, setSelectedCardId] = useState('all'); // 'all' or card id
-  const [customFixedPayment, setCustomFixedPayment] = useState(400);
   const [selectedScenario, setSelectedScenario] = useState('B'); // 'A' | 'B' | 'C' | 'D'
 
-  // Compute selected card or total debt balance & weighted APR
+  // Compute selected card or total debt balance & weighted APR from real cards
   const targetCards = selectedCardId === 'all' 
     ? cards 
     : cards.filter(c => c.id === selectedCardId);
 
-  const totalBalance = targetCards.reduce((sum, c) => sum + (Number(c.balance) || 0), 0) || 8000;
+  const totalBalance = targetCards.reduce((sum, c) => sum + (Number(c.balance) || 0), 0);
   
-  // Calculate weighted average APR
-  let weightedApr = 24.0;
+  // Calculate weighted average APR from actual cards
+  let weightedApr = 21.0;
   if (totalBalance > 0 && targetCards.length > 0) {
-    const totalAprWeight = targetCards.reduce((sum, c) => sum + ((Number(c.balance) || 0) * (Number(c.apr) || 24.0)), 0);
+    const totalAprWeight = targetCards.reduce((sum, c) => sum + ((Number(c.balance) || 0) * (Number(c.apr) || 21.0)), 0);
     weightedApr = Math.round((totalAprWeight / totalBalance) * 10) / 10;
   }
+
+  const defaultFixedTarget = Math.max(50, Math.round(totalBalance / 18));
+  const [userFixedPayment, setUserFixedPayment] = useState(null);
+  const customFixedPayment = userFixedPayment !== null ? userFixedPayment : defaultFixedTarget;
 
   const sim = simulatePayoffScenarios(totalBalance, weightedApr, customFixedPayment);
 
@@ -138,16 +142,28 @@ export default function InteractivePayoffComparison({
         <div className="flex items-center gap-3 w-full sm:w-64">
           <input
             type="range"
-            min={Math.max(100, Math.round(sim.scenarioA.monthOneInterest + 30))}
-            max={Math.min(1500, Math.round(totalBalance * 0.4))}
+            min={Math.max(25, Math.round(sim.scenarioA.monthOneInterest + 25))}
+            max={Math.max(100, Math.min(2500, Math.round(totalBalance)))}
             step="25"
             value={customFixedPayment}
-            onChange={e => setCustomFixedPayment(Number(e.target.value))}
+            onChange={e => setUserFixedPayment(Number(e.target.value))}
             className="w-full accent-[#18457c] cursor-pointer"
           />
           <span className="text-[11px] text-slate-400 whitespace-nowrap">Adjust</span>
         </div>
       </div>
+
+      {/* Cash Liquidity Insight Banner */}
+      {availableCash > 0 && totalBalance > 0 && availableCash >= totalBalance && (
+        <div className="px-5 sm:px-6 py-3 bg-emerald-50/70 border-b border-emerald-100 flex items-center justify-between gap-3 text-xs text-emerald-900">
+          <div className="flex items-center gap-2 min-w-0">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="truncate">
+              Available Cash: <strong>${Math.round(availableCash).toLocaleString()}</strong> covers your entire <strong>${Math.round(totalBalance).toLocaleString()}</strong> card debt today with zero interest.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* 4 Scenarios Grid */}
       <div className="p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
