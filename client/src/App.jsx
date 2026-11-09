@@ -183,33 +183,34 @@ function SubpageHeader({
   }, [isOpen]);
 
   return (
-    <div className="relative flex items-center justify-between gap-3 min-h-[42px]">
-      {/* Left: Back button (aligned on the same row, lowering it so page starts higher) */}
-      <div className="flex items-center justify-start flex-1 min-w-[130px] z-10">
+    <div className="relative flex items-center justify-between gap-2 sm:gap-4 min-h-[42px] w-full">
+      {/* Left: Back button */}
+      <div className="flex items-center justify-start shrink-0 z-10">
         {onBack && (
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200/90 hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold shadow-2xs cursor-pointer transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white border border-slate-200/90 hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold shadow-2xs cursor-pointer transition-colors shrink-0"
           >
-            <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
-            <span>{backLabel}</span>
+            <ArrowLeft className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            <span className="hidden sm:inline">{backLabel}</span>
+            <span className="sm:hidden">Back</span>
           </button>
         )}
       </div>
 
       {/* Center: Title & optional subtitle centered on page */}
-      <div className="flex flex-col items-center justify-center text-center shrink-0 px-2 max-w-xl">
-        <h2 className="font-serif-title text-2xl font-bold text-slate-900 tracking-tight leading-tight">
+      <div className="flex flex-col items-center justify-center text-center min-w-0 flex-1 px-1 sm:px-3">
+        <h2 className="font-serif-title text-xl sm:text-2xl font-bold text-slate-900 tracking-tight leading-tight truncate max-w-full">
           {title}
         </h2>
         {subtitle && (
-          <p className="text-xs text-slate-500 mt-0.5 truncate">{subtitle}</p>
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate max-w-full">{subtitle}</p>
         )}
       </div>
 
       {/* Right: Three-dot dropdown menu */}
-      <div className="flex items-center justify-end flex-1 min-w-[130px] z-10">
+      <div className="flex items-center justify-end shrink-0 z-10">
         {actions && actions.length > 0 ? (
           <div className="relative" ref={menuRef}>
             <button
@@ -1713,6 +1714,8 @@ function KlarityApp() {
   // Debt Payoff Planner State
   const [extraDebtPayment, setExtraDebtPayment] = useState(150);
   const [debtStrategy, setDebtStrategy] = useState('avalanche');
+  const [cardsFilter, setCardsFilter] = useState('all'); // 'all' | 'credit' | 'checking' | 'loans'
+  const [cardsPayoffTab, setCardsPayoffTab] = useState('speed'); // 'speed' | 'options'
   const [isHardshipModalOpen, setIsHardshipModalOpen] = useState(false);
   const [seniorReliefTab, setSeniorReliefTab] = useState('protections'); // 'protections' | 'hardship' | 'dmp' | 'family' | 'math'
   const [copiedSeniorScript, setCopiedSeniorScript] = useState(false);
@@ -6202,7 +6205,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       {/* ======================================================================= */}
       {/* 2B. DESKTOP CENTER MAIN CONTENT (>= 768px) */}
       {/* ======================================================================= */}
-      <main className="hidden md:flex flex-1 min-w-0 p-6 lg:p-8 flex-col gap-5 overflow-y-auto relative bg-[#f8fafc] text-slate-800">
+      <main className="hidden md:flex flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex-col gap-5 overflow-y-auto overflow-x-hidden relative bg-[#f8fafc] text-slate-800">
 
         {/* Top-of-App Auto-Update Banner (Appears whenever an update is pushed out) */}
         {!updateBannerDismissed && (
@@ -6306,7 +6309,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             )}
 
             {/* 1. Top 3-Metric Summary Card */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 gap-4 md:gap-6">
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 divide-y sm:divide-y-0 gap-4 sm:gap-6">
               <div>
                 <div className="text-xs text-slate-500 font-medium">Available cash</div>
                 <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
@@ -6417,7 +6420,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             )}
 
             {/* Net Worth & Cash Flow Forecast Card */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
               <div className="lg:col-span-3 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -6613,7 +6616,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             </div>
 
             {/* 4. Bottom 2-Column Row for Subscriptions & Recent purchases */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
               {/* Subscriptions Card */}
               <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between overflow-hidden">
                 <div>
@@ -6741,7 +6744,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             </div>
 
             {/* Summary Totals Bar for Budgets */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 md:grid-cols-3 gap-4 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 divide-y sm:divide-y-0">
               <div>
                 <span className="text-xs text-slate-500 font-medium">Total Monthly Budget</span>
                 <p className="text-2xl font-bold text-slate-900 mt-1">{fmtMoney(totalBudgetLimit, 0)}</p>
@@ -7233,233 +7236,399 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         )}
 
         {/* --------------------------------------------------------------------- */}
-        {/* TAB: CARDS & DEBT PAYOFF PLANNER (Dedicated Page) */}
+        {/* TAB: CARDS & ACCOUNTS (Clean, Unified Hub) */}
         {/* --------------------------------------------------------------------- */}
-        {activeTab === 'cards' && (
-          <div className="flex flex-col gap-6">
-            <SubpageHeader
-              title="Cards & Household"
-              onBack={() => setActiveTab('dashboard')}
-              actions={[
-                { label: 'Add Card', icon: Plus, onClick: () => setIsAddAccountOpen(true) },
-                { label: '+ Manual Account / Loan', icon: CreditCard, onClick: () => setIsAddManualAssetOpen(true) }
-              ]}
-            />
+        {activeTab === 'cards' && (() => {
+          const rawCheckingList = checkingAccounts.length > 0
+            ? checkingAccounts
+            : [{ id: 'card-checking-4821', name: 'Checking', institution: 'Chase', mask: '4821', subtype: 'Checking', balance: displayCash }];
+          const totalLimitAll = displayCards.reduce((s, c) => s + Number(c.limit || 0), 0);
+          const totalAvailHeadroom = displayCards.reduce((s, c) => s + Math.max(0, Number(c.limit || 0) - Number(c.balance || 0)), 0);
+          const allCount = displayCards.length + rawCheckingList.length + manualAssets.length;
 
-            {/* Shaded Total Summary Card for Cards */}
-            <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2.5">
-                <CreditCard className="w-4 h-4 text-[#18457c]" />
-                <span className="font-semibold text-slate-700">Total Card Balances ({displayCards.length} {displayCards.length === 1 ? 'card' : 'cards'})</span>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="font-bold text-slate-900 text-sm">
-                  {fmtMoney(displayCardBalances)}
-                </span>
-                <span className="text-slate-300">|</span>
-                <span className="text-slate-500 font-medium">Total Limit: {fmtMoney(displayCards.reduce((s, c) => s + Number(c.limit || 0), 0), 0)}</span>
-              </div>
-            </div>
+          return (
+            <div className="flex flex-col gap-5 sm:gap-6">
+              <SubpageHeader
+                title="Cards"
+                subtitle="All your credit cards, checking accounts, and payoff plans in one place."
+                onBack={() => setActiveTab('dashboard')}
+                actions={[
+                  { label: 'Add Card / Bank', icon: Plus, onClick: () => setIsAddAccountOpen(true) },
+                  { label: 'Add Loan or Asset', icon: CreditCard, onClick: () => setIsAddManualAssetOpen(true) },
+                  { label: 'View Debt Payoff', icon: Calculator, onClick: () => setCardsPayoffTab('speed') }
+                ]}
+              />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {displayCards.map(card => {
-                const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
-                return (
-                  <div key={card.id} className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between gap-4">
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-bold text-slate-900">{card.institution ? `${card.institution} ` : ''}{card.name}</p>
-                          <p className="text-[11px] text-slate-400 font-mono mt-0.5">•••• {card.mask}</p>
+              {/* 1. TOP OVERVIEW & FILTER BAR (All Accounts, Cards, Checking, Loans) */}
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs flex flex-col gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Card Debt</span>
+                    <span className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">{fmtMoney(displayCardBalances)}</span>
+                    <span className="text-[11px] text-slate-400 mt-0.5">{displayCards.length} {displayCards.length === 1 ? 'card' : 'cards'} carrying balances</span>
+                  </div>
+                  <div className="flex flex-col pt-3 sm:pt-0 sm:pl-4">
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Available Cash</span>
+                    <span className="text-xl sm:text-2xl font-bold text-emerald-700 mt-0.5">{fmtMoney(displayCash)}</span>
+                    <span className="text-[11px] text-emerald-600 font-medium mt-0.5">Liquid checking & deposits</span>
+                  </div>
+                  <div className="flex flex-col pt-3 sm:pt-0 sm:pl-4">
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Credit Headroom</span>
+                    <span className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">{fmtMoney(totalAvailHeadroom, 0)}</span>
+                    <span className="text-[11px] text-slate-400 mt-0.5">of {fmtMoney(totalLimitAll, 0)} total credit</span>
+                  </div>
+                  <div className="flex flex-col pt-3 sm:pt-0 sm:pl-4">
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Cash vs Debt</span>
+                    <span className={`text-xl sm:text-2xl font-bold mt-0.5 ${displayCash >= displayCardBalances ? 'text-emerald-700' : 'text-rose-600'}`}>
+                      {displayCash >= displayCardBalances ? `+${fmtMoney(displayCash - displayCardBalances)}` : `-${fmtMoney(displayCardBalances - displayCash)}`}
+                    </span>
+                    <span className="text-[11px] text-slate-400 mt-0.5">
+                      {displayCash >= displayCardBalances ? 'Full debt payoff covered' : 'Debt exceeds cash'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Filter Selector Tabs */}
+                <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100 overflow-x-auto pb-1">
+                  {[
+                    { id: 'all', label: `All Accounts (${allCount})` },
+                    { id: 'credit', label: `Credit Cards (${displayCards.length})` },
+                    { id: 'checking', label: `Checking & Cash (${rawCheckingList.length})` },
+                    ...(manualAssets.length > 0 ? [{ id: 'loans', label: `Loans & Manual (${manualAssets.length})` }] : [])
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setCardsFilter(tab.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                        cardsFilter === tab.id
+                          ? 'bg-[#18457c] text-white shadow-2xs'
+                          : 'bg-slate-100 hover:bg-slate-200/80 text-slate-600'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. UNIFIED CARDS & ACCOUNTS GRID (All shown together cleanly!) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+                {/* Credit Cards */}
+                {(cardsFilter === 'all' || cardsFilter === 'credit') && displayCards.map(card => {
+                  const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
+                  const isHighUtil = util >= 30;
+                  return (
+                    <div key={card.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between gap-4 hover:border-slate-300 transition-all">
+                      <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900 truncate">
+                              {card.institution ? `${card.institution} ` : ''}{card.name}
+                            </p>
+                            <p className="text-[11px] text-slate-400 font-mono mt-0.5">•••• {card.mask}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60">
+                              {card.apr || 0}% APR
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              isHighUtil
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            }`}>
+                              {Math.round(util)}% Used
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/60">
-                          {card.apr || 0}% APR
+
+                        <div className="mt-4">
+                          <div className="flex items-baseline justify-between mb-1">
+                            <span className="text-2xl font-bold text-slate-900">{fmtMoney(card.balance)}</span>
+                            <span className="text-xs text-slate-500 font-medium">{fmtMoney(card.limit, 0)} Limit</span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mt-1.5">
+                            <div
+                              className={`h-full rounded-full transition-all ${isHighUtil ? 'bg-amber-500' : 'bg-[#18457c]'}`}
+                              style={{ width: `${Math.max(2, Math.min(100, util))}%` }}
+                            ></div>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5">
+                            <span>{fmtMoney(Math.max(0, card.limit - card.balance), 0)} Available credit</span>
+                            {isHighUtil && <span className="text-amber-700 font-semibold">Over 30% limit</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCardIds([card.id]);
+                            setActiveTab('transactions');
+                          }}
+                          className="text-[#18457c] hover:underline font-semibold cursor-pointer"
+                        >
+                          View payments on card →
+                        </button>
+                        {!String(card.id).startsWith('mock-') && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAccount(card.id, card.name)}
+                            className="text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Checking & Cash Accounts */}
+                {(cardsFilter === 'all' || cardsFilter === 'checking') && rawCheckingList.map(acc => (
+                  <div key={acc.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between gap-4 hover:border-slate-300 transition-all">
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
+                            <Building2 className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900 truncate">{acc.institution ? `${acc.institution} ` : ''}{acc.name}</p>
+                            <p className="text-[11px] text-slate-400 font-mono mt-0.5">•••• {acc.mask || '4821'} · {acc.subtype || 'Depository'}</p>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
+                          Available Cash
                         </span>
                       </div>
 
                       <div className="mt-4">
-                        <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                          <span>Balance: {fmtMoney(card.balance)}</span>
-                          <span>Limit: {fmtMoney(card.limit, 0)} ({Math.round(util)}%)</span>
+                        <div className="flex items-baseline justify-between mb-1">
+                          <span className="text-2xl font-bold text-emerald-700">{fmtMoney(acc.balance)}</span>
+                          <span className="text-xs text-slate-400 font-medium">Liquid reserve</span>
                         </div>
-                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${util > 30 ? 'bg-amber-500' : 'bg-[#18457c]'}`}
-                            style={{ width: `${util}%` }}
-                          ></div>
-                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          Available immediately for bill payments and everyday expenses.
+                        </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
                       <button
                         type="button"
-                        onClick={() => {
-                          setSelectedCardIds([card.id]);
-                          setActiveTab('transactions');
-                        }}
-                        className="text-xs text-[#18457c] hover:underline font-semibold cursor-pointer"
+                        onClick={() => setActiveTab('transactions')}
+                        className="text-[#18457c] hover:underline font-semibold cursor-pointer"
                       >
-                        View payments on this card →
+                        View account activity →
                       </button>
-                      {!String(card.id).startsWith('mock-') && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteAccount(card.id, card.name)}
-                          className="text-xs text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
-                        >
-                          Remove Card
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Interactive Debt Payoff Planner (Avalanche vs. Snowball) */}
-            {debtPayoffComparison && (
-              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col gap-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                      <Calculator className="w-4 h-4 text-[#18457c]" />
-                      <span>Debt Payoff Planner</span>
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Compare Highest-APR-First (Avalanche) vs. Smallest-Balance-First (Snowball)
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
-                    <button
-                      type="button"
-                      onClick={() => setDebtStrategy('avalanche')}
-                      className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
-                        debtStrategy === 'avalanche' ? 'bg-white text-[#18457c] shadow-2xs' : 'text-slate-600'
-                      }`}
-                    >
-                      Highest APR First (Avalanche)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDebtStrategy('snowball')}
-                      className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
-                        debtStrategy === 'snowball' ? 'bg-white text-[#18457c] shadow-2xs' : 'text-slate-600'
-                      }`}
-                    >
-                      Smallest Balance First (Snowball)
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/80 rounded-xl p-4 border border-slate-200/60 text-xs">
-                  <div className="flex flex-col gap-1">
-                    <span className="font-semibold text-slate-700">Extra Monthly Payment Beyond Minimums: <strong className="text-[#18457c]">+${extraDebtPayment}/mo</strong></span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="600"
-                      step="25"
-                      value={extraDebtPayment}
-                      onChange={e => setExtraDebtPayment(Number(e.target.value))}
-                      className="w-64 accent-[#18457c] cursor-pointer mt-1"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {[50, 150, 300, 500].map(amt => (
-                      <button
-                        key={amt}
-                        type="button"
-                        onClick={() => setExtraDebtPayment(amt)}
-                        className={`px-2.5 py-1 rounded-lg border text-xs font-semibold cursor-pointer ${
-                          extraDebtPayment === amt ? 'bg-[#18457c] text-white border-[#18457c]' : 'bg-white text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        +${amt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  <div className="p-4 rounded-xl border border-slate-200/80 bg-white">
-                    <span className="text-slate-500">Projected Debt-Free Date</span>
-                    <p className="text-xl font-bold text-slate-900 mt-1">{debtPayoffComparison.activePlan.finishLabel}</p>
-                    <p className="text-[11px] text-emerald-700 font-medium mt-1">
-                      {debtPayoffComparison.activePlan.months} months ({debtPayoffComparison.monthsSavedVsMin} mo faster than minimums)
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-xl border border-slate-200/80 bg-white">
-                    <span className="text-slate-500">Total Interest Saved</span>
-                    <p className="text-xl font-bold text-emerald-700 mt-1">{fmtMoney(debtPayoffComparison.interestSavedVsMin)}</p>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Est. total interest: {fmtMoney(debtPayoffComparison.activePlan.totalInterest)}
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-xl border border-slate-200/80 bg-white">
-                    <span className="text-slate-500">Payoff Priority Order</span>
-                    <ol className="list-decimal list-inside font-semibold text-slate-800 mt-1 space-y-0.5">
-                      {debtPayoffComparison.activePlan.order.map((name, i) => (
-                        <li key={i} className="truncate text-[11px]">{name}</li>
-                      ))}
-                    </ol>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            
-
-            {/* 2. Mathematical 4-Option Payoff Engine (Minimum, Accelerated, 0% Hardship/NFCC, Family Qard Hasan) */}
-            <InteractivePayoffComparison 
-              cards={allFilterableCards.filter(c => c.type === 'credit')} 
-              onOpenHardshipPlaybook={() => setIsHardshipModalOpen(true)} 
-              onSendPlanToAi={(plan) => handleSendPayoffPlanToAi(plan)}
-            />
-
-            {/* Connected Bank Checking, Savings & Manual Accounts */}
-            <div className="flex flex-col gap-3 mt-2">
-              <h3 className="font-serif-title text-lg font-bold text-slate-900">Checking, Savings & Manual Accounts</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(checkingAccounts.length > 0 ? checkingAccounts : [{ id: 'card-checking-4821', name: 'Checking', institution: 'Chase', mask: '4821', subtype: 'Checking', balance: displayCash }]).map(acc => (
-                  <div key={acc.id} className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-blue-600" />
-                        <p className="text-xs font-bold text-slate-900">{acc.institution ? `${acc.institution} ` : ''}{acc.name}</p>
-                      </div>
-                      <p className="text-[11px] text-slate-400 font-mono mt-1">•••• {acc.mask || '4821'} • {acc.subtype || 'Depository'}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-slate-900">{fmtMoney(acc.balance)}</p>
-                      <p className="text-[10px] text-emerald-600 font-semibold">Available Cash</p>
+                      <span className="text-slate-400 text-[11px] font-mono">Verified Depository</span>
                     </div>
                   </div>
                 ))}
-                {manualAssets.map(ma => (
-                  <div key={ma.id} className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex items-center justify-between">
+
+                {/* Manual Loans & Assets */}
+                {(cardsFilter === 'all' || cardsFilter === 'loans') && manualAssets.map(ma => (
+                  <div key={ma.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between gap-4 hover:border-slate-300 transition-all">
                     <div>
-                      <p className="text-xs font-bold text-slate-900">{ma.name}</p>
-                      <p className="text-[11px] text-slate-400 capitalize mt-0.5">Manual {ma.type}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-900 truncate">{ma.name}</p>
+                          <p className="text-[11px] text-slate-400 capitalize mt-0.5">Manual {ma.type}</p>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                          ma.type === 'loan'
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}>
+                          {ma.type === 'loan' ? 'Liability' : 'Asset'}
+                        </span>
+                      </div>
+
+                      <div className="mt-4">
+                        <div className="flex items-baseline justify-between mb-1">
+                          <span className={`text-2xl font-bold ${ma.type === 'loan' ? 'text-rose-600' : 'text-slate-900'}`}>
+                            {ma.type === 'loan' ? `-${fmtMoney(ma.balance)}` : fmtMoney(ma.balance)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          {ma.type === 'loan' ? 'Account liability tracked in net worth' : 'Manual asset counted in portfolio'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-sm font-bold ${ma.type === 'loan' ? 'text-rose-600' : 'text-slate-900'}`}>
-                        {ma.type === 'loan' ? `-${fmtMoney(ma.balance)}` : fmtMoney(ma.balance)}
-                      </span>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
+                      <span className="text-slate-400 text-[11px]">User added</span>
                       <button
                         type="button"
                         onClick={() => handleDeleteManualAsset(ma.id, ma.name)}
-                        className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                        className="text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        Delete
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
+
+              {/* 3. CONSOLIDATED DEBT PAYOFF & RELIEF HUB (Compact, Tabbed, Never Covers Page) */}
+              <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden flex flex-col mt-2">
+                {/* Header Bar with Tab Switcher */}
+                <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-[#18457c] shrink-0">
+                      <Calculator className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-serif-title text-base sm:text-lg font-bold text-slate-900">
+                        Debt Payoff & Strategy Planner
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Simulate payoff speed and explore 0% interest relief options.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold self-start sm:self-center shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setCardsPayoffTab('speed')}
+                      className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
+                        cardsPayoffTab === 'speed' ? 'bg-white text-[#18457c] shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Payoff Speed & Order
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCardsPayoffTab('options')}
+                      className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
+                        cardsPayoffTab === 'options' ? 'bg-white text-[#18457c] shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Relief Options (4 Plans)
+                    </button>
+                  </div>
+                </div>
+
+                {/* View 1: Payoff Speed & Priority Order */}
+                {cardsPayoffTab === 'speed' && debtPayoffComparison && (
+                  <div className="p-4 sm:p-5 flex flex-col gap-4">
+                    {/* Strategy Switcher & Extra Payment Controls */}
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/80 rounded-xl p-4 border border-slate-200/60 text-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <span className="font-semibold text-slate-700 whitespace-nowrap">Strategy:</span>
+                        <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs font-semibold">
+                          <button
+                            type="button"
+                            onClick={() => setDebtStrategy('avalanche')}
+                            className={`px-3 py-1 rounded-lg cursor-pointer transition-all ${
+                              debtStrategy === 'avalanche' ? 'bg-[#18457c] text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            Highest APR (Avalanche)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDebtStrategy('snowball')}
+                            className={`px-3 py-1 rounded-lg cursor-pointer transition-all ${
+                              debtStrategy === 'snowball' ? 'bg-[#18457c] text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            Smallest Balance (Snowball)
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-700 whitespace-nowrap">Extra Payment:</span>
+                          <span className="font-bold text-[#18457c] font-mono">+${extraDebtPayment}/mo</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {[50, 150, 300, 500].map(amt => (
+                            <button
+                              key={amt}
+                              type="button"
+                              onClick={() => setExtraDebtPayment(amt)}
+                              className={`px-2.5 py-1 rounded-lg border text-xs font-semibold cursor-pointer ${
+                                extraDebtPayment === amt ? 'bg-[#18457c] text-white border-[#18457c]' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                              }`}
+                            >
+                              +${amt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3 Metric Summary Badges */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
+                      <div className="p-4 rounded-xl border border-slate-200/80 bg-white shadow-2xs flex flex-col justify-between">
+                        <span className="text-slate-500 font-medium">Projected Debt-Free</span>
+                        <p className="text-xl font-bold text-slate-900 mt-1">{debtPayoffComparison.activePlan.finishLabel}</p>
+                        <p className="text-[11px] text-emerald-700 font-semibold mt-1">
+                          {debtPayoffComparison.activePlan.months} months ({debtPayoffComparison.monthsSavedVsMin} mo faster)
+                        </p>
+                      </div>
+
+                      <div className="p-4 rounded-xl border border-slate-200/80 bg-white shadow-2xs flex flex-col justify-between">
+                        <span className="text-slate-500 font-medium">Interest Saved vs Minimums</span>
+                        <p className="text-xl font-bold text-emerald-700 mt-1">{fmtMoney(debtPayoffComparison.interestSavedVsMin)}</p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Total interest: {fmtMoney(debtPayoffComparison.activePlan.totalInterest)}
+                        </p>
+                      </div>
+
+                      <div className="p-4 rounded-xl border border-slate-200/80 bg-white shadow-2xs flex flex-col justify-between">
+                        <span className="text-slate-500 font-medium">Payoff Priority Order</span>
+                        <ol className="list-decimal list-inside font-semibold text-slate-800 mt-1 space-y-0.5">
+                          {debtPayoffComparison.activePlan.order.map((name, i) => (
+                            <li key={i} className="truncate text-[11px]">{name}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    </div>
+
+                    {/* Quick Advisor Insight Chip */}
+                    {projectedCashAfterBills > displayCardBalances && (
+                      <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2 text-slate-800 min-w-0">
+                          <Sparkles className="w-4 h-4 text-blue-700 shrink-0" />
+                          <span className="truncate">
+                            You have <strong>{fmtMoney(projectedCashAfterBills)}</strong> in checking after bills. You can pay off <strong>100% of card debt</strong> today and save all monthly interest!
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setChatInput('Should I pay off all my credit cards today with my checking balance?');
+                            setActiveTab('advisor');
+                          }}
+                          className="px-3 py-1 rounded-lg bg-[#18457c] text-white font-semibold text-[11px] shrink-0 cursor-pointer shadow-2xs self-start sm:self-center"
+                        >
+                          Ask Advisor
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* View 2: Relief Options (4 Plans) */}
+                {cardsPayoffTab === 'options' && (
+                  <div className="p-4 sm:p-5">
+                    <InteractivePayoffComparison 
+                      cards={allFilterableCards.filter(c => c.type === 'credit')} 
+                      onOpenHardshipPlaybook={() => setIsHardshipModalOpen(true)} 
+                      onSendPlanToAi={(plan) => handleSendPayoffPlanToAi(plan)}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* --------------------------------------------------------------------- */}
         {/* TAB: RETIREMENT & PENSIONS TRACKER */}

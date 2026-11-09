@@ -150,11 +150,11 @@ export default function InteractivePayoffComparison({
       </div>
 
       {/* 4 Scenarios Grid */}
-      <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
         {/* Scenario A: Minimum Payment Trap */}
         <div 
           onClick={() => setSelectedScenario('A')}
-          className={`rounded-2xl p-4.5 flex flex-col justify-between relative shadow-2xs cursor-pointer transition-all ${
+          className={`rounded-2xl p-4 flex flex-col justify-between relative shadow-2xs cursor-pointer transition-all ${
             selectedScenario === 'A'
               ? 'border-2 border-rose-500 bg-rose-50/50 ring-2 ring-rose-200'
               : 'border border-rose-200/90 bg-rose-50/20 hover:border-rose-300'
@@ -212,7 +212,7 @@ export default function InteractivePayoffComparison({
         {/* Scenario B: Fixed Accelerated Repayment */}
         <div 
           onClick={() => setSelectedScenario('B')}
-          className={`rounded-2xl p-4.5 flex flex-col justify-between shadow-2xs cursor-pointer transition-all ${
+          className={`rounded-2xl p-4 flex flex-col justify-between shadow-2xs cursor-pointer transition-all ${
             selectedScenario === 'B'
               ? 'border-2 border-[#18457c] bg-blue-50/40 ring-2 ring-blue-200'
               : 'border border-slate-200 bg-white hover:border-slate-300'
@@ -268,7 +268,7 @@ export default function InteractivePayoffComparison({
         {/* Scenario C: Internal Hardship / NFCC DMP */}
         <div 
           onClick={() => setSelectedScenario('C')}
-          className={`rounded-2xl p-4.5 flex flex-col justify-between relative shadow-2xs cursor-pointer transition-all ${
+          className={`rounded-2xl p-4 flex flex-col justify-between relative shadow-2xs cursor-pointer transition-all ${
             selectedScenario === 'C'
               ? 'border-2 border-emerald-600 bg-emerald-50/50 ring-2 ring-emerald-200'
               : 'border border-emerald-300 bg-emerald-50/20 hover:border-emerald-400'
@@ -332,7 +332,7 @@ export default function InteractivePayoffComparison({
         {/* Scenario D: Family Qard Hasan / CalPERS 457 Loan */}
         <div 
           onClick={() => setSelectedScenario('D')}
-          className={`rounded-2xl p-4.5 flex flex-col justify-between shadow-2xs cursor-pointer transition-all ${
+          className={`rounded-2xl p-4 flex flex-col justify-between shadow-2xs cursor-pointer transition-all ${
             selectedScenario === 'D'
               ? 'border-2 border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-200'
               : 'border border-slate-200 bg-white hover:border-slate-300'
@@ -387,8 +387,8 @@ export default function InteractivePayoffComparison({
       </div>
 
       {/* Selected Strategy AI Action Bar */}
-      <div className="p-4 sm:p-5 bg-gradient-to-r from-blue-50/90 via-slate-50 to-indigo-50/90 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+      <div className="p-3.5 sm:p-4 bg-gradient-to-r from-blue-50/90 via-slate-50 to-indigo-50/90 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-10 h-10 rounded-xl bg-[#18457c] text-white flex items-center justify-center shrink-0 shadow-2xs">
             <Sparkles className="w-5 h-5 text-amber-300" />
           </div>
