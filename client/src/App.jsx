@@ -897,7 +897,14 @@ function KlarityApp() {
   const handlePerformUpdate = async () => {
     setIsInstallingUpdate(true);
     setIsUpdateModalOpen(false);
+    setUpdatePromptDismissed(true);
     try {
+      const pendingSha = desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
+      if (pendingSha) {
+        try {
+          sessionStorage.setItem('klarity_last_applied_sha', pendingSha);
+        } catch {}
+      }
       if (typeof window !== 'undefined' && window.klarityDesktop?.installUpdateNow) {
         const res = await window.klarityDesktop.installUpdateNow();
         if (!res?.ok && res?.error) {
@@ -919,9 +926,19 @@ function KlarityApp() {
   // Trigger update notification prompt when Klarity opens and an update is detected
   useEffect(() => {
     if (desktopAppInfo.updateStatus?.state === 'available' && !updatePromptDismissed) {
-      setIsUpdateModalOpen(true);
+      let alreadyApplied = false;
+      try {
+        const lastApplied = sessionStorage.getItem('klarity_last_applied_sha');
+        const currentPending = desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
+        if (lastApplied && currentPending && (currentPending.startsWith(lastApplied) || lastApplied.startsWith(currentPending))) {
+          alreadyApplied = true;
+        }
+      } catch {}
+      if (!alreadyApplied) {
+        setIsUpdateModalOpen(true);
+      }
     }
-  }, [desktopAppInfo.updateStatus?.state, updatePromptDismissed]);
+  }, [desktopAppInfo.updateStatus?.state, desktopAppInfo.updateStatus?.commitSha, desktopAppInfo.updateStatus?.fullSha, updatePromptDismissed]);
 
   // Run background storage encryption audit on mount so all sensitive localStorage keys use ENCv2
   useEffect(() => {
