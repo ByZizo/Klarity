@@ -4105,6 +4105,40 @@ app.post('/api/feedback', (req, res) => {
     } catch {}
 
     console.log(`[Klarity Feedback] Received ${feedbackItem.type} from ${feedbackItem.user}: "${feedbackItem.text.slice(0, 60)}..."`);
+
+    // If GitHub feedback integration is configured, automatically create a private issue in ByZizo/klarity-feedback
+    const ghToken = process.env.GITHUB_FEEDBACK_TOKEN;
+    const ghRepo = process.env.GITHUB_FEEDBACK_REPO || 'ByZizo/klarity-feedback';
+    if (ghToken) {
+      const issueTitle = `[${feedbackItem.type}] ${feedbackItem.text.slice(0, 60)}${feedbackItem.text.length > 60 ? '...' : ''}`;
+      const issueBody = `### Klarity Feedback Report\n\n**Category:** ${feedbackItem.type}\n**User:** ${feedbackItem.user}\n**App Version:** v${feedbackItem.version}\n**Timestamp:** ${feedbackItem.createdAt}\n\n---\n\n### User Message:\n${feedbackItem.text}\n`;
+
+      fetch(`https://api.github.com/repos/${ghRepo}/issues`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${ghToken}`,
+          'Accept': 'application/vnd.github+json',
+          'User-Agent': 'KlarityApp',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: issueTitle,
+          body: issueBody,
+          labels: [feedbackItem.type.toLowerCase().includes('bug') ? 'bug' : 'feedback']
+        })
+      }).then(async (ghRes) => {
+        if (ghRes.ok) {
+          const data = await ghRes.json();
+          console.log(`[Klarity Feedback] Created private GitHub issue #${data.number}: ${data.html_url}`);
+        } else {
+          const errText = await ghRes.text();
+          console.warn('[Klarity Feedback] GitHub issue creation note:', errText);
+        }
+      }).catch(err => {
+        console.warn('[Klarity Feedback] GitHub issue request note:', err.message);
+      });
+    }
+
     return res.json({ ok: true, feedback: feedbackItem });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
