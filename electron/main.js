@@ -69,7 +69,7 @@ function getRunningCommitSha() {
 function formatWhatsNewHighlights(changes) {
   if (!Array.isArray(changes) || changes.length === 0) {
     return [
-      "Visual theme system with Dark Mode & High Contrast",
+      "Weekly Financial Advisor with Live Cards, Priorities & Budgets",
       "Household Hub & Statements Management",
       "Password Vault enhancements",
       "Bug fixes & performance improvements"
@@ -222,7 +222,7 @@ async function checkForGitHubUpdate() {
       } catch (e) {}
     }
 
-    const versionNum = remoteVersion || currentVersion || '1.8.10';
+    const versionNum = remoteVersion || currentVersion || app.getVersion() || '3.12.14';
     const cleanSemVer = versionNum.startsWith('v') ? versionNum.slice(1) : versionNum;
     const formattedSemVer = `v${cleanSemVer}`;
 

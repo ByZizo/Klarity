@@ -589,10 +589,10 @@ function PlaidLauncher({ token, onSuccess, onExit }) {
 // Helper to format release highlights: only major features, minor items become "Bug fixes"
 
 function formatVersionString(version) {
-  if (!version) return 'v1.8.10';
+  if (!version) return 'v3.12.14';
   const str = String(version).trim();
   if (/^[0-9a-f]{7,40}$/i.test(str)) {
-    return 'v1.8.10';
+    return 'v3.12.14';
   }
   return str.startsWith('v') ? str : `v${str}`;
 }
@@ -10528,7 +10528,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                                 {desktopAppInfo.isDesktopApp ? 'Klarity Desktop App' : 'Klarity App'}
                               </span>
                               <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
-                                {formatVersionString(desktopAppInfo.version || '1.8.10')}
+                                {formatVersionString(desktopAppInfo.version || '3.12.14')}
                               </span>
                               {desktopAppInfo.updateStatus?.commitSha && (
                                 <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-mono text-[10px]">
@@ -10617,21 +10617,19 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       </div>
 
                       {/* Card 2: Active Session & Sign Out */}
-                      <div className="border border-slate-200 rounded-2xl p-5 flex flex-col gap-4 bg-white shadow-2xs">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-900">Signed in as</p>
-                          <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email || ''}</p>
-                        </div>
-
-                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                          <span className="text-xs text-slate-500">End this session and require login</span>
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-900">Signed in as</p>
+                            <p className="text-xs text-slate-500 mt-0.5 truncate">{currentUser?.email || ''}</p>
+                          </div>
                           <button
                             type="button"
                             onClick={() => {
                               setIsSettingsOpen(false);
                               handleLogout();
                             }}
-                            className="px-4 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-semibold text-xs cursor-pointer transition-colors shadow-2xs"
+                            className="px-3.5 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-semibold text-xs cursor-pointer transition-colors shadow-2xs shrink-0"
                           >
                             Sign Out
                           </button>
