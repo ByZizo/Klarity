@@ -120,6 +120,7 @@ export default function PasswordVaultPage({
   });
 
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [openCardMenuId, setOpenCardMenuId] = useState(null);
   const [itemToDelete, setItemToDelete] = useState(null);
 
@@ -948,97 +949,173 @@ export default function PasswordVaultPage({
         </div>
       )}
 
-      {/* User Custom Sections Filter Bar & Search */}
+      {/* Category Dropdown & Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs">
-        <div className="flex items-center gap-1.5 overflow-x-auto p-1 max-w-full">
-          {/* All Section Pill */}
+        <div className="relative">
+          {/* Main Category Dropdown Trigger */}
           <button
             type="button"
-            onClick={() => setSelectedCategory('All')}
-            className={`px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer whitespace-nowrap font-bold ${
-              selectedCategory === 'All'
-                ? 'bg-[#18457c] text-white shadow-2xs'
-                : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+            className={`px-3.5 py-2 rounded-xl text-xs transition-all cursor-pointer whitespace-nowrap font-bold flex items-center gap-2 border select-none ${
+              isCategoryDropdownOpen
+                ? 'bg-[#18457c] text-white border-[#18457c] shadow-2xs'
+                : selectedCategory === 'All'
+                ? 'bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200'
+                : 'bg-blue-50 text-[#18457c] border-blue-200 hover:bg-blue-100 shadow-2xs'
             }`}
           >
-            All ({(vaultItems || []).length})
+            <span>
+              {selectedCategory === 'All'
+                ? `All (${(vaultItems || []).length})`
+                : `${selectedCategory} (${(vaultItems || []).filter(i => (i.category || '').toLowerCase() === selectedCategory.toLowerCase()).length})`}
+            </span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {/* User's Custom Sections */}
-          {allSections.map(sec => {
-            const count = (vaultItems || []).filter(i => (i.category || '').toLowerCase() === sec.toLowerCase()).length;
-            const isSelected = selectedCategory.toLowerCase() === sec.toLowerCase();
-            return (
-              <div key={sec} className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setSelectedCategory(sec)}
-                  className={`px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 font-bold ${
-                    isSelected
-                      ? 'bg-[#18457c] text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                  }`}
-                >
-                  <span>{sec}</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                    {count}
-                  </span>
-                </button>
-                {count === 0 && (
+          {/* Category Dropdown Menu */}
+          {isCategoryDropdownOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-30"
+                onClick={() => {
+                  setIsCategoryDropdownOpen(false);
+                  setIsAddingSection(false);
+                }}
+              />
+              <div className="absolute left-0 top-full mt-2 w-64 bg-white rounded-2xl border border-slate-200 shadow-xl py-2 z-40 text-xs flex flex-col animate-in fade-in zoom-in-95 duration-100 select-none">
+                {/* 1. At the top of the dropdown: "+ New Section" Button / Input */}
+                <div className="px-2.5 pb-2 border-b border-slate-100">
+                  {isAddingSection ? (
+                    <div className="flex items-center gap-1 bg-white border border-[#18457c] rounded-xl px-2 py-1.5 shadow-2xs">
+                      <input
+                        type="text"
+                        placeholder="Section name..."
+                        value={newSectionInput}
+                        onChange={e => setNewSectionInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            handleCreateSection();
+                            setIsCategoryDropdownOpen(false);
+                          }
+                          if (e.key === 'Escape') setIsAddingSection(false);
+                        }}
+                        className="text-xs font-bold text-slate-900 outline-none w-full bg-transparent"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleCreateSection();
+                          setIsCategoryDropdownOpen(false);
+                        }}
+                        className="p-1 bg-[#18457c] text-white rounded-lg hover:bg-[#123561] cursor-pointer"
+                        title="Save section"
+                      >
+                        <Check className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingSection(false)}
+                        className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        title="Cancel"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingSection(true);
+                        setNewSectionInput('');
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-dashed border-slate-300 hover:border-[#18457c] text-[#18457c] hover:bg-blue-50/70 font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>New Section</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* 2. List of Categories */}
+                <div className="max-h-64 overflow-y-auto pt-1 flex flex-col gap-0.5 px-1.5">
+                  {/* All Option */}
                   <button
                     type="button"
-                    onClick={() => handleDeleteSection(sec)}
-                    className="p-1 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
-                    title={`Delete empty section "${sec}"`}
+                    onClick={() => {
+                      setSelectedCategory('All');
+                      setIsCategoryDropdownOpen(false);
+                      setIsAddingSection(false);
+                    }}
+                    className={`w-full px-3 py-2 rounded-xl font-bold flex items-center justify-between text-left cursor-pointer transition-colors ${
+                      selectedCategory === 'All'
+                        ? 'bg-blue-50 text-[#18457c]'
+                        : 'text-slate-700 hover:bg-slate-50'
+                    }`}
                   >
-                    <X className="w-3 h-3" />
+                    <div className="flex items-center gap-2">
+                      {selectedCategory === 'All' ? (
+                        <Check className="w-3.5 h-3.5 text-[#18457c]" />
+                      ) : (
+                        <span className="w-3.5" />
+                      )}
+                      <span>All</span>
+                    </div>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-600">
+                      {(vaultItems || []).length}
+                    </span>
                   </button>
-                )}
-              </div>
-            );
-          })}
 
-          {/* + Create New Section Button */}
-          {isAddingSection ? (
-            <div className="flex items-center gap-1 bg-white border border-[#18457c] rounded-xl px-2 py-1 shadow-2xs shrink-0">
-              <input
-                type="text"
-                placeholder="Section name..."
-                value={newSectionInput}
-                onChange={e => setNewSectionInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleCreateSection();
-                  if (e.key === 'Escape') setIsAddingSection(false);
-                }}
-                className="text-xs font-bold text-slate-900 outline-none w-28 bg-transparent"
-                autoFocus
-              />
-              <button
-                type="button"
-                onClick={handleCreateSection}
-                className="p-1 bg-[#18457c] text-white rounded-lg hover:bg-[#123561] cursor-pointer"
-                title="Save section"
-              >
-                <Check className="w-3 h-3" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsAddingSection(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
-                title="Cancel"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => { setIsAddingSection(true); setNewSectionInput(''); }}
-              className="px-2.5 py-1.5 rounded-xl border border-dashed border-slate-300 hover:border-[#18457c] text-[#18457c] bg-white hover:bg-blue-50 text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 shrink-0"
-            >
-              <Plus className="w-3 h-3" />
-              <span>New Section</span>
-            </button>
+                  {/* User-created Custom Sections */}
+                  {allSections.map(sec => {
+                    const count = (vaultItems || []).filter(i => (i.category || '').toLowerCase() === sec.toLowerCase()).length;
+                    const isSelected = selectedCategory.toLowerCase() === sec.toLowerCase();
+                    return (
+                      <div
+                        key={sec}
+                        className={`group w-full px-3 py-2 rounded-xl font-bold flex items-center justify-between text-left cursor-pointer transition-colors ${
+                          isSelected
+                            ? 'bg-blue-50 text-[#18457c]'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                        onClick={() => {
+                          setSelectedCategory(sec);
+                          setIsCategoryDropdownOpen(false);
+                          setIsAddingSection(false);
+                        }}
+                      >
+                        <div className="flex items-center gap-2 truncate pr-2">
+                          {isSelected ? (
+                            <Check className="w-3.5 h-3.5 text-[#18457c] shrink-0" />
+                          ) : (
+                            <span className="w-3.5 shrink-0" />
+                          )}
+                          <span className="truncate">{sec}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-600">
+                            {count}
+                          </span>
+                          {count === 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteSection(sec);
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-600 rounded-md transition-colors"
+                              title={`Delete empty section "${sec}"`}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
           )}
         </div>
 
