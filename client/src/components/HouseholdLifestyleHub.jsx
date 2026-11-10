@@ -748,7 +748,18 @@ export default function HouseholdLifestyleHub({
   const [providerScanProgress, setProviderScanProgress] = useState('');
   const [providerScanSuccess, setProviderScanSuccess] = useState('');
   const [providerEditForm, setProviderEditForm] = useState(null);
+  const [isEditingProviderDetail, setIsEditingProviderDetail] = useState(false);
+  const [copiedAccount, setCopiedAccount] = useState(false);
   const providerDocInputRef = useRef(null);
+
+  const handleCopyAccount = (acct) => {
+    if (!acct) return;
+    try {
+      navigator.clipboard.writeText(acct);
+      setCopiedAccount(true);
+      setTimeout(() => setCopiedAccount(false), 2000);
+    } catch {}
+  };
 
   const handleOpenProvider = (pKey) => {
     setSelectedProviderKey(pKey);
@@ -761,8 +772,21 @@ export default function HouseholdLifestyleHub({
         monthlyCost: householdProfile[cfg.costField] || '',
         notes: householdProfile[cfg.notesField] || ''
       });
+    } else {
+      const extraProv = (householdProfile.extraProviders || []).find(p => p.id === pKey);
+      if (extraProv) {
+        setProviderEditForm({
+          provider: extraProv.name || '',
+          plan: extraProv.plan || '',
+          accountNumber: extraProv.accountNumber || '',
+          monthlyCost: extraProv.monthlyCost || '',
+          notes: extraProv.notes || '',
+          type: extraProv.type || 'Custom Service'
+        });
+      }
     }
     setProviderScanSuccess('');
+    setIsEditingProviderDetail(false);
     setHouseholdView('providerDetail');
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
   };
@@ -866,23 +890,66 @@ export default function HouseholdLifestyleHub({
   const handleSaveProviderDetails = () => {
     if (!selectedProviderKey || !providerEditForm) return;
     const cfg = HOUSEHOLD_PROVIDER_CONFIGS[selectedProviderKey];
-    if (!cfg) return;
+    let nextProfile;
 
+    if (cfg) {
+      nextProfile = {
+        ...householdProfile,
+        [cfg.providerField]: providerEditForm.provider,
+        [cfg.planField]: providerEditForm.plan,
+        [cfg.accountField]: providerEditForm.accountNumber,
+        [cfg.costField]: providerEditForm.monthlyCost,
+        [cfg.notesField]: providerEditForm.notes
+      };
+    } else {
+      const existingList = Array.isArray(householdProfile.extraProviders) ? householdProfile.extraProviders : [];
+      const updatedList = existingList.map(p => {
+        if (p.id === selectedProviderKey) {
+          return {
+            ...p,
+            name: providerEditForm.provider,
+            plan: providerEditForm.plan,
+            accountNumber: providerEditForm.accountNumber,
+            monthlyCost: providerEditForm.monthlyCost,
+            notes: providerEditForm.notes,
+            type: providerEditForm.type || p.type
+          };
+        }
+        return p;
+      });
+      nextProfile = {
+        ...householdProfile,
+        extraProviders: updatedList
+      };
+    }
+
+    onUpdateProfile(nextProfile);
+    try {
+      localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
+      localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
+    } catch {}
+    setIsEditingProviderDetail(false);
+    setProviderScanSuccess('Provider details saved successfully!');
+    setTimeout(() => setProviderScanSuccess(''), 3000);
+  };
+
+  const handleDeleteProviderFromDetail = () => {
+    if (!selectedProviderKey) return;
+    if (!confirm('Remove this provider from household?')) return;
+    const existingList = Array.isArray(householdProfile.extraProviders) ? householdProfile.extraProviders : [];
+    const updatedList = existingList.filter(p => p.id !== selectedProviderKey);
     const nextProfile = {
       ...householdProfile,
-      [cfg.providerField]: providerEditForm.provider,
-      [cfg.planField]: providerEditForm.plan,
-      [cfg.accountField]: providerEditForm.accountNumber,
-      [cfg.costField]: providerEditForm.monthlyCost,
-      [cfg.notesField]: providerEditForm.notes
+      extraProviders: updatedList
     };
     onUpdateProfile(nextProfile);
     try {
       localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
       localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
     } catch {}
-    setProviderScanSuccess('Provider details saved successfully!');
-    setTimeout(() => setProviderScanSuccess(''), 3000);
+    setSelectedProviderKey(null);
+    setIsEditingProviderDetail(false);
+    setHouseholdView('saved');
   };
 
   const handleUploadProviderDocument = async (e) => {
@@ -991,6 +1058,20 @@ export default function HouseholdLifestyleHub({
         if (extracted.provider) nextProfile[cfg.providerField] = extracted.provider;
         if (extracted.plan) nextProfile[cfg.planField] = extracted.plan;
         if (extracted.amount != null) nextProfile[cfg.costField] = extracted.amount;
+      } else {
+        const existingList = Array.isArray(householdProfile.extraProviders) ? householdProfile.extraProviders : [];
+        nextProfile.extraProviders = existingList.map(p => {
+          if (p.id === selectedProviderKey) {
+            return {
+              ...p,
+              name: extracted.provider || p.name,
+              plan: extracted.plan || p.plan,
+              accountNumber: extracted.accountNumber || p.accountNumber,
+              monthlyCost: extracted.amount != null ? extracted.amount : p.monthlyCost
+            };
+          }
+          return p;
+        });
       }
 
       onUpdateProfile(nextProfile);
@@ -1001,10 +1082,10 @@ export default function HouseholdLifestyleHub({
 
       setProviderEditForm(prev => ({
         ...prev,
-        provider: nextProfile[cfg.providerField] || prev?.provider,
-        plan: nextProfile[cfg.planField] || prev?.plan,
-        accountNumber: nextProfile[cfg.accountField] || prev?.accountNumber,
-        monthlyCost: nextProfile[cfg.costField] || prev?.monthlyCost
+        provider: cfg ? (nextProfile[cfg.providerField] || prev?.provider) : (extracted.provider || prev?.provider),
+        plan: cfg ? (nextProfile[cfg.planField] || prev?.plan) : (extracted.plan || prev?.plan),
+        accountNumber: cfg ? (nextProfile[cfg.accountField] || prev?.accountNumber) : (extracted.accountNumber || prev?.accountNumber),
+        monthlyCost: cfg ? (nextProfile[cfg.costField] || prev?.monthlyCost) : (extracted.amount != null ? extracted.amount : prev?.monthlyCost)
       }));
 
       setProviderScanSuccess(
@@ -3876,29 +3957,47 @@ export default function HouseholdLifestyleHub({
                         {/* 1. Internet */}
                         <div
                           onClick={() => handleOpenProvider('internet')}
-                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-900/40 shadow-2xs">
-                              <Wifi className="w-4 h-4" />
+                            <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                              <Wifi className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
-                                Internet
+                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Internet & WiFi
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.internetProvider || 'Xfinity'}
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-3 shrink-0 text-right">
-                            <div>
-                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                                {householdProfile.internetPlan || 'Gigabit Extra'}
-                              </span>
-                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
-                                {householdProfile.providerDocuments?.internet?.length ? `${householdProfile.providerDocuments.internet.length} statement on file` : 'Upload statement'}
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                  {householdProfile.internetPlan || 'Gigabit Extra'}
+                                </span>
+                                {householdProfile.internetMonthlyCost && (
+                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                    ${householdProfile.internetMonthlyCost}/mo
+                                  </span>
+                                )}
+                              </div>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                                householdProfile.providerDocuments?.internet?.length
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'text-slate-400'
+                              }`}>
+                                {householdProfile.providerDocuments?.internet?.length ? (
+                                  <>
+                                    <Check className="w-3 h-3" />
+                                    <span>Statement on file</span>
+                                  </>
+                                ) : (
+                                  <span>Upload statement</span>
+                                )}
                               </span>
                             </div>
                             <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
@@ -3908,29 +4007,47 @@ export default function HouseholdLifestyleHub({
                         {/* 2. Mobile Wireless */}
                         <div
                           onClick={() => handleOpenProvider('phone')}
-                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-100 dark:border-purple-900/40 shadow-2xs">
-                              <Smartphone className="w-4 h-4" />
+                            <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-100 dark:border-purple-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                              <Smartphone className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
-                                Mobile wireless
+                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Mobile Wireless
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.phoneProvider || 'T-Mobile'} ({householdProfile.phoneLines || 3} lines)
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-3 shrink-0 text-right">
-                            <div>
-                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                                {householdProfile.phonePlan || 'Go5G Plus'}
-                              </span>
-                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
-                                {householdProfile.providerDocuments?.phone?.length ? `${householdProfile.providerDocuments.phone.length} statement on file` : 'Upload statement'}
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                  {householdProfile.phonePlan || 'Go5G Plus'}
+                                </span>
+                                {householdProfile.phoneMonthlyCost && (
+                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                    ${householdProfile.phoneMonthlyCost}/mo
+                                  </span>
+                                )}
+                              </div>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                                householdProfile.providerDocuments?.phone?.length
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'text-slate-400'
+                              }`}>
+                                {householdProfile.providerDocuments?.phone?.length ? (
+                                  <>
+                                    <Check className="w-3 h-3" />
+                                    <span>Statement on file</span>
+                                  </>
+                                ) : (
+                                  <span>Upload statement</span>
+                                )}
                               </span>
                             </div>
                             <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
@@ -3940,29 +4057,47 @@ export default function HouseholdLifestyleHub({
                         {/* 3. Electric & Gas Utility */}
                         <div
                           onClick={() => handleOpenProvider('electric')}
-                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-100 dark:border-amber-900/40 shadow-2xs">
-                              <Zap className="w-4 h-4" />
+                            <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-100 dark:border-amber-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                              <Zap className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
-                                Utility rate
+                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Electric & Gas Utility
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.electricGasProvider || 'PG&E'}
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-3 shrink-0 text-right">
-                            <div>
-                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                                {householdProfile.electricGasPlan || 'EV2-A Home TOU'}
-                              </span>
-                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
-                                {householdProfile.providerDocuments?.electric?.length ? `${householdProfile.providerDocuments.electric.length} statement on file` : 'Upload statement'}
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                  {householdProfile.electricGasPlan || 'EV2-A Home TOU'}
+                                </span>
+                                {householdProfile.electricGasMonthlyCost && (
+                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                    ${householdProfile.electricGasMonthlyCost}/mo
+                                  </span>
+                                )}
+                              </div>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                                householdProfile.providerDocuments?.electric?.length
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'text-slate-400'
+                              }`}>
+                                {householdProfile.providerDocuments?.electric?.length ? (
+                                  <>
+                                    <Check className="w-3 h-3" />
+                                    <span>Statement on file</span>
+                                  </>
+                                ) : (
+                                  <span>Upload statement</span>
+                                )}
                               </span>
                             </div>
                             <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
@@ -3972,29 +4107,47 @@ export default function HouseholdLifestyleHub({
                         {/* 4. Trash & Recycling */}
                         <div
                           onClick={() => handleOpenProvider('trash')}
-                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-900/40 shadow-2xs">
-                              <Droplets className="w-4 h-4" />
+                            <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                              <Droplets className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
-                                Trash & recycling
+                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Trash & Recycling
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.trashProvider || 'City Utilities'}
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-3 shrink-0 text-right">
-                            <div>
-                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                                {householdProfile.trashPlan || '64-Gal Cart'}
-                              </span>
-                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
-                                {householdProfile.providerDocuments?.trash?.length ? `${householdProfile.providerDocuments.trash.length} statement on file` : 'Upload statement'}
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                  {householdProfile.trashPlan || '64-Gal Cart'}
+                                </span>
+                                {householdProfile.trashMonthlyCost && (
+                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                    ${householdProfile.trashMonthlyCost}/mo
+                                  </span>
+                                )}
+                              </div>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                                householdProfile.providerDocuments?.trash?.length
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'text-slate-400'
+                              }`}>
+                                {householdProfile.providerDocuments?.trash?.length ? (
+                                  <>
+                                    <Check className="w-3 h-3" />
+                                    <span>Statement on file</span>
+                                  </>
+                                ) : (
+                                  <span>Upload statement</span>
+                                )}
                               </span>
                             </div>
                             <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
@@ -4004,29 +4157,47 @@ export default function HouseholdLifestyleHub({
                         {/* 5. Home Security */}
                         <div
                           onClick={() => handleOpenProvider('security')}
-                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100 dark:border-emerald-900/40 shadow-2xs">
-                              <ShieldCheck className="w-4 h-4" />
+                            <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100 dark:border-emerald-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                              <ShieldCheck className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
-                                Home security
+                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Home Security
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.securityProvider || 'Ring'}
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-3 shrink-0 text-right">
-                            <div>
-                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                                {householdProfile.securityPlan || 'Ring Protect Pro'}
-                              </span>
-                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
-                                {householdProfile.providerDocuments?.security?.length ? `${householdProfile.providerDocuments.security.length} statement on file` : 'Upload statement'}
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                  {householdProfile.securityPlan || 'Ring Protect Pro'}
+                                </span>
+                                {householdProfile.securityMonthlyCost && (
+                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                    ${householdProfile.securityMonthlyCost}/mo
+                                  </span>
+                                )}
+                              </div>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                                householdProfile.providerDocuments?.security?.length
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'text-slate-400'
+                              }`}>
+                                {householdProfile.providerDocuments?.security?.length ? (
+                                  <>
+                                    <Check className="w-3 h-3" />
+                                    <span>Statement on file</span>
+                                  </>
+                                ) : (
+                                  <span>Upload statement</span>
+                                )}
                               </span>
                             </div>
                             <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
@@ -4036,29 +4207,47 @@ export default function HouseholdLifestyleHub({
                         {/* 6. Water Service */}
                         <div
                           onClick={() => handleOpenProvider('water')}
-                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-9 h-9 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-100 dark:border-cyan-900/40 shadow-2xs">
-                              <Droplets className="w-4 h-4" />
+                            <div className="w-10 h-10 rounded-2xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-100 dark:border-cyan-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                              <Droplets className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
-                                Water service
+                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Water Service
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.waterProvider || 'City Water Works'}
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-3 shrink-0 text-right">
-                            <div>
-                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                                {householdProfile.waterPlan || 'Standard Residential Meter'}
-                              </span>
-                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
-                                {householdProfile.providerDocuments?.water?.length ? `${householdProfile.providerDocuments.water.length} statement on file` : 'Upload statement'}
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                  {householdProfile.waterPlan || 'Standard Residential Meter'}
+                                </span>
+                                {householdProfile.waterMonthlyCost && (
+                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                    ${householdProfile.waterMonthlyCost}/mo
+                                  </span>
+                                )}
+                              </div>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                                householdProfile.providerDocuments?.water?.length
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'text-slate-400'
+                              }`}>
+                                {householdProfile.providerDocuments?.water?.length ? (
+                                  <>
+                                    <Check className="w-3 h-3" />
+                                    <span>Statement on file</span>
+                                  </>
+                                ) : (
+                                  <span>Upload statement</span>
+                                )}
                               </span>
                             </div>
                             <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
@@ -4068,29 +4257,47 @@ export default function HouseholdLifestyleHub({
                         {/* 7. Home Warranty */}
                         <div
                           onClick={() => handleOpenProvider('homeWarranty')}
-                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-100 dark:border-rose-900/40 shadow-2xs">
-                              <Shield className="w-4 h-4" />
+                            <div className="w-10 h-10 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-100 dark:border-rose-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                              <Shield className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
-                                Home warranty
+                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Home Warranty & Protection
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.homeWarrantyProvider || 'American Home Shield'}
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-3 shrink-0 text-right">
-                            <div>
-                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                                {householdProfile.homeWarrantyPlan || 'ShieldGold'}
-                              </span>
-                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
-                                {householdProfile.providerDocuments?.homeWarranty?.length ? `${householdProfile.providerDocuments.homeWarranty.length} statement on file` : 'Upload statement'}
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                  {householdProfile.homeWarrantyPlan || 'ShieldGold'}
+                                </span>
+                                {householdProfile.homeWarrantyMonthlyCost && (
+                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                    ${householdProfile.homeWarrantyMonthlyCost}/mo
+                                  </span>
+                                )}
+                              </div>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                                householdProfile.providerDocuments?.homeWarranty?.length
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'text-slate-400'
+                              }`}>
+                                {householdProfile.providerDocuments?.homeWarranty?.length ? (
+                                  <>
+                                    <Check className="w-3 h-3" />
+                                    <span>Statement on file</span>
+                                  </>
+                                ) : (
+                                  <span>Upload statement</span>
+                                )}
                               </span>
                             </div>
                             <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
@@ -4101,35 +4308,53 @@ export default function HouseholdLifestyleHub({
                         {(householdProfile.extraProviders || []).map((prov) => (
                           <div
                             key={prov.id}
-                            onClick={() => handleOpenEditExtraProvider(prov)}
-                            className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
-                            title="Click to view and edit extra provider"
+                            onClick={() => handleOpenProvider(prov.id)}
+                            className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                            title="Click to view details and upload statements"
                           >
                             <div className="flex items-center gap-3.5 min-w-0">
-                              <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-100 dark:border-purple-900/40 shadow-2xs">
-                                <Sparkles className="w-4 h-4" />
+                              <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-100 dark:border-purple-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                                <Sparkles className="w-5 h-5" />
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
-                                    {prov.type || 'Extra Provider'}
+                                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                    {prov.type || 'Custom Provider'}
                                   </span>
                                   <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-purple-50 text-purple-700 border border-purple-200">
                                     Extra
                                   </span>
                                 </div>
-                                <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                                <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                   {prov.name || 'Provider Name'}
                                 </span>
                               </div>
                             </div>
                             <div className="flex items-center gap-3 shrink-0 text-right">
-                              <div>
-                                <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
-                                  {prov.plan || (prov.monthlyCost ? `$${prov.monthlyCost}/mo` : 'Active')}
-                                </span>
-                                <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
-                                  {prov.monthlyCost ? `$${prov.monthlyCost}/mo` : 'Custom provider'}
+                              <div className="flex flex-col items-end gap-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                    {prov.plan || 'Active Service'}
+                                  </span>
+                                  {prov.monthlyCost && (
+                                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                      ${prov.monthlyCost}/mo
+                                    </span>
+                                  )}
+                                </div>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                                  householdProfile.providerDocuments?.[prov.id]?.length
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'text-slate-400'
+                                }`}>
+                                  {householdProfile.providerDocuments?.[prov.id]?.length ? (
+                                    <>
+                                      <Check className="w-3 h-3" />
+                                      <span>Statement on file</span>
+                                    </>
+                                  ) : (
+                                    <span>Upload statement</span>
+                                  )}
                                 </span>
                               </div>
                               <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
@@ -4144,7 +4369,7 @@ export default function HouseholdLifestyleHub({
                           <button
                             type="button"
                             onClick={() => handleOpenAddExtraProvider()}
-                            className="w-full py-3 px-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-[#18457c] dark:hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/50 text-[#18457c] dark:text-blue-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                            className="w-full py-3.5 px-4 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-[#18457c] dark:hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/50 text-[#18457c] dark:text-blue-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
                           >
                             <Plus className="w-4 h-4" />
                             <span>Add Extra Provider (Home Warranty, Pest, Pool, Lawn, Gas...)</span>
@@ -4243,14 +4468,33 @@ export default function HouseholdLifestyleHub({
           {/* VIEW C: PROVIDER DETAIL & STATEMENT UPLOADER PAGE             */}
           {/* ============================================================= */}
           {householdView === 'providerDetail' && selectedProviderKey && (() => {
-            const cfg = HOUSEHOLD_PROVIDER_CONFIGS[selectedProviderKey];
+            const cfg = HOUSEHOLD_PROVIDER_CONFIGS[selectedProviderKey] || (() => {
+              const extraProv = (householdProfile.extraProviders || []).find(p => p.id === selectedProviderKey);
+              if (!extraProv) return null;
+              return {
+                key: extraProv.id,
+                label: extraProv.type || 'Custom Provider',
+                title: extraProv.name || extraProv.type || 'Custom Provider',
+                category: extraProv.type || 'Custom Service',
+                icon: 'Sparkles',
+                colorClass: 'text-purple-600 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800',
+                isExtra: true,
+                defaultProvider: extraProv.name || '',
+                defaultPlan: extraProv.plan || '',
+                placeholderProvider: 'Provider Company Name',
+                placeholderPlan: 'Plan / Coverage Name',
+                quickProviders: [],
+                quickPlans: []
+              };
+            })();
             if (!cfg) return null;
 
-            const currentProvider = householdProfile[cfg.providerField] || cfg.defaultProvider;
-            const currentPlan = householdProfile[cfg.planField] || cfg.defaultPlan;
-            const currentAccount = householdProfile[cfg.accountField] || '';
-            const currentCost = householdProfile[cfg.costField] || '';
-            const currentNotes = householdProfile[cfg.notesField] || '';
+            const extraProv = cfg.isExtra ? (householdProfile.extraProviders || []).find(p => p.id === selectedProviderKey) : null;
+            const currentProvider = cfg.isExtra ? (extraProv?.name || '') : (householdProfile[cfg.providerField] || cfg.defaultProvider);
+            const currentPlan = cfg.isExtra ? (extraProv?.plan || '') : (householdProfile[cfg.planField] || cfg.defaultPlan);
+            const currentAccount = cfg.isExtra ? (extraProv?.accountNumber || '') : (householdProfile[cfg.accountField] || '');
+            const currentCost = cfg.isExtra ? (extraProv?.monthlyCost || '') : (householdProfile[cfg.costField] || '');
+            const currentNotes = cfg.isExtra ? (extraProv?.notes || '') : (householdProfile[cfg.notesField] || '');
             const docs = householdProfile.providerDocuments?.[selectedProviderKey] || [];
 
             // Match actual bills from payments for this provider
@@ -4260,29 +4504,76 @@ export default function HouseholdLifestyleHub({
             );
 
             return (
-              <div className="flex flex-col gap-6 animate-in fade-in duration-200">
-                {/* Top Navigation Bar: Back to Household */}
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setHouseholdView('saved');
-                      setSelectedProviderKey(null);
-                    }}
-                    className="inline-flex items-center gap-2 text-xs font-bold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer bg-slate-100 dark:bg-slate-800 px-3.5 py-2 rounded-xl transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Back to Household</span>
-                  </button>
-                  <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
-                    Household Service Provider
-                  </span>
+              <div className="flex flex-col gap-6 animate-in fade-in duration-200 max-w-5xl mx-auto w-full">
+                {/* 1. Header & Navigation Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHouseholdView('saved');
+                        setSelectedProviderKey(null);
+                        setIsEditingProviderDetail(false);
+                      }}
+                      className="inline-flex items-center gap-2 text-xs font-bold text-[#18457c] dark:text-blue-400 hover:bg-slate-200/70 bg-slate-100 dark:bg-slate-800 px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-2xs"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      <span>Back to Household Providers</span>
+                    </button>
+                    <span className="hidden sm:inline text-xs text-slate-400">/</span>
+                    <span className="hidden sm:inline text-xs font-medium text-slate-500 truncate max-w-[200px]">
+                      {currentProvider || cfg.label}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {isEditingProviderDetail ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingProviderDetail(false)}
+                          className="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveProviderDetails}
+                          className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-bold transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Save Changes</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingProviderDetail(true)}
+                          className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-[#18457c]" />
+                          <span>Edit Details</span>
+                        </button>
+                        {cfg.isExtra && (
+                          <button
+                            type="button"
+                            onClick={handleDeleteProviderFromDetail}
+                            className="px-3 py-2 rounded-xl border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
+                            title="Remove Provider"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove</span>
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
 
-                {/* Main Card: Provider Header & Quick Stats */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xs flex flex-col gap-6">
-                  {/* Header Title & Badges */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
+                {/* 2. Hero Header Card */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs flex flex-col gap-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-2xs border ${cfg.colorClass}`}>
                         {cfg.icon === 'Wifi' && <Wifi className="w-7 h-7" />}
@@ -4291,348 +4582,429 @@ export default function HouseholdLifestyleHub({
                         {cfg.icon === 'Droplets' && <Droplets className="w-7 h-7" />}
                         {cfg.icon === 'ShieldCheck' && <ShieldCheck className="w-7 h-7" />}
                         {cfg.icon === 'Shield' && <Shield className="w-7 h-7" />}
+                        {cfg.icon === 'Sparkles' && <Sparkles className="w-7 h-7" />}
                       </div>
                       <div>
                         <div className="flex items-center gap-2.5 flex-wrap">
-                          <h2 className="font-serif text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-                            {currentProvider}
+                          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                            {currentProvider || 'Provider Name'}
                           </h2>
-                          <span className="px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-[#18457c] dark:text-blue-400 font-bold text-[10px] border border-blue-200 dark:border-blue-800">
-                            {cfg.title}
+                          <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
+                            {cfg.category || cfg.title}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold text-[10px] border border-emerald-200 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                            Active Provider
                           </span>
                         </div>
-                        <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                          {currentPlan} {currentAccount ? `· Account #${currentAccount}` : ''}
+                        <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                          {currentPlan || 'Standard Plan'} {currentAccount ? `· Account #${currentAccount}` : ''}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 font-semibold">
-                        {docs.length} Statement{docs.length === 1 ? '' : 's'} on file
+                    {/* Quick Stats Pill */}
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                      <div className="px-3.5 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-right">
+                        <span className="text-[10px] font-semibold text-slate-400 block uppercase tracking-wider">Monthly Rate</span>
+                        <span className="text-lg font-bold text-slate-900 block leading-tight">
+                          {matchingBills[0]?.amount ? `$${matchingBills[0].amount}/mo` : (currentCost ? `$${currentCost}/mo` : '—')}
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* 4-Column Specs Grid (matching Household aesthetic) */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-2">
-                    <div>
-                      <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">
-                        Provider
-                      </span>
-                      <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 block mt-0.5 truncate">
-                        {currentProvider}
-                      </span>
+                  {/* 4 Stat Tiles */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Service Tier</span>
+                      <span className="text-sm font-bold text-slate-800 truncate mt-1">{currentPlan || 'Standard'}</span>
                     </div>
 
-                    <div>
-                      <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">
-                        Plan / Rate
-                      </span>
-                      <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 block mt-0.5 truncate">
-                        {currentPlan}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">
-                        Account #
-                      </span>
-                      <span className="text-base sm:text-lg font-mono font-bold text-slate-900 dark:text-slate-100 block mt-0.5 truncate">
-                        {currentAccount || '—'}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">
-                        Billing Cost
-                      </span>
-                      <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 block mt-0.5 truncate">
-                        {matchingBills[0]?.amount ? `$${matchingBills[0].amount} /mo` : (currentCost ? `$${currentCost} /mo` : '—')}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* ======================================================== */}
-                  {/* STATEMENT & DOCUMENT UPLOADER                           */}
-                  {/* ======================================================== */}
-                  <div className="mt-2 p-6 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/90 dark:border-slate-800 flex flex-col gap-5">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <FileText className="w-5 h-5 text-[#18457c] dark:text-blue-400" />
-                        <div>
-                          <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-                            Provider Statements & Verification Documents
-                          </h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                            Upload bill statements, contracts, or rate sheets (PDF or Image) to give Klarity exact plan and pricing info.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Scan feedback alert */}
-                    {providerScanSuccess && (
-                      <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span className="font-medium">{providerScanSuccess}</span>
-                      </div>
-                    )}
-
-                    {/* Drag and Drop Zone */}
-                    <div
-                      onClick={() => providerDocInputRef.current?.click()}
-                      className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-[#18457c] dark:hover:border-blue-400 rounded-2xl p-6 sm:p-8 text-center bg-white dark:bg-slate-900 cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group"
-                    >
-                      <input
-                        ref={providerDocInputRef}
-                        type="file"
-                        accept=".pdf,image/png,image/jpeg,image/jpg"
-                        onChange={handleUploadProviderDocument}
-                        className="hidden"
-                      />
-
-                      <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-[#18457c] dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform shadow-2xs">
-                        {isScanningProviderDoc ? (
-                          <RefreshCw className="w-6 h-6 animate-spin" />
-                        ) : (
-                          <UploadCloud className="w-6 h-6" />
+                    <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Account / ID #</span>
+                      <div className="flex items-center justify-between gap-1 mt-1">
+                        <span className="text-xs font-mono font-bold text-slate-800 truncate">{currentAccount || 'Not set'}</span>
+                        {currentAccount && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopyAccount(currentAccount)}
+                            className="p-1 text-slate-400 hover:text-slate-700 rounded-md transition-colors cursor-pointer"
+                            title="Copy Account Number"
+                          >
+                            {copiedAccount ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
                         )}
                       </div>
-
-                      <div className="space-y-1">
-                        <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 block">
-                          {isScanningProviderDoc ? providerScanProgress : `Click to upload ${currentProvider} statement or bill`}
-                        </span>
-                        <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
-                          Supports PDF, PNG, JPG (statement text and account numbers will be read automatically)
-                        </span>
-                      </div>
                     </div>
 
-                    {/* Uploaded Documents List */}
-                    {docs.length > 0 && (
-                      <div className="space-y-3 pt-2">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                          Saved Statements ({docs.length})
-                        </span>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {docs.map(doc => (
-                            <div
-                              key={doc.id}
-                              className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-3 shadow-2xs"
-                            >
-                              <div className="flex items-start gap-3 min-w-0">
-                                <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                                  <FileText className="w-5 h-5 text-slate-500" />
-                                </div>
-                                <div className="min-w-0">
-                                  <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs block truncate" title={doc.name}>
-                                    {doc.name}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                                    {new Date(doc.uploadedAt).toLocaleDateString()} · {doc.size || 'PDF'}
-                                  </span>
-                                  {doc.extracted?.accountNumber && (
-                                    <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold block mt-1">
-                                      Acct: {doc.extracted.accountNumber}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
+                    <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Documents</span>
+                      <span className="text-sm font-bold text-slate-800 mt-1">{docs.length} on file</span>
+                    </div>
 
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                {doc.dataUrl && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setViewingCardPhoto(doc.dataUrl);
-                                      setViewingCardTitle(doc.name);
-                                    }}
-                                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                    title="View Statement"
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteProviderDocument(doc.id)}
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                                  title="Delete Document"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* ======================================================== */}
-                  {/* EDIT PROVIDER DETAILS FORM                               */}
-                  {/* ======================================================== */}
-                  <div className="mt-2 p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex flex-col gap-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                      <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-                        Edit Provider & Plan Details
-                      </h3>
-                      <span className="text-[11px] text-slate-400">
-                        Changes save directly to your Household profile
+                    <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Billing Status</span>
+                      <span className="text-xs font-bold text-emerald-700 mt-1 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Connected</span>
                       </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Main Content: When Editing Form vs When Viewing */}
+                {isEditingProviderDetail ? (
+                  /* Clean Editing Card */
+                  <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-7 shadow-xs flex flex-col gap-5">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div>
+                        <h3 className="font-bold text-slate-900 text-sm">Edit Provider & Plan Details</h3>
+                        <p className="text-xs text-slate-500 mt-0.5">Update company name, plan tier, monthly cost, and account notes.</p>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                       {/* Provider Name */}
                       <div className="flex flex-col gap-1.5">
-                        <label className="font-semibold text-slate-700 dark:text-slate-300">
-                          Provider Name
-                        </label>
+                        <label className="font-semibold text-slate-700">Company / Provider Name</label>
                         <input
                           type="text"
                           value={providerEditForm?.provider || ''}
                           onChange={e => setProviderEditForm({ ...providerEditForm, provider: e.target.value })}
                           placeholder={cfg.placeholderProvider}
-                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#18457c]"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 font-bold text-slate-900 focus:outline-none focus:border-[#18457c]"
                         />
-                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                          {cfg.quickProviders.map(p => (
-                            <button
-                              key={p}
-                              type="button"
-                              onClick={() => setProviderEditForm({ ...providerEditForm, provider: p })}
-                              className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition-colors cursor-pointer ${
-                                providerEditForm?.provider === p
-                                  ? 'bg-[#18457c] text-white border-[#18457c]'
-                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
-                              }`}
-                            >
-                              {p}
-                            </button>
-                          ))}
-                        </div>
+                        {cfg.quickProviders?.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            {cfg.quickProviders.map(p => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => setProviderEditForm({ ...providerEditForm, provider: p })}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition-colors cursor-pointer ${
+                                  providerEditForm?.provider === p
+                                    ? 'bg-[#18457c] text-white border-[#18457c]'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
-                      {/* Plan Name */}
+                      {/* Plan / Tier Name */}
                       <div className="flex flex-col gap-1.5">
-                        <label className="font-semibold text-slate-700 dark:text-slate-300">
-                          Plan / Rate Name
-                        </label>
+                        <label className="font-semibold text-slate-700">Plan / Coverage Tier</label>
                         <input
                           type="text"
                           value={providerEditForm?.plan || ''}
                           onChange={e => setProviderEditForm({ ...providerEditForm, plan: e.target.value })}
                           placeholder={cfg.placeholderPlan}
-                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#18457c]"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 font-bold text-slate-900 focus:outline-none focus:border-[#18457c]"
                         />
-                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                          {cfg.quickPlans.map(pl => (
-                            <button
-                              key={pl}
-                              type="button"
-                              onClick={() => setProviderEditForm({ ...providerEditForm, plan: pl })}
-                              className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition-colors cursor-pointer ${
-                                providerEditForm?.plan === pl
-                                  ? 'bg-[#18457c] text-white border-[#18457c]'
-                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
-                              }`}
-                            >
-                              {pl}
-                            </button>
-                          ))}
-                        </div>
+                        {cfg.quickPlans?.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            {cfg.quickPlans.map(pl => (
+                              <button
+                                key={pl}
+                                type="button"
+                                onClick={() => setProviderEditForm({ ...providerEditForm, plan: pl })}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition-colors cursor-pointer ${
+                                  providerEditForm?.plan === pl
+                                    ? 'bg-[#18457c] text-white border-[#18457c]'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                {pl}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       {/* Account Number */}
                       <div className="flex flex-col gap-1.5">
-                        <label className="font-semibold text-slate-700 dark:text-slate-300">
-                          Account / Customer ID Number
-                        </label>
+                        <label className="font-semibold text-slate-700">Account / Customer ID Number</label>
                         <input
                           type="text"
                           value={providerEditForm?.accountNumber || ''}
                           onChange={e => setProviderEditForm({ ...providerEditForm, accountNumber: e.target.value })}
                           placeholder="e.g. 8495-201-9481"
-                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#18457c]"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 font-mono text-slate-900 focus:outline-none focus:border-[#18457c]"
                         />
                       </div>
 
                       {/* Monthly Cost */}
                       <div className="flex flex-col gap-1.5">
-                        <label className="font-semibold text-slate-700 dark:text-slate-300">
-                          Monthly Bill Amount ($)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={providerEditForm?.monthlyCost || ''}
-                          onChange={e => setProviderEditForm({ ...providerEditForm, monthlyCost: e.target.value })}
-                          placeholder="e.g. 85.00"
-                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#18457c]"
-                        />
+                        <label className="font-semibold text-slate-700">Monthly Bill Amount ($)</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={providerEditForm?.monthlyCost || ''}
+                            onChange={e => setProviderEditForm({ ...providerEditForm, monthlyCost: e.target.value })}
+                            placeholder="0.00"
+                            className="w-full bg-white border border-slate-200 rounded-xl pl-7 pr-3.5 py-2.5 font-mono text-slate-900 focus:outline-none focus:border-[#18457c]"
+                          />
+                        </div>
                       </div>
 
-                      {/* Notes / Specs */}
+                      {/* Notes / Contract Details */}
                       <div className="flex flex-col gap-1.5 sm:col-span-2">
-                        <label className="font-semibold text-slate-700 dark:text-slate-300">
-                          Notes / Contract Details
-                        </label>
+                        <label className="font-semibold text-slate-700">Contract & Service Notes</label>
                         <textarea
                           rows={2}
                           value={providerEditForm?.notes || ''}
                           onChange={e => setProviderEditForm({ ...providerEditForm, notes: e.target.value })}
-                          placeholder="Add any contract terms, renewal dates, modem rentals, or plan options..."
-                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#18457c]"
+                          placeholder="Renewal dates, equipment rentals, warranty coverage items, emergency numbers..."
+                          className="w-full bg-white border border-slate-200 rounded-xl p-3 text-slate-800 focus:outline-none focus:border-[#18457c]"
                         />
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingProviderDetail(false)}
+                        className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer transition-colors"
+                      >
+                        Cancel
+                      </button>
                       <button
                         type="button"
                         onClick={handleSaveProviderDetails}
-                        className="px-5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#133560] text-white font-bold text-xs cursor-pointer shadow-2xs transition-colors flex items-center gap-2"
+                        className="px-5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-bold text-xs cursor-pointer shadow-2xs transition-colors flex items-center gap-1.5"
                       >
                         <Check className="w-4 h-4" />
-                        <span>Save Provider Info</span>
+                        <span>Save Provider Details</span>
                       </button>
                     </div>
                   </div>
+                ) : (
+                  /* Viewing Mode Cards */
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Left: Account & Contract Specifications Card */}
+                    <div className="lg:col-span-1 bg-white border border-slate-200/90 rounded-3xl p-6 shadow-xs flex flex-col justify-between gap-5">
+                      <div>
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                          <h3 className="font-bold text-slate-900 text-sm">Account Overview</h3>
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingProviderDetail(true)}
+                            className="text-xs text-[#18457c] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            <span>Edit</span>
+                          </button>
+                        </div>
 
-                  {/* Connected Bills from Payments */}
-                  {matchingBills.length > 0 && (
-                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/90 dark:border-slate-800 flex flex-col gap-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900 dark:text-slate-100 text-xs flex items-center gap-2">
-                          <Receipt className="w-4 h-4 text-emerald-600" />
-                          <span>Connected Bills from Payments</span>
-                        </span>
-                        <span className="text-[11px] text-slate-400">
-                          {matchingBills.length} matched payment
-                        </span>
-                      </div>
-                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {matchingBills.map(b => (
-                          <div key={b.id} className="py-2.5 flex items-center justify-between text-xs">
-                            <div>
-                              <span className="font-bold text-slate-900 dark:text-slate-100 block">{b.name}</span>
-                              <span className="text-[10px] text-slate-400">{b.category || 'Utility'} · {b.dueDate ? `Due ${b.dueDate}` : 'Active'}</span>
-                            </div>
-                            <div className="text-right">
-                              <span className="font-bold text-slate-900 dark:text-slate-100 text-sm block">${b.amount}</span>
-                              <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 justify-end">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                                From payments
-                              </span>
+                        <div className="space-y-4 pt-3 text-xs">
+                          <div>
+                            <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Service Category</span>
+                            <span className="font-bold text-slate-900 mt-0.5 block">{cfg.category || cfg.title}</span>
+                          </div>
+
+                          <div>
+                            <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Company</span>
+                            <span className="font-bold text-slate-900 mt-0.5 block">{currentProvider || 'Not specified'}</span>
+                          </div>
+
+                          <div>
+                            <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Active Plan</span>
+                            <span className="font-bold text-slate-900 mt-0.5 block">{currentPlan || 'Not specified'}</span>
+                          </div>
+
+                          <div>
+                            <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Account / Customer ID</span>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="font-mono font-bold text-slate-900">{currentAccount || 'None'}</span>
+                              {currentAccount && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyAccount(currentAccount)}
+                                  className="text-[10px] font-semibold text-[#18457c] hover:underline flex items-center gap-1 cursor-pointer"
+                                >
+                                  {copiedAccount ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                  <span>{copiedAccount ? 'Copied' : 'Copy'}</span>
+                                </button>
+                              )}
                             </div>
                           </div>
-                        ))}
+
+                          <div>
+                            <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Monthly Rate</span>
+                            <span className="font-bold text-slate-900 mt-0.5 block">
+                              {currentCost ? `$${parseFloat(currentCost).toFixed(2)} / month` : 'Not specified'}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Contract / Service Notes</span>
+                            <p className="text-slate-600 mt-0.5 whitespace-pre-wrap leading-relaxed">
+                              {currentNotes || 'No contract terms or notes added yet.'}
+                            </p>
+                          </div>
+                        </div>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingProviderDetail(true)}
+                        className="w-full py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors cursor-pointer shadow-2xs flex items-center justify-center gap-1.5"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Edit Account Information</span>
+                      </button>
                     </div>
-                  )}
-                </div>
+
+                    {/* Right: Statements, Documents & Matching Payments (2 cols) */}
+                    <div className="lg:col-span-2 flex flex-col gap-6">
+                      {/* Statements & Document Uploader */}
+                      <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-xs flex flex-col gap-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                          <div>
+                            <h3 className="font-bold text-slate-900 text-sm">Statements & Contracts</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Upload bills, rate sheets, or warranties (PDF or image). Klarity auto-extracts your account & cost.</p>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold">
+                            {docs.length} on file
+                          </span>
+                        </div>
+
+                        {/* Scan status alert */}
+                        {providerScanSuccess && (
+                          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span className="font-medium">{providerScanSuccess}</span>
+                          </div>
+                        )}
+
+                        {/* Upload Bar / Dropzone */}
+                        <div
+                          onClick={() => providerDocInputRef.current?.click()}
+                          className="border-2 border-dashed border-slate-300 hover:border-[#18457c] rounded-2xl p-5 text-center bg-slate-50/60 hover:bg-blue-50/30 cursor-pointer transition-all flex items-center justify-center gap-3.5 group"
+                        >
+                          <input
+                            ref={providerDocInputRef}
+                            type="file"
+                            accept=".pdf,image/png,image/jpeg,image/jpg"
+                            onChange={handleUploadProviderDocument}
+                            className="hidden"
+                          />
+                          <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#18457c] flex items-center justify-center group-hover:scale-105 transition-transform shadow-2xs shrink-0">
+                            {isScanningProviderDoc ? (
+                              <RefreshCw className="w-5 h-5 animate-spin" />
+                            ) : (
+                              <UploadCloud className="w-5 h-5" />
+                            )}
+                          </div>
+                          <div className="text-left">
+                            <span className="text-xs sm:text-sm font-bold text-slate-900 block">
+                              {isScanningProviderDoc ? providerScanProgress : `Upload ${currentProvider || 'Provider'} Statement`}
+                            </span>
+                            <span className="text-[11px] text-slate-400 block">
+                              PDF, PNG, JPG (Account numbers & bill amounts will be auto-scanned)
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Saved Documents */}
+                        {docs.length > 0 && (
+                          <div className="space-y-2.5 pt-1">
+                            <span className="text-xs font-bold text-slate-700 block">Uploaded Statements</span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {docs.map(doc => (
+                                <div
+                                  key={doc.id}
+                                  className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex items-start justify-between gap-2.5"
+                                >
+                                  <div className="flex items-start gap-2.5 min-w-0">
+                                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                                      <FileText className="w-4 h-4 text-[#18457c]" />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <span className="font-semibold text-slate-900 text-xs block truncate" title={doc.name}>
+                                        {doc.name}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                                        {new Date(doc.uploadedAt).toLocaleDateString()} · {doc.size || 'PDF'}
+                                      </span>
+                                      {doc.extracted?.accountNumber && (
+                                        <span className="text-[10px] font-mono text-emerald-700 font-semibold block mt-0.5">
+                                          Acct: {doc.extracted.accountNumber}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {doc.dataUrl && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setViewingCardPhoto(doc.dataUrl);
+                                          setViewingCardTitle(doc.name);
+                                        }}
+                                        className="p-1 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-white transition-colors cursor-pointer"
+                                        title="View Statement"
+                                      >
+                                        <Eye className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteProviderDocument(doc.id)}
+                                      className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-white transition-colors cursor-pointer"
+                                      title="Delete Statement"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Matching Payments / Bills */}
+                      {matchingBills.length > 0 && (
+                        <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-xs flex flex-col gap-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                            <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                              <Receipt className="w-4 h-4 text-emerald-600" />
+                              <span>Connected Payments & Bills</span>
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              {matchingBills.length} matched payment{matchingBills.length === 1 ? '' : 's'}
+                            </span>
+                          </div>
+                          <div className="divide-y divide-slate-100">
+                            {matchingBills.map(b => (
+                              <div key={b.id} className="py-2.5 flex items-center justify-between text-xs">
+                                <div>
+                                  <span className="font-bold text-slate-900 block">{b.name}</span>
+                                  <span className="text-[10px] text-slate-400">{b.category || 'Utility'} · {b.dueDate ? `Due ${b.dueDate}` : 'Active payment'}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-bold text-slate-900 text-sm block">${b.amount}</span>
+                                  <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 justify-end">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                                    From payments
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
