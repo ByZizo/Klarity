@@ -547,12 +547,13 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
   securityProvider: 'Ring',
   securityPlan: 'Ring Protect Pro ($20/mo or $200/yr)',
   securityPlanType: 'cloud_video',
-  homeWarrantyProvider: '',
-  homeWarrantyPlan: '',
-  homeWarrantyPlanType: '',
+  homeWarrantyProvider: 'American Home Shield',
+  homeWarrantyPlan: 'ShieldGold (Systems & Appliances)',
+  homeWarrantyPlanType: 'combo_plan',
   homeWarrantyAccount: '',
-  homeWarrantyMonthlyCost: '',
+  homeWarrantyMonthlyCost: 65,
   homeWarrantyNotes: '',
+  extraProviders: [],
 
   // Solar & Storage suite
   hasSolar: false,

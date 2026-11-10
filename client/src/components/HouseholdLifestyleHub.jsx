@@ -767,6 +767,102 @@ export default function HouseholdLifestyleHub({
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
   };
 
+  const [isExtraProviderModalOpen, setIsExtraProviderModalOpen] = useState(false);
+  const [extraProviderForm, setExtraProviderForm] = useState(null);
+
+  const handleOpenAddExtraProvider = (prefillType = 'Home Warranty & Protection') => {
+    setExtraProviderForm({
+      id: 'extra_' + Date.now(),
+      type: prefillType,
+      name: '',
+      plan: '',
+      monthlyCost: '',
+      accountNumber: '',
+      notes: '',
+      isNew: true
+    });
+    setIsExtraProviderModalOpen(true);
+  };
+
+  const handleOpenEditExtraProvider = (prov) => {
+    setExtraProviderForm({
+      ...prov,
+      isNew: false
+    });
+    setIsExtraProviderModalOpen(true);
+  };
+
+  const handleSaveExtraProvider = () => {
+    if (!extraProviderForm || !extraProviderForm.name?.trim()) return;
+    const existingList = Array.isArray(householdProfile.extraProviders) ? householdProfile.extraProviders : [];
+    const idx = existingList.findIndex(p => p.id === extraProviderForm.id);
+    let updatedList;
+    if (idx >= 0) {
+      updatedList = [...existingList];
+      updatedList[idx] = { ...extraProviderForm };
+    } else {
+      updatedList = [...existingList, { ...extraProviderForm }];
+    }
+    const nextProfile = {
+      ...householdProfile,
+      extraProviders: updatedList
+    };
+    onUpdateProfile(nextProfile);
+    try {
+      localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
+      localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
+    } catch {}
+    setIsExtraProviderModalOpen(false);
+    setExtraProviderForm(null);
+  };
+
+  const handleDeleteExtraProvider = (id) => {
+    if (!confirm('Remove this provider from household?')) return;
+    const existingList = Array.isArray(householdProfile.extraProviders) ? householdProfile.extraProviders : [];
+    const updatedList = existingList.filter(p => p.id !== id);
+    const nextProfile = {
+      ...householdProfile,
+      extraProviders: updatedList
+    };
+    onUpdateProfile(nextProfile);
+    try {
+      localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
+      localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
+    } catch {}
+    setIsExtraProviderModalOpen(false);
+    setExtraProviderForm(null);
+  };
+
+  const suggestedQuickCompanies = useMemo(() => {
+    if (!extraProviderForm?.type) return [];
+    const t = extraProviderForm.type.toLowerCase();
+    if (t.includes('warranty')) {
+      return ['American Home Shield', 'Choice Home Warranty', 'First American', 'Cinch Home Services', 'Liberty Home Guard', 'Select Home Warranty'];
+    }
+    if (t.includes('pest')) {
+      return ['Orkin', 'Terminix', 'Aptive Environmental', 'Rentokil', 'Truly Nolen', 'Mosquito Authority'];
+    }
+    if (t.includes('lawn')) {
+      return ['TruGreen', 'Sunday', 'Lawn Doctor', 'Davey Tree', 'Local Lawn Care'];
+    }
+    if (t.includes('pool')) {
+      return ['Leslie\'s Pool', 'Premier Pools & Spas', 'Pinch A Penny', 'Local Pool Service'];
+    }
+    if (t.includes('gas') || t.includes('propane')) {
+      return ['Suburban Propane', 'AmeriGas', 'Ferrellgas', 'Superior Plus', 'Local Gas Utility'];
+    }
+    if (t.includes('clean') || t.includes('maid')) {
+      return ['Merry Maids', 'The Cleaning Authority', 'Molly Maid', 'MaidPro'];
+    }
+    if (t.includes('security')) {
+      return ['Ring', 'ADT', 'SimpliSafe', 'Vivint', 'Nest / Google Home', 'Arlo'];
+    }
+    if (t.includes('insurance')) {
+      return ['State Farm', 'Travelers', 'Allstate', 'Lemonade', 'Liberty Mutual', 'USAA'];
+    }
+    return ['Local Service Provider', 'Independent Contractor'];
+  }, [extraProviderForm?.type]);
+
   const handleSaveProviderDetails = () => {
     if (!selectedProviderKey || !providerEditForm) return;
     const cfg = HOUSEHOLD_PROVIDER_CONFIGS[selectedProviderKey];
@@ -1057,6 +1153,10 @@ export default function HouseholdLifestyleHub({
   const suggestedHomeWarrantyPlans = useMemo(
     () => getPlansForProvider('homeWarranty', householdProfile.homeWarrantyProvider),
     [householdProfile.homeWarrantyProvider]
+  );
+  const suggestedWaterPlans = useMemo(
+    () => getPlansForProvider('water', householdProfile.waterProvider),
+    [householdProfile.waterProvider]
   );
 
   const handleRefreshProperty = () => {
@@ -3164,82 +3264,208 @@ export default function HouseholdLifestyleHub({
                       </div>
 
                       {/* 6. Home Warranty & Protection */}
-                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3 md:col-span-2">
+                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
                         <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
                           <Shield className="w-4 h-4 text-rose-600" />
                           <span>6. Home Warranty & Protection</span>
                         </span>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">Warranty Company</span>
-                            <input
-                              type="text"
-                              value={householdProfile.homeWarrantyProvider || ''}
-                              onChange={e => handleFieldChange('homeWarrantyProvider', e.target.value)}
-                              placeholder="e.g. American Home Shield, Choice Home Warranty, First American, Cinch..."
-                              className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
-                            />
-                            <div className="flex items-center gap-1.5 flex-wrap mt-2">
-                              {['American Home Shield', 'Choice Home Warranty', 'First American', 'Cinch Home Services', 'Liberty Home Guard', 'Select Home Warranty', 'None'].map(p => (
-                                <button
-                                  key={p}
-                                  type="button"
-                                  onClick={() => handleFieldChange('homeWarrantyProvider', p)}
-                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.homeWarrantyProvider === p ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
-                                >
-                                  {p}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div>
-                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">
-                              Warranty Plan Name
-                            </span>
-                            <input
-                              type="text"
-                              list="warranty-plans-list"
-                              value={householdProfile.homeWarrantyPlan || ''}
-                              onChange={e => handleFieldChange('homeWarrantyPlan', e.target.value)}
-                              placeholder="Type plan, e.g. ShieldGold, ShieldPlatinum, Total Plan, Basic Plan..."
-                              className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
-                            />
-                            <datalist id="warranty-plans-list">
-                              {suggestedHomeWarrantyPlans.map(p => (
-                                <option key={p.name} value={p.name}>{p.name} ({p.tag})</option>
-                              ))}
-                            </datalist>
-
-                            {suggestedHomeWarrantyPlans.length > 0 && (
-                              <div className="flex items-center gap-1.5 flex-wrap mt-2 max-h-24 overflow-y-auto pr-1">
-                                {suggestedHomeWarrantyPlans.map(p => {
-                                  const isSelected = householdProfile.homeWarrantyPlan === p.name;
-                                  return (
-                                    <button
-                                      key={p.name}
-                                      type="button"
-                                      onClick={() => handleFieldChange('homeWarrantyPlan', p.name)}
-                                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
-                                        isSelected
-                                          ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
-                                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                                      }`}
-                                    >
-                                      <span>{p.name}</span>
-                                      <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
-                                        isSelected ? 'bg-rose-700 text-rose-100' : 'bg-slate-100 text-slate-500'
-                                      }`}>
-                                        {p.tag}
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Warranty Company</span>
+                          <input
+                            type="text"
+                            value={householdProfile.homeWarrantyProvider || ''}
+                            onChange={e => handleFieldChange('homeWarrantyProvider', e.target.value)}
+                            placeholder="e.g. American Home Shield, Choice Home Warranty, First American, Cinch..."
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                          />
+                          <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                            {['American Home Shield', 'Choice Home Warranty', 'First American', 'Cinch Home Services', 'Liberty Home Guard', 'Select Home Warranty', 'None'].map(p => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => handleFieldChange('homeWarrantyProvider', p)}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.homeWarrantyProvider === p ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                              >
+                                {p}
+                              </button>
+                            ))}
                           </div>
                         </div>
+
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                            Warranty Plan Name
+                          </span>
+                          <input
+                            type="text"
+                            list="warranty-plans-list"
+                            value={householdProfile.homeWarrantyPlan || ''}
+                            onChange={e => handleFieldChange('homeWarrantyPlan', e.target.value)}
+                            placeholder="Type plan, e.g. ShieldGold, ShieldPlatinum, Total Plan, Basic Plan..."
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                          />
+                          <datalist id="warranty-plans-list">
+                            {suggestedHomeWarrantyPlans.map(p => (
+                              <option key={p.name} value={p.name}>{p.name} ({p.tag})</option>
+                            ))}
+                          </datalist>
+
+                          {suggestedHomeWarrantyPlans.length > 0 && (
+                            <div className="flex items-center gap-1.5 flex-wrap mt-2 max-h-24 overflow-y-auto pr-1">
+                              {suggestedHomeWarrantyPlans.map(p => {
+                                const isSelected = householdProfile.homeWarrantyPlan === p.name;
+                                return (
+                                  <button
+                                    key={p.name}
+                                    type="button"
+                                    onClick={() => handleFieldChange('homeWarrantyPlan', p.name)}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                      isSelected
+                                        ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
+                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                  >
+                                    <span>{p.name}</span>
+                                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                                      isSelected ? 'bg-rose-700 text-rose-100' : 'bg-slate-100 text-slate-500'
+                                    }`}>
+                                      {p.tag}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 7. Municipal Water Service */}
+                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                        <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                          <Droplets className="w-4 h-4 text-cyan-600" />
+                          <span>7. Municipal Water Service</span>
+                        </span>
+
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Water Utility / District</span>
+                          <input
+                            type="text"
+                            value={householdProfile.waterProvider || ''}
+                            onChange={e => handleFieldChange('waterProvider', e.target.value)}
+                            placeholder="e.g. City Water Works, American Water, County Water District..."
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                          />
+                          <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                            {['City Water Works', 'County Water District', 'American Water', 'California Water Service', 'None'].map(p => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => handleFieldChange('waterProvider', p)}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.waterProvider === p ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                              >
+                                {p}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                            Water Rate / Meter Plan
+                          </span>
+                          <input
+                            type="text"
+                            list="water-plans-list"
+                            value={householdProfile.waterPlan || ''}
+                            onChange={e => handleFieldChange('waterPlan', e.target.value)}
+                            placeholder="Type plan, e.g. Standard Residential Meter, Tiered Conservation..."
+                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                          />
+                          <datalist id="water-plans-list">
+                            {suggestedWaterPlans.map(p => (
+                              <option key={p.name} value={p.name}>{p.name} ({p.tag})</option>
+                            ))}
+                          </datalist>
+
+                          {suggestedWaterPlans.length > 0 && (
+                            <div className="flex items-center gap-1.5 flex-wrap mt-2 max-h-24 overflow-y-auto pr-1">
+                              {suggestedWaterPlans.map(p => {
+                                const isSelected = householdProfile.waterPlan === p.name;
+                                return (
+                                  <button
+                                    key={p.name}
+                                    type="button"
+                                    onClick={() => handleFieldChange('waterPlan', p.name)}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                      isSelected
+                                        ? 'bg-cyan-600 text-white border-cyan-600 shadow-2xs'
+                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                  >
+                                    <span>{p.name}</span>
+                                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                                      isSelected ? 'bg-cyan-700 text-cyan-100' : 'bg-slate-100 text-slate-500'
+                                    }`}>
+                                      {p.tag}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 8. Extra / Custom Household Providers */}
+                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3 md:col-span-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-purple-600" />
+                            <span>8. Extra Household Providers</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAddExtraProvider()}
+                            className="px-2.5 py-1 rounded-lg bg-[#18457c] text-white text-[10px] font-bold hover:bg-[#123561] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Add Extra Provider</span>
+                          </button>
+                        </div>
+
+                        <p className="text-[11px] text-slate-500">
+                          Add pest control, lawn care, pool service, propane, or additional protection contracts.
+                        </p>
+
+                        {(householdProfile.extraProviders || []).length > 0 ? (
+                          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                            {(householdProfile.extraProviders || []).map(p => (
+                              <div
+                                key={p.id}
+                                onClick={() => handleOpenEditExtraProvider(p)}
+                                className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between text-xs cursor-pointer hover:border-[#18457c] transition-colors"
+                              >
+                                <div className="truncate pr-2">
+                                  <span className="font-bold text-slate-900 block truncate">{p.name}</span>
+                                  <span className="text-[10px] text-slate-500">{p.type} {p.plan ? `· ${p.plan}` : ''}</span>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <span className="font-bold text-slate-800 text-xs">{p.monthlyCost ? `$${p.monthlyCost}/mo` : 'Active'}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAddExtraProvider()}
+                            className="w-full py-4 border border-dashed border-slate-300 rounded-xl bg-white hover:bg-purple-50/50 text-[#18457c] text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Click to Add an Extra Provider</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3610,23 +3836,40 @@ export default function HouseholdLifestyleHub({
                     {/* 2. SECTION 3: SERVICE PROVIDERS (Simple rows, 1px lines, 20px padding, no pills, never truncate plan names) */}
                     <div id="section-providers" className="scroll-mt-16">
                       <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                          Providers
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (isOverview && onNavigateToLifestyle) {
-                              onNavigateToLifestyle();
-                            } else {
-                              setWizardStep(7);
-                              setHouseholdView('wizard');
-                            }
-                          }}
-                          className="text-xs font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
-                        >
-                          {isOverview ? 'Manage in Lifestyle' : 'Edit'}
-                        </button>
+                        <div className="flex items-center gap-2.5">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                            Providers
+                          </h4>
+                          <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                            {7 + (householdProfile.extraProviders || []).length}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {!isOverview && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAddExtraProvider()}
+                              className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/40 text-[#18457c] dark:text-blue-400 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Provider</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isOverview && onNavigateToLifestyle) {
+                                onNavigateToLifestyle();
+                              } else {
+                                setWizardStep(7);
+                                setHouseholdView('wizard');
+                              }
+                            }}
+                            className="text-xs font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
+                          >
+                            {isOverview ? 'Manage in Lifestyle' : 'Edit'}
+                          </button>
+                        </div>
                       </div>
 
                       <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -3853,7 +4096,61 @@ export default function HouseholdLifestyleHub({
                             <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
                           </div>
                         </div>
+
+                        {/* Extra Providers Added by User */}
+                        {(householdProfile.extraProviders || []).map((prov) => (
+                          <div
+                            key={prov.id}
+                            onClick={() => handleOpenEditExtraProvider(prov)}
+                            className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                            title="Click to view and edit extra provider"
+                          >
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-100 dark:border-purple-900/40 shadow-2xs">
+                                <Sparkles className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                    {prov.type || 'Extra Provider'}
+                                  </span>
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                                    Extra
+                                  </span>
+                                </div>
+                                <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                                  {prov.name || 'Provider Name'}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0 text-right">
+                              <div>
+                                <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
+                                  {prov.plan || (prov.monthlyCost ? `$${prov.monthlyCost}/mo` : 'Active')}
+                                </span>
+                                <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
+                                  {prov.monthlyCost ? `$${prov.monthlyCost}/mo` : 'Custom provider'}
+                                </span>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
+                            </div>
+                          </div>
+                        ))}
                       </div>
+
+                      {/* + Add Extra Provider Button at bottom of section */}
+                      {!isOverview && (
+                        <div className="pt-3">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAddExtraProvider()}
+                            className="w-full py-3 px-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-[#18457c] dark:hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/50 text-[#18457c] dark:text-blue-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span>Add Extra Provider (Home Warranty, Pest, Pool, Lawn, Gas...)</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* 6. SECTION 4: BILLS TABLE (Spacious rows, small green dot with 'From payments', bold total) */}
@@ -5976,6 +6273,203 @@ export default function HouseholdLifestyleHub({
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Extra Provider Modal Dialog */}
+      {isExtraProviderModalOpen && extraProviderForm && (
+        <div
+          className="fixed inset-0 bg-[#0A1423]/55 backdrop-blur-xs flex items-center justify-center p-4 z-50 cursor-pointer"
+          onClick={() => {
+            setIsExtraProviderModalOpen(false);
+            setExtraProviderForm(null);
+          }}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xl max-w-lg w-full p-6 sm:p-7 flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-200 text-slate-800 dark:text-slate-200 max-h-[90vh] overflow-y-auto cursor-default"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-2xs border border-purple-200 dark:border-purple-800">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif-title text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
+                    {extraProviderForm.isNew ? 'Add Extra Provider' : 'Edit Extra Provider'}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Home warranty, pest control, lawn care, pool, gas, or other services
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsExtraProviderModalOpen(false);
+                  setExtraProviderForm(null);
+                }}
+                className="p-1 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Category / Type Selector */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                  Service Category
+                </label>
+                <select
+                  value={extraProviderForm.type || 'Home Warranty & Protection'}
+                  onChange={e => setExtraProviderForm(prev => ({ ...prev, type: e.target.value }))}
+                  className="w-full text-xs font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 focus:outline-none"
+                >
+                  <option value="Home Warranty & Protection">Home Warranty & Appliance Protection (HomeShield, Choice...)</option>
+                  <option value="Pest Control">Pest Control (Orkin, Terminix...)</option>
+                  <option value="Lawn Care & Landscaping">Lawn Care & Landscaping (TruGreen, Local...)</option>
+                  <option value="Pool & Spa Maintenance">Pool & Spa Maintenance (Leslie's, Local...)</option>
+                  <option value="Gas & Propane">Gas & Propane (Suburban Propane, AmeriGas...)</option>
+                  <option value="Cleaning & Maid Service">Cleaning & Maid Service (Merry Maids...)</option>
+                  <option value="Home Security & Cameras">Home Security & Cameras (Ring, ADT, Vivint...)</option>
+                  <option value="Homeowners Insurance">Homeowners Insurance (State Farm, Travelers...)</option>
+                  <option value="Custom Service">Other / Custom Home Service</option>
+                </select>
+              </div>
+
+              {/* Provider Company Name with Quick Suggestions */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                  Provider Company Name *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. American Home Shield, Choice Home Warranty, Orkin, TruGreen..."
+                  value={extraProviderForm.name || ''}
+                  onChange={e => setExtraProviderForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full text-xs font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 focus:outline-none"
+                  autoFocus
+                />
+                {/* Quick Provider Suggestions for Selected Category */}
+                {suggestedQuickCompanies.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                    {suggestedQuickCompanies.map(c => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setExtraProviderForm(prev => ({ ...prev, name: c }))}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                          extraProviderForm.name === c
+                            ? 'bg-[#18457c] text-white border-[#18457c]'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Plan Name & Monthly Cost */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                    Plan / Coverage Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. ShieldGold, Total Plan, Premium..."
+                    value={extraProviderForm.plan || ''}
+                    onChange={e => setExtraProviderForm(prev => ({ ...prev, plan: e.target.value }))}
+                    className="w-full text-xs font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                    Monthly Cost ($)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">$</span>
+                    <input
+                      type="number"
+                      placeholder="e.g. 65"
+                      value={extraProviderForm.monthlyCost || ''}
+                      onChange={e => setExtraProviderForm(prev => ({ ...prev, monthlyCost: e.target.value }))}
+                      className="w-full text-xs font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3.5 py-2.5 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Account / Policy Number */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                  Account Number / Policy #
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. HW-98218342"
+                  value={extraProviderForm.accountNumber || ''}
+                  onChange={e => setExtraProviderForm(prev => ({ ...prev, accountNumber: e.target.value }))}
+                  className="w-full text-xs font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 focus:outline-none"
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                  Notes & Contract Details
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Deductible is $100 per trade call. Covers AC, plumbing, refrigerator..."
+                  value={extraProviderForm.notes || ''}
+                  onChange={e => setExtraProviderForm(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full text-xs font-medium text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 focus:outline-none resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Modal Bottom Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+              {!extraProviderForm.isNew ? (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteExtraProvider(extraProviderForm.id)}
+                  className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              ) : <div />}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsExtraProviderModalOpen(false);
+                    setExtraProviderForm(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!extraProviderForm.name?.trim()}
+                  onClick={handleSaveExtraProvider}
+                  className="px-5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] disabled:opacity-50 text-white font-bold text-xs cursor-pointer transition-colors shadow-2xs flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Save Provider</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

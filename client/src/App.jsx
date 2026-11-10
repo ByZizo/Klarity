@@ -589,7 +589,7 @@ function PlaidLauncher({ token, onSuccess, onExit }) {
   return null;
 }
 
-const CURRENT_APP_VERSION = '3.12.19';
+const CURRENT_APP_VERSION = '3.12.20';
 
 function isSemverNewer(remoteVer, currentVer = CURRENT_APP_VERSION) {
   if (!remoteVer || !currentVer) return false;
@@ -607,10 +607,10 @@ function isSemverNewer(remoteVer, currentVer = CURRENT_APP_VERSION) {
 // Helper to format release highlights: only major features, minor items become "Bug fixes"
 
 function formatVersionString(version) {
-  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.19';
+  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.20';
   const str = String(version).trim();
   if (/^[0-9a-f]{6,40}$/i.test(str) || str.toLowerCase().includes('commit')) {
-    return 'v3.12.19';
+    return 'v3.12.20';
   }
   return str.startsWith('v') ? str : `v${str}`;
 }
@@ -804,7 +804,7 @@ function KlarityApp() {
         type: feedbackType,
         text: feedbackText.trim(),
         user: currentUser?.email || 'Anonymous',
-        version: '3.12.19',
+        version: '3.12.20',
         createdAt: new Date().toISOString()
       };
       try {
@@ -10978,7 +10978,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                             <div className="flex items-center gap-2">
                               <h3 className="font-bold text-slate-900 text-sm">Klarity Finance</h3>
                               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
-                                {formatVersionString(desktopAppInfo.version || '3.12.19')}
+                                {formatVersionString(desktopAppInfo.version || '3.12.20')}
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 mt-0.5">
@@ -11094,7 +11094,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           <div className="flex items-center gap-2.5">
                             <h3 className="font-bold text-slate-900 text-sm">Release Notes</h3>
                             <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200">
-                              v3.12.19
+                              v3.12.20
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -11108,14 +11108,29 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         {isReleaseNotesOpen && (
                           <div className="px-5 pb-5 pt-1 border-t border-slate-100">
                             <div className="space-y-4 pt-3">
-                              {/* Release 3.12.19 (Latest) */}
+                              {/* Release 3.12.20 (Latest) */}
                               <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/60 flex flex-col gap-2.5">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.19</span>
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.20</span>
                                     <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">Current</span>
                                   </div>
                                   <span className="text-[10px] text-slate-400">Latest Release</span>
+                                </div>
+                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                                  <li><strong className="text-slate-800">Extra Household Providers:</strong> Added flexible &quot;+ Add Extra Provider&quot; functionality in Household Lifestyle Providers section allowing users to add custom services (Pest Control, Lawn Care, Pool Maintenance, Gas / Propane, Cleaning Service) with custom plan names, costs, account numbers, and notes.</li>
+                                  <li><strong className="text-slate-800">Home Warranty & Protection Suite:</strong> Pre-populated realistic defaults for Home Warranty (American Home Shield, Choice Home Warranty, etc.) and Municipal Water Service across the Household dashboard and Step 7 Onboarding Wizard.</li>
+                                  <li><strong className="text-slate-800">Password Category Dropdown:</strong> Clean, uncluttered category filter dropdown with &quot;+ New Section&quot; at the top, section badges, and category management.</li>
+                                </ul>
+                              </div>
+
+                              {/* Release 3.12.19 */}
+                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.19</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400">Previous</span>
                                 </div>
                                 <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
                                   <li><strong className="text-slate-800">Update Notification Precision Engine:</strong> Eliminated false-positive update alerts when running the latest version. Integrated semantic version verification and persistent dismissal tracking across web and native desktop runtimes.</li>
@@ -11585,7 +11600,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <div className="flex items-center gap-2">
                     <h3 className="font-serif-title text-lg font-bold text-slate-900">What's New in Klarity</h3>
                     <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
-                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.19'))}
+                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.20'))}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
