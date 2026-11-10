@@ -177,7 +177,18 @@ async function checkForGitHubUpdate() {
     broadcastUpdateStatus({ state: 'checking', message: 'Checking GitHub for updates...' });
 
     const currentSha = getRunningCommitSha();
-    const currentVersion = app.getVersion();
+    let currentVersion = app.getVersion();
+    try {
+      const localPkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
+      if (localPkg && localPkg.version) currentVersion = localPkg.version;
+    } catch {}
+    try {
+      const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
+      if (fs.existsSync(versionFile)) {
+        const iv = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
+        if (iv && iv.version) currentVersion = iv.version;
+      }
+    } catch {}
 
     let remoteSha = null;
     let commitTitle = '';
@@ -242,9 +253,29 @@ async function checkForGitHubUpdate() {
     const cleanSemVer = versionNum.startsWith('v') ? versionNum.slice(1) : versionNum;
     const formattedSemVer = `v${cleanSemVer}`;
 
-    // 3. Verify whether current running commit already equals or contains remoteSha
+    function isSemverNewer(remoteVer, currentVer) {
+      if (!remoteVer || !currentVer) return false;
+      const rParts = String(remoteVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+      const cParts = String(currentVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+      for (let i = 0; i < Math.max(rParts.length, cParts.length); i++) {
+        const r = rParts[i] || 0;
+        const c = cParts[i] || 0;
+        if (r > c) return true;
+        if (r < c) return false;
+      }
+      return false;
+    }
+
+    // 3. Verify whether current running version or commit already equals or contains remoteSha
     let alreadyUpToDate = false;
-    if (remoteSha && currentSha) {
+
+    // A. Semantic version verification: if remoteVersion is not strictly newer than currentVersion, it is up to date
+    if (remoteVersion && currentVersion && !isSemverNewer(remoteVersion, currentVersion)) {
+      alreadyUpToDate = true;
+    }
+
+    // B. Commit SHA verification
+    if (!alreadyUpToDate && remoteSha && currentSha) {
       if (remoteSha.startsWith(currentSha) || currentSha.startsWith(remoteSha)) {
         alreadyUpToDate = true;
       } else {

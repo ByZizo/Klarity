@@ -16,7 +16,6 @@ import {
   FileSpreadsheet,
   Lock,
   AlertCircle,
-  ArrowLeft,
   ChevronDown,
   LayoutGrid,
   List,
@@ -565,17 +564,6 @@ export default function PasswordVaultPage({
     const isPasswordMode = vaultLockType === 'password';
     return (
       <div className="flex flex-col gap-6 py-6 sm:py-10 max-w-md mx-auto w-full">
-        {onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            className="text-xs text-slate-500 hover:text-slate-900 flex items-center gap-1.5 font-semibold cursor-pointer w-fit"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Overview</span>
-          </button>
-        )}
-
         <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col gap-5">
           <div className="flex flex-col items-center text-center gap-2">
             <div className="w-12 h-12 rounded-2xl bg-[#18457c] text-white flex items-center justify-center shadow-2xs">
@@ -715,19 +703,8 @@ export default function PasswordVaultPage({
     <div className="flex flex-col gap-5">
       {/* Top Bar with Main Name in the Middle */}
       <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-1">
-        {/* Left Side (Back button if available or spacer) */}
-        <div className="flex items-center gap-2 min-w-[40px]">
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back</span>
-            </button>
-          )}
-        </div>
+        {/* Left Spacer */}
+        <div className="hidden sm:block min-w-[40px]" />
 
         {/* Center: Main Name in the Middle */}
         <div className="flex flex-col items-center text-center justify-center sm:absolute sm:left-1/2 sm:-translate-x-1/2">

@@ -4208,6 +4208,18 @@ app.get('/api/feedback', (req, res) => {
 
 app.get('/api/app/update-check', async (req, res) => {
   try {
+    const repoDir = path.join(__dirname, '..');
+    let localVersion = '3.12.19';
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
+      if (pkg && pkg.version) localVersion = pkg.version;
+    } catch {}
+
+    let localSha = '';
+    try {
+      localSha = require('child_process').execSync('git rev-parse HEAD', { cwd: repoDir, windowsHide: true }).toString().trim();
+    } catch {}
+
     const ghRes = await fetch('https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5', {
       headers: { 'User-Agent': 'KlarityApp' }
     });
@@ -4215,8 +4227,57 @@ app.get('/api/app/update-check', async (req, res) => {
       const commits = await ghRes.json();
       if (Array.isArray(commits) && commits.length > 0) {
         const latest = commits[0];
+        const remoteSha = latest.sha || '';
+
+        // Fetch remote package.json to compare semantic version
+        let remoteVersion = null;
+        try {
+          const pkgRes = await fetch('https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json', {
+            headers: { 'User-Agent': 'KlarityApp' }
+          });
+          if (pkgRes.ok) {
+            const pkgData = await pkgRes.json();
+            if (pkgData && pkgData.version) remoteVersion = pkgData.version;
+          }
+        } catch {}
+
+        function isSemverNewer(remoteVer, currentVer) {
+          if (!remoteVer || !currentVer) return false;
+          const rParts = String(remoteVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+          const cParts = String(currentVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+          for (let i = 0; i < Math.max(rParts.length, cParts.length); i++) {
+            const r = rParts[i] || 0;
+            const c = cParts[i] || 0;
+            if (r > c) return true;
+            if (r < c) return false;
+          }
+          return false;
+        }
+
+        let isUpdateAvailable = false;
+        if (remoteVersion && isSemverNewer(remoteVersion, localVersion)) {
+          isUpdateAvailable = true;
+        } else if (remoteSha && localSha && !remoteSha.startsWith(localSha) && !localSha.startsWith(remoteSha)) {
+          // If git is available, verify ancestry
+          try {
+            const isAncestor = require('child_process').execSync(`git merge-base --is-ancestor ${remoteSha} ${localSha} && echo yes`, { cwd: repoDir, windowsHide: true }).toString();
+            if (!isAncestor.includes('yes')) {
+              isUpdateAvailable = true;
+            }
+          } catch {
+            // If ancestry check cannot be determined and versions are identical, do not falsely claim update
+            if (remoteVersion && !isSemverNewer(remoteVersion, localVersion)) {
+              isUpdateAvailable = false;
+            }
+          }
+        }
+
         return res.json({
           ok: true,
+          isUpdateAvailable,
+          currentVersion: localVersion,
+          latestVersion: remoteVersion || localVersion,
+          currentSha: localSha ? localSha.slice(0, 7) : 'latest',
           sha: latest.sha?.slice(0, 7),
           fullSha: latest.sha,
           message: latest.commit?.message?.split('\n')[0] || '',

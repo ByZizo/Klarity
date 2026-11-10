@@ -589,13 +589,28 @@ function PlaidLauncher({ token, onSuccess, onExit }) {
   return null;
 }
 
+const CURRENT_APP_VERSION = '3.12.19';
+
+function isSemverNewer(remoteVer, currentVer = CURRENT_APP_VERSION) {
+  if (!remoteVer || !currentVer) return false;
+  const rParts = String(remoteVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+  const cParts = String(currentVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(rParts.length, cParts.length); i++) {
+    const r = rParts[i] || 0;
+    const c = cParts[i] || 0;
+    if (r > c) return true;
+    if (r < c) return false;
+  }
+  return false;
+}
+
 // Helper to format release highlights: only major features, minor items become "Bug fixes"
 
 function formatVersionString(version) {
-  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.18';
+  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.19';
   const str = String(version).trim();
   if (/^[0-9a-f]{6,40}$/i.test(str) || str.toLowerCase().includes('commit')) {
-    return 'v3.12.18';
+    return 'v3.12.19';
   }
   return str.startsWith('v') ? str : `v${str}`;
 }
@@ -789,7 +804,7 @@ function KlarityApp() {
         type: feedbackType,
         text: feedbackText.trim(),
         user: currentUser?.email || 'Anonymous',
-        version: '3.12.18',
+        version: '3.12.19',
         createdAt: new Date().toISOString()
       };
       try {
@@ -853,6 +868,22 @@ function KlarityApp() {
         if (info) setDesktopAppInfo(info);
       }).catch(() => {});
       const unsub = window.klarityDesktop.onUpdateStatus?.((status) => {
+        if (status && (status.state === 'available' || status.state === 'ready')) {
+          const offeredVer = status.latestVersion || status.version;
+          if (offeredVer && !isSemverNewer(offeredVer, CURRENT_APP_VERSION)) {
+            // Normalize false positive update status when current running app is already on this version
+            setDesktopAppInfo(prev => ({
+              ...prev,
+              updateStatus: {
+                state: 'up-to-date',
+                version: CURRENT_APP_VERSION,
+                commitSha: status.commitSha || 'latest',
+                message: `Up to date — v${CURRENT_APP_VERSION}`
+              }
+            }));
+            return;
+          }
+        }
         setDesktopAppInfo(prev => ({ ...prev, updateStatus: status }));
       });
       // Proactively check for updates immediately on launch
@@ -867,16 +898,27 @@ function KlarityApp() {
       // In web browser mode, proactively poll server update check on mount
       const t = setTimeout(() => {
         fetch('/api/app/update-check').then(res => res.json()).then(data => {
-          if (data && data.ok && data.sha) {
+          if (data && data.ok && data.isUpdateAvailable && isSemverNewer(data.latestVersion, CURRENT_APP_VERSION)) {
             setDesktopAppInfo(prev => ({
               ...prev,
               updateStatus: {
                 state: 'available',
                 commitSha: data.sha,
                 fullSha: data.fullSha,
+                latestVersion: data.latestVersion,
                 commitTitle: data.message,
                 recentChanges: data.recentChanges || [],
-                message: `A new update for Klarity is ready!`
+                message: `A new update for Klarity (${data.latestVersion ? 'v' + data.latestVersion : 'ready'}) is ready!`
+              }
+            }));
+          } else {
+            setDesktopAppInfo(prev => ({
+              ...prev,
+              updateStatus: {
+                state: 'up-to-date',
+                commitSha: data?.currentSha || data?.sha || 'latest',
+                version: CURRENT_APP_VERSION,
+                message: `Up to date — v${CURRENT_APP_VERSION}`
               }
             }));
           }
@@ -954,11 +996,20 @@ function KlarityApp() {
   // Trigger update notification prompt when Klarity opens and an update is detected
   useEffect(() => {
     if (desktopAppInfo.updateStatus?.state === 'available' && !updatePromptDismissed) {
+      const offeredVer = desktopAppInfo.updateStatus?.latestVersion || desktopAppInfo.updateStatus?.version;
+      // Do not open modal if offered version is not strictly newer than currently running app
+      if (offeredVer && !isSemverNewer(offeredVer, CURRENT_APP_VERSION)) {
+        return;
+      }
       let alreadyApplied = false;
       try {
         const lastApplied = sessionStorage.getItem('klarity_last_applied_sha');
+        const dismissedSha = localStorage.getItem('klarity_dismissed_update_sha');
         const currentPending = desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
         if (lastApplied && currentPending && (currentPending.startsWith(lastApplied) || lastApplied.startsWith(currentPending))) {
+          alreadyApplied = true;
+        }
+        if (dismissedSha && currentPending && (currentPending.startsWith(dismissedSha) || dismissedSha.startsWith(currentPending))) {
           alreadyApplied = true;
         }
       } catch {}
@@ -966,7 +1017,7 @@ function KlarityApp() {
         setIsUpdateModalOpen(true);
       }
     }
-  }, [desktopAppInfo.updateStatus?.state, desktopAppInfo.updateStatus?.commitSha, desktopAppInfo.updateStatus?.fullSha, updatePromptDismissed]);
+  }, [desktopAppInfo.updateStatus?.state, desktopAppInfo.updateStatus?.commitSha, desktopAppInfo.updateStatus?.fullSha, desktopAppInfo.updateStatus?.latestVersion, updatePromptDismissed]);
 
   // Run background storage encryption audit on mount so all sensitive localStorage keys use ENCv2
   useEffect(() => {
@@ -6300,7 +6351,6 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <PasswordVaultPage
                     vaultItems={vaultItems}
                     onUpdateVaultItems={setVaultItems}
-                    onBack={() => setActiveTab('more')}
                   />
                 </div>
               )}
@@ -6374,8 +6424,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
         {/* Top-of-App Auto-Update Banner (Appears whenever an update is pushed out) */}
         {!updateBannerDismissed && (
-          desktopAppInfo.updateStatus?.state === 'available' ||
-          desktopAppInfo.updateStatus?.state === 'ready' ||
+          ((desktopAppInfo.updateStatus?.state === 'available' || desktopAppInfo.updateStatus?.state === 'ready') &&
+            (!desktopAppInfo.updateStatus?.latestVersion || isSemverNewer(desktopAppInfo.updateStatus?.latestVersion, CURRENT_APP_VERSION))) ||
           desktopAppInfo.updateStatus?.state === 'installing'
         ) && (
           <div className="w-full rounded-2xl bg-[#18457c] text-white px-4 py-3 shadow-md flex items-center justify-between gap-3 text-xs animate-in fade-in slide-in-from-top-2">
@@ -6399,7 +6449,13 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               {desktopAppInfo.updateStatus?.state !== 'installing' && (
                 <button
                   type="button"
-                  onClick={() => setUpdateBannerDismissed(true)}
+                  onClick={() => {
+                    setUpdateBannerDismissed(true);
+                    try {
+                      const curSha = desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
+                      if (curSha) localStorage.setItem('klarity_dismissed_update_sha', curSha);
+                    } catch {}
+                  }}
                   className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 font-semibold cursor-pointer transition-colors"
                 >
                   Later
@@ -7799,7 +7855,6 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           <PasswordVaultPage
             vaultItems={vaultItems}
             onUpdateVaultItems={setVaultItems}
-            onBack={() => setActiveTab('dashboard')}
           />
         )}
 
@@ -10923,7 +10978,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                             <div className="flex items-center gap-2">
                               <h3 className="font-bold text-slate-900 text-sm">Klarity Finance</h3>
                               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
-                                {formatVersionString(desktopAppInfo.version || '3.12.18')}
+                                {formatVersionString(desktopAppInfo.version || '3.12.19')}
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 mt-0.5">
@@ -11039,7 +11094,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           <div className="flex items-center gap-2.5">
                             <h3 className="font-bold text-slate-900 text-sm">Release Notes</h3>
                             <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200">
-                              v3.12.18
+                              v3.12.19
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -11053,14 +11108,28 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         {isReleaseNotesOpen && (
                           <div className="px-5 pb-5 pt-1 border-t border-slate-100">
                             <div className="space-y-4 pt-3">
-                              {/* Release 3.12.18 (Latest) */}
+                              {/* Release 3.12.19 (Latest) */}
                               <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/60 flex flex-col gap-2.5">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.18</span>
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.19</span>
                                     <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">Current</span>
                                   </div>
                                   <span className="text-[10px] text-slate-400">Latest Release</span>
+                                </div>
+                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                                  <li><strong className="text-slate-800">Update Notification Precision Engine:</strong> Eliminated false-positive update alerts when running the latest version. Integrated semantic version verification and persistent dismissal tracking across web and native desktop runtimes.</li>
+                                  <li><strong className="text-slate-800">Passwords & Accounts Header:</strong> Removed the back button from the top left corner of the Passwords & Accounts hub for a clean, focused workspace layout.</li>
+                                </ul>
+                              </div>
+
+                              {/* Release 3.12.18 */}
+                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.18</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400">Previous</span>
                                 </div>
                                 <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
                                   <li><strong className="text-slate-800">Home Warranty & Appliance Protection:</strong> Added home warranty providers (American Home Shield, Choice Home Warranty, First American, Cinch Home Services, Liberty Home Guard, Select Home Warranty) with plan tiers, monthly costs, contract notes, and full statement uploading & scanning.</li>
@@ -11439,6 +11508,10 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 onClick={() => {
                   setIsUpdateModalOpen(false);
                   setUpdatePromptDismissed(true);
+                  try {
+                    const curSha = desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
+                    if (curSha) localStorage.setItem('klarity_dismissed_update_sha', curSha);
+                  } catch {}
                 }}
                 className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 aria-label="Close"
@@ -11457,6 +11530,10 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 onClick={() => {
                   setIsUpdateModalOpen(false);
                   setUpdatePromptDismissed(true);
+                  try {
+                    const curSha = desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
+                    if (curSha) localStorage.setItem('klarity_dismissed_update_sha', curSha);
+                  } catch {}
                 }}
                 className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs cursor-pointer transition-colors"
               >
@@ -11508,7 +11585,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <div className="flex items-center gap-2">
                     <h3 className="font-serif-title text-lg font-bold text-slate-900">What's New in Klarity</h3>
                     <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
-                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.18'))}
+                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.19'))}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
