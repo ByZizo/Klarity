@@ -592,10 +592,10 @@ function PlaidLauncher({ token, onSuccess, onExit }) {
 // Helper to format release highlights: only major features, minor items become "Bug fixes"
 
 function formatVersionString(version) {
-  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.15';
+  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.16';
   const str = String(version).trim();
   if (/^[0-9a-f]{6,40}$/i.test(str) || str.toLowerCase().includes('commit')) {
-    return 'v3.12.15';
+    return 'v3.12.16';
   }
   return str.startsWith('v') ? str : `v${str}`;
 }
@@ -789,7 +789,7 @@ function KlarityApp() {
         type: feedbackType,
         text: feedbackText.trim(),
         user: currentUser?.email || 'Anonymous',
-        version: '3.12.15',
+        version: '3.12.16',
         createdAt: new Date().toISOString()
       };
       try {
@@ -1217,7 +1217,7 @@ function KlarityApp() {
   // Settings & Plaid state
   const [settings, setSettings] = useState({ hasPlaidKeys: false, plaidEnv: 'development' });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsActiveTab, setSettingsActiveTab] = useState('profile'); // 'profile' | 'appearance' | 'sidebar' | 'ai' | 'plaid' | 'security' | 'session'
+  const [settingsActiveTab, setSettingsActiveTab] = useState('profile'); // 'profile' | 'ui' | 'sidebar' | 'ai' | 'plaid' | 'security' | 'about'
 
   // UI & Accessibility states: font scale, density, reduce motion, high focus, privacy mask
   const [uiFontScale, setUiFontScale] = useState(() => {
@@ -9420,7 +9420,6 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' },
                       { id: 'plaid', label: 'Bank connection', dot: settingsPlaidStatus !== 'connected' },
                       { id: 'security', label: 'Security', dot: false },
-                      { id: 'session', label: 'Session', dot: false },
                       { id: 'about', label: 'About', dot: false }
                     ].map(tab => {
                       const isActive = settingsActiveTab === tab.id;
@@ -10796,107 +10795,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           </button>
                         </div>
                       </div>
-                    </div>
-                  )}
 
-                  {/* TAB 5: SESSION & UPDATES */}
-                  {settingsActiveTab === 'session' && (
-                    <div key="settings-tab-session" className="flex flex-col gap-6">
-                      <div>
-                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Session & Updates</h2>
-                        <p className="text-xs text-slate-500 mt-1">Manage active logins, inspect software versions, and check for desktop updates.</p>
-                      </div>
-
-                      {/* Card 1: Desktop App Engine & GitHub Auto-Updater */}
-                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col gap-4 text-xs">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 text-sm">
-                                Klarity
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-500 mt-1">
-                              {desktopAppInfo.updateStatus?.message && !desktopAppInfo.updateStatus.message.includes('Connected to GitHub') && !desktopAppInfo.updateStatus.message.includes('ByZizo') ? desktopAppInfo.updateStatus.message : 'Up to date'}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            {desktopAppInfo.updateStatus?.state === 'available' || desktopAppInfo.updateStatus?.state === 'ready' ? (
-                              <button
-                                type="button"
-                                disabled={isInstallingUpdate || desktopAppInfo.updateStatus?.state === 'installing'}
-                                onClick={handlePerformUpdate}
-                                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold cursor-pointer flex items-center gap-2 shadow-xs transition-colors"
-                              >
-                                <Download className="w-4 h-4" />
-                                <span>{isInstallingUpdate ? 'Updating...' : 'Update Now'}</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={isCheckingUpdateInSettings}
-                                onClick={async () => {
-                                  setIsCheckingUpdateInSettings(true);
-                                  try {
-                                    if (typeof window !== 'undefined' && window.klarityDesktop?.checkForUpdates) {
-                                      const st = await window.klarityDesktop.checkForUpdates();
-                                      if (st?.state === 'available') {
-                                        setIsUpdateModalOpen(true);
-                                      } else {
-                                        setNotificationToast(st?.message || 'Klarity is up to date!');
-                                        setTimeout(() => setNotificationToast(''), 3000);
-                                      }
-                                    } else {
-                                      const res = await fetch('/api/app/update-check');
-                                      const data = await res.json();
-                                      if (data.ok) {
-                                        setNotificationToast('Klarity is up to date');
-                                      } else {
-                                        setNotificationToast('Klarity is up to date');
-                                      }
-                                      setTimeout(() => setNotificationToast(''), 3500);
-                                    }
-                                  } catch (err) {
-                                    setNotificationToast('Update check complete — up to date.');
-                                    setTimeout(() => setNotificationToast(''), 3000);
-                                  } finally {
-                                    setIsCheckingUpdateInSettings(false);
-                                  }
-                                }}
-                                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-800 font-semibold cursor-pointer flex items-center gap-2 transition-colors"
-                              >
-                                <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdateInSettings ? 'animate-spin text-[#18457c]' : ''}`} />
-                                <span>{isCheckingUpdateInSettings ? 'Checking GitHub...' : 'Check for Updates'}</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* If an update is available, show a detailed alert banner */}
-                        {desktopAppInfo.updateStatus?.state === 'available' && (
-                          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start justify-between gap-3 text-amber-900 animate-in fade-in duration-150">
-                            <div className="flex items-start gap-2.5">
-                              <ArrowUpCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                              <div>
-                                <span className="font-bold text-xs block">Update available</span>
-                                <span className="text-[11px] text-amber-800 leading-snug">
-                                  A new version is ready to install.
-                                </span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handlePerformUpdate}
-                              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer shrink-0 transition-colors shadow-2xs"
-                            >
-                              Install Now
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Card 2: Active Session & Sign Out */}
+                      {/* Card 5: Active Session & Sign Out */}
                       <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs">
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
@@ -10918,7 +10818,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                     </div>
                   )}
 
-                  {/* TAB 6: ABOUT & LAST UPDATES */}
+                  {/* TAB: ABOUT & LAST UPDATES */}
                   {settingsActiveTab === 'about' && (
                     <div key="settings-tab-about" className="flex flex-col gap-6">
                       <div>
@@ -10936,7 +10836,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                             <div className="flex items-center gap-2">
                               <h3 className="font-bold text-slate-900 text-sm">Klarity Finance</h3>
                               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
-                                {formatVersionString(desktopAppInfo.version || '3.12.15')}
+                                {formatVersionString(desktopAppInfo.version || '3.12.16')}
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 mt-0.5">
@@ -11052,7 +10952,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           <div className="flex items-center gap-2.5">
                             <h3 className="font-bold text-slate-900 text-sm">Release Notes</h3>
                             <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200">
-                              v3.12.15
+                              v3.12.16
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -11066,14 +10966,29 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         {isReleaseNotesOpen && (
                           <div className="px-5 pb-5 pt-1 border-t border-slate-100">
                             <div className="space-y-4 pt-3">
-                              {/* Release 3.12.15 (Latest) */}
+                              {/* Release 3.12.16 (Latest) */}
                               <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/60 flex flex-col gap-2.5">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.15</span>
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.16</span>
                                     <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">Current</span>
                                   </div>
                                   <span className="text-[10px] text-slate-400">Latest Release</span>
+                                </div>
+                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                                  <li><strong className="text-slate-800">Security Page Sign Out:</strong> Moved Active Session status and Sign Out button cleanly to the bottom of the Security section.</li>
+                                  <li><strong className="text-slate-800">Settings Streamlining:</strong> Removed redundant update checker from Session tab and consolidated all software update controls into About.</li>
+                                  <li><strong className="text-slate-800">Settings About Elevate:</strong> Positioned user feedback and bug reporting directly above release notes for immediate visibility.</li>
+                                </ul>
+                              </div>
+
+                              {/* Release 3.12.15 */}
+                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.15</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400">Previous</span>
                                 </div>
                                 <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
                                   <li><strong className="text-slate-800">Settings About Elevate:</strong> Positioned user feedback and bug reporting directly above release notes for immediate visibility.</li>
@@ -11477,7 +11392,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <div className="flex items-center gap-2">
                     <h3 className="font-serif-title text-lg font-bold text-slate-900">What's New in Klarity</h3>
                     <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
-                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.15'))}
+                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.16'))}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
