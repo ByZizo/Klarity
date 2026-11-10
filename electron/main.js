@@ -34,8 +34,11 @@ let updateStatusState = {
 let runningCommitSha = null;
 
 function getRunningCommitSha() {
+  // 1. Return in-memory cache if already determined for this process lifetime
+  if (runningCommitSha) return runningCommitSha;
+
   const repoDir = path.join(__dirname, '..');
-  // 1. When running from repository, the local HEAD commit is always the ground truth
+  // 2. When running from repository, the local HEAD commit at startup is the ground truth
   try {
     const sha = require('child_process').execSync('git rev-parse HEAD', { cwd: repoDir, windowsHide: true }).toString().trim();
     if (sha) {
@@ -51,9 +54,6 @@ function getRunningCommitSha() {
       return runningCommitSha;
     }
   } catch {}
-
-  // 2. In-memory cache
-  if (runningCommitSha) return runningCommitSha;
 
   // 3. Fall back to persisted installed_version.json (for packaged production environments without .git)
   const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
@@ -249,7 +249,7 @@ async function checkForGitHubUpdate() {
         alreadyUpToDate = true;
       } else {
         try {
-          const isAncestor = await runShell(`git merge-base --is-ancestor ${remoteSha} HEAD && echo yes`, repoDir).catch(() => '');
+          const isAncestor = await runShell(`git merge-base --is-ancestor ${remoteSha} ${currentSha} && echo yes`, repoDir).catch(() => '');
           if (isAncestor && isAncestor.includes('yes')) {
             alreadyUpToDate = true;
           }
