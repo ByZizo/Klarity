@@ -246,6 +246,25 @@ export const HOUSEHOLD_PROVIDER_CONFIGS = {
     placeholderPlan: 'e.g. Standard Residential Meter, Tiered Conservation...',
     quickProviders: ['City Water Works', 'County Water District', 'California Water Service', 'American Water'],
     quickPlans: ['Standard Residential Meter', 'Tiered Conservation Rate', 'Flat Residential Rate']
+  },
+  homeWarranty: {
+    key: 'homeWarranty',
+    label: 'Home warranty',
+    title: 'Home Warranty & Appliance Protection',
+    category: 'Home Warranty & Protection',
+    icon: 'Shield',
+    colorClass: 'text-rose-600 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800',
+    providerField: 'homeWarrantyProvider',
+    planField: 'homeWarrantyPlan',
+    accountField: 'homeWarrantyAccount',
+    costField: 'homeWarrantyMonthlyCost',
+    notesField: 'homeWarrantyNotes',
+    defaultProvider: 'American Home Shield',
+    defaultPlan: 'ShieldGold',
+    placeholderProvider: 'e.g. American Home Shield, Choice Home Warranty, First American, Cinch...',
+    placeholderPlan: 'e.g. ShieldGold, ShieldPlatinum, Total Plan, Basic Plan...',
+    quickProviders: ['American Home Shield', 'Choice Home Warranty', 'First American', 'Cinch Home Services', 'Liberty Home Guard', 'Select Home Warranty'],
+    quickPlans: ['ShieldGold ($65/mo)', 'ShieldPlatinum ($85/mo)', 'ShieldSilver ($45/mo)', 'Total Plan ($55/mo)', 'Basic Plan ($40/mo)', 'Complete Home Coverage']
   }
 };
 
@@ -1034,6 +1053,10 @@ export default function HouseholdLifestyleHub({
   const suggestedSecurityPlans = useMemo(
     () => getPlansForProvider('security', householdProfile.securityProvider),
     [householdProfile.securityProvider]
+  );
+  const suggestedHomeWarrantyPlans = useMemo(
+    () => getPlansForProvider('homeWarranty', householdProfile.homeWarrantyProvider),
+    [householdProfile.homeWarrantyProvider]
   );
 
   const handleRefreshProperty = () => {
@@ -3139,6 +3162,85 @@ export default function HouseholdLifestyleHub({
                           </div>
                         </div>
                       </div>
+
+                      {/* 6. Home Warranty & Protection */}
+                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3 md:col-span-2">
+                        <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                          <Shield className="w-4 h-4 text-rose-600" />
+                          <span>6. Home Warranty & Protection</span>
+                        </span>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">Warranty Company</span>
+                            <input
+                              type="text"
+                              value={householdProfile.homeWarrantyProvider || ''}
+                              onChange={e => handleFieldChange('homeWarrantyProvider', e.target.value)}
+                              placeholder="e.g. American Home Shield, Choice Home Warranty, First American, Cinch..."
+                              className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            />
+                            <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                              {['American Home Shield', 'Choice Home Warranty', 'First American', 'Cinch Home Services', 'Liberty Home Guard', 'Select Home Warranty', 'None'].map(p => (
+                                <button
+                                  key={p}
+                                  type="button"
+                                  onClick={() => handleFieldChange('homeWarrantyProvider', p)}
+                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.homeWarrantyProvider === p ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                >
+                                  {p}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                              Warranty Plan Name
+                            </span>
+                            <input
+                              type="text"
+                              list="warranty-plans-list"
+                              value={householdProfile.homeWarrantyPlan || ''}
+                              onChange={e => handleFieldChange('homeWarrantyPlan', e.target.value)}
+                              placeholder="Type plan, e.g. ShieldGold, ShieldPlatinum, Total Plan, Basic Plan..."
+                              className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            />
+                            <datalist id="warranty-plans-list">
+                              {suggestedHomeWarrantyPlans.map(p => (
+                                <option key={p.name} value={p.name}>{p.name} ({p.tag})</option>
+                              ))}
+                            </datalist>
+
+                            {suggestedHomeWarrantyPlans.length > 0 && (
+                              <div className="flex items-center gap-1.5 flex-wrap mt-2 max-h-24 overflow-y-auto pr-1">
+                                {suggestedHomeWarrantyPlans.map(p => {
+                                  const isSelected = householdProfile.homeWarrantyPlan === p.name;
+                                  return (
+                                    <button
+                                      key={p.name}
+                                      type="button"
+                                      onClick={() => handleFieldChange('homeWarrantyPlan', p.name)}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                        isSelected
+                                          ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
+                                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                      }`}
+                                    >
+                                      <span>{p.name}</span>
+                                      <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                                        isSelected ? 'bg-rose-700 text-rose-100' : 'bg-slate-100 text-slate-500'
+                                      }`}>
+                                        {p.tag}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -3719,6 +3821,38 @@ export default function HouseholdLifestyleHub({
                             <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
                           </div>
                         </div>
+
+                        {/* 7. Home Warranty */}
+                        <div
+                          onClick={() => handleOpenProvider('homeWarranty')}
+                          className="py-4.5 px-3 -mx-3 rounded-xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          title="Click to view details and upload statements"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-100 dark:border-rose-900/40 shadow-2xs">
+                              <Shield className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                Home warranty
+                              </span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                                {householdProfile.homeWarrantyProvider || 'American Home Shield'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 text-right">
+                            <div>
+                              <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
+                                {householdProfile.homeWarrantyPlan || 'ShieldGold'}
+                              </span>
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
+                                {householdProfile.providerDocuments?.homeWarranty?.length ? `${householdProfile.providerDocuments.homeWarranty.length} statement on file` : 'Upload statement'}
+                              </span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-all" />
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -3859,6 +3993,7 @@ export default function HouseholdLifestyleHub({
                         {cfg.icon === 'Zap' && <Zap className="w-7 h-7" />}
                         {cfg.icon === 'Droplets' && <Droplets className="w-7 h-7" />}
                         {cfg.icon === 'ShieldCheck' && <ShieldCheck className="w-7 h-7" />}
+                        {cfg.icon === 'Shield' && <Shield className="w-7 h-7" />}
                       </div>
                       <div>
                         <div className="flex items-center gap-2.5 flex-wrap">

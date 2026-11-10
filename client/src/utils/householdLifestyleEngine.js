@@ -319,6 +319,36 @@ export const PROVIDER_SPECIFIC_PLANS = {
       { name: 'Vivint Smart Home Automation & Monitoring', tag: 'Current' },
       { name: 'Vivint Security Basics', tag: 'Monitoring' }
     ]
+  },
+  homeWarranty: {
+    'homeshield': [
+      { name: 'ShieldGold (Systems & Appliances)', tag: 'Combo Plan' },
+      { name: 'ShieldPlatinum (Comprehensive + Roof Leak)', tag: 'Premium' },
+      { name: 'ShieldSilver (Major Built-in Systems)', tag: 'Systems Only' }
+    ],
+    'choice': [
+      { name: 'Total Plan (Appliances & Plumbing/HVAC)', tag: 'Combo Plan' },
+      { name: 'Basic Plan (Primary Appliances)', tag: 'Basic' }
+    ],
+    'firstamerican': [
+      { name: 'Eagle Premier (Comprehensive Systems & Appliances)', tag: 'Full Coverage' },
+      { name: 'Basic Plan (Appliances Only)', tag: 'Standard' }
+    ],
+    'cinch': [
+      { name: 'Complete Home Plan', tag: 'All-in-One' },
+      { name: 'Appliances Plan', tag: 'Appliances' },
+      { name: 'Built-in Systems Plan', tag: 'Systems' }
+    ],
+    'liberty': [
+      { name: 'Total Home Guard', tag: 'Combo Plan' },
+      { name: 'Appliance Guard', tag: 'Appliances' },
+      { name: 'Systems Guard', tag: 'Systems' }
+    ],
+    'select': [
+      { name: 'Platinum Care (Systems & Appliances)', tag: 'Comprehensive' },
+      { name: 'Gold Care (Major Systems)', tag: 'Systems' },
+      { name: 'Bronze Care (Major Appliances)', tag: 'Appliances' }
+    ]
   }
 };
 
@@ -517,6 +547,12 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
   securityProvider: 'Ring',
   securityPlan: 'Ring Protect Pro ($20/mo or $200/yr)',
   securityPlanType: 'cloud_video',
+  homeWarrantyProvider: '',
+  homeWarrantyPlan: '',
+  homeWarrantyPlanType: '',
+  homeWarrantyAccount: '',
+  homeWarrantyMonthlyCost: '',
+  homeWarrantyNotes: '',
 
   // Solar & Storage suite
   hasSolar: false,
@@ -601,6 +637,7 @@ export function getSuggestedProviders(profile = {}) {
   const propertyTax = `${county} Tax Collector`;
   const hoa = 'HOA Community Association';
   const homeInsurance = profile.ownership === 'rent' ? 'Lemonade / State Farm Renters' : 'State Farm / Travelers Homeowners';
+  const homeWarranty = profile.homeWarrantyProvider || 'American Home Shield / Choice';
 
   return {
     electricity: electric,
@@ -609,6 +646,7 @@ export function getSuggestedProviders(profile = {}) {
     internet,
     phone,
     security,
+    homeWarranty,
     mortgageRent,
     propertyTax,
     hoa,

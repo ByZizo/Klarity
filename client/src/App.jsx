@@ -592,10 +592,10 @@ function PlaidLauncher({ token, onSuccess, onExit }) {
 // Helper to format release highlights: only major features, minor items become "Bug fixes"
 
 function formatVersionString(version) {
-  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.17';
+  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.18';
   const str = String(version).trim();
   if (/^[0-9a-f]{6,40}$/i.test(str) || str.toLowerCase().includes('commit')) {
-    return 'v3.12.17';
+    return 'v3.12.18';
   }
   return str.startsWith('v') ? str : `v${str}`;
 }
@@ -789,7 +789,7 @@ function KlarityApp() {
         type: feedbackType,
         text: feedbackText.trim(),
         user: currentUser?.email || 'Anonymous',
-        version: '3.12.17',
+        version: '3.12.18',
         createdAt: new Date().toISOString()
       };
       try {
@@ -10923,7 +10923,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                             <div className="flex items-center gap-2">
                               <h3 className="font-bold text-slate-900 text-sm">Klarity Finance</h3>
                               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
-                                {formatVersionString(desktopAppInfo.version || '3.12.17')}
+                                {formatVersionString(desktopAppInfo.version || '3.12.18')}
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 mt-0.5">
@@ -11039,7 +11039,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           <div className="flex items-center gap-2.5">
                             <h3 className="font-bold text-slate-900 text-sm">Release Notes</h3>
                             <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200">
-                              v3.12.17
+                              v3.12.18
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -11053,14 +11053,28 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         {isReleaseNotesOpen && (
                           <div className="px-5 pb-5 pt-1 border-t border-slate-100">
                             <div className="space-y-4 pt-3">
-                              {/* Release 3.12.17 (Latest) */}
+                              {/* Release 3.12.18 (Latest) */}
                               <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/60 flex flex-col gap-2.5">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.17</span>
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.18</span>
                                     <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">Current</span>
                                   </div>
                                   <span className="text-[10px] text-slate-400">Latest Release</span>
+                                </div>
+                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                                  <li><strong className="text-slate-800">Home Warranty & Appliance Protection:</strong> Added home warranty providers (American Home Shield, Choice Home Warranty, First American, Cinch Home Services, Liberty Home Guard, Select Home Warranty) with plan tiers, monthly costs, contract notes, and full statement uploading & scanning.</li>
+                                  <li><strong className="text-slate-800">Password Category Dropdown:</strong> Clean, uncluttered category filter dropdown with &quot;+ New Section&quot; at the top, section badges, and category management.</li>
+                                </ul>
+                              </div>
+
+                              {/* Release 3.12.17 */}
+                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.17</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400">Previous</span>
                                 </div>
                                 <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
                                   <li><strong className="text-slate-800">Readability & Content Scaling Up to 200%:</strong> Added fluid 100%–200% scale slider and 5 preset buttons (100%, 125%, 150%, 175%, 200%) for maximum visual comfort and legibility.</li>
@@ -11494,7 +11508,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <div className="flex items-center gap-2">
                     <h3 className="font-serif-title text-lg font-bold text-slate-900">What's New in Klarity</h3>
                     <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
-                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.17'))}
+                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.18'))}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
