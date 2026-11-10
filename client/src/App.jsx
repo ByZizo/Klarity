@@ -592,10 +592,10 @@ function PlaidLauncher({ token, onSuccess, onExit }) {
 // Helper to format release highlights: only major features, minor items become "Bug fixes"
 
 function formatVersionString(version) {
-  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.16';
+  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.17';
   const str = String(version).trim();
   if (/^[0-9a-f]{6,40}$/i.test(str) || str.toLowerCase().includes('commit')) {
-    return 'v3.12.16';
+    return 'v3.12.17';
   }
   return str.startsWith('v') ? str : `v${str}`;
 }
@@ -789,7 +789,7 @@ function KlarityApp() {
         type: feedbackType,
         text: feedbackText.trim(),
         user: currentUser?.email || 'Anonymous',
-        version: '3.12.16',
+        version: '3.12.17',
         createdAt: new Date().toISOString()
       };
       try {
@@ -1221,7 +1221,18 @@ function KlarityApp() {
 
   // UI & Accessibility states: font scale, density, reduce motion, high focus, privacy mask
   const [uiFontScale, setUiFontScale] = useState(() => {
-    try { return localStorage.getItem('klarity_ui_font_scale') || 'normal'; } catch (e) { return 'normal'; }
+    try {
+      const saved = localStorage.getItem('klarity_ui_font_scale');
+      if (saved === 'normal') return '100';
+      if (saved === 'large') return '125';
+      if (saved === 'xlarge') return '150';
+      if (saved === 'huge') return '175';
+      if (saved === 'maximum' || saved === 'max') return '200';
+      if (saved && !isNaN(Number(saved))) return saved;
+      return '100';
+    } catch (e) {
+      return '100';
+    }
   });
   const [uiDensity, setUiDensity] = useState(() => {
     try { return localStorage.getItem('klarity_ui_density') || 'comfortable'; } catch (e) { return 'comfortable'; }
@@ -1240,8 +1251,28 @@ function KlarityApp() {
     try {
       const root = document.documentElement;
       root.classList.remove('font-scale-large', 'font-scale-xlarge', 'ui-density-compact', 'reduce-motion', 'high-focus', 'privacy-mask', 'dark', 'high-contrast', 'high-contrast-light');
-      if (scale === 'large') root.classList.add('font-scale-large');
-      if (scale === 'xlarge') root.classList.add('font-scale-xlarge');
+      
+      let percent = 100;
+      if (scale === 'normal' || scale === '100' || scale === 100) percent = 100;
+      else if (scale === 'large' || scale === '110') percent = 110;
+      else if (scale === '125') percent = 125;
+      else if (scale === 'xlarge' || scale === '150') percent = 150;
+      else if (scale === 'huge' || scale === '175') percent = 175;
+      else if (scale === 'maximum' || scale === 'max' || scale === '200' || scale === 200) percent = 200;
+      else {
+        const num = Number(scale);
+        if (!isNaN(num) && num >= 100 && num <= 200) {
+          percent = num;
+        }
+      }
+
+      const zoomFactor = percent / 100;
+      if ('zoom' in root.style) {
+        root.style.zoom = zoomFactor !== 1 ? `${zoomFactor}` : '';
+      } else {
+        root.style.fontSize = zoomFactor !== 1 ? `${16 * zoomFactor}px` : '';
+      }
+
       if (dens === 'compact') root.classList.add('ui-density-compact');
       if (motion) root.classList.add('reduce-motion');
       if (focus) root.classList.add('high-focus');
@@ -9401,7 +9432,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           <div
             ref={settingsModalRef}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-[880px] w-full min-h-[580px] h-[640px] flex flex-col overflow-hidden cursor-default"
+            className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-[880px] w-full max-h-[92vh] h-[640px] flex flex-col overflow-hidden cursor-default"
           >
             
             {/* Modal Body: Left Tabs + Right Content */}
@@ -9644,38 +9675,94 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         </p>
                       </div>
 
-                      {/* 1. Text Sizing & Font Scaling */}
-                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-4 bg-white shadow-2xs">
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-900">Text & Content Scaling</h3>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            Scale typography and interface elements for easier reading.
-                          </p>
+                      {/* 1. Readability & UI Scaling (Up to 200%) */}
+                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-5 bg-white shadow-2xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-bold text-slate-900">Readability & Content Scaling</h3>
+                              <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-xs border border-blue-200">
+                                {(() => {
+                                  const num = Number(uiFontScale);
+                                  return !isNaN(num) && num >= 100 && num <= 200 ? num : 100;
+                                })()}%
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Scale typography, numbers, and interface elements up to 200% for effortless legibility.
+                            </p>
+                          </div>
+                          {uiFontScale !== '100' && uiFontScale !== 100 && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetFontScale('100')}
+                              className="text-xs text-[#18457c] hover:underline font-semibold cursor-pointer shrink-0"
+                            >
+                              Reset to 100%
+                            </button>
+                          )}
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Interactive Scale Slider (100% to 200%) */}
+                        <div className="flex flex-col gap-2.5 p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl">
+                          <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                            <span>100% (Default)</span>
+                            <span className="text-[#18457c] font-bold bg-white px-2 py-0.5 rounded-lg border border-slate-200 shadow-2xs">
+                              {(() => {
+                                const num = Number(uiFontScale);
+                                return !isNaN(num) && num >= 100 && num <= 200 ? num : 100;
+                              })()}%
+                            </span>
+                            <span>200% (Maximum)</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="100"
+                            max="200"
+                            step="5"
+                            value={(() => {
+                              const num = Number(uiFontScale);
+                              return !isNaN(num) && num >= 100 && num <= 200 ? num : 100;
+                            })()}
+                            onChange={(e) => handleSetFontScale(e.target.value)}
+                            className="w-full accent-[#18457c] cursor-pointer h-2 bg-slate-200 rounded-lg appearance-none"
+                          />
+                          <div className="flex justify-between text-[10px] text-slate-400 font-medium px-0.5">
+                            <span>100%</span>
+                            <span>125%</span>
+                            <span>150%</span>
+                            <span>175%</span>
+                            <span>200%</span>
+                          </div>
+                        </div>
+
+                        {/* Preset Quick Buttons Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                           {[
-                            { id: 'normal', label: 'Default (100%)', desc: 'Standard compact text size' },
-                            { id: 'large', label: 'Large (110%)', desc: 'Enhanced legibility for comfortable reading' },
-                            { id: 'xlarge', label: 'Extra Large (125%)', desc: 'High readability for larger displays' }
-                          ].map(scale => {
-                            const isSelected = uiFontScale === scale.id;
+                            { id: '100', percent: 100, label: '100%', tag: 'Default' },
+                            { id: '125', percent: 125, label: '125%', tag: 'Medium' },
+                            { id: '150', percent: 150, label: '150%', tag: 'Large' },
+                            { id: '175', percent: 175, label: '175%', tag: 'X-Large' },
+                            { id: '200', percent: 200, label: '200%', tag: 'Maximum' }
+                          ].map(preset => {
+                            const currentNum = Number(uiFontScale) || 100;
+                            const isSelected = currentNum === preset.percent;
                             return (
                               <button
-                                key={scale.id}
+                                key={preset.id}
                                 type="button"
-                                onClick={() => handleSetFontScale(scale.id)}
-                                className={`p-4 rounded-xl border text-left cursor-pointer transition-all ${
+                                onClick={() => handleSetFontScale(preset.id)}
+                                className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
                                   isSelected
-                                    ? 'border-[#18457c] ring-2 ring-[#18457c]/20 bg-blue-50/25'
-                                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
+                                    ? 'border-[#18457c] ring-2 ring-[#18457c]/20 bg-blue-50/40 text-[#18457c]'
+                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-slate-700'
                                 }`}
                               >
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs font-bold text-slate-900">{scale.label}</span>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-xs font-bold">{preset.label}</span>
                                   {isSelected && <Check className="w-3.5 h-3.5 text-[#18457c]" />}
                                 </div>
-                                <p className="text-[11px] text-slate-500">{scale.desc}</p>
+                                <p className="text-[10px] font-semibold text-slate-500">{preset.tag}</p>
                               </button>
                             );
                           })}
@@ -10836,7 +10923,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                             <div className="flex items-center gap-2">
                               <h3 className="font-bold text-slate-900 text-sm">Klarity Finance</h3>
                               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
-                                {formatVersionString(desktopAppInfo.version || '3.12.16')}
+                                {formatVersionString(desktopAppInfo.version || '3.12.17')}
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 mt-0.5">
@@ -10952,7 +11039,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           <div className="flex items-center gap-2.5">
                             <h3 className="font-bold text-slate-900 text-sm">Release Notes</h3>
                             <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200">
-                              v3.12.16
+                              v3.12.17
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -10966,14 +11053,29 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         {isReleaseNotesOpen && (
                           <div className="px-5 pb-5 pt-1 border-t border-slate-100">
                             <div className="space-y-4 pt-3">
-                              {/* Release 3.12.16 (Latest) */}
+                              {/* Release 3.12.17 (Latest) */}
                               <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/60 flex flex-col gap-2.5">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.16</span>
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.17</span>
                                     <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">Current</span>
                                   </div>
                                   <span className="text-[10px] text-slate-400">Latest Release</span>
+                                </div>
+                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                                  <li><strong className="text-slate-800">Readability & Content Scaling Up to 200%:</strong> Added fluid 100%–200% scale slider and 5 preset buttons (100%, 125%, 150%, 175%, 200%) for maximum visual comfort and legibility.</li>
+                                  <li><strong className="text-slate-800">Responsive High-Zoom Architecture:</strong> Configured modals and dashboards to dynamically adapt and scroll gracefully at 200% scale.</li>
+                                  <li><strong className="text-slate-800">Security Page Sign Out:</strong> Clean single-row layout with Sign Out directly next to signed-in email.</li>
+                                </ul>
+                              </div>
+
+                              {/* Release 3.12.16 */}
+                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.16</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400">Previous</span>
                                 </div>
                                 <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
                                   <li><strong className="text-slate-800">Security Page Sign Out:</strong> Moved Active Session status and Sign Out button cleanly to the bottom of the Security section.</li>
@@ -11392,7 +11494,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <div className="flex items-center gap-2">
                     <h3 className="font-serif-title text-lg font-bold text-slate-900">What's New in Klarity</h3>
                     <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
-                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.16'))}
+                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.17'))}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">

@@ -39,11 +39,23 @@ html.dark, html.dark body, body.dark {
 /* ========================================================================== */
 /* ACCESSIBILITY & UI PREFERENCES (Font Scale, Density, Motion, Focus)        */
 /* ========================================================================== */
-html.font-scale-large {
-  font-size: 17px;
+html.font-scale-large,
+html.font-scale-110 {
+  font-size: 17.6px;
 }
-html.font-scale-xlarge {
-  font-size: 18.5px;
+html.font-scale-125 {
+  font-size: 20px;
+}
+html.font-scale-xlarge,
+html.font-scale-150 {
+  font-size: 24px;
+}
+html.font-scale-175 {
+  font-size: 28px;
+}
+html.font-scale-maximum,
+html.font-scale-200 {
+  font-size: 32px;
 }
 
 html.ui-density-compact .p-6 {
