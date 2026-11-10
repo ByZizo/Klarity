@@ -472,19 +472,19 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
   cityOrZip: 'Bay Area / Northern CA',
   zillowUrl: '',
   zillowImportedAt: null,
-  dwellingType: 'single_family',
+  dwellingType: '',
   ownership: 'own',
-  householdSize: 4,
-  sqFt: 2100,
-  bedrooms: 3,
-  bathrooms: 2,
-  yearBuilt: 2004,
-  lotSize: '6,500 sq ft',
-  estimatedValue: '$425,000',
-  county: 'Fresno County',
-  garage: 'Attached 2-Car Garage',
+  householdSize: 1,
+  sqFt: 0,
+  bedrooms: 0,
+  bathrooms: 0,
+  yearBuilt: null,
+  lotSize: '',
+  estimatedValue: '',
+  county: '',
+  garage: '',
   utilityRegionId: 'pge_norcal',
-  hasCareDiscount: true, // CARE/FERA low-income or senior discount
+  hasCareDiscount: false, // CARE/FERA low-income or senior discount
 
   // Questionnaire: Heating, Cooling, Water, EV, Pool
   heatingType: 'natural_gas_furnace', // 'natural_gas_furnace' | 'heat_pump' | 'electric_baseboard' | 'propane_other'
@@ -557,55 +557,7 @@ export const DEFAULT_HOUSEHOLD_PROFILE = {
     doctors: [],
     cards: []
   },
-  vehicles: [
-    {
-      id: 'veh-1',
-      year: 2024,
-      make: 'Toyota',
-      model: 'Camry Hybrid',
-      name: '2024 Toyota Camry Hybrid',
-      type: 'hybrid', // 'gas' | 'hybrid' | 'phev' | 'ev'
-      ownership: 'owned',
-      insuranceProvider: 'GEICO',
-      insuranceCoverage: 'liability_only',
-      insuranceMonthly: 65,
-      insurancePolicyNumber: 'G-8821943',
-      insuranceCardPhoto: null,
-      estimatedValue: 26500,
-      odometer: 14200,
-      threeYearMileLimit: null,
-      mpgOrEfficiency: 51,
-      fuelGrade: 'regular',
-      monthlyMiles: 950,
-      monthlyPayment: 0,
-      apr: 0,
-      freeChargingSharePercent: 0
-    },
-    {
-      id: 'veh-2',
-      year: 2024,
-      make: 'Tesla',
-      model: 'Model Y Long Range',
-      name: '2024 Tesla Model Y Long Range',
-      type: 'ev',
-      ownership: 'lease',
-      insuranceProvider: 'State Farm',
-      insuranceCoverage: 'full_coverage_gap',
-      insuranceMonthly: 145,
-      insurancePolicyNumber: 'SF-4401923',
-      insuranceCardPhoto: null,
-      estimatedValue: 38000,
-      odometer: 8900,
-      threeYearMileLimit: 36000,
-      mpgOrEfficiency: 28,
-      batteryKwh: 75,
-      fuelGrade: 'electric',
-      monthlyMiles: 1000,
-      monthlyPayment: 429,
-      apr: 0,
-      freeChargingSharePercent: 30
-    }
-  ]
+  vehicles: []
 };
 
 /**

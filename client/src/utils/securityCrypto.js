@@ -602,11 +602,7 @@ export async function verifyMasterPin(inputPin) {
 // ============================================================================
 
 export const SENSITIVE_STORAGE_KEYS = [
-  'klarity_password_vault',
-  'klarity_household_profile',
-  'klarity_income_streams',
   'klarity_retirement_plans',
-  'klarity_finance_data',
   'klarity_accounts',
   'klarity_manual_assets',
   'klarity_plaid_secret',

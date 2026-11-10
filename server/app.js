@@ -467,6 +467,8 @@ async function requireAuth(req, res, next) {
     '/api/household/zillow-lookup',
     '/api/household/scan-insurance-card',
     '/api/household',
+    '/api/vault',
+    '/vault',
     '/api/feedback',
     '/feedback',
     '/api/app/whats-new',
@@ -2213,6 +2215,40 @@ app.post(['/api/household', '/household'], async (req, res) => {
   } catch (err) {
     console.warn('Household save notice:', err.message);
     res.status(500).json({ error: 'Failed to persist household profile' });
+  }
+});
+
+// ============================================================================
+// PASSWORDS & ACCOUNT VAULT PERSISTENCE (Safe server-side storage)
+// ============================================================================
+app.get(['/api/vault', '/vault'], async (req, res) => {
+  try {
+    const uid = req.userId || 'default';
+    const data = await readData(uid);
+    const vaultItems = (data.userVaults && data.userVaults[uid]) || data.vaultItems || [];
+    res.json({ success: true, vaultItems });
+  } catch (err) {
+    console.warn('Vault read notice:', err.message);
+    res.status(500).json({ error: 'Failed to load vault items' });
+  }
+});
+
+app.post(['/api/vault', '/vault'], async (req, res) => {
+  const { vaultItems } = req.body || {};
+  if (!Array.isArray(vaultItems)) {
+    return res.status(400).json({ error: 'Invalid vaultItems payload' });
+  }
+  try {
+    const uid = req.userId || 'default';
+    const data = await readData(uid);
+    if (!data.userVaults) data.userVaults = {};
+    data.userVaults[uid] = vaultItems;
+    data.vaultItems = vaultItems;
+    await writeData(data, uid);
+    res.json({ success: true, count: vaultItems.length });
+  } catch (err) {
+    console.warn('Vault save notice:', err.message);
+    res.status(500).json({ error: 'Failed to persist vault items' });
   }
 });
 

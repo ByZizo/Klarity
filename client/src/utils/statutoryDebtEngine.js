@@ -39,32 +39,7 @@
  * Default sample income streams for California seniors & household members
  * @type {IncomeStream[]}
  */
-export const DEFAULT_INCOME_STREAMS = [
-  {
-    id: 'inc-ss',
-    label: 'Social Security (SSA)',
-    amount: 1950,
-    type: 'social_security',
-    isStatutorilyExempt: true,
-    statutoryBasis: '42 U.S.C. § 407 (Social Security Act § 207)'
-  },
-  {
-    id: 'inc-calpers',
-    label: 'CalPERS State Pension',
-    amount: 2450,
-    type: 'calpers',
-    isStatutorilyExempt: true,
-    statutoryBasis: 'California CCP § 704.110'
-  },
-  {
-    id: 'inc-w2-hh',
-    label: 'Accessible Household Income (W-2)',
-    amount: 3200,
-    type: 'w2',
-    isStatutorilyExempt: false,
-    statutoryBasis: '12 CFR § 1026.51 (CARD Act Shared Household Income)'
-  }
-];
+export const DEFAULT_INCOME_STREAMS = [];
 
 /**
  * Calculate Judgment-Proof Shield and 31 CFR Part 212 Lookback Cushion

@@ -70,7 +70,9 @@ const initialSeedData = {
   userSettings: {},
   plaidItems: [],
   householdProfiles: {},
-  householdProfile: null
+  householdProfile: null,
+  userVaults: {},
+  vaultItems: []
 };
 
 let memoryData = JSON.parse(JSON.stringify(initialSeedData));

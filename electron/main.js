@@ -587,9 +587,25 @@ ipcMain.handle('klarity:install-update-now', async () => {
       return { ok: true };
     }
 
+    // Safety backup of local data so user data is never lost across git resets or updates
+    const localDataPath = path.join(repoDir, 'server', 'data.json');
+    let localDataBackup = null;
+    if (fs.existsSync(localDataPath)) {
+      try {
+        localDataBackup = fs.readFileSync(localDataPath, 'utf8');
+      } catch {}
+    }
+
     // Pull latest code
     await runShell('git fetch origin main --quiet', repoDir);
     await runShell('git reset --hard origin/main', repoDir);
+
+    // Restore user data if it existed so user data is permanently preserved across updates
+    if (localDataBackup) {
+      try {
+        fs.writeFileSync(localDataPath, localDataBackup, 'utf8');
+      } catch {}
+    }
 
     // Rebuild client so frontend reflects new code
     try {

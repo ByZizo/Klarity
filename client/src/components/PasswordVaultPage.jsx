@@ -32,28 +32,7 @@ import {
   removeMasterPin
 } from '../utils/securityCrypto';
 
-export const DEFAULT_VAULT_ITEMS = [
-  {
-    id: 'v-pge',
-    service: 'PG&E',
-    category: 'Household',
-    username: '',
-    password: '',
-    accountNumber: '',
-    website: 'https://www.pge.com',
-    notes: 'Electric & Gas'
-  },
-  {
-    id: 'v-water',
-    service: 'Water Utility',
-    category: 'Household',
-    username: '',
-    password: '',
-    accountNumber: '',
-    website: '',
-    notes: 'Water & Trash'
-  }
-];
+export const DEFAULT_VAULT_ITEMS = [];
 
 const CATEGORIES = ['All', 'Household', 'Auto', 'Health', 'Banking', 'Other'];
 
@@ -199,6 +178,10 @@ export default function PasswordVaultPage({
 
   const filteredItems = useMemo(() => {
     return (vaultItems || []).filter(item => {
+      // Exclude legacy empty premade placeholders
+      if ((item.id === 'v-pge' || item.id === 'v-water') && !item.password && !item.username && !item.accountNumber) {
+        return false;
+      }
       const matchesCat = selectedCategory === 'All' || (item.category || '').toLowerCase() === selectedCategory.toLowerCase();
       const q = searchQuery.toLowerCase();
       const matchesSearch =

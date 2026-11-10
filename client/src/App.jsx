@@ -87,6 +87,7 @@ import { DEFAULT_HOUSEHOLD_PROFILE, calculateHouseholdAndFleetMetrics } from './
 import {
   secureStorage,
   enforceStorageEncryptionAudit,
+  decryptPayload,
   hasMasterPinSet,
   setMasterPin,
   removeMasterPin,
@@ -1502,10 +1503,10 @@ function KlarityApp() {
       const saved = localStorage.getItem('klarity_income_streams');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {}
-    return DEFAULT_INCOME_STREAMS;
+    return [];
   });
 
   useEffect(() => {
@@ -1727,22 +1728,96 @@ function KlarityApp() {
     return () => clearTimeout(timer);
   }, [householdProfile]);
 
-  // Password & Account Vault state (persisted to localStorage)
+  // Password & Account Vault state (resilient async persistence to localStorage, secureStorage, and server)
+  const isVaultLoadedRef = useRef(false);
   const [vaultItems, setVaultItems] = useState(() => {
     try {
       const saved = localStorage.getItem('klarity_password_vault');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+      if (saved && typeof saved === 'string') {
+        if (!saved.startsWith('ENCv3:') && !saved.startsWith('ENCv2:')) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            return parsed.filter(item => {
+              if ((item.id === 'v-pge' || item.id === 'v-water') && !item.password && !item.username && !item.accountNumber) {
+                return false;
+              }
+              return true;
+            });
+          }
+        }
       }
     } catch (e) {}
-    return DEFAULT_VAULT_ITEMS;
+    return [];
   });
 
+  // Decrypt and sync vaultItems safely from secureStorage, encrypted storage, and backend on mount
   useEffect(() => {
+    let active = true;
+    async function loadVault() {
+      try {
+        // 1. Check secureStorage (handles decryption automatically)
+        const secureStored = await secureStorage.getItem('klarity_password_vault', null);
+        if (active && Array.isArray(secureStored) && secureStored.length > 0) {
+          const cleaned = secureStored.filter(item => !(item.id === 'v-pge' && !item.password) && !(item.id === 'v-water' && !item.password));
+          setVaultItems(cleaned);
+          isVaultLoadedRef.current = true;
+          return;
+        }
+
+        // 2. Check localStorage (if it was encrypted with ENCv3 or ENCv2)
+        const raw = localStorage.getItem('klarity_password_vault');
+        if (raw && (raw.startsWith('ENCv3:') || raw.startsWith('ENCv2:'))) {
+          const decryptedStr = await decryptPayload(raw);
+          if (decryptedStr) {
+            const parsed = JSON.parse(decryptedStr);
+            if (active && Array.isArray(parsed) && parsed.length > 0) {
+              const cleaned = parsed.filter(item => !(item.id === 'v-pge' && !item.password) && !(item.id === 'v-water' && !item.password));
+              setVaultItems(cleaned);
+              isVaultLoadedRef.current = true;
+              return;
+            }
+          }
+        }
+
+        // 3. Check backend database /api/vault
+        const res = await fetch('/api/vault');
+        if (res.ok) {
+          const json = await res.json();
+          if (active && Array.isArray(json.vaultItems) && json.vaultItems.length > 0) {
+            const cleaned = json.vaultItems.filter(item => !(item.id === 'v-pge' && !item.password) && !(item.id === 'v-water' && !item.password));
+            setVaultItems(cleaned);
+            isVaultLoadedRef.current = true;
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load vault items safely:', err);
+      } finally {
+        isVaultLoadedRef.current = true;
+      }
+    }
+    loadVault();
+    return () => { active = false; };
+  }, []);
+
+  // Persist vaultItems changes to localStorage, secureStorage, and server backend
+  useEffect(() => {
+    if (!isVaultLoadedRef.current) return;
     try {
       localStorage.setItem('klarity_password_vault', JSON.stringify(vaultItems));
+      secureStorage.setItem('klarity_password_vault', vaultItems).catch(() => {});
     } catch (e) {}
+
+    // Debounced persist to server database
+    const timer = setTimeout(() => {
+      fetch('/api/vault', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vaultItems })
+      }).catch(err => console.warn('Could not persist vault items to server:', err.message));
+    }, 600);
+
+    return () => clearTimeout(timer);
   }, [vaultItems]);
 
   const handleSyncUtilitiesToBills = (calcMetrics) => {
@@ -4454,34 +4529,11 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
   const totalMonthlyBills = billsList.reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0);
   const totalMonthlySubscriptions = subscriptionsList.reduce((sum, s) => sum + Number(s.amount || 0), 0);
 
-  // Default fallback mocks to guarantee 1:1 visual match with reference design
-  const DEFAULT_OVERVIEW_CARDS = [
-    { id: 'mock-card-1', name: 'Everyday Rewards', mask: '4417', balance: 1102.20, limit: 5000, apr: 21.9, minPayment: 35, bgColor: 'bg-[#18457c]' },
-    { id: 'mock-card-2', name: 'Travel Card', mask: '9082', balance: 662.00, limit: 2000, apr: 24.4, minPayment: 25, bgColor: 'bg-[#242e3d]' }
-  ];
-
+  // Default empty fallback arrays (strictly no fake/premade demo data)
+  const DEFAULT_OVERVIEW_CARDS = [];
   const DEFAULT_OVERVIEW_BILLS = [];
-
-  const DEFAULT_OVERVIEW_SUBS = [
-    { id: 'mock-s-1', name: 'Netflix', category: 'Streaming', renewalDate: 'Nov 3', renewText: 'Renews Nov 3', amount: 15.49, billingCycle: 'monthly', account: 'Everyday Rewards •••• 4417', priceIncreased: 2.00 },
-    { id: 'mock-s-2', name: 'Spotify', category: 'Music', renewalDate: 'Nov 9', renewText: 'Renews Nov 9', amount: 11.99, billingCycle: 'monthly', account: 'Everyday Rewards •••• 4417' },
-    { id: 'mock-s-3', name: 'iCloud', category: 'Cloud Storage', renewalDate: 'Nov 14', renewText: 'Renews Nov 14', amount: 2.99, billingCycle: 'monthly', account: 'Travel Card •••• 9082' },
-    { id: 'mock-s-4', name: 'ChatGPT Plus', category: 'AI & Software', renewalDate: 'Nov 20', renewText: 'Renews Nov 20', amount: 20.00, billingCycle: 'monthly', account: 'Everyday Rewards •••• 4417' }
-  ];
-
-  const DEFAULT_OVERVIEW_TXS = [
-    { id: 'mock-t-0', name: 'Chipotle', date: 'Oct 26', category: 'Dining', account: 'Everyday Rewards •••• 4417', subText: 'Oct 26 · Dining', amount: -16.40, pending: true, notes: '' },
-    { id: 'mock-t-sub-1', name: 'Netflix', date: 'Oct 25', category: 'Subscriptions', account: 'Everyday Rewards •••• 4417', subText: 'Oct 25 · Subscriptions', amount: -15.49, notes: '' },
-    { id: 'mock-t-1', name: "Trader Joe's", date: 'Oct 24', category: 'Groceries', account: 'Everyday Rewards •••• 4417', subText: 'Oct 24 · Groceries', amount: -54.12, notes: 'Weekly family groceries' },
-    { id: 'mock-t-2', name: 'Shell', date: 'Oct 23', category: 'Gas', account: 'Everyday Rewards •••• 4417', subText: 'Oct 23 · Gas', amount: -41.80, notes: '' },
-    { id: 'mock-t-3', name: 'Paycheck', date: 'Oct 22', category: 'Income', account: 'Checking •••• 4821', subText: 'Oct 22 · Income', amount: 1850.00, notes: 'Bi-weekly direct deposit' },
-    { id: 'mock-t-4', name: 'Amazon', date: 'Oct 21', category: 'Shopping', account: 'Everyday Rewards •••• 4417', subText: 'Oct 21 · Shopping', amount: -67.90, notes: '' },
-    { id: 'mock-t-5', name: 'Starbucks', date: 'Oct 20', category: 'Dining', account: 'Everyday Rewards •••• 4417', subText: 'Oct 20 · Dining', amount: -6.85, notes: '' },
-    { id: 'mock-t-6', name: 'Safeway', date: 'Oct 19', category: 'Groceries', account: 'Everyday Rewards •••• 4417', subText: 'Oct 19 · Groceries', amount: -88.30, notes: '' },
-    { id: 'mock-t-7', name: 'Spotify', date: 'Oct 18', category: 'Subscriptions', account: 'Everyday Rewards •••• 4417', subText: 'Oct 18 · Subscriptions', amount: -11.99, notes: '' },
-    { id: 'mock-t-8', name: 'Chevron', date: 'Oct 16', category: 'Gas', account: 'Travel Card •••• 9082', subText: 'Oct 16 · Gas', amount: -48.20, notes: '' },
-    { id: 'mock-t-9', name: 'Sweetgreen', date: 'Oct 15', category: 'Dining', account: 'Travel Card •••• 9082', subText: 'Oct 15 · Dining', amount: -33.75, notes: '' }
-  ];
+  const DEFAULT_OVERVIEW_SUBS = [];
+  const DEFAULT_OVERVIEW_TXS = [];
 
   // Unified list of every connected card and account (with last 4 digits) for the Multi-Card Filter
   const allFilterableCards = (() => {
@@ -4573,7 +4625,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       }))
     : DEFAULT_OVERVIEW_CARDS;
 
-  const displayCardBalances = creditCards.length > 0 ? cardBalances : 1764.20;
+  const displayCardBalances = creditCards.length > 0 ? cardBalances : 0;
 
   // Source lists for Bills, Subscriptions, and Transactions (using real data when present, or defaults)
   const sourceBillsList = (Array.isArray(billsList) ? billsList : []).map(b => {
