@@ -14,7 +14,19 @@ import {
   KeyRound,
   ShieldCheck,
   RefreshCw,
-  X
+  X,
+  ArrowUp,
+  ArrowDown,
+  RotateCcw,
+  LayoutDashboard,
+  CreditCard,
+  History,
+  Receipt,
+  Zap,
+  PieChart,
+  Home,
+  Landmark,
+  Sparkles
 } from 'lucide-react';
 import { Button, Card, Pill, ConfirmDialog } from '../components/ui';
 import {
@@ -106,11 +118,15 @@ export function SettingsPage({
   isSubmittingFeedback = false,
   feedbackSubmitted = false,
   handleSendFeedback,
-  onShowToast
+  onShowToast,
+  sidebarNavOrder = [],
+  handleMoveSidebarItem,
+  handleResetSidebarOrder,
+  SIDEBAR_ITEMS_CONFIG: propsSidebarConfig
 }) {
-  // Map legacy tab names ('ui', 'sidebar', 'plaid') into the 6 merged tabs
+  // Map legacy tab names ('ui', 'plaid') into modern tabs
   const normalizedTab =
-    settingsActiveTab === 'ui' || settingsActiveTab === 'sidebar'
+    settingsActiveTab === 'ui'
       ? 'preferences'
       : settingsActiveTab === 'plaid'
       ? 'bank'
@@ -244,11 +260,30 @@ export function SettingsPage({
   const tabs = [
     { id: 'profile', label: 'Profile' },
     { id: 'preferences', label: 'Preferences' },
+    { id: 'sidebar', label: 'Sidebar' },
     { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' && settingsAiProvider !== 'local' },
     { id: 'bank', label: 'Bank', dot: settingsPlaidStatus !== 'connected' },
     { id: 'security', label: 'Security' },
     { id: 'about', label: 'About' }
   ];
+
+  const DEFAULT_CONFIG = {
+    dashboard: { id: 'dashboard', label: 'Overview', icon: LayoutDashboard, flag: null },
+    cards: { id: 'cards', label: 'Cards', icon: CreditCard, flag: null },
+    transactions: { id: 'transactions', label: 'Transactions', icon: History, flag: null },
+    bills: { id: 'bills', label: 'Bills', icon: Receipt, flag: null },
+    subscriptions: { id: 'subscriptions', label: 'Subscriptions', icon: Zap, flag: null },
+    budgets: { id: 'budgets', label: 'Budgets', icon: PieChart, flag: 'budgets' },
+    household: { id: 'household', label: 'Household', icon: Home, flag: 'household' },
+    retirement: { id: 'retirement', label: 'Retirement', icon: Landmark, flag: 'retirement' },
+    vault: { id: 'vault', label: 'Vault', icon: KeyRound, flag: 'vault' },
+    advisor: { id: 'advisor', label: 'Advisor', icon: Sparkles, flag: null }
+  };
+  const effectiveConfig = propsSidebarConfig || DEFAULT_CONFIG;
+  const effectiveSidebarOrder =
+    Array.isArray(sidebarNavOrder) && sidebarNavOrder.length > 0
+      ? sidebarNavOrder
+      : Object.keys(effectiveConfig);
 
   const displayNameFallback =
     currentUser?.name ||
@@ -557,6 +592,132 @@ export function SettingsPage({
                     })}
                   </div>
                 </Card>
+              </div>
+            )}
+
+            {/* TAB: SIDEBAR & NAVIGATION */}
+            {normalizedTab === 'sidebar' && (
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-serif text-[22px] font-semibold text-[var(--ink)]">Sidebar and navigation</h3>
+                    <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
+                      Customize your navigation order with Move Up / Move Down, or toggle optional sections to show or hide them.
+                    </p>
+                  </div>
+                  {handleResetSidebarOrder && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleResetSidebarOrder}
+                      className="self-start sm:self-auto flex items-center gap-1.5"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Reset layout</span>
+                    </Button>
+                  )}
+                </div>
+
+                {/* Reorderable and Toggleable List of Navigation Items */}
+                <Card className="divide-y divide-[var(--line)] overflow-hidden p-0">
+                  {effectiveSidebarOrder.map((itemId, idx) => {
+                    const config = effectiveConfig[itemId];
+                    if (!config) return null;
+                    const Icon = config.icon || LayoutDashboard;
+                    const isOptional = Boolean(config.flag);
+                    const isEnabled = isOptional ? featureFlags[config.flag] !== false : true;
+
+                    const descriptions = {
+                      dashboard: 'Main financial overview, net worth, cash flow and health score.',
+                      cards: 'Credit cards, utilization, weighted APR and interactive payoff engine.',
+                      transactions: 'Purchases, transaction history, categories and card filters.',
+                      bills: 'Upcoming bills, recurring due dates and payment schedules.',
+                      subscriptions: 'Monthly and annual active software and entertainment subs.',
+                      budgets: 'Spending budgets and category progress limits.',
+                      household: 'Utility bills (PG&E / water), fleet vehicles, and healthcare.',
+                      retirement: 'Public pensions (CalPERS, CalSTRS), 401(k), IRAs and Social Security.',
+                      vault: 'Encrypted password and account credentials vault.',
+                      advisor: 'Interactive AI financial and lifestyle assistant.'
+                    };
+
+                    return (
+                      <div
+                        key={itemId}
+                        className={`p-4 sm:p-5 flex items-center justify-between gap-4 transition-colors ${
+                          !isEnabled ? 'bg-[var(--surface-subtle)]/50 opacity-60' : 'hover:bg-[var(--surface-subtle)]/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                          <div className="w-9 h-9 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] flex items-center justify-center text-[#1B4B91] shrink-0">
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-[15px] font-semibold text-[var(--ink)]">{config.label}</p>
+                              <span className="text-[11px] font-mono text-[var(--muted)]">#{idx + 1}</span>
+                              {!isOptional ? (
+                                <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
+                                  Core
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5 line-clamp-1">
+                              {descriptions[itemId] || ''}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* Up / Down Order Buttons */}
+                          <div className="flex items-center bg-[var(--surface-subtle)] rounded-lg p-0.5 border border-[var(--line)]">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveSidebarItem && handleMoveSidebarItem(itemId, 'up')}
+                              disabled={idx === 0}
+                              title="Move section up"
+                              aria-label={`Move ${config.label} up`}
+                              className="p-1.5 rounded-md hover:bg-white text-[var(--ink)] disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                            >
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveSidebarItem && handleMoveSidebarItem(itemId, 'down')}
+                              disabled={idx === effectiveSidebarOrder.length - 1}
+                              title="Move section down"
+                              aria-label={`Move ${config.label} down`}
+                              className="p-1.5 rounded-md hover:bg-white text-[var(--ink)] disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                            >
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Visibility Toggle */}
+                          {isOptional ? (
+                            <Button
+                              variant={isEnabled ? 'primary' : 'secondary'}
+                              size="sm"
+                              onClick={() => handleUpdateFeatureFlags({ [config.flag]: !isEnabled })}
+                            >
+                              {isEnabled ? 'Shown' : 'Hidden'}
+                            </Button>
+                          ) : (
+                            <div className="w-16 text-center">
+                              <span className="text-[13px] text-[var(--muted)] font-medium">Always</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </Card>
+
+                <div className="p-4 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] text-[13px] font-medium text-[var(--muted)] flex items-start gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <p className="leading-relaxed">
+                    Your sidebar arrangement and feature visibility are saved in real-time. Hiding an item removes its button from navigation and mobile menu while preserving all of your underlying accounts and data.
+                  </p>
+                </div>
               </div>
             )}
 

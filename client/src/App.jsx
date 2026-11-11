@@ -1565,7 +1565,8 @@ function KlarityApp() {
     'budgets',
     'household',
     'retirement',
-    'vault'
+    'vault',
+    'advisor'
   ];
 
   const [sidebarNavOrder, setSidebarNavOrder] = useState(() => {
@@ -1635,9 +1636,10 @@ function KlarityApp() {
     bills: { id: 'bills', label: 'Bills', icon: Receipt, flag: null },
     subscriptions: { id: 'subscriptions', label: 'Subscriptions', icon: Zap, flag: null },
     budgets: { id: 'budgets', label: 'Budgets', icon: PieChart, flag: 'budgets' },
-    household: { id: 'household', label: 'Lifestyle', icon: Home, flag: 'household' },
+    household: { id: 'household', label: 'Household', icon: Home, flag: 'household' },
     retirement: { id: 'retirement', label: 'Retirement', icon: Landmark, flag: 'retirement' },
-    vault: { id: 'vault', label: 'Passwords', icon: KeyRound, flag: 'vault' }
+    vault: { id: 'vault', label: 'Vault', icon: KeyRound, flag: 'vault' },
+    advisor: { id: 'advisor', label: 'Advisor', icon: Sparkles, flag: null }
   };
 
   const handleSendPayoffPlanToAi = (plan) => {
@@ -5389,55 +5391,45 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             </div>
           )}
 
-          {/* Grouped Labeled or Compact Navigation */}
-          <nav className={`flex flex-col ${isSidebarCompact ? 'items-center gap-1.5 w-full' : 'gap-3.5'}`} aria-label="Main sections">
-            {sidebarSections.map((section) => {
-              const visibleItems = section.items.filter((i) => i.show);
-              if (visibleItems.length === 0) return null;
-              return (
-                <div key={section.group} className={`flex flex-col ${isSidebarCompact ? 'items-center gap-1 w-full' : 'gap-1'}`}>
-                  {!isSidebarCompact && (
-                    <div className="px-2.5 text-[13px] font-medium text-[var(--muted)]">
-                      {section.group}
-                    </div>
-                  )}
-                  {visibleItems.map((item) => {
-                    const IconComponent = item.icon;
-                    const isActive = normalizedActiveTab === item.id;
-                    return !isSidebarCompact ? (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setActiveTab(item.id)}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-[8px] text-[15px] transition-colors cursor-pointer text-left ${
-                          isActive
-                            ? 'bg-[#1B4B91] text-white font-semibold'
-                            : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)] font-medium'
-                        }`}
-                      >
-                        <IconComponent className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-[var(--muted)]'}`} />
-                        <span className="truncate">{item.label}</span>
-                      </button>
-                    ) : (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setActiveTab(item.id)}
-                        aria-label={item.label}
-                        title={item.label}
-                        className={`w-10 h-10 flex items-center justify-center rounded-[8px] transition-colors cursor-pointer ${
-                          isActive
-                            ? 'bg-[#1B4B91] text-white'
-                            : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
-                        }`}
-                      >
-                        <IconComponent className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-[var(--muted)]'}`} />
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
+          {/* Navigation Links (Follows custom user order from Settings > Sidebar) */}
+          <nav className={`flex flex-col ${isSidebarCompact ? 'items-center gap-1.5 w-full' : 'gap-1'}`} aria-label="Main sections">
+            {sidebarNavOrder
+              .map((id) => SIDEBAR_ITEMS_CONFIG[id])
+              .filter((item) => Boolean(item) && (!item.flag || featureFlags[item.flag] !== false))
+              .map((item) => {
+                const IconComponent = item.icon;
+                const isActive = normalizedActiveTab === item.id;
+                return !isSidebarCompact ? (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-[8px] text-[15px] transition-colors cursor-pointer text-left ${
+                      isActive
+                        ? 'bg-[#1B4B91] text-white font-semibold'
+                        : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)] font-medium'
+                    }`}
+                  >
+                    <IconComponent className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-[var(--muted)]'}`} />
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                ) : (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveTab(item.id)}
+                    aria-label={item.label}
+                    title={item.label}
+                    className={`w-10 h-10 flex items-center justify-center rounded-[8px] transition-colors cursor-pointer ${
+                      isActive
+                        ? 'bg-[#1B4B91] text-white'
+                        : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                    }`}
+                  >
+                    <IconComponent className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-[var(--muted)]'}`} />
+                  </button>
+                );
+              })}
           </nav>
         </div>
 
@@ -6394,6 +6386,10 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         feedbackSubmitted={feedbackSubmitted}
         handleSendFeedback={handleSendFeedback}
         onShowToast={showToast}
+        sidebarNavOrder={sidebarNavOrder}
+        handleMoveSidebarItem={handleMoveSidebarItem}
+        handleResetSidebarOrder={handleResetSidebarOrder}
+        SIDEBAR_ITEMS_CONFIG={SIDEBAR_ITEMS_CONFIG}
       />
 
       {/* 2. Payment Relief Guide Modal */}
