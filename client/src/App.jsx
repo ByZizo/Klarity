@@ -5926,9 +5926,18 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       </button>
                     </div>
 
-                    {/* Middle: Name "Advisor" with Connection Checkmark */}
+                    {/* Middle: Title "AI Advisor" with Quick Settings Button right next to it & Online Checkmark */}
                     <div className="flex items-center gap-1.5">
-                      <h2 className="text-sm font-bold text-slate-900 tracking-tight">Advisor</h2>
+                      <h2 className="text-sm font-bold text-slate-900 tracking-tight">AI Advisor</h2>
+                      <button
+                        type="button"
+                        onClick={() => setIsMemoryModalOpen((prev) => !prev)}
+                        className="p-1 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 transition-colors cursor-pointer shadow-2xs border border-slate-200/80 bg-white"
+                        title="AI Advisor Quick Settings & Memory"
+                        aria-label="AI Advisor Quick Settings & Memory"
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-[#18457c]" />
+                      </button>
                       <span
                         title={isAdvisorOnline ? 'Connected to the internet' : 'Connected locally only (Web search disabled)'}
                         className={`inline-flex items-center justify-center w-4 h-4 rounded-full border ${
@@ -5941,7 +5950,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       </span>
                     </div>
 
-                    {/* Right: Weekly Summary + Mini Settings + Full Screen AI */}
+                    {/* Right: Weekly Summary + Full Screen AI */}
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
@@ -5951,15 +5960,6 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         aria-label="Weekly Advisor Summary"
                       >
                         <Sparkles className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsMemoryModalOpen((prev) => !prev)}
-                        className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
-                        title="AI Advisor Settings and Tools"
-                        aria-label="AI Advisor Settings and Tools"
-                      >
-                        <SlidersHorizontal className="w-4 h-4" />
                       </button>
                       <button
                         type="button"

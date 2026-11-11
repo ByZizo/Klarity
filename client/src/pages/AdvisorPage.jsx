@@ -39,9 +39,21 @@ export function AdvisorPage({
       {/* Header */}
       <div className="pb-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="font-serif text-xl font-bold text-slate-900 tracking-tight">
-            Advisor
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-serif text-xl font-bold text-slate-900 tracking-tight">
+              AI Advisor
+            </h1>
+            <button
+              type="button"
+              onClick={() => setIsMemoryModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+              title="AI Advisor Quick Settings & Memory"
+              aria-label="AI Advisor Quick Settings & Memory"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[#18457c]" />
+              <span>AI Settings</span>
+            </button>
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">
             Reads your bills, cards and spending to answer questions.
           </p>
@@ -62,14 +74,6 @@ export function AdvisorPage({
           >
             <History className="w-3.5 h-3.5" />
             <span>Past Chats</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsMemoryModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span>Mini Settings &amp; Memory ({aiMemory.length})</span>
           </button>
         </div>
       </div>
