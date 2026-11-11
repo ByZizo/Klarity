@@ -112,57 +112,39 @@ export function formatCleanUpdateMessage(rawMsg, rawVer) {
 }
 
 export function formatWhatsNewHighlights(changes) {
-  if (!Array.isArray(changes) || changes.length === 0) {
-    return [
-      "Shared UI foundation with accessible typography and dark theme",
-      "Modular page layout with labeled navigation and mobile tab bar",
-      "Hardened vault PIN security and per-user data isolation"
-    ];
+  let list = [];
+  if (Array.isArray(changes)) {
+    list = changes;
+  } else if (changes && typeof changes === 'object') {
+    if (Array.isArray(changes.changes)) {
+      list = changes.changes;
+    } else if (typeof changes.message === 'string' && changes.message.trim()) {
+      list = [changes.message];
+    } else if (typeof changes.commitTitle === 'string' && changes.commitTitle.trim()) {
+      list = [changes.commitTitle];
+    }
   }
 
-  const isMinor = (text) => {
-    return /(fix|bug|typo|patch|minor|tweak|adjust|chore|test|clean|format|style|spacing|padding|margin|remove.*button|remove.*message|bump|deps|refactor)/i.test(text);
-  };
-
-  const isMajor = (text) => {
-    return /(dark mode|high contrast|theme|appearance|household|vault|password|retirement|ai advisor|report|statement|upload|overview|budget|bills|redesign|add.*feature|introduce|foundation)/i.test(text);
-  };
-
-  const majorItems = [];
-
-  for (const raw of changes) {
+  const items = [];
+  for (const raw of list) {
     if (typeof raw !== 'string') continue;
     const clean = raw.trim();
     if (!clean) continue;
 
-    if (isMajor(clean)) {
-      let formatted = clean;
-      if (formatted.toLowerCase().startsWith('feat:')) formatted = formatted.slice(5).trim();
-      if (formatted.toLowerCase().startsWith('feature:')) formatted = formatted.slice(8).trim();
-      formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1);
-
-      if (!majorItems.some(item => item.toLowerCase() === formatted.toLowerCase())) {
-        majorItems.push(formatted);
-      }
+    const formatted = formatUserFacingReleaseNote(clean);
+    if (formatted && !items.some(existing => existing.toLowerCase() === formatted.toLowerCase())) {
+      items.push(formatted);
     }
   }
 
-  if (majorItems.length === 0) {
-    for (const raw of changes) {
-      if (typeof raw === 'string' && raw.trim() && !isMinor(raw)) {
-        majorItems.push(raw.trim());
-        if (majorItems.length >= 2) break;
-      }
-    }
+  if (items.length > 0) {
+    return items.slice(0, 4);
   }
 
-  const finalHighlights = majorItems.slice(0, 2);
-  if (finalHighlights.length === 0) {
-    finalHighlights.push("Shared UI foundation with accessible typography and dark theme");
-  }
-
-  finalHighlights.push("Bug fixes and security improvements");
-  return finalHighlights.slice(0, 3);
+  return [
+    "Refined user experience and interface enhancements",
+    "Performance optimizations and security improvements"
+  ];
 }
 
 // Universal Subpage Header: Centered title, leveled Back to Overview, and 3-dot dropdown actions menu

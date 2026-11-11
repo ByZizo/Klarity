@@ -7621,8 +7621,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               </Pill>
             </div>
             <ul className="list-disc list-inside space-y-1.5 text-[15px] font-medium text-[var(--ink)]">
-              {formatWhatsNewHighlights(whatsNewData)
-                .slice(0, 3)
+              {formatWhatsNewHighlights(whatsNewData.changes || whatsNewData)
+                .slice(0, 4)
                 .map((line, i) => (
                   <li key={i}>{line}</li>
                 ))}

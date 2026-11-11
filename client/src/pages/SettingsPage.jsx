@@ -29,7 +29,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { Button, Card, Pill, ConfirmDialog } from '../components/ui';
-import { formatCleanUpdateMessage } from '../components/SharedAppComponents';
+import { formatCleanUpdateMessage, formatWhatsNewHighlights } from '../components/SharedAppComponents';
 import {
   hasMasterPinSet,
   verifyMasterPin,
@@ -1473,9 +1473,13 @@ export function SettingsPage({
                   </div>
 
                   <ul className="list-disc list-inside space-y-1.5 text-[15px] font-medium text-[var(--ink)]">
-                    <li>Shared UI foundation with Public Sans and Source Serif 4 typography, dark mode, and 100%–200% scaling.</li>
-                    <li>Hardened PBKDF2 vault PIN security and strict per-user account isolation.</li>
-                    <li>Expanded Household providers hub with Home Warranty tracking and streamlined debt help tools.</li>
+                    {formatWhatsNewHighlights(
+                      desktopAppInfo.updateStatus?.recentChanges ||
+                      desktopAppInfo.updateStatus?.message ||
+                      []
+                    ).map((line, i) => (
+                      <li key={i}>{line}</li>
+                    ))}
                   </ul>
 
                   {showFullReleaseNotes && (

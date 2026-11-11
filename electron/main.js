@@ -76,59 +76,85 @@ function getRunningCommitSha() {
   return runningCommitSha;
 }
 
-function formatWhatsNewHighlights(changes) {
-  if (!Array.isArray(changes) || changes.length === 0) {
-    return [
-      "Weekly Financial Advisor with Live Cards, Priorities & Budgets",
-      "Household Hub & Statements Management",
-      "Password Vault enhancements",
-      "Bug fixes & performance improvements"
-    ];
+function formatUserFacingReleaseNote(rawText) {
+  if (!rawText || typeof rawText !== 'string') return '';
+  let text = rawText.trim();
+  text = text.replace(/^(?:feat|fix|perf|refactor|chore|style|docs|build|ci)(?:\([^)]*\))?:\s*/i, '');
+  text = text.replace(/^merge\s+(?:branch|pull\s+request).*$/i, '');
+  if (!text) return '';
+
+  const verbReplacements = [
+    [/^streamline\b/i, 'Streamlined'],
+    [/^enhance\b/i, 'Enhanced'],
+    [/^bring\s+back\b/i, 'Brought back'],
+    [/^add\b/i, 'Added'],
+    [/^fix\b/i, 'Fixed'],
+    [/^resolve\b/i, 'Resolved'],
+    [/^update\b/i, 'Updated'],
+    [/^improve\b/i, 'Improved'],
+    [/^optimize\b/i, 'Optimized'],
+    [/^remove\b/i, 'Removed'],
+    [/^support\b/i, 'Added support for'],
+    [/^integrate\b/i, 'Integrated'],
+    [/^polish\b/i, 'Polished'],
+    [/^clean\s+up\b/i, 'Cleaned up'],
+    [/^cleanup\b/i, 'Cleaned up'],
+    [/^restyle\b/i, 'Restyled'],
+    [/^reorganize\b/i, 'Reorganized'],
+    [/^allow\b/i, 'Added ability to'],
+    [/^show\b/i, 'Added view for'],
+    [/^hide\b/i, 'Removed display of'],
+    [/^change\b/i, 'Updated']
+  ];
+
+  for (const [pattern, replacement] of verbReplacements) {
+    if (pattern.test(text)) {
+      text = text.replace(pattern, replacement);
+      break;
+    }
   }
 
-  const isMinor = (text) => {
-    return /(fix|bug|typo|patch|minor|tweak|adjust|chore|test|clean|format|style|spacing|padding|margin|remove.*button|remove.*message|bump|deps|refactor)/i.test(text);
-  };
+  if (text.length > 0) {
+    text = text.charAt(0).toUpperCase() + text.slice(1);
+  }
+  text = text.replace(/[.;,]+$/, '');
+  return text;
+}
 
-  const isMajor = (text) => {
-    return /(dark mode|high contrast|theme|appearance|household|vault|password|retirement|ai advisor|report|statement|upload|overview|budget|bills|redesign|add.*feature|introduce)/i.test(text);
-  };
+function formatWhatsNewHighlights(changes) {
+  let list = [];
+  if (Array.isArray(changes)) {
+    list = changes;
+  } else if (changes && typeof changes === 'object') {
+    if (Array.isArray(changes.changes)) {
+      list = changes.changes;
+    } else if (typeof changes.message === 'string' && changes.message.trim()) {
+      list = [changes.message];
+    } else if (typeof changes.commitTitle === 'string' && changes.commitTitle.trim()) {
+      list = [changes.commitTitle];
+    }
+  }
 
-  const majorItems = [];
-
-  for (const raw of changes) {
+  const items = [];
+  for (const raw of list) {
     if (typeof raw !== 'string') continue;
     const clean = raw.trim();
     if (!clean) continue;
 
-    if (isMajor(clean)) {
-      let formatted = clean;
-      if (formatted.toLowerCase().startsWith('feat:')) formatted = formatted.slice(5).trim();
-      if (formatted.toLowerCase().startsWith('feature:')) formatted = formatted.slice(8).trim();
-      formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1);
-
-      if (!majorItems.some(item => item.toLowerCase() === formatted.toLowerCase())) {
-        majorItems.push(formatted);
-      }
+    const formatted = formatUserFacingReleaseNote(clean);
+    if (formatted && !items.some(existing => existing.toLowerCase() === formatted.toLowerCase())) {
+      items.push(formatted);
     }
   }
 
-  if (majorItems.length === 0) {
-    for (const raw of changes) {
-      if (typeof raw === 'string' && raw.trim() && !isMinor(raw)) {
-        majorItems.push(raw.trim());
-        if (majorItems.length >= 2) break;
-      }
-    }
+  if (items.length > 0) {
+    return items.slice(0, 4);
   }
 
-  const finalHighlights = majorItems.slice(0, 3);
-  if (finalHighlights.length === 0) {
-    finalHighlights.push("Latest feature enhancements & interface upgrades");
-  }
-
-  finalHighlights.push("Bug fixes & performance improvements");
-  return finalHighlights;
+  return [
+    "Refined user experience and interface enhancements",
+    "Performance optimizations and security improvements"
+  ];
 }
 
 function saveWhatsNewData(changes, versionOrSha, explicitVersion) {
@@ -623,28 +649,11 @@ ipcMain.handle('klarity:install-update-now', async () => {
       message: 'Downloading latest update & rebuilding Klarity...'
     });
 
-    // 1. Gather recent changes for "What's New" modal
-    let recentChanges = [];
-    try {
-      const log = await runShell('git log -5 --pretty=format:"%s" origin/main', repoDir);
-      recentChanges = log.split('\n').map(s => s.trim()).filter(Boolean);
-    } catch {}
-
-    if (recentChanges.length === 0 && updateStatusState.recentChanges?.length > 0) {
-      recentChanges = updateStatusState.recentChanges;
-    }
-    if (recentChanges.length === 0) {
-      recentChanges = [
-        "Passwords Vault: Added three-dots card menu with Favorite (yellow card highlight) and Red Delete Confirmation Pop-up",
-        "Household Hub: Spacious redesigned layout with sticky navigation bar and real-time bills synchronization",
-        "Auto & Health Hub: Upgraded card uploaders with unified scanning and document parsing",
-        "Passwords & Accounts: Added website URL fields and custom user-defined sections with full delete support",
-        "App Settings: Real-time GitHub auto-update checking and What's New release announcements"
-      ];
-    }
+    // Capture previous HEAD SHA before updating to extract exact incoming commits
+    const previousSha = await runShell('git rev-parse HEAD', repoDir).catch(() => '');
 
     if (app.isPackaged && autoUpdater && updateStatusState.state === 'ready') {
-      saveWhatsNewData(recentChanges, updateStatusState.latestVersion || app.getVersion());
+      saveWhatsNewData(updateStatusState.recentChanges || [], updateStatusState.latestVersion || app.getVersion());
       autoUpdater.quitAndInstall(false, true);
       return { ok: true };
     }
@@ -677,6 +686,25 @@ ipcMain.handle('klarity:install-update-now', async () => {
     }
 
     const newSha = await runShell('git rev-parse HEAD', repoDir).catch(() => 'latest');
+
+    // Gather the exact commits applied in this update
+    let recentChanges = [];
+    try {
+      if (previousSha && newSha && previousSha !== newSha && previousSha !== 'latest' && newSha !== 'latest') {
+        const rangeLog = await runShell(`git log ${previousSha}..${newSha} --pretty=format:"%s"`, repoDir).catch(() => '');
+        if (rangeLog) {
+          recentChanges = rangeLog.split('\n').map(s => s.trim()).filter(Boolean);
+        }
+      }
+      if (recentChanges.length === 0) {
+        const headLog = await runShell('git log -5 --pretty=format:"%s" HEAD', repoDir);
+        recentChanges = headLog.split('\n').map(s => s.trim()).filter(Boolean);
+      }
+    } catch {}
+
+    if (recentChanges.length === 0 && updateStatusState.recentChanges?.length > 0) {
+      recentChanges = updateStatusState.recentChanges;
+    }
 
     let updatedVersion = null;
     try {
