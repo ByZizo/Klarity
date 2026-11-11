@@ -269,6 +269,124 @@ export const HOUSEHOLD_PROVIDER_CONFIGS = {
   }
 };
 
+export function isNonHouseholdBill(b) {
+  if (!b) return true;
+  const name = String(b.name || '').toLowerCase();
+  const cat = String(b.category || '').toLowerCase();
+  const desc = String(b.notes || b.description || b.merchant || b.account || '').toLowerCase();
+
+  // Explicit non-household categories (food, transportation, dining, uber, shopping, etc.)
+  const excludedCategories = [
+    'food', 'dining', 'restaurant', 'restaurants', 'groceries', 'grocery', 'supermarket',
+    'transportation', 'transit', 'travel', 'entertainment',
+    'shopping', 'retail', 'clothing', 'personal', 'auto', 'car', 'vehicle'
+  ];
+  if (excludedCategories.some(c => cat === c || cat.startsWith(c + ' ') || cat.endsWith(' ' + c) || cat.includes(c))) {
+    return true;
+  }
+
+  // Strict non-household keywords
+  const excludedKeywords = [
+    'uber', 'lyft', 'doordash', 'grubhub', 'instacart', 'postmates', 'seamless',
+    'mcdonald', 'starbucks', 'chipotle', 'burger', 'pizza', 'taco', 'restaurant', 'cafe',
+    'trader joe', 'whole foods', 'safeway', 'kroger', 'costco', 'walmart', 'target',
+    'gas station', 'chevron', 'shell', 'exxon', 'mobil', '76 gas', 'arco', 'bp gas',
+    'netflix', 'spotify', 'hulu', 'disney+', 'disney plus', 'apple tv', 'gym', 'planet fitness',
+    'amazon prime', 'amazon.com', 'amzn', 'amzn mktp'
+  ];
+  if (excludedKeywords.some(kw => name.includes(kw) || desc.includes(kw))) {
+    return true;
+  }
+
+  return false;
+}
+
+export function getBillProviderCategory(b, profile = {}) {
+  if (!b) return null;
+  const name = String(b.name || '').toLowerCase();
+  const cat = String(b.category || '').toLowerCase();
+  const desc = String(b.notes || b.description || b.merchant || '').toLowerCase();
+
+  // 1. Check exact configured provider names
+  const pgeProv = String(profile.electricGasProvider || '').toLowerCase().trim();
+  if (pgeProv && pgeProv.length > 2 && (name.includes(pgeProv) || desc.includes(pgeProv))) return 'electric';
+
+  const intProv = String(profile.internetProvider || '').toLowerCase().trim();
+  if (intProv && intProv.length > 2 && (name.includes(intProv) || desc.includes(intProv))) return 'internet';
+
+  const phoneProv = String(profile.phoneProvider || '').toLowerCase().trim();
+  if (phoneProv && phoneProv.length > 2 && (name.includes(phoneProv) || desc.includes(phoneProv))) return 'phone';
+
+  const waterProv = String(profile.waterProvider || '').toLowerCase().trim();
+  if (waterProv && waterProv.length > 2 && (name.includes(waterProv) || desc.includes(waterProv))) return 'water';
+
+  const trashProv = String(profile.trashProvider || '').toLowerCase().trim();
+  if (trashProv && trashProv.length > 2 && (name.includes(trashProv) || desc.includes(trashProv))) return 'trash';
+
+  const secProv = String(profile.securityProvider || '').toLowerCase().trim();
+  if (secProv && secProv.length > 2 && (name.includes(secProv) || desc.includes(secProv))) return 'security';
+
+  const warProv = String(profile.homeWarrantyProvider || '').toLowerCase().trim();
+  if (warProv && warProv.length > 2 && (name.includes(warProv) || desc.includes(warProv))) return 'homeWarranty';
+
+  // Check extra providers
+  if (Array.isArray(profile.extraProviders)) {
+    for (const ep of profile.extraProviders) {
+      const epName = String(ep.name || '').toLowerCase().trim();
+      if (epName && epName.length > 2 && (name.includes(epName) || desc.includes(epName))) {
+        return `extra-${ep.id}`;
+      }
+    }
+  }
+
+  // 2. Keyword fallback for electric/gas
+  if (/electric|pg&e|pge|smud|edison|sdge|ladwp|natural\s+gas|socalgas|conedison|national\s+grid|duke\s+energy/i.test(name)) {
+    return 'electric';
+  }
+
+  // 3. Keyword fallback for water & sewer
+  if (/water|sewer|waterworks|water\s+district|aquarion|american\s+water/i.test(name)) {
+    return 'water';
+  }
+
+  // 4. Keyword fallback for trash & waste
+  if (/trash|recycling|garbage|waste\s+mgmt|waste\s+management|republic\s+services|recology|wm\s+trash/i.test(name)) {
+    return 'trash';
+  }
+
+  // 5. Keyword fallback for internet
+  if (/internet|wifi|xfinity|comcast|spectrum|fios|frontier|starlink|cox\s+comm|centurylink|optimum/i.test(name)) {
+    return 'internet';
+  }
+
+  // 6. Keyword fallback for phone / mobile
+  if (/t-mobile|tmobile|verizon\s+wireless|at&t\s+wireless|mint\s+mobile|google\s+fi|visible|cricket|boost\s+mobile|cellular/i.test(name)) {
+    return 'phone';
+  }
+
+  // 7. Keyword fallback for security
+  if (/security|ring\s+protect|adt|simplisafe|vivint|cove\s+security|brinks/i.test(name)) {
+    return 'security';
+  }
+
+  // 8. Keyword fallback for home warranty
+  if (/home\s+warranty|home\s+shield|choice\s+home|first\s+american|cinch|liberty\s+home/i.test(name)) {
+    return 'homeWarranty';
+  }
+
+  // 9. Keyword fallback for housing / rent / mortgage
+  if (/mortgage|rent|housing|lease|hoa\b|homeowner\s+assoc|property\s+tax|county\s+tax/i.test(name) || cat === 'housing') {
+    return 'housing';
+  }
+
+  // General utilities category fallback
+  if (cat === 'utilities') {
+    return 'electric';
+  }
+
+  return null;
+}
+
 export default function HouseholdLifestyleHub({
   householdProfile,
   onUpdateProfile,
@@ -1157,20 +1275,9 @@ export default function HouseholdLifestyleHub({
     }
   }, [householdProfile.zillowImportedAt]);
 
-  // Extract only verified bills pulled from actual payments & connected accounts (strictly excluding any simulated or fake bills)
+  // Extract only verified bills pulled from actual payments & connected accounts (strictly excluding non-household expenses like food, uber, dining, etc.)
   const actualHouseholdBills = useMemo(() => {
     if (!Array.isArray(bills) || bills.length === 0) return [];
-    const householdKeywords = [
-      'electric', 'pg&e', 'pge', 'smud', 'edison', 'sdge', 'ladwp',
-      'gas', 'socalgas', 'natural gas',
-      'water', 'trash', 'sewer', 'waste', 'city utilities', 'republic services', 'waste management',
-      'internet', 'wifi', 'xfinity', 'comcast', 'at&t', 'spectrum', 'verizon', 'frontier', 'starlink',
-      'phone', 'cell', 'mobile', 'wireless', 't-mobile', 'tmobile', 'mint mobile', 'google fi',
-      'mortgage', 'rent', 'housing', 'lease',
-      'property tax', 'county tax', 'tax collector',
-      'hoa', 'homeowners',
-      'home insurance', 'hazard insurance', 'renters insurance', 'security', 'ring', 'adt'
-    ];
     return bills.filter(b => {
       if (!b || !b.name) return false;
       const id = String(b.id || '').toLowerCase();
@@ -1197,24 +1304,75 @@ export default function HouseholdLifestyleHub({
       if (acct.includes('4821') || acct.includes('mock')) {
         return false;
       }
-      const name = (b.name || '').toLowerCase();
-      const cat = (b.category || '').toLowerCase();
 
-      // Ensure vehicle / auto insurance does not appear in household
-      if ((cat.includes('insurance') || name.includes('insurance')) && (name.includes('auto') || name.includes('car') || name.includes('vehicle'))) {
+      // Strictly exclude non-household expenses (food, uber, dining, groceries, shopping, entertainment, etc.)
+      if (isNonHouseholdBill(b)) {
         return false;
       }
 
-      const isHouseholdCat = ['utilities', 'housing', 'internet & tech', 'home'].includes(cat) || (cat === 'insurance' && !name.includes('auto') && !name.includes('car') && !name.includes('vehicle'));
-      const matches = householdKeywords.some(kw => name.includes(kw));
-      return (isHouseholdCat || matches) && Number(b.expectedAmount || b.amount || 0) > 0;
+      const provCategory = getBillProviderCategory(b, householdProfile);
+      const isHouseholdCat = ['utilities', 'housing', 'internet & tech', 'home'].includes(String(b.category || '').toLowerCase());
+      return (Boolean(provCategory) || isHouseholdCat) && Number(b.expectedAmount || b.amount || 0) > 0;
     });
-  }, [bills]);
+  }, [bills, householdProfile]);
 
   const totalActualBills = useMemo(
     () => actualHouseholdBills.reduce((sum, b) => sum + Number(b.expectedAmount || b.amount || 0), 0),
     [actualHouseholdBills]
   );
+
+  const [selectedBillProvider, setSelectedBillProvider] = useState('all');
+
+  const providerFilterOptions = useMemo(() => {
+    const list = [
+      { id: 'all', label: 'All provider bills', shortLabel: 'All provider bills', icon: Receipt },
+      { id: 'electric', label: householdProfile.electricGasProvider ? `${householdProfile.electricGasProvider} (Electric & Gas)` : 'Electric & Gas', shortLabel: householdProfile.electricGasProvider || 'Electric & Gas', icon: Zap },
+      { id: 'water', label: householdProfile.waterProvider ? `${householdProfile.waterProvider} (Water & Sewer)` : 'Water & Sewer', shortLabel: householdProfile.waterProvider || 'Water & Sewer', icon: Droplets },
+      { id: 'trash', label: householdProfile.trashProvider ? `${householdProfile.trashProvider} (Trash & Recycling)` : 'Trash & Recycling', shortLabel: householdProfile.trashProvider || 'Trash & Recycling', icon: Droplets },
+      { id: 'internet', label: householdProfile.internetProvider ? `${householdProfile.internetProvider} (Internet & WiFi)` : 'Internet & WiFi', shortLabel: householdProfile.internetProvider || 'Internet & WiFi', icon: Wifi },
+      { id: 'phone', label: householdProfile.phoneProvider ? `${householdProfile.phoneProvider} (Mobile Wireless)` : 'Mobile Wireless', shortLabel: householdProfile.phoneProvider || 'Mobile Wireless', icon: Smartphone },
+      { id: 'security', label: householdProfile.securityProvider ? `${householdProfile.securityProvider} (Home Security)` : 'Home Security', shortLabel: householdProfile.securityProvider || 'Home Security', icon: ShieldCheck },
+      { id: 'homeWarranty', label: householdProfile.homeWarrantyProvider ? `${householdProfile.homeWarrantyProvider} (Home Warranty)` : 'Home Warranty', shortLabel: householdProfile.homeWarrantyProvider || 'Home Warranty', icon: Shield },
+      { id: 'housing', label: 'Housing (Rent / Mortgage)', shortLabel: 'Rent / Mortgage', icon: Building }
+    ];
+
+    if (Array.isArray(householdProfile.extraProviders)) {
+      householdProfile.extraProviders.forEach(ep => {
+        list.push({
+          id: `extra-${ep.id}`,
+          label: ep.name ? `${ep.name} (${ep.type || 'Custom'})` : (ep.type || 'Custom Provider'),
+          shortLabel: ep.name || ep.type || 'Extra Provider',
+          icon: Sparkles
+        });
+      });
+    }
+
+    return list.map(opt => {
+      if (opt.id === 'all') {
+        return {
+          ...opt,
+          count: actualHouseholdBills.length,
+          total: totalActualBills
+        };
+      }
+      const matchingBills = actualHouseholdBills.filter(b => getBillProviderCategory(b, householdProfile) === opt.id);
+      const total = matchingBills.reduce((sum, b) => sum + Number(b.expectedAmount || b.amount || 0), 0);
+      return {
+        ...opt,
+        count: matchingBills.length,
+        total
+      };
+    }).filter(opt => opt.id === 'all' || opt.count > 0 || ['electric', 'internet', 'phone', 'water'].includes(opt.id));
+  }, [householdProfile, actualHouseholdBills, totalActualBills]);
+
+  const displayedHouseholdBills = useMemo(() => {
+    if (selectedBillProvider === 'all') return actualHouseholdBills;
+    return actualHouseholdBills.filter(b => getBillProviderCategory(b, householdProfile) === selectedBillProvider);
+  }, [actualHouseholdBills, selectedBillProvider, householdProfile]);
+
+  const displayedBillsTotal = useMemo(() => {
+    return displayedHouseholdBills.reduce((sum, b) => sum + Number(b.expectedAmount || b.amount || 0), 0);
+  }, [displayedHouseholdBills]);
 
   const suggestedInternetPlans = useMemo(
     () => getPlansForProvider('internet', householdProfile.internetProvider),
@@ -4417,33 +4575,71 @@ export default function HouseholdLifestyleHub({
                     </div>
                     )}
 
-                    {/* 4. SECTION 4: BILLS TABLE (Spacious rows, small green dot with 'From payments', bold total) */}
+                    {/* 4. SECTION 4: BILLS TABLE (Provider Filter Buttons & Table) */}
                     {householdSubTab === 'bills' && (
-                    <div id="section-bills" className="scroll-mt-16 pt-2">
-                      <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-2">
+                    <div id="section-bills" className="scroll-mt-16 pt-2 flex flex-col gap-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-2">
                         <div>
-                          <h4 className="text-[13px] font-semibold  text-slate-400 dark:text-slate-500">
-                            Bills
+                          <h4 className="text-[13px] font-semibold text-slate-400 dark:text-slate-500">
+                            Household Provider Bills
                           </h4>
                           <span className="text-[13px] text-slate-400 dark:text-slate-500 mt-0.5 block">
-                            Actual bills pulled directly from payments
+                            Verified bills for household utilities, protection, connectivity, and housing
                           </span>
                         </div>
-                        {actualHouseholdBills.length > 0 && (
-                          <div className="text-right">
-                            <span className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">
-                              ${totalActualBills.toLocaleString()}
-                              <span className="text-[13px] font-normal text-slate-400"> /mo</span>
+                        <div className="text-right">
+                          <span className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">
+                            ${displayedBillsTotal.toLocaleString()}
+                            <span className="text-[13px] font-normal text-slate-400"> /mo</span>
+                          </span>
+                          {selectedBillProvider !== 'all' && (
+                            <span className="text-[11px] text-slate-400 block">
+                              Filtered by {providerFilterOptions.find(p => p.id === selectedBillProvider)?.shortLabel || 'provider'}
                             </span>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
 
-                      {actualHouseholdBills.length > 0 ? (
+                      {/* Provider Switcher Button Bar */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar flex-wrap">
+                        {providerFilterOptions.map((btn) => {
+                          const IconComponent = btn.icon || Receipt;
+                          const isSelected = selectedBillProvider === btn.id;
+                          return (
+                            <button
+                              key={btn.id}
+                              type="button"
+                              onClick={() => setSelectedBillProvider(btn.id)}
+                              className={`px-3 py-1.5 rounded-xl text-[13px] font-semibold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+                                isSelected
+                                  ? 'bg-[var(--brand)] text-white shadow-2xs'
+                                  : 'bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] border border-[var(--line)]'
+                              }`}
+                            >
+                              <IconComponent className="w-3.5 h-3.5" />
+                              <span>{btn.shortLabel || btn.label}</span>
+                              {btn.count > 0 && (
+                                <span
+                                  className={`text-[11px] px-1.5 py-0.2 rounded-full font-bold ${
+                                    isSelected
+                                      ? 'bg-white/20 text-white'
+                                      : 'bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)]'
+                                  }`}
+                                >
+                                  ${Number(btn.total || 0).toLocaleString()}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Bills Table */}
+                      {displayedHouseholdBills.length > 0 ? (
                         <div className="overflow-x-auto">
                           <table className="w-full text-left text-[13px] min-w-[550px]">
                             <thead>
-                              <tr className="border-b border-slate-100 dark:border-slate-800 text-[13px] font-semibold text-slate-400 dark:text-slate-500 ">
+                              <tr className="border-b border-slate-100 dark:border-slate-800 text-[13px] font-semibold text-slate-400 dark:text-slate-500">
                                 <th className="py-4 pr-4 font-medium">Bill / Provider</th>
                                 <th className="py-4 px-4 font-medium">Category</th>
                                 <th className="py-4 px-4 font-medium">Due date</th>
@@ -4452,12 +4648,12 @@ export default function HouseholdLifestyleHub({
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                              {actualHouseholdBills.map((b) => (
+                              {displayedHouseholdBills.map((b) => (
                                 <tr key={b.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                                   <td className="py-4 pr-4 font-semibold text-slate-900 dark:text-slate-100 text-sm">
                                     {b.name}
                                   </td>
-                                  <td className="py-4 px-4 text-slate-500 dark:text-slate-400">
+                                  <td className="py-4 px-4 text-slate-500 dark:text-slate-400 capitalize">
                                     {b.category || 'Utilities'}
                                   </td>
                                   <td className="py-4 px-4 text-slate-500 dark:text-slate-400">
@@ -4479,10 +4675,12 @@ export default function HouseholdLifestyleHub({
                             <tfoot>
                               <tr className="border-t-2 border-slate-200 dark:border-slate-700">
                                 <td colSpan="4" className="py-5 pr-4 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                                  Total monthly bills
+                                  {selectedBillProvider === 'all'
+                                    ? 'Total monthly household bills'
+                                    : `Total ${providerFilterOptions.find(p => p.id === selectedBillProvider)?.shortLabel || 'provider'} bill`}
                                 </td>
                                 <td className="py-5 pl-4 text-right text-base font-semibold text-slate-900 dark:text-slate-100">
-                                  ${totalActualBills.toLocaleString()}
+                                  ${displayedBillsTotal.toLocaleString()}
                                   <span className="text-[13px] font-normal text-slate-400"> /mo</span>
                                 </td>
                               </tr>
@@ -4492,10 +4690,25 @@ export default function HouseholdLifestyleHub({
                       ) : (
                         <div className="py-12 flex flex-col items-center justify-center text-center gap-2">
                           <Receipt className="w-8 h-8 text-slate-300 dark:text-slate-600" />
-                          <b className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">No household bills pulled from payments yet</b>
+                          <b className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">
+                            {selectedBillProvider === 'all'
+                              ? 'No household provider bills synced yet'
+                              : `No synced bills for ${providerFilterOptions.find(p => p.id === selectedBillProvider)?.shortLabel || 'this provider'} yet`}
+                          </b>
                           <p className="text-[13px] text-slate-400 dark:text-slate-500 max-w-sm">
-                            Once your payment statements or connected bank accounts sync in Klarity, verified utility and household provider bills will appear here.
+                            {selectedBillProvider === 'all'
+                              ? 'Once your payments or utility accounts sync in Klarity, verified household bills will appear here.'
+                              : 'When payments for this provider are detected in your connected accounts, they will be tracked here automatically.'}
                           </p>
+                          {selectedBillProvider !== 'all' && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedBillProvider('all')}
+                              className="mt-2 text-[13px] font-semibold text-[var(--brand)] hover:underline cursor-pointer"
+                            >
+                              View all household provider bills &rarr;
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

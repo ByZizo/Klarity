@@ -7571,12 +7571,12 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               <h3 id="update-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
                 Update available
               </h3>
+              <Pill variant="brand">
+                {formatVersionString(desktopAppInfo.updateStatus?.latestVersion || CURRENT_APP_VERSION)}
+              </Pill>
             </div>
             <p className="text-[15px] font-medium text-[var(--ink)] leading-relaxed">
-              {formatCleanUpdateMessage(
-                desktopAppInfo.updateStatus?.message || desktopAppInfo.updateStatus?.commitTitle,
-                desktopAppInfo.updateStatus?.latestVersion
-              )}
+              A new version of Klarity is ready to install with improvements and updates.
             </p>
             <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
               <Button
