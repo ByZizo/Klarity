@@ -1026,9 +1026,7 @@ function KlarityApp() {
     account: 'Everyday Rewards •••• 4417'
   });
 
-  const [scanText, setScanText] = useState(
-    "PACIFIC GAS AND ELECTRIC COMPANY\nAccount: 4819-2041-02\nTotal Amount Due: $248.50\nPayment Due Date: November 15, 2026\nService: Electric and Natural Gas"
-  );
+  const [scanText, setScanText] = useState('');
   const [scanResult, setScanResult] = useState(null);
   const [txSearch, setTxSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -7176,15 +7174,23 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           aria-modal="true"
           aria-labelledby="scan-statement-modal-title"
         >
-          <Card className="max-w-lg w-full p-6 flex flex-col gap-4 shadow-xl">
+          <Card className="max-w-2xl w-full p-6 flex flex-col gap-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
-              <h3 id="scan-statement-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
-                Paste statement or bill text
-              </h3>
+              <div>
+                <h3 id="scan-statement-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                  Scan document or statement
+                </h3>
+                <p className="text-[13px] text-[var(--muted)] mt-0.5">
+                  Paste bill lines, account statements, or receipts for AI comprehension.
+                </p>
+              </div>
               <button
                 type="button"
                 aria-label="Close scan statement modal"
-                onClick={() => setIsScanBillOpen(false)}
+                onClick={() => {
+                  setIsScanBillOpen(false);
+                  setScanText('');
+                }}
                 className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -7192,22 +7198,35 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             </div>
             <div>
               <label htmlFor="scan-statement-textarea" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
-                Statement text
+                Statement or bill text
               </label>
               <textarea
                 id="scan-statement-textarea"
-                rows={5}
+                rows={11}
                 value={scanText}
                 onChange={(e) => setScanText(e.target.value)}
-                placeholder="Paste bill or statement lines here..."
-                className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] p-3 text-[15px] font-medium text-[var(--ink)]"
+                placeholder={"e.g. PACIFIC GAS AND ELECTRIC COMPANY\nAccount: 4819-2041-02\nTotal Amount Due: $248.50\nPayment Due Date: November 15, 2026\nService: Electric and Natural Gas\n\nPaste any bill, receipt, or subscription sentences here..."}
+                className="w-full min-h-[220px] bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] p-3.5 text-[15px] font-medium text-[var(--ink)] placeholder:text-[var(--muted)]/50 placeholder:font-normal focus:placeholder-transparent focus:outline-none focus:border-[var(--brand)] transition-colors leading-relaxed resize-y"
               />
+              <p className="text-[13px] text-[var(--muted)] mt-1.5">
+                The AI will automatically identify due dates, amounts, billing cycles, and merchants.
+              </p>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
-              <Button variant="secondary" onClick={() => setIsScanBillOpen(false)}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setIsScanBillOpen(false);
+                  setScanText('');
+                }}
+              >
                 Cancel
               </Button>
-              <Button variant="primary" onClick={handleScanBill}>
+              <Button
+                variant="primary"
+                onClick={handleScanBill}
+                disabled={!scanText.trim()}
+              >
                 Analyze statement
               </Button>
             </div>
