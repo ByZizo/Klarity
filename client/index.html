@@ -16,13 +16,16 @@
 
           var root = document.documentElement;
           var savedTheme = localStorage.getItem('klarity_theme') || 'light';
+          var isDark = savedTheme === 'dark' || (savedTheme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
           if (savedTheme === 'dark') {
             root.setAttribute('data-theme', 'dark');
+            root.classList.add('dark');
           } else if (savedTheme === 'system') {
-            var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-            root.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+            root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+            if (isDark) root.classList.add('dark'); else root.classList.remove('dark');
           } else {
             root.setAttribute('data-theme', 'light');
+            root.classList.remove('dark');
           }
 
           var fontScale = localStorage.getItem('klarity_ui_font_scale') || 'normal';

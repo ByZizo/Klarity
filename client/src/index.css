@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "./styles/tokens.css";
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
+
 @layer base {
   :root,
   html,
@@ -50,55 +52,170 @@ textarea:focus-visible,
 }
 
 /* ========================================================================== */
-/* DARK THEME ADAPTATION ([data-theme="dark"])                                */
+/* DARK THEME ADAPTATION ([data-theme="dark"] & .dark)                         */
 /* ========================================================================== */
-[data-theme="dark"] body {
+[data-theme="dark"] body,
+.dark body {
   background-color: var(--background);
   color: var(--ink);
 }
 
 [data-theme="dark"] .bg-white,
+.dark .bg-white,
 [data-theme="dark"] .bg-\[\#f8fafc\],
-[data-theme="dark"] .bg-\[\#F7F8FA\] {
+.dark .bg-\[\#f8fafc\],
+[data-theme="dark"] .bg-\[\#F7F8FA\],
+.dark .bg-\[\#F7F8FA\] {
   background-color: var(--surface) !important;
   color: var(--ink);
 }
 
 [data-theme="dark"] .bg-slate-50,
+.dark .bg-slate-50,
 [data-theme="dark"] .bg-slate-50\/80,
+.dark .bg-slate-50\/80,
+[data-theme="dark"] .bg-slate-50\/70,
+.dark .bg-slate-50\/70,
 [data-theme="dark"] .bg-slate-50\/60,
+.dark .bg-slate-50\/60,
 [data-theme="dark"] .bg-slate-50\/50,
+.dark .bg-slate-50\/50,
 [data-theme="dark"] .bg-slate-100,
-[data-theme="dark"] .bg-slate-100\/80 {
+.dark .bg-slate-100,
+[data-theme="dark"] .bg-slate-100\/90,
+.dark .bg-slate-100\/90,
+[data-theme="dark"] .bg-slate-100\/80,
+.dark .bg-slate-100\/80,
+[data-theme="dark"] .bg-slate-200,
+.dark .bg-slate-200,
+[data-theme="dark"] .bg-slate-200\/70,
+.dark .bg-slate-200\/70,
+[data-theme="dark"] .bg-slate-200\/60,
+.dark .bg-slate-200\/60,
+[data-theme="dark"] .bg-\[\#eff4f9\],
+.dark .bg-\[\#eff4f9\] {
   background-color: var(--surface-subtle) !important;
   color: var(--ink);
 }
 
 [data-theme="dark"] .text-slate-900,
+.dark .text-slate-900,
 [data-theme="dark"] .text-slate-800,
-[data-theme="dark"] .text-slate-700 {
+.dark .text-slate-800,
+[data-theme="dark"] .text-slate-700,
+.dark .text-slate-700 {
   color: var(--ink) !important;
 }
 
 [data-theme="dark"] .text-slate-600,
+.dark .text-slate-600,
 [data-theme="dark"] .text-slate-500,
-[data-theme="dark"] .text-slate-400 {
+.dark .text-slate-500,
+[data-theme="dark"] .text-slate-400,
+.dark .text-slate-400 {
   color: var(--muted) !important;
 }
 
+[data-theme="dark"] .text-\[\#18457c\],
+.dark .text-\[\#18457c\],
+[data-theme="dark"] .text-\[\#1B4B91\],
+.dark .text-\[\#1B4B91\] {
+  color: var(--brand) !important;
+}
+
 [data-theme="dark"] .border-slate-100,
+.dark .border-slate-100,
 [data-theme="dark"] .border-slate-200,
+.dark .border-slate-200,
+[data-theme="dark"] .border-slate-200\/60,
+.dark .border-slate-200\/60,
+[data-theme="dark"] .border-slate-200\/70,
+.dark .border-slate-200\/70,
 [data-theme="dark"] .border-slate-200\/80,
+.dark .border-slate-200\/80,
 [data-theme="dark"] .border-slate-200\/90,
+.dark .border-slate-200\/90,
 [data-theme="dark"] .border-slate-300,
+.dark .border-slate-300,
+[data-theme="dark"] .border-blue-200,
+.dark .border-blue-200,
+[data-theme="dark"] .border-blue-200\/80,
+.dark .border-blue-200\/80,
+[data-theme="dark"] .border-\[\#18457c\]\/20,
+.dark .border-\[\#18457c\]\/20,
+[data-theme="dark"] .border-\[\#18457c\]\/25,
+.dark .border-\[\#18457c\]\/25,
 [data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
-[data-theme="dark"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+[data-theme="dark"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
   border-color: var(--line) !important;
 }
 
+[data-theme="dark"] .bg-blue-50,
+.dark .bg-blue-50,
+[data-theme="dark"] .bg-blue-50\/70,
+.dark .bg-blue-50\/70,
+[data-theme="dark"] .bg-blue-100,
+.dark .bg-blue-100 {
+  background-color: var(--brand-soft) !important;
+  color: var(--ink) !important;
+}
+
+[data-theme="dark"] .bg-emerald-50,
+.dark .bg-emerald-50 {
+  background-color: var(--success-soft) !important;
+}
+[data-theme="dark"] .text-emerald-700,
+.dark .text-emerald-700,
+[data-theme="dark"] .text-emerald-800,
+.dark .text-emerald-800 {
+  color: var(--success) !important;
+}
+
+[data-theme="dark"] .bg-amber-50,
+.dark .bg-amber-50,
+[data-theme="dark"] .bg-amber-50\/90,
+.dark .bg-amber-50\/90 {
+  background-color: var(--warning-soft) !important;
+}
+[data-theme="dark"] .text-amber-800,
+.dark .text-amber-800,
+[data-theme="dark"] .text-amber-900,
+.dark .text-amber-900,
+[data-theme="dark"] .text-amber-950,
+.dark .text-amber-950 {
+  color: var(--warning) !important;
+}
+
+[data-theme="dark"] .bg-rose-50,
+.dark .bg-rose-50 {
+  background-color: var(--danger-soft) !important;
+}
+
+/* Chat bubble suggestion action buttons in dark mode */
+[data-theme="dark"] .bg-\[\#eff4f9\] button,
+.dark .bg-\[\#eff4f9\] button,
+[data-theme="dark"] button.bg-white.text-\[\#18457c\],
+.dark button.bg-white.text-\[\#18457c\] {
+  background-color: var(--surface) !important;
+  color: var(--brand) !important;
+  border-color: var(--line) !important;
+}
+[data-theme="dark"] .bg-\[\#eff4f9\] button:hover,
+.dark .bg-\[\#eff4f9\] button:hover,
+[data-theme="dark"] button.bg-white.text-\[\#18457c\]:hover,
+.dark button.bg-white.text-\[\#18457c\]:hover {
+  background-color: var(--brand) !important;
+  color: #FFFFFF !important;
+}
+
 [data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 [data-theme="dark"] select,
-[data-theme="dark"] textarea {
+.dark select,
+[data-theme="dark"] textarea,
+.dark textarea {
   background-color: var(--surface-subtle) !important;
   color: var(--ink) !important;
   border-color: var(--line) !important;

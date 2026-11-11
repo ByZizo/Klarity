@@ -35,26 +35,26 @@ export function AdvisorPage({
   FormattedChatMessage
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col h-[650px] justify-between">
+    <div className="bg-[var(--surface)] text-[var(--ink)] rounded-xl border border-[var(--line)] shadow-2xs p-5 flex flex-col h-[650px] justify-between">
       {/* Header */}
-      <div className="pb-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="pb-3 border-b border-[var(--line)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="font-serif text-xl font-bold text-slate-900 tracking-tight">
+            <h1 className="font-serif text-xl font-bold text-[var(--ink)] tracking-tight">
               AI Advisor
             </h1>
             <button
               type="button"
               onClick={() => setIsMemoryModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)] text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
               title="AI Advisor Quick Settings & Memory"
               aria-label="AI Advisor Quick Settings & Memory"
             >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-[#18457c]" />
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--brand)]" />
               <span>AI Settings</span>
             </button>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-[var(--muted)] mt-0.5">
             Reads your bills, cards and spending to answer questions.
           </p>
         </div>
@@ -62,7 +62,7 @@ export function AdvisorPage({
           <button
             type="button"
             onClick={handleGenerateWeeklySummary}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#eff4f9] hover:bg-blue-100 text-[#18457c] border border-[#18457c]/20 text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--brand-soft)] hover:bg-[var(--surface-hover)] text-[var(--brand)] border border-[var(--line)] text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>Weekly Summary</span>
@@ -70,7 +70,7 @@ export function AdvisorPage({
           <button
             type="button"
             onClick={() => setIsPastChatsOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)] text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
           >
             <History className="w-3.5 h-3.5" />
             <span>Past Chats</span>
@@ -88,8 +88,8 @@ export function AdvisorPage({
             <div
               className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed flex flex-col gap-2 ${
                 msg.role === 'user'
-                  ? 'bg-[#18457c] text-white shadow-2xs'
-                  : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
+                  ? 'bg-[var(--brand)] text-white shadow-2xs'
+                  : 'bg-[var(--surface-subtle)] text-[var(--ink)] border border-[var(--line)] shadow-2xs'
               }`}
             >
               {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
@@ -138,13 +138,13 @@ export function AdvisorPage({
               )}
 
               {msg.role === 'assistant' && Array.isArray(msg.suggestedActions) && msg.suggestedActions.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-slate-200/70">
+                <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-[var(--line)]">
                   {msg.suggestedActions.map((act, actIdx) => (
                     <button
                       key={actIdx}
                       type="button"
                       onClick={() => handleExecuteSuggestedAction(act)}
-                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#18457c] text-[#18457c] hover:text-white border border-[#18457c]/25 text-[11px] font-semibold transition-colors cursor-pointer shadow-2xs"
+                      className="px-2.5 py-1 rounded-lg bg-[var(--surface)] hover:bg-[var(--brand)] text-[var(--brand)] hover:text-white border border-[var(--line)] text-[11px] font-semibold transition-colors cursor-pointer shadow-2xs"
                     >
                       {act.label}
                     </button>
@@ -157,7 +157,7 @@ export function AdvisorPage({
 
         {isAiTyping && (
           <div className="flex justify-start">
-            <div className="bg-[#eff4f9] rounded-2xl px-4 py-2.5 text-xs text-slate-500 animate-pulse border border-slate-200/60">
+            <div className="bg-[var(--surface-subtle)] rounded-2xl px-4 py-2.5 text-xs text-[var(--muted)] animate-pulse border border-[var(--line)]">
               Advisor is reading and analyzing...
             </div>
           </div>
@@ -171,19 +171,19 @@ export function AdvisorPage({
           {chatFiles.map((fileItem) => (
             <div
               key={fileItem.id}
-              className="flex items-center gap-2.5 p-2 bg-slate-100/90 rounded-xl border border-slate-200 w-fit max-w-[260px]"
+              className="flex items-center gap-2.5 p-2 bg-[var(--surface-subtle)] rounded-xl border border-[var(--line)] w-fit max-w-[260px]"
             >
               {fileItem.isImage && fileItem.previewUrl ? (
-                <img src={fileItem.previewUrl} alt={fileItem.name} className="w-10 h-10 rounded-lg object-cover border border-slate-300 shrink-0" />
+                <img src={fileItem.previewUrl} alt={fileItem.name} className="w-10 h-10 rounded-lg object-cover border border-[var(--line)] shrink-0" />
               ) : (
-                <div className="w-10 h-10 rounded-lg bg-[#18457c]/10 border border-[#18457c]/20 flex flex-col items-center justify-center shrink-0">
-                  <FileText className="w-4 h-4 text-[#18457c]" />
-                  <span className="text-[8px] font-bold text-[#18457c] uppercase">{fileItem.ext || 'FILE'}</span>
+                <div className="w-10 h-10 rounded-lg bg-[var(--brand-soft)] border border-[var(--line)] flex flex-col items-center justify-center shrink-0">
+                  <FileText className="w-4 h-4 text-[var(--brand)]" />
+                  <span className="text-[8px] font-bold text-[var(--brand)] uppercase">{fileItem.ext || 'FILE'}</span>
                 </div>
               )}
               <div className="min-w-0 pr-1 flex-1">
-                <p className="text-xs font-semibold text-slate-800 truncate">{fileItem.name}</p>
-                <p className="text-[10px] text-slate-500">
+                <p className="text-xs font-semibold text-[var(--ink)] truncate">{fileItem.name}</p>
+                <p className="text-[10px] text-[var(--muted)]">
                   {fileItem.ext || 'FILE'} • {(fileItem.size / 1024).toFixed(1)} KB
                 </p>
               </div>
@@ -191,7 +191,7 @@ export function AdvisorPage({
                 type="button"
                 aria-label={`Remove attached file ${fileItem.name}`}
                 onClick={() => setChatFiles((prev) => prev.filter((f) => f.id !== fileItem.id))}
-                className="p-1 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer shrink-0"
+                className="p-1 rounded-full text-[var(--muted)] hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer shrink-0"
                 title="Remove file"
               >
                 ✕
@@ -202,7 +202,7 @@ export function AdvisorPage({
       )}
 
       {/* Chat Input */}
-      <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 pt-3 border-t border-slate-100">
+      <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 pt-3 border-t border-[var(--line)]">
         <input
           type="file"
           multiple
@@ -219,27 +219,27 @@ export function AdvisorPage({
             type="button"
             aria-label="Add file or scan document"
             onClick={() => setIsFullUploadMenuOpen((prev) => !prev)}
-            className="w-[40px] h-[40px] rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
+            className="w-[40px] h-[40px] rounded-xl bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
             title="Add file or scan document"
           >
             <Plus className="w-4 h-4" />
           </button>
           {isFullUploadMenuOpen && (
-            <div className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl border border-slate-200 shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95">
+            <div className="absolute bottom-full left-0 mb-2 w-64 bg-[var(--surface)] rounded-xl border border-[var(--line)] shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95">
               <button
                 type="button"
                 onClick={() => {
                   setIsFullUploadMenuOpen(false);
                   setIsScanBillOpen(true);
                 }}
-                className="w-full flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                className="w-full flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-[var(--surface-subtle)] text-left transition-colors cursor-pointer"
               >
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#18457c] flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-lg bg-[var(--brand-soft)] text-[var(--brand)] flex items-center justify-center shrink-0 mt-0.5">
                   <FileText className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-900">Scan Document</p>
-                  <p className="text-[11px] text-slate-500 leading-snug">Paste sentences &amp; AI auto-adds bills or subscriptions</p>
+                  <p className="text-xs font-bold text-[var(--ink)]">Scan Document</p>
+                  <p className="text-[11px] text-[var(--muted)] leading-snug">Paste sentences &amp; AI auto-adds bills or subscriptions</p>
                 </div>
               </button>
               <button
@@ -248,14 +248,14 @@ export function AdvisorPage({
                   setIsFullUploadMenuOpen(false);
                   fullAdvisorFileInputRef.current?.click();
                 }}
-                className="w-full flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                className="w-full flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-[var(--surface-subtle)] text-left transition-colors cursor-pointer"
               >
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                   <UploadCloud className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-900">Submit File</p>
-                  <p className="text-[11px] text-slate-500 leading-snug">Attach one or multiple files of any format for AI to read</p>
+                  <p className="text-xs font-bold text-[var(--ink)]">Submit File</p>
+                  <p className="text-[11px] text-[var(--muted)] leading-snug">Attach one or multiple files of any format for AI to read</p>
                 </div>
               </button>
             </div>
@@ -286,14 +286,14 @@ export function AdvisorPage({
               await handleAttachFiles(files);
             }
           }}
-          className="flex-1 min-w-0 h-[40px] min-h-[40px] max-h-36 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs resize-none leading-relaxed flex items-center"
+          className="flex-1 min-w-0 h-[40px] min-h-[40px] max-h-36 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-xl px-4 py-2.5 text-xs text-[var(--ink)] placeholder-[var(--muted)] focus:bg-[var(--surface)] focus:outline-none focus:border-[var(--brand)] shadow-2xs resize-none leading-relaxed flex items-center"
         />
 
         {isAiTyping ? (
           <button
             type="button"
             onClick={handleStopGeneration}
-            className="h-[38px] px-4 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0 mb-0.5 animate-in fade-in zoom-in-90"
+            className="h-[38px] px-4 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0 mb-0.5 animate-in fade-in zoom-in-90"
             title="Stop response"
             aria-label="Stop generating response"
           >
@@ -304,7 +304,7 @@ export function AdvisorPage({
           <button
             type="submit"
             disabled={!chatInput.trim() && chatFiles.length === 0}
-            className="h-[40px] px-5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
+            className="h-[40px] px-5 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
           >
             Send
           </button>

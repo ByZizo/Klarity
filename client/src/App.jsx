@@ -5911,7 +5911,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 <aside
                   aria-label="Financial Advisor Assistant"
                   style={{ width: `${advisorWidth}px` }}
-                  className={`shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-4 xl:p-5 flex flex-col h-screen sticky top-0 hidden lg:flex relative transition-[width] duration-75 select-none ${
+                  className={`shrink-0 border-l border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] p-4 xl:p-5 flex flex-col h-screen sticky top-0 hidden lg:flex relative transition-[width] duration-75 select-none ${
                     isResizingAdvisor ? 'select-none cursor-col-resize !transition-none' : ''
                   }`}
                 >
@@ -5928,19 +5928,19 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   >
                     <div
                       className={`w-1 h-9 rounded-full transition-colors ${
-                        isResizingAdvisor ? 'bg-blue-600' : 'bg-slate-300 group-hover:bg-blue-500'
+                        isResizingAdvisor ? 'bg-[var(--brand)]' : 'bg-slate-300 dark:bg-slate-600 group-hover:bg-[var(--brand)]'
                       }`}
                     />
                   </div>
 
                   {/* Header: Collapse & Past Chats (Left), Centered Name (Middle), Weekly Summary, Mini Settings, Fullscreen (Right) */}
-                  <div className="shrink-0 flex items-center justify-between pb-3 border-b border-slate-200/70 relative">
+                  <div className="shrink-0 flex items-center justify-between pb-3 border-b border-[var(--line)] relative">
                     {/* Left: Collapse Button + Past Chats */}
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => setIsAdvisorCollapsed(true)}
-                        className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
+                        className="p-1.5 rounded-xl text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer shadow-2xs border border-[var(--line)] bg-[var(--surface)]"
                         title="Collapse Advisor"
                         aria-label="Collapse Advisor"
                       >
@@ -5949,7 +5949,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       <button
                         type="button"
                         onClick={() => setIsPastChatsOpen(true)}
-                        className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
+                        className="p-1.5 rounded-xl text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer shadow-2xs border border-[var(--line)] bg-[var(--surface)]"
                         title="Past Conversations"
                         aria-label="Past Conversations"
                       >
@@ -5959,22 +5959,22 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
                     {/* Middle: Title "AI Advisor" with Quick Settings Button right next to it & Online Checkmark */}
                     <div className="flex items-center gap-1.5">
-                      <h2 className="text-sm font-bold text-slate-900 tracking-tight">AI Advisor</h2>
+                      <h2 className="text-sm font-bold text-[var(--ink)] tracking-tight">AI Advisor</h2>
                       <button
                         type="button"
                         onClick={() => setIsMemoryModalOpen((prev) => !prev)}
-                        className="p-1 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 transition-colors cursor-pointer shadow-2xs border border-slate-200/80 bg-white"
+                        className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer shadow-2xs border border-[var(--line)] bg-[var(--surface)]"
                         title="AI Advisor Quick Settings & Memory"
                         aria-label="AI Advisor Quick Settings & Memory"
                       >
-                        <SlidersHorizontal className="w-3.5 h-3.5 text-[#18457c]" />
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--brand)]" />
                       </button>
                       <span
                         title={isAdvisorOnline ? 'Connected to the internet' : 'Connected locally only (Web search disabled)'}
                         className={`inline-flex items-center justify-center w-4 h-4 rounded-full border ${
                           isAdvisorOnline
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
-                            : 'bg-blue-50 border-blue-200 text-blue-600'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400'
                         }`}
                       >
                         <CheckCircle2 className="w-3 h-3" />
@@ -5986,7 +5986,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       <button
                         type="button"
                         onClick={handleGenerateWeeklySummary}
-                        className="p-1.5 rounded-xl text-[#18457c] bg-[#eff4f9] hover:bg-blue-100 border border-[#18457c]/20 transition-colors cursor-pointer shadow-2xs"
+                        className="p-1.5 rounded-xl text-[var(--brand)] bg-[var(--brand-soft)] hover:bg-[var(--surface-hover)] border border-[var(--line)] transition-colors cursor-pointer shadow-2xs"
                         title="Weekly Advisor Summary"
                         aria-label="Weekly Advisor Summary"
                       >
@@ -5995,7 +5995,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       <button
                         type="button"
                         onClick={() => setActiveTab('advisor')}
-                        className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
+                        className="p-1.5 rounded-xl text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer shadow-2xs border border-[var(--line)] bg-[var(--surface)]"
                         title="Full Screen Advisor"
                         aria-label="Full Screen Advisor"
                       >
@@ -6007,12 +6007,12 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   {/* Scrollable Conversation Stream */}
                   <div ref={sidebarChatContainerRef} className="flex-1 overflow-y-auto py-3 space-y-3 min-h-0 pr-0.5 select-text">
                     {settingsAiStatus !== 'connected' && settingsAiProvider !== 'local' && (
-                      <div className="bg-amber-50/90 border border-amber-200/90 rounded-2xl p-4 text-xs text-amber-900 flex flex-col gap-2 shadow-2xs">
-                        <div className="flex items-center gap-2 font-bold text-amber-950">
-                          <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                      <div className="bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-800 rounded-2xl p-4 text-xs text-amber-900 dark:text-amber-200 flex flex-col gap-2 shadow-2xs">
+                        <div className="flex items-center gap-2 font-bold text-amber-950 dark:text-amber-100">
+                          <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                           <span>AI Advisor Not Connected</span>
                         </div>
-                        <p className="text-[11px] text-amber-800 leading-relaxed">
+                        <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
                           Connect your Anthropic, OpenAI, or Google Gemini API key to activate personal debt payoff advice and automated intelligence.
                         </p>
                         <button
@@ -6021,7 +6021,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                             setSettingsActiveTab('ai');
                             setIsSettingsOpen(true);
                           }}
-                          className="self-start px-3 py-1.5 rounded-lg bg-[#1B4B91] hover:bg-[#153a70] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-all mt-1"
+                          className="self-start px-3 py-1.5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-all mt-1"
                         >
                           Configure in Settings &rarr;
                         </button>
@@ -6037,8 +6037,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         <div
                           className={`max-w-[90%] rounded-2xl p-3 text-xs leading-relaxed flex flex-col gap-2 ${
                             msg.role === 'user'
-                              ? 'bg-[#18457c] text-white shadow-2xs'
-                              : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
+                              ? 'bg-[var(--brand)] text-white shadow-2xs'
+                              : 'bg-[var(--surface-subtle)] text-[var(--ink)] border border-[var(--line)] shadow-2xs'
                           }`}
                         >
                           {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
@@ -6085,13 +6085,13 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           {msg.text && <FormattedChatMessage text={msg.text} isUser={msg.role === 'user'} />}
 
                           {msg.role === 'assistant' && Array.isArray(msg.suggestedActions) && msg.suggestedActions.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-slate-200/70">
+                            <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-[var(--line)]">
                               {msg.suggestedActions.map((act, actIdx) => (
                                 <button
                                   key={actIdx}
                                   type="button"
                                   onClick={() => handleExecuteSuggestedAction(act)}
-                                  className="px-2 py-1 rounded-lg bg-white hover:bg-[#18457c] text-[#18457c] hover:text-white border border-[#18457c]/25 text-[10px] font-semibold transition-colors cursor-pointer shadow-2xs"
+                                  className="px-2 py-1 rounded-lg bg-[var(--surface)] hover:bg-[var(--brand)] text-[var(--brand)] hover:text-white border border-[var(--line)] text-[10px] font-semibold transition-colors cursor-pointer shadow-2xs"
                                 >
                                   {act.label}
                                 </button>
@@ -6104,42 +6104,42 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
                     {isAiTyping && (
                       <div className="flex justify-start">
-                        <div className="bg-[#eff4f9] border border-slate-200/60 rounded-2xl px-3.5 py-2.5 text-xs text-slate-500 flex items-center gap-1.5 shadow-2xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:0.2s]" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:0.4s]" />
+                        <div className="bg-[var(--surface-subtle)] border border-[var(--line)] rounded-2xl px-3.5 py-2.5 text-xs text-[var(--muted)] flex items-center gap-1.5 shadow-2xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--muted)] animate-bounce" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--muted)] animate-bounce [animation-delay:0.2s]" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--muted)] animate-bounce [animation-delay:0.4s]" />
                         </div>
                       </div>
                     )}
                   </div>
 
                   {/* Bottom Actions: Multi-File Preview + Chat Input Form */}
-                  <div className="pt-3 border-t border-slate-200/70 flex flex-col gap-2 shrink-0">
+                  <div className="pt-3 border-t border-[var(--line)] flex flex-col gap-2 shrink-0">
                     {chatFiles.length > 0 && (
                       <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-0.5">
                         {chatFiles.map((fileItem) => (
                           <div
                             key={fileItem.id}
-                            className="flex items-center gap-2 p-2 bg-slate-100/90 rounded-xl border border-slate-200 w-full"
+                            className="flex items-center gap-2 p-2 bg-[var(--surface-subtle)] rounded-xl border border-[var(--line)] w-full"
                           >
                             {fileItem.isImage && fileItem.previewUrl ? (
-                              <img src={fileItem.previewUrl} alt={fileItem.name} className="w-9 h-9 rounded-lg object-cover border border-slate-300 shrink-0" />
+                              <img src={fileItem.previewUrl} alt={fileItem.name} className="w-9 h-9 rounded-lg object-cover border border-[var(--line)] shrink-0" />
                             ) : (
-                              <div className="w-9 h-9 rounded-lg bg-[#18457c]/10 border border-[#18457c]/20 flex flex-col items-center justify-center shrink-0">
-                                <FileText className="w-3.5 h-3.5 text-[#18457c]" />
-                                <span className="text-[8px] font-bold text-[#18457c] uppercase">{fileItem.ext || 'FILE'}</span>
+                              <div className="w-9 h-9 rounded-lg bg-[var(--brand-soft)] border border-[var(--line)] flex flex-col items-center justify-center shrink-0">
+                                <FileText className="w-3.5 h-3.5 text-[var(--brand)]" />
+                                <span className="text-[8px] font-bold text-[var(--brand)] uppercase">{fileItem.ext || 'FILE'}</span>
                               </div>
                             )}
                             <div className="min-w-0 pr-1 flex-1">
-                              <p className="text-[11px] font-semibold text-slate-800 truncate">{fileItem.name}</p>
-                              <p className="text-[10px] text-slate-500">
+                              <p className="text-[11px] font-semibold text-[var(--ink)] truncate">{fileItem.name}</p>
+                              <p className="text-[10px] text-[var(--muted)]">
                                 {fileItem.ext || 'FILE'} • {(fileItem.size / 1024).toFixed(1)} KB
                               </p>
                             </div>
                             <button
                               type="button"
                               onClick={() => setChatFiles((prev) => prev.filter((f) => f.id !== fileItem.id))}
-                              className="p-1 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer shrink-0"
+                              className="p-1 rounded-full text-[var(--muted)] hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer shrink-0"
                               title="Remove file"
                               aria-label={`Remove ${fileItem.name}`}
                             >
@@ -6167,28 +6167,28 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         <button
                           type="button"
                           onClick={() => setIsUploadMenuOpen((prev) => !prev)}
-                          className="w-[38px] h-[38px] rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-600 hover:text-slate-900 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
+                          className="w-[38px] h-[38px] rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
                           title="Add file or scan document"
                           aria-label="Add file or scan document"
                         >
                           <Plus className="w-4 h-4" />
                         </button>
                         {isUploadMenuOpen && (
-                          <div className="absolute bottom-full left-0 mb-2 w-60 bg-white rounded-xl border border-slate-200 shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95">
+                          <div className="absolute bottom-full left-0 mb-2 w-60 bg-[var(--surface)] rounded-xl border border-[var(--line)] shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95">
                             <button
                               type="button"
                               onClick={() => {
                                 setIsUploadMenuOpen(false);
                                 setIsScanBillOpen(true);
                               }}
-                              className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                              className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-[var(--surface-subtle)] text-left transition-colors cursor-pointer"
                             >
-                              <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#18457c] flex items-center justify-center shrink-0 mt-0.5">
+                              <div className="w-7 h-7 rounded-lg bg-[var(--brand-soft)] text-[var(--brand)] flex items-center justify-center shrink-0 mt-0.5">
                                 <FileText className="w-3.5 h-3.5" />
                               </div>
                               <div>
-                                <p className="text-xs font-bold text-slate-900">Scan Document</p>
-                                <p className="text-[10px] text-slate-500 leading-snug">Paste sentences &amp; AI auto-adds bills or subscriptions</p>
+                                <p className="text-xs font-bold text-[var(--ink)]">Scan Document</p>
+                                <p className="text-[10px] text-[var(--muted)] leading-snug">Paste sentences &amp; AI auto-adds bills or subscriptions</p>
                               </div>
                             </button>
                             <button
@@ -6197,14 +6197,14 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                                 setIsUploadMenuOpen(false);
                                 fileInputRef.current?.click();
                               }}
-                              className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                              className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-[var(--surface-subtle)] text-left transition-colors cursor-pointer"
                             >
-                              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                                 <UploadCloud className="w-3.5 h-3.5" />
                               </div>
                               <div>
-                                <p className="text-xs font-bold text-slate-900">Submit File</p>
-                                <p className="text-[10px] text-slate-500 leading-snug">Attach one or multiple files of any format for AI to read</p>
+                                <p className="text-xs font-bold text-[var(--ink)]">Submit File</p>
+                                <p className="text-[10px] text-[var(--muted)] leading-snug">Attach one or multiple files of any format for AI to read</p>
                               </div>
                             </button>
                           </div>
@@ -6234,13 +6234,13 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                             await handleAttachFiles(files);
                           }
                         }}
-                        className="flex-1 min-w-0 h-[38px] min-h-[38px] max-h-32 bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs resize-none leading-relaxed flex items-center"
+                        className="flex-1 min-w-0 h-[38px] min-h-[38px] max-h-32 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-xl px-3 py-2 text-xs text-[var(--ink)] placeholder-[var(--muted)] focus:outline-none focus:border-[var(--brand)] shadow-2xs resize-none leading-relaxed flex items-center"
                       />
                       {isAiTyping ? (
                         <button
                           type="button"
                           onClick={handleStopGeneration}
-                          className="h-[38px] px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0 animate-in fade-in zoom-in-90"
+                          className="h-[38px] px-3.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0 animate-in fade-in zoom-in-90"
                           title="Stop response"
                           aria-label="Stop generating response"
                         >
@@ -6251,7 +6251,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         <button
                           type="submit"
                           disabled={!chatInput.trim() && chatFiles.length === 0}
-                          className="h-[38px] px-4 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
+                          className="h-[38px] px-4 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
                         >
                           Send
                         </button>

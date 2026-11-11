@@ -2122,15 +2122,15 @@ export default function HouseholdLifestyleHub({
   const foodMonthly = Number(householdProfile.foodMonthly) || (metrics.people * 220);
 
   return (
-    <div className="bg-white rounded-[12px] border border-slate-200/90 shadow-2xs overflow-hidden">
+    <div className="bg-[var(--surface)] text-[var(--ink)] rounded-[12px] border border-[var(--line)] shadow-2xs overflow-hidden">
       {/* Simple Clean Section Bar: Household | Auto | Health */}
-      <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-1.5 bg-slate-200/70 p-1 rounded-[8px] text-[13px] font-semibold">
+      <div className="px-5 py-3.5 bg-[var(--surface-subtle)] border-b border-[var(--line)] flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-1.5 bg-[var(--surface)] border border-[var(--line)] p-1 rounded-[8px] text-[13px] font-semibold">
           <button
             type="button"
             onClick={() => setSection('household')}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-all cursor-pointer ${
-              section === 'household' ? 'bg-[#18457c] text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              section === 'household' ? 'bg-[var(--brand)] text-white shadow-2xs font-semibold' : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] font-medium'
             }`}
           >
             <Home className="w-3.5 h-3.5" />
@@ -2140,7 +2140,7 @@ export default function HouseholdLifestyleHub({
             type="button"
             onClick={() => setSection('auto')}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-all cursor-pointer ${
-              section === 'auto' ? 'bg-[#18457c] text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              section === 'auto' ? 'bg-[var(--brand)] text-white shadow-2xs font-semibold' : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] font-medium'
             }`}
           >
             <Car className="w-3.5 h-3.5" />
@@ -2150,7 +2150,7 @@ export default function HouseholdLifestyleHub({
             type="button"
             onClick={() => setSection('health')}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-all cursor-pointer ${
-              section === 'health' ? 'bg-[#18457c] text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              section === 'health' ? 'bg-[var(--brand)] text-white shadow-2xs font-semibold' : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] font-medium'
             }`}
           >
             <HeartPulse className="w-3.5 h-3.5" />
@@ -3616,25 +3616,25 @@ export default function HouseholdLifestyleHub({
             <div className="flex flex-col gap-4">
               {/* Header Bar: Clean title matching Health section (no cluttered button in the header) */}
               <div className="px-1">
-                <h2 className="font-semibold text-xl text-slate-900 tracking-tight">Household</h2>
-                <p className="text-[13px] text-slate-500 mt-0.5">
+                <h2 className="font-semibold text-xl text-[var(--ink)] tracking-tight">Household</h2>
+                <p className="text-[13px] text-[var(--muted)] mt-0.5">
                   1 active property · Click card to expand or collapse details
                 </p>
               </div>
 
               {/* Restyled Household Card with Spacious Layout */}
-              <section className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-[12px] shadow-2xs overflow-hidden transition-all">
+              <section className="bg-[var(--surface)] border border-[var(--line)] rounded-[12px] shadow-2xs overflow-hidden transition-all">
                 {/* 5. Card Header: Address, One Summary Line, Monthly Bills Total & Collapse Arrow */}
                 <div
                   onClick={() => setIsHouseholdExpanded(!isHouseholdExpanded)}
-                  className="w-full px-6 sm:px-[36px] py-5 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors select-none"
+                  className="w-full px-6 sm:px-[36px] py-5 flex items-center justify-between gap-4 cursor-pointer hover:bg-[var(--surface-hover)] transition-colors select-none"
                 >
                   {/* Left: Address + One Summary Line */}
                   <div className="min-w-0">
-                    <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base sm:text-lg tracking-tight truncate">
+                    <h3 className="font-semibold text-[var(--ink)] text-base sm:text-lg tracking-tight truncate">
                       {householdProfile.address || 'Household Property'}
                     </h3>
-                    <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                    <p className="text-[13px] text-[var(--muted)] mt-0.5 truncate">
                       {DWELLING_TYPES.find(d => d.id === householdProfile.dwellingType)?.label || 'Single-Family House'} · {householdProfile.bedrooms || 3} bd, {householdProfile.bathrooms || 2} ba · {Number(householdProfile.sqFt || 2100).toLocaleString()} sq ft
                     </p>
                   </div>
@@ -3643,22 +3643,22 @@ export default function HouseholdLifestyleHub({
                   <div className="flex items-center gap-4 shrink-0">
                     {actualHouseholdBills.length > 0 ? (
                       <div className="text-right">
-                        <div className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">
-                          ${totalActualBills.toLocaleString()}<span className="text-[13px] font-normal text-slate-400">/mo</span>
+                        <div className="text-base sm:text-lg font-semibold text-[var(--ink)]">
+                          ${totalActualBills.toLocaleString()}<span className="text-[13px] font-normal text-[var(--muted)]">/mo</span>
                         </div>
-                        <div className="text-[13px] text-slate-400">Monthly bills</div>
+                        <div className="text-[13px] text-[var(--muted)]">Monthly bills</div>
                       </div>
                     ) : (
-                      <div className="text-right text-[13px] text-slate-400">
+                      <div className="text-right text-[13px] text-[var(--muted)]">
                         No bills synced
                       </div>
                     )}
 
-                    <div className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                    <div className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] transition-colors">
                       {isHouseholdExpanded ? (
-                        <ChevronUp className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                        <ChevronUp className="w-5 h-5 text-[var(--muted)]" />
                       ) : (
-                        <ChevronDown className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                        <ChevronDown className="w-5 h-5 text-[var(--muted)]" />
                       )}
                     </div>
                   </div>
@@ -3666,10 +3666,10 @@ export default function HouseholdLifestyleHub({
 
                 {/* Expanded Sections Container with 36px horizontal padding and ~56px between sections */}
                 {isHouseholdExpanded && (
-                  <div className="border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 sm:px-[36px] pb-10 flex flex-col space-y-14">
+                  <div className="border-t border-[var(--line)] bg-[var(--surface)] px-6 sm:px-[36px] pb-10 flex flex-col space-y-14">
                     {/* 4. Sticky Nav Bar: Property, Home systems, Providers, Bills + "Update my answers" */}
-                    <div className="sticky top-0 z-10 -mx-6 sm:-mx-[36px] px-6 sm:px-[36px] py-3.5 bg-white/95 dark:bg-slate-900/95  border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between flex-wrap gap-3">
-                      <nav className="flex items-center gap-6 overflow-x-auto text-[13px] font-semibold text-slate-600 dark:text-slate-400">
+                    <div className="sticky top-0 z-10 -mx-6 sm:-mx-[36px] px-6 sm:px-[36px] py-3.5 bg-[var(--surface)]/95 border-b border-[var(--line)] flex items-center justify-between flex-wrap gap-3 backdrop-blur-xs">
+                      <nav className="flex items-center gap-6 overflow-x-auto text-[13px] font-semibold text-[var(--muted)]">
                         <a
                           href="#section-property"
                           onClick={(e) => {
