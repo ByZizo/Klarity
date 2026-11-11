@@ -229,6 +229,69 @@ async function scrapeWithDdgInstantApi(cleanQuery, maxResults = 5) {
 }
 
 /**
+ * Sanitize a location hint so only coarse city/state names are retained
+ * (strips street addresses, unit numbers, and postal codes).
+ */
+function sanitizeLocationHint(rawLocation = '') {
+  if (!rawLocation || typeof rawLocation !== 'string') return '';
+  let loc = rawLocation
+    // Strip any street number + street name prefix before a comma
+    .replace(/^\s*\d+\s+[^,]+,\s*/i, '')
+    // Strip street suffixes and numbers anywhere in the string
+    .replace(/\b\d{1,6}\s+[A-Za-z0-9.\s]{1,30}\b(?:Street|St|Avenue|Ave|Boulevard|Blvd|Road|Rd|Way|Drive|Dr|Lane|Ln|Court|Ct|Circle|Cir|Place|Pl|Parkway|Pkwy|Terrace|Ter|Loop|Trail|Trl|Apt|Suite|Unit|#)\b\.?/gi, '')
+    // Strip 5-digit or 9-digit ZIP codes
+    .replace(/\b\d{5}(?:-\d{4})?\b/g, '')
+    // Strip remaining digits
+    .replace(/\d+/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[,\s]+|[,\s]+$/g, '')
+    .trim();
+  return loc.slice(0, 60);
+}
+
+/**
+ * Strip all personal/financial details (balances, dollar amounts, street addresses,
+ * account numbers, card masks, SSNs, emails, phone numbers, and document dumps)
+ * from a query before sending it to DuckDuckGo.
+ */
+function sanitizeSearchQuery(rawQuery = '') {
+  if (!rawQuery || typeof rawQuery !== 'string') return '';
+
+  let sanitized = rawQuery
+    // 1. Remove any attached file / OCR / statement dumps or action tags
+    .replace(/---\s*Extracted Text[\s\S]*$/i, ' ')
+    .replace(/\[(?:ACTION|NAVIGATE):[\s\S]*?\]/gi, ' ')
+    // 2. Remove URLs and Zillow ZPIDs
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/\b\d+_zpid\b/gi, ' ')
+    // 3. Remove email addresses
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, ' ')
+    // 4. Remove phone numbers and SSNs
+    .replace(/\b\d{3}[-.\s]\d{2}[-.\s]\d{4}\b/g, ' ')
+    .replace(/(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g, ' ')
+    // 5. Remove card masks and account number references (e.g. "•••• 4821", "ending in 1234", "account #987654")
+    .replace(/(?:••••|\*{2,}|x{2,}|ending\s+in|acct(?:\s*#|\s+num(?:ber)?)?|account(?:\s*#|\s+num(?:ber)?)?|card(?:\s*#|\s+ending)?|routing(?:\s*#)?)\s*[:#-]?\s*[A-Za-z0-9-]{2,24}\b/gi, ' ')
+    // 6. Remove dollar amounts and balances (e.g. "$1,234.56", "$500", "balance of 3400.00")
+    .replace(/\$\s*\d[\d,]*(?:\.\d{1,2})?\b/g, ' ')
+    .replace(/\b(?:balance|owed|owe|debt|limit|payment|salary|income|worth)\s+(?:of\s+|is\s+)?\$?\d[\d,]*(?:\.\d{1,2})?\b/gi, ' ')
+    .replace(/\b\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?\b/g, ' ')
+    .replace(/\b\d+\.\d{2}\b/g, ' ')
+    // 7. Remove street addresses (e.g. "123 Main St", "456 Oak Ave Apt 4B")
+    .replace(/\b\d{1,6}\s+[A-Za-z0-9.\s]{1,35}\b(?:Street|St|Avenue|Ave|Boulevard|Blvd|Road|Rd|Way|Drive|Dr|Lane|Ln|Court|Ct|Circle|Cir|Place|Pl|Parkway|Pkwy|Terrace|Ter|Loop|Trail|Trl|Highway|Hwy)\b\.?(?:\s*(?:Apt|Suite|Unit|#)\s*[A-Za-z0-9-]+)?/gi, ' ')
+    .replace(/\b(?:Apt|Suite|Unit)\s*[#]?\s*[A-Za-z0-9-]+\b/gi, ' ')
+    // 8. Remove any standalone 5+ digit numbers (ZIPs, account numbers, IDs)
+    .replace(/\b\d{5,}\b/g, ' ')
+    // 9. Remove 4-digit numbers unless they are a plausible year (2020-2035)
+    .replace(/\b(?!20[2-3]\d\b)\d{4}\b/g, ' ')
+    // 10. Clean up punctuation and whitespace
+    .replace(/[^\w\s\%\-\?]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return sanitized.slice(0, 160);
+}
+
+/**
  * Fetch top 3-5 web search result snippets, clean the text, and format into an injected context block.
  *
  * @param {string} query - Search query string
@@ -237,30 +300,30 @@ async function scrapeWithDdgInstantApi(cleanQuery, maxResults = 5) {
  */
 async function retrieveWebContext(query, options = {}) {
   const maxResults = options.maxResults || 5;
-  const locationHint = options.locationHint || '';
+  const safeLocation = sanitizeLocationHint(options.locationHint || '');
 
   if (!query || typeof query !== 'string' || !query.trim()) {
     return { results: [], formattedContext: 'No live web context required.' };
   }
 
-  let effectiveQuery = query.trim();
+  let effectiveQuery = sanitizeSearchQuery(query);
+  if (!effectiveQuery || effectiveQuery.length < 3) {
+    return { results: [], formattedContext: 'No live web context available.' };
+  }
+
   const lowerQ = effectiveQuery.toLowerCase();
   const isLocalIntent = [
     'near me', 'nearby', 'in my city', 'in my area', 'around here',
     'cheapest gas', 'gas price', 'grocery', 'groceries', 'ev deal', 'dealer'
   ].some(k => lowerQ.includes(k));
 
-  if (isLocalIntent && locationHint && !lowerQ.includes(locationHint.toLowerCase())) {
-    effectiveQuery = `${effectiveQuery} ${locationHint}`;
+  if (isLocalIntent && safeLocation && !lowerQ.includes(safeLocation.toLowerCase())) {
+    effectiveQuery = `${effectiveQuery} ${safeLocation}`;
   }
 
-  const cleanQuery = effectiveQuery
-    .replace(/[^\w\s\$\%\.\,\-\+]/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 180);
+  const cleanQuery = sanitizeSearchQuery(effectiveQuery);
 
-  if (!cleanQuery) {
+  if (!cleanQuery || cleanQuery.length < 3) {
     return { results: [], formattedContext: 'No live web context available.' };
   }
 
@@ -303,6 +366,8 @@ async function retrieveWebContext(query, options = {}) {
 
 module.exports = {
   cleanSnippetText,
+  sanitizeSearchQuery,
+  sanitizeLocationHint,
   shouldTriggerWebSearch,
   retrieveWebContext
 };

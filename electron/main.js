@@ -1,6 +1,10 @@
 const { app, BrowserWindow, shell, ipcMain, session, nativeTheme, Menu, MenuItem } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
+
+// Generate per-launch cryptographic secret for desktop loopback verification
+const DESKTOP_IPC_SECRET = crypto.randomBytes(32).toString('hex');
 
 // Ensure App name and userData path are set immediately before any lock checks
 app.setName('Klarity');
@@ -11,6 +15,7 @@ if (!fs.existsSync(userDataDir)) {
 app.setPath('userData', userDataDir);
 process.env.KLARITY_USER_DATA_DIR = userDataDir;
 process.env.KLARITY_DESKTOP_APP = 'true';
+process.env.KLARITY_DESKTOP_IPC_SECRET = DESKTOP_IPC_SECRET;
 try { if (nativeTheme) nativeTheme.themeSource = 'light'; } catch (e) {}
 const http = require('http');
 const { exec } = require('child_process');
@@ -355,6 +360,7 @@ async function startEmbeddedBackend() {
   const userDataDir = app.getPath('userData');
   process.env.KLARITY_USER_DATA_DIR = userDataDir;
   process.env.KLARITY_DESKTOP_APP = 'true';
+  process.env.KLARITY_DESKTOP_IPC_SECRET = DESKTOP_IPC_SECRET;
 
   const expressApp = require('../server/index.js');
   const { localModelEngine } = require('../server/services/localModelService');
@@ -497,7 +503,9 @@ ipcMain.handle('klarity:google-sign-in', async () => {
 
     checkInterval = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:${port}/api/auth/google/check-session?sid=${sid}`);
+        const res = await fetch(`http://localhost:${port}/api/auth/google/check-session?sid=${sid}`, {
+          headers: { 'x-klarity-desktop-secret': DESKTOP_IPC_SECRET }
+        });
         if (res.ok) {
           const json = await res.json();
           if (json.ok && json.user) {

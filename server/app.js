@@ -21,8 +21,16 @@ const {
 } = require('./services/localModelService');
 const {
   shouldTriggerWebSearch,
-  retrieveWebContext
+  retrieveWebContext,
+  sanitizeSearchQuery,
+  sanitizeLocationHint
 } = require('./services/webSearchService');
+
+// Ensure KLARITY_DESKTOP_APP can never be active on Vercel or hosted serverless deployments
+if (process.env.VERCEL) {
+  delete process.env.KLARITY_DESKTOP_APP;
+  delete process.env.KLARITY_DESKTOP_IPC_SECRET;
+}
 
 const app = express();
 
@@ -126,18 +134,53 @@ async function writeData(data, userId) {
 }
 
 // Encryption utilities for storing API keys & secrets securely server-side
-let ENCRYPTION_SECRET = process.env.SETTINGS_ENCRYPTION_KEY;
-
-if (!ENCRYPTION_SECRET) {
-  if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
-    console.error('FATAL: SETTINGS_ENCRYPTION_KEY environment variable is required in production.');
-    process.exit(1);
-  }
-  ENCRYPTION_SECRET = 'klarity-dev-default-encryption-key-32bytes!';
+let ENCRYPTION_SECRET;
+try {
+  ENCRYPTION_SECRET = db.getOrCreateInstallationKey();
+} catch (err) {
+  console.error(err.message);
+  process.exit(1);
 }
 
 function getDerivedKey() {
   return crypto.createHash('sha256').update(ENCRYPTION_SECRET).digest();
+}
+
+function isStrictlyOwnedByUser(item, userId) {
+  if (!item || !userId) return false;
+  return item.ownerId === userId || item.userId === userId;
+}
+
+function isLoopbackRequest(req) {
+  if (process.env.VERCEL || req.headers['x-forwarded-for'] || req.headers['cf-connecting-ip']) {
+    return false;
+  }
+  const remoteAddr = String(req.socket?.remoteAddress || req.ip || '').trim();
+  return (
+    remoteAddr === '127.0.0.1' ||
+    remoteAddr === '::1' ||
+    remoteAddr === '::ffff:127.0.0.1'
+  );
+}
+
+function isVerifiedDesktopLoopbackRequest(req) {
+  if (process.env.VERCEL || process.env.KLARITY_DESKTOP_APP !== 'true') {
+    return false;
+  }
+  if (!isLoopbackRequest(req)) {
+    return false;
+  }
+  const expectedSecret = process.env.KLARITY_DESKTOP_IPC_SECRET;
+  const providedSecret = req.headers['x-klarity-desktop-secret'] || req.body?.desktopSecret;
+  if (!expectedSecret || !providedSecret) {
+    return false;
+  }
+  const bufA = Buffer.from(String(providedSecret));
+  const bufB = Buffer.from(String(expectedSecret));
+  if (bufA.length !== bufB.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 function encrypt(text) {
@@ -487,12 +530,11 @@ async function requireAuth(req, res, next) {
       if (token) {
         try {
           const tokenHash = hashToken(token);
-          db.getSession(tokenHash).then(session => {
-            if (session) {
-              req.userId = session.userId;
-              req.user = session.user;
-            }
-          }).catch(() => {});
+          const session = await db.getSession(tokenHash);
+          if (session) {
+            req.userId = session.userId;
+            req.user = session.user;
+          }
         } catch (e) {}
       }
     }
@@ -842,6 +884,9 @@ app.get('/api/auth/google/callback', async (req, res) => {
 });
 
 app.get('/api/auth/google/check-session', async (req, res) => {
+  if (!isVerifiedDesktopLoopbackRequest(req)) {
+    return res.status(403).json({ error: 'Forbidden: Desktop loopback verification failed.' });
+  }
   const { sid } = req.query;
   if (!sid) return res.status(400).json({ error: 'Missing sid' });
   if (global.completedDesktopAuths && global.completedDesktopAuths.has(sid)) {
@@ -874,8 +919,8 @@ app.post('/api/auth/google', async (req, res) => {
     } catch (err) {
       return res.status(401).json({ error: 'Could not verify Google token with Google servers.' });
     }
-  } else if (desktopVerified && process.env.KLARITY_DESKTOP_APP === 'true' && fallbackEmail) {
-    // Verified directly inside Electron's native accounts.google.com BrowserWindow
+  } else if (desktopVerified && fallbackEmail && isVerifiedDesktopLoopbackRequest(req)) {
+    // Verified strictly from local Electron process with launch-generated IPC secret
     verifiedEmail = String(fallbackEmail).trim().toLowerCase();
     verifiedName = fallbackName || '';
   }
@@ -925,7 +970,7 @@ app.get('/api/settings', async (req, res) => {
   const userSettings = getUserSettings(data, userId);
   const ai = userSettings.ai;
   const plaid = userSettings.plaid;
-  const userPlaidItems = (data.plaidItems || []).filter(item => !item.userId || item.userId === userId);
+  const userPlaidItems = (data.plaidItems || []).filter(item => isStrictlyOwnedByUser(item, userId));
 
   res.json({
     user: {
@@ -959,7 +1004,7 @@ app.get('/api/settings', async (req, res) => {
       connectedAt: item.connectedAt,
       accounts: (data.accounts || []).filter(a =>
         (a.itemId === item.itemId || a.institution === item.institution) &&
-        (!userId || !a.ownerId || a.ownerId === userId || a.userId === userId || a.ownerId === 'u-ziyad' || a.userId === 'u-ziyad' || a.ownerId === 'u-owner')
+        isStrictlyOwnedByUser(a, userId)
       )
     })),
     featureFlags: userSettings.featureFlags || {
@@ -1288,6 +1333,9 @@ app.post('/api/plaid/create-link-token', async (req, res) => {
 
 app.post('/api/plaid/exchange-public-token', async (req, res) => {
   const userId = req.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
   const { public_token, metadata } = req.body;
   const plaidClient = await getPlaidClient(null, null, userId);
 
@@ -1326,8 +1374,8 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
       const newAcc = {
         id: `acc-${acc.account_id}`,
         itemId,
-        ownerId: userId || 'u-ziyad',
-        userId: userId || 'u-ziyad',
+        ownerId: userId,
+        userId: userId,
         institution: instName,
         name: acc.name,
         officialName: acc.official_name || acc.name,
@@ -1342,11 +1390,12 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
       addedAccounts.push(newAcc);
     }
 
-    data.accounts = (data.accounts || []).filter(a => !addedAccounts.some(na => na.id === a.id)).concat(addedAccounts);
+    data.accounts = (data.accounts || []).filter(a => !addedAccounts.some(na => na.id === a.id && isStrictlyOwnedByUser(a, userId))).concat(addedAccounts);
     data.plaidItems = data.plaidItems || [];
     data.plaidItems.push({
       itemId,
-      userId: userId || 'u-ziyad',
+      ownerId: userId,
+      userId: userId,
       accessToken,
       institution: metadata?.institution?.name || 'Connected Bank',
       institutionId: metadata?.institution?.institution_id,
@@ -1365,7 +1414,8 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
           const amt = Number(pt.amount || 0);
           fetchedTransactions.push({
             id: `tx-plaid-${pt.transaction_id}`,
-            ownerId: userId || 'u-ziyad',
+            ownerId: userId,
+            userId: userId,
             name: pt.merchant_name || pt.name || 'Card Purchase',
             amount: amt > 0 ? -amt : Math.abs(amt),
             category: cat,
@@ -1375,7 +1425,7 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
             notes: pt.payment_channel ? `Paid via ${pt.payment_channel}` : ''
           });
         }
-        data.transactions = (data.transactions || []).filter(t => !fetchedTransactions.some(ft => ft.id === t.id)).concat(fetchedTransactions);
+        data.transactions = (data.transactions || []).filter(t => !fetchedTransactions.some(ft => ft.id === t.id && isStrictlyOwnedByUser(t, userId))).concat(fetchedTransactions);
       }
     } catch (txErr) {
       console.warn('transactionsSync note:', txErr.message);
@@ -1383,7 +1433,7 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
 
     await writeData(data, req.userId);
 
-    const userPlaidItems = data.plaidItems.filter(item => !item.userId || item.userId === userId);
+    const userPlaidItems = data.plaidItems.filter(item => isStrictlyOwnedByUser(item, userId));
     res.json({ success: true, accounts: addedAccounts, plaidItems: userPlaidItems });
   } catch (err) {
     console.error('Plaid exchange error:', err.response?.data || err.message);
@@ -1395,17 +1445,14 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
 app.get('/api/plaid/items', async (req, res) => {
   const userId = req.userId;
   const data = await readData(req.userId);
-  const userItems = (data.plaidItems || []).filter(item =>
-    !userId || !item.userId || item.userId === userId || item.ownerId === userId ||
-    item.userId === 'u-ziyad' || item.ownerId === 'u-ziyad' || item.userId === 'u-owner' || item.ownerId === 'u-owner'
-  );
+  const userItems = (data.plaidItems || []).filter(item => isStrictlyOwnedByUser(item, userId));
   const items = userItems.map(item => ({
     itemId: item.itemId,
     institution: item.institution || 'Connected Bank',
     connectedAt: item.connectedAt,
     accounts: (data.accounts || []).filter(a =>
       (a.itemId === item.itemId || a.institution === item.institution) &&
-      (!userId || !a.ownerId || a.ownerId === userId || a.userId === userId || a.ownerId === 'u-ziyad' || a.userId === 'u-ziyad' || a.ownerId === 'u-owner')
+      isStrictlyOwnedByUser(a, userId)
     )
   }));
   res.json({ items });
@@ -1415,13 +1462,14 @@ app.get('/api/plaid/items', async (req, res) => {
 
 app.delete('/api/plaid/items/:itemId', async (req, res) => {
   const { itemId } = req.params;
-  const data = await readData(req.userId);
-  const targetItem = (data.plaidItems || []).find(i => i.itemId === itemId);
+  const userId = req.userId;
+  const data = await readData(userId);
+  const targetItem = (data.plaidItems || []).find(i => i.itemId === itemId && isStrictlyOwnedByUser(i, userId));
   if (targetItem) {
     const instName = targetItem.institution;
-    data.accounts = (data.accounts || []).filter(a => a.institution !== instName);
-    data.plaidItems = data.plaidItems.filter(i => i.itemId !== itemId);
-    await writeData(data, req.userId);
+    data.accounts = (data.accounts || []).filter(a => !(isStrictlyOwnedByUser(a, userId) && (a.itemId === itemId || a.institution === instName)));
+    data.plaidItems = data.plaidItems.filter(i => !(i.itemId === itemId && isStrictlyOwnedByUser(i, userId)));
+    await writeData(data, userId);
   }
   res.json({ success: true });
 });
@@ -1430,7 +1478,7 @@ app.delete('/api/plaid/items/:itemId', async (req, res) => {
 // ==================== BUDGETS CRUD ====================
 app.get('/api/budgets', async (req, res) => {
   const data = await readData(req.userId);
-  res.json({ budgets: (data.budgets || []).filter(b => b.ownerId === req.userId || b.userId === req.userId) });
+  res.json({ budgets: (data.budgets || []).filter(b => isStrictlyOwnedByUser(b, req.userId)) });
 });
 
 app.post('/api/budgets', async (req, res) => {
@@ -1439,7 +1487,7 @@ app.post('/api/budgets', async (req, res) => {
   const data = await readData(req.userId);
   data.budgets = data.budgets || [];
   const limitNum = parseFloat(limit);
-  const existingIdx = data.budgets.findIndex(b => (b.id === id || (b.category || '').toLowerCase() === category.toLowerCase()) && (b.ownerId === req.userId || b.userId === req.userId));
+  const existingIdx = data.budgets.findIndex(b => (b.id === id || (b.category || '').toLowerCase() === category.toLowerCase()) && isStrictlyOwnedByUser(b, req.userId));
   let item;
   if (existingIdx >= 0) {
     data.budgets[existingIdx] = {
@@ -1461,13 +1509,13 @@ app.post('/api/budgets', async (req, res) => {
     data.budgets.push(item);
   }
   await writeData(data, req.userId);
-  res.json({ success: true, budget: item, budgets: (data.budgets || []).filter(b => b.ownerId === req.userId || b.userId === req.userId) });
+  res.json({ success: true, budget: item, budgets: (data.budgets || []).filter(b => isStrictlyOwnedByUser(b, req.userId)) });
 });
 
 // ==================== MANUAL ASSETS CRUD ====================
 app.get('/api/manual-assets', async (req, res) => {
   const data = await readData(req.userId);
-  res.json({ manualAssets: (data.manualAssets || []).filter(a => a.ownerId === req.userId || a.userId === req.userId) });
+  res.json({ manualAssets: (data.manualAssets || []).filter(a => isStrictlyOwnedByUser(a, req.userId)) });
 });
 
 app.post('/api/manual-assets', async (req, res) => {
@@ -1475,7 +1523,7 @@ app.post('/api/manual-assets', async (req, res) => {
   if (!name) return res.status(400).json({ error: 'Missing asset name' });
   const data = await readData(req.userId);
   data.manualAssets = data.manualAssets || [];
-  const existingIdx = data.manualAssets.findIndex(a => a.id === id && (a.ownerId === req.userId || a.userId === req.userId));
+  const existingIdx = data.manualAssets.findIndex(a => a.id === id && isStrictlyOwnedByUser(a, req.userId));
   let item;
   if (existingIdx >= 0) {
     data.manualAssets[existingIdx] = {
@@ -1497,20 +1545,20 @@ app.post('/api/manual-assets', async (req, res) => {
     data.manualAssets.push(item);
   }
   await writeData(data, req.userId);
-  res.json({ success: true, asset: item, manualAssets: (data.manualAssets || []).filter(a => a.ownerId === req.userId || a.userId === req.userId) });
+  res.json({ success: true, asset: item, manualAssets: (data.manualAssets || []).filter(a => isStrictlyOwnedByUser(a, req.userId)) });
 });
 
 app.delete('/api/manual-assets/:id', async (req, res) => {
   const data = await readData(req.userId);
-  data.manualAssets = (data.manualAssets || []).filter(a => a.id !== req.params.id || (a.ownerId && a.ownerId !== req.userId));
+  data.manualAssets = (data.manualAssets || []).filter(a => !(a.id === req.params.id && isStrictlyOwnedByUser(a, req.userId)));
   await writeData(data, req.userId);
-  res.json({ success: true, manualAssets: (data.manualAssets || []).filter(a => a.ownerId === req.userId || a.userId === req.userId) });
+  res.json({ success: true, manualAssets: (data.manualAssets || []).filter(a => isStrictlyOwnedByUser(a, req.userId)) });
 });
 
 // ==================== RETIREMENT PLANS CRUD ====================
 app.get('/api/retirement', async (req, res) => {
   const data = await readData(req.userId);
-  const userPlans = (data.retirementPlans || []).filter(p => p.ownerId === req.userId || p.userId === req.userId);
+  const userPlans = (data.retirementPlans || []).filter(p => isStrictlyOwnedByUser(p, req.userId));
   res.json({ success: true, retirementPlans: userPlans });
 });
 
@@ -1521,7 +1569,7 @@ app.post('/api/retirement', async (req, res) => {
   const data = await readData(req.userId);
   data.retirementPlans = data.retirementPlans || [];
 
-  const existingIdx = data.retirementPlans.findIndex(p => p.id === plan.id && (p.ownerId === req.userId || p.userId === req.userId));
+  const existingIdx = data.retirementPlans.findIndex(p => p.id === plan.id && isStrictlyOwnedByUser(p, req.userId));
 
   const planItem = {
     ...plan,
@@ -1552,21 +1600,21 @@ app.post('/api/retirement', async (req, res) => {
   }
 
   await writeData(data, req.userId);
-  const userPlans = (data.retirementPlans || []).filter(p => p.ownerId === req.userId || p.userId === req.userId);
+  const userPlans = (data.retirementPlans || []).filter(p => isStrictlyOwnedByUser(p, req.userId));
   res.json({ success: true, plan: planItem, retirementPlans: userPlans });
 });
 
 app.delete('/api/retirement/:id', async (req, res) => {
   const data = await readData(req.userId);
   const isTargetOwnedByUser = (p) =>
-    p.id === req.params.id && (p.ownerId === req.userId || p.userId === req.userId);
+    p.id === req.params.id && isStrictlyOwnedByUser(p, req.userId);
 
   if ((data.retirementPlans || []).some(isTargetOwnedByUser)) {
     data.retirementPlans = (data.retirementPlans || []).filter(p => !isTargetOwnedByUser(p));
     await db.deleteItem('retirement_plans', req.params.id, req.userId);
     await writeData(data, req.userId);
   }
-  const userPlans = (data.retirementPlans || []).filter(p => p.ownerId === req.userId || p.userId === req.userId);
+  const userPlans = (data.retirementPlans || []).filter(p => isStrictlyOwnedByUser(p, req.userId));
   res.json({ success: true, retirementPlans: userPlans });
 });
 
@@ -1575,13 +1623,7 @@ app.get('/api/data', async (req, res) => {
   const userId = req.userId;
   const data = await readData(req.userId);
 
-  const isUserOwner = (item) => {
-    if (!item) return false;
-    if (!userId) return true;
-    if (!item.ownerId && !item.userId) return true;
-    if (item.ownerId === 'u-ziyad' || item.ownerId === 'u-owner' || item.userId === 'u-ziyad' || item.userId === 'u-owner') return true;
-    return item.ownerId === userId || item.userId === userId;
-  };
+  const isUserOwner = (item) => isStrictlyOwnedByUser(item, userId);
 
   const userAccounts = (data.accounts || []).filter(isUserOwner);
   const userChecking = userAccounts.filter(a => a.type === 'depository');
@@ -1615,7 +1657,7 @@ app.get('/api/data', async (req, res) => {
     savingsGoals: userSavingsGoals,
     manualAssets: userManualAssets,
     retirementPlans: userRetirementPlans,
-    householdProfile: data.householdProfiles?.[userId] || data.householdProfile || null,
+    householdProfile: (userId && data.householdProfiles?.[userId]) || null,
     featureFlags: userSettings.featureFlags || {
       retirement: true,
       budgets: true,
@@ -1637,27 +1679,35 @@ app.get('/api/data', async (req, res) => {
 // Batch sync accounts, bills, subscriptions, and transactions from client cache if server cold started
 app.post('/api/accounts/batch-sync', async (req, res) => {
   const userId = req.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
   const { accounts, bills, subscriptions, transactions, budgets, savingsGoals, manualAssets, retirementPlans } = req.body;
-  const data = await readData(req.userId);
+  const data = await readData(userId);
   if (Array.isArray(budgets)) {
-    data.budgets = budgets;
+    const otherBudgets = (data.budgets || []).filter(b => !isStrictlyOwnedByUser(b, userId));
+    data.budgets = otherBudgets.concat(budgets.map(b => ({ ...b, ownerId: userId, userId })));
   }
   if (Array.isArray(savingsGoals)) {
-    data.savingsGoals = savingsGoals;
+    const otherGoals = (data.savingsGoals || []).filter(g => !isStrictlyOwnedByUser(g, userId));
+    data.savingsGoals = otherGoals.concat(savingsGoals.map(g => ({ ...g, ownerId: userId, userId })));
   }
   if (Array.isArray(manualAssets)) {
-    data.manualAssets = manualAssets;
+    const otherAssets = (data.manualAssets || []).filter(a => !isStrictlyOwnedByUser(a, userId));
+    data.manualAssets = otherAssets.concat(manualAssets.map(a => ({ ...a, ownerId: userId, userId })));
   }
   if (Array.isArray(retirementPlans)) {
-    data.retirementPlans = retirementPlans.map(p => ({ ...p, userId: req.userId, ownerId: req.userId }));
+    const otherPlans = (data.retirementPlans || []).filter(p => !isStrictlyOwnedByUser(p, userId));
+    data.retirementPlans = otherPlans.concat(retirementPlans.map(p => ({ ...p, userId, ownerId: userId })));
   }
   if (Array.isArray(accounts) && accounts.length > 0) {
     data.accounts = data.accounts || [];
     for (const acc of accounts) {
-      if (!data.accounts.some(a => a.id === acc.id)) {
+      if (!data.accounts.some(a => a.id === acc.id && isStrictlyOwnedByUser(a, userId))) {
         data.accounts.push({
           ...acc,
-          ownerId: req.userId
+          ownerId: userId,
+          userId
         });
       }
     }
@@ -1665,29 +1715,29 @@ app.post('/api/accounts/batch-sync', async (req, res) => {
   if (Array.isArray(bills) && bills.length > 0) {
     data.bills = data.bills || [];
     for (const b of bills) {
-      if (!data.bills.some(eb => eb.id === b.id || eb.name.toLowerCase() === (b.name || '').toLowerCase())) {
-        data.bills.push(b);
+      if (!data.bills.some(eb => isStrictlyOwnedByUser(eb, userId) && (eb.id === b.id || eb.name.toLowerCase() === (b.name || '').toLowerCase()))) {
+        data.bills.push({ ...b, ownerId: userId, userId });
       }
     }
   }
   if (Array.isArray(subscriptions) && subscriptions.length > 0) {
     data.subscriptions = data.subscriptions || [];
     for (const s of subscriptions) {
-      if (!data.subscriptions.some(es => es.id === s.id || es.name.toLowerCase() === (s.name || '').toLowerCase())) {
-        data.subscriptions.push(s);
+      if (!data.subscriptions.some(es => isStrictlyOwnedByUser(es, userId) && (es.id === s.id || es.name.toLowerCase() === (s.name || '').toLowerCase()))) {
+        data.subscriptions.push({ ...s, ownerId: userId, userId });
       }
     }
   }
   if (Array.isArray(transactions) && transactions.length > 0) {
     data.transactions = data.transactions || [];
     for (const t of transactions) {
-      if (!data.transactions.some(et => et.id === t.id)) {
-        data.transactions.push(t);
+      if (!data.transactions.some(et => isStrictlyOwnedByUser(et, userId) && et.id === t.id)) {
+        data.transactions.push({ ...t, ownerId: userId, userId });
       }
     }
   }
-  await writeData(data, req.userId);
-  return res.json({ success: true, count: (data.accounts || []).length });
+  await writeData(data, userId);
+  return res.json({ success: true, count: (data.accounts || []).filter(a => isStrictlyOwnedByUser(a, userId)).length });
 });
 
 // 5. Account Management
@@ -1698,6 +1748,7 @@ app.post('/api/accounts', async (req, res) => {
   const newAccount = {
     id: `acc-${Date.now()}`,
     ownerId: req.userId,
+    userId: req.userId,
     name: name || 'Account',
     institution: institution || 'Manual Bank',
     type: type || 'credit',
@@ -1718,7 +1769,7 @@ app.post('/api/accounts', async (req, res) => {
 app.delete('/api/accounts/:id', async (req, res) => {
   const { id } = req.params;
   const data = await readData(req.userId);
-  data.accounts = (data.accounts || []).filter(a => a.id !== id || (a.ownerId && a.ownerId !== req.userId));
+  data.accounts = (data.accounts || []).filter(a => !(a.id === id && isStrictlyOwnedByUser(a, req.userId)));
   await writeData(data, req.userId);
   res.json({ success: true });
 });
@@ -1947,10 +1998,11 @@ app.post('/api/bills/scan', async (req, res) => {
 
 // Live Web Search Helper for Market Research, Live Internet Browsing & Real-Time Card/Bank Offers
 async function performWebSearch(query, options = {}) {
-  if (!query || query.trim().length === 0) return '';
-  const result = await retrieveWebContext(query, {
+  const sanitized = sanitizeSearchQuery(query);
+  if (!sanitized || sanitized.length < 3) return '';
+  const result = await retrieveWebContext(sanitized, {
     maxResults: options.maxResults || 5,
-    locationHint: options.locationHint || ''
+    locationHint: sanitizeLocationHint(options.locationHint || '')
   });
   if (result && Array.isArray(result.results) && result.results.length > 0) {
     return result.formattedContext;
@@ -2185,13 +2237,16 @@ app.post('/api/household/zillow-lookup', async (req, res) => {
 });
 
 // ============================================================================
-// HOUSEHOLD, LIFESTYLE & PROPERTY PERSISTENCE
+// HOUSEHOLD, LIFESTYLE & PROPERTY PERSISTENCE (Strictly user-scoped)
 // ============================================================================
 app.get(['/api/household', '/household'], async (req, res) => {
   try {
-    const uid = req.userId || 'default';
+    const uid = req.userId;
+    if (!uid) {
+      return res.json({ success: true, householdProfile: null });
+    }
     const data = await readData(uid);
-    const profile = data.householdProfiles?.[uid] || data.householdProfile || null;
+    const profile = data.householdProfiles?.[uid] || null;
     res.json({ success: true, householdProfile: profile });
   } catch (err) {
     console.warn('Household read notice:', err.message);
@@ -2205,11 +2260,13 @@ app.post(['/api/household', '/household'], async (req, res) => {
     return res.status(400).json({ error: 'Invalid household profile payload' });
   }
   try {
-    const uid = req.userId || 'default';
+    const uid = req.userId;
+    if (!uid) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
     const data = await readData(uid);
     if (!data.householdProfiles) data.householdProfiles = {};
     data.householdProfiles[uid] = profile;
-    data.householdProfile = profile;
     await writeData(data, uid);
     res.json({ success: true, householdProfile: profile });
   } catch (err) {
@@ -2219,13 +2276,16 @@ app.post(['/api/household', '/household'], async (req, res) => {
 });
 
 // ============================================================================
-// PASSWORDS & ACCOUNT VAULT PERSISTENCE (Safe server-side storage)
+// PASSWORDS & ACCOUNT VAULT PERSISTENCE (Strictly user-scoped)
 // ============================================================================
 app.get(['/api/vault', '/vault'], async (req, res) => {
   try {
-    const uid = req.userId || 'default';
+    const uid = req.userId;
+    if (!uid) {
+      return res.json({ success: true, vaultItems: [] });
+    }
     const data = await readData(uid);
-    const vaultItems = (data.userVaults && data.userVaults[uid]) || data.vaultItems || [];
+    const vaultItems = (data.userVaults && data.userVaults[uid]) || [];
     res.json({ success: true, vaultItems });
   } catch (err) {
     console.warn('Vault read notice:', err.message);
@@ -2239,11 +2299,13 @@ app.post(['/api/vault', '/vault'], async (req, res) => {
     return res.status(400).json({ error: 'Invalid vaultItems payload' });
   }
   try {
-    const uid = req.userId || 'default';
+    const uid = req.userId;
+    if (!uid) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
     const data = await readData(uid);
     if (!data.userVaults) data.userVaults = {};
     data.userVaults[uid] = vaultItems;
-    data.vaultItems = vaultItems;
     await writeData(data, uid);
     res.json({ success: true, count: vaultItems.length });
   } catch (err) {
@@ -3016,15 +3078,8 @@ app.post('/api/ai/chat', async (req, res) => {
 
   const currentUser = (data.users || []).find(u => u.id === userId) || req.user || { name: 'User' };
 
-  // Data restricted by user toggles and account ownership (matching /api/data ownership rules + live client state)
-  const isOwnedByCurrentUser = (item) =>
-    item && (
-      (!item.ownerId && !item.userId) ||
-      item.ownerId === userId ||
-      item.userId === userId ||
-      item.ownerId === 'u-ziyad' ||
-      item.ownerId === 'u-owner'
-    );
+  // Data restricted strictly by user toggles and signed-in user's account ownership
+  const isOwnedByCurrentUser = (item) => isStrictlyOwnedByUser(item, userId);
   const userAccounts = (data.accounts || []).filter(isOwnedByCurrentUser);
   const dbCards = userAccounts.filter(a => a.type === 'credit' || (a.subtype && a.subtype.includes('credit')));
   const dbChecking = userAccounts.filter(a => a.type === 'depository' || (a.subtype && (a.subtype.includes('checking') || a.subtype.includes('savings'))));
@@ -3102,10 +3157,10 @@ app.post('/api/ai/chat', async (req, res) => {
     ? `\n\nUser Financial Preferences & Memory:\n${userMemory.map(m => `- ${m}`).join('\n')}`
     : '';
 
-  // Extract user location from householdProfile or userSettings/database
+  // Extract user location from householdProfile or userSettings/database (strictly user-scoped)
   const residence = (householdProfile && Object.keys(householdProfile).length > 0)
     ? householdProfile
-    : (data.householdProfiles?.[userId] || data.householdProfile || {});
+    : ((userId && data.householdProfiles?.[userId]) || {});
 
   // Comprehensive Household Summaries for AI Context
   const evSummary = residence.hasEvAtHome !== false
@@ -3121,22 +3176,25 @@ app.post('/api/ai/chat', async (req, res) => {
 
   const providersSummary = `Electric & Gas: ${residence.electricGasProvider || 'PG&E'} (Rate Plan: ${residence.electricGasPlan || 'EV2-A Home TOU'}) | Internet: ${residence.internetProvider || 'Xfinity'} (Plan: ${residence.internetPlan || 'Gigabit Extra'}) | Mobile: ${residence.phoneProvider || 'T-Mobile'} (${residence.phoneLines || 3} lines, Plan: ${residence.phonePlan || 'Go5G Plus'}) | Trash: ${residence.trashProvider || 'City Utilities'} (Cart: ${residence.trashPlan || '64-Gal'}) | Security: ${residence.securityProvider || 'Ring'} (Plan: ${residence.securityPlan || 'Ring Protect Pro'})`;
   const userCityOrZip = residence.cityOrZip || (residence.city ? `${residence.city}, ${residence.state || 'CA'}` : '') || userSettings.profile?.location || 'California';
+  const safeSearchLocation = sanitizeLocationHint(residence.city ? `${residence.city}, ${residence.state || 'CA'}` : userCityOrZip) || 'California';
   const fullAddress = residence.address || (residence.street ? `${residence.street}, ${userCityOrZip}` : userCityOrZip);
   const neighborhoodDesc = residence.neighborhood ? ` (${residence.neighborhood})` : '';
   const localHubsDesc = residence.localHubs ? ` | Nearby Shopping & Retail Hubs: ${residence.localHubs}` : '';
 
   // Perform real-time web search if the user asks about credit card offers, 0% APR, balance transfers, or market rates / local queries
+  // Strictly sanitize the query so personal details (balances, street addresses, account numbers) are NEVER sent to DuckDuckGo
   let liveWebSearchContext = '';
-  if (shouldPerformWebSearch(message) && fileAttachments.length === 0) {
-    let enrichedQuery = message;
-    const lowerMsg = message.toLowerCase();
+  const sanitizedUserQuery = sanitizeSearchQuery(message || '');
+  if (webSearchEnabled !== false && sanitizedUserQuery && shouldPerformWebSearch(sanitizedUserQuery) && fileAttachments.length === 0) {
+    let enrichedQuery = sanitizedUserQuery;
+    const lowerMsg = sanitizedUserQuery.toLowerCase();
     const isLocalQuery = ['near me', 'nearby', 'in my city', 'in my area', 'around here', 'gas', 'cheapest gas', 'grocery', 'groceries', 'deals', 'ev deals', '0 apr', '0% apr', 'costco', 'supermarket', 'dealer'].some(k => lowerMsg.includes(k));
-    if (isLocalQuery && userCityOrZip && !lowerMsg.includes(userCityOrZip.toLowerCase())) {
-      enrichedQuery = `${message} ${userCityOrZip}`;
+    if (isLocalQuery && safeSearchLocation && !lowerMsg.includes(safeSearchLocation.toLowerCase())) {
+      enrichedQuery = `${sanitizedUserQuery} ${safeSearchLocation}`;
     }
-    const webResults = await performWebSearch(enrichedQuery);
+    const webResults = await performWebSearch(enrichedQuery, { locationHint: safeSearchLocation });
     if (webResults) {
-      liveWebSearchContext = `\n\nLive Web Search Results (Real-Time Market & Local Data for ${userCityOrZip}):\n${webResults}\nUse these live web findings to provide specific local recommendations (gas prices, dealership promotions, 0% APR EV inventory, grocery deals, and current card promotions).`;
+      liveWebSearchContext = `\n\nLive Web Search Results (Real-Time Market & Local Data for ${safeSearchLocation}):\n${webResults}\nUse these live web findings to provide specific local recommendations (gas prices, dealership promotions, 0% APR EV inventory, grocery deals, and current card promotions).`;
     }
   }
 
@@ -3315,8 +3373,9 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
     } else if (provider === 'local') {
       const localResult = await localModelEngine.query({
         query: fullUserPrompt,
+        searchQuery: sanitizedUserQuery,
         enableWebSearch: webSearchEnabled !== false && fileAttachments.length === 0,
-        locationHint: userCityOrZip,
+        locationHint: safeSearchLocation,
         financialContext: compactFinancialContext,
         maxTokens: responseLength === 'concise' ? 512 : responseLength === 'detailed' ? 1536 : 1024,
         temperature: 0.7

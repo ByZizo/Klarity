@@ -1,7 +1,11 @@
 node_modules
+node_modules/
 client/node_modules
+client/node_modules/
 server/node_modules
+server/node_modules/
 bin/
+bin/*.exe
 *.exe
 .env
 .env*
@@ -11,10 +15,17 @@ server/.env*
 .DS_Store
 *.log
 .vercel
+.vercel/
 server/data.json
 data.json
 *.enc
+.klarity_master.key
+server/.klarity_master.key
+*.key
 klarity_session.json
+feedback.json
+server/feedback.json
+whats_new.json
 
 review-files/
 tree.txt
@@ -23,3 +34,5 @@ dist/
 client/dist/
 
 *.traineddata
+
+*.zip

@@ -70,23 +70,48 @@ const initialSeedData = {
   userSettings: {},
   plaidItems: [],
   householdProfiles: {},
-  householdProfile: null,
-  userVaults: {},
-  vaultItems: []
+  userVaults: {}
 };
 
 let memoryData = JSON.parse(JSON.stringify(initialSeedData));
+let cachedInstallationKey = null;
+
+function getOrCreateInstallationKey() {
+  if (process.env.SETTINGS_ENCRYPTION_KEY && process.env.SETTINGS_ENCRYPTION_KEY.trim()) {
+    return process.env.SETTINGS_ENCRYPTION_KEY.trim();
+  }
+  const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
+  if (isProd) {
+    throw new Error('FATAL: SETTINGS_ENCRYPTION_KEY environment variable is required in production.');
+  }
+  if (cachedInstallationKey) {
+    return cachedInstallationKey;
+  }
+  const keyDir = process.env.KLARITY_USER_DATA_DIR || __dirname;
+  const keyFile = path.join(keyDir, '.klarity_master.key');
+  try {
+    if (fs.existsSync(keyFile)) {
+      const existing = fs.readFileSync(keyFile, 'utf8').trim();
+      if (existing.length >= 32) {
+        cachedInstallationKey = existing;
+        return cachedInstallationKey;
+      }
+    }
+    if (!fs.existsSync(keyDir)) {
+      fs.mkdirSync(keyDir, { recursive: true });
+    }
+    const generated = crypto.randomBytes(32).toString('hex');
+    fs.writeFileSync(keyFile, generated, { encoding: 'utf8', mode: 0o600 });
+    cachedInstallationKey = generated;
+    return cachedInstallationKey;
+  } catch (err) {
+    throw new Error(`FATAL: Unable to load or persist installation encryption key (${err.message}). Set SETTINGS_ENCRYPTION_KEY in your environment.`);
+  }
+}
 
 function getEncryptionKey() {
-  const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
-  const key = process.env.SETTINGS_ENCRYPTION_KEY;
-  if (!key) {
-    if (isProd) {
-      throw new Error('FATAL: SETTINGS_ENCRYPTION_KEY environment variable is required in production.');
-    }
-    return crypto.createHash('sha256').update('klarity-dev-default-encryption-key-32bytes!').digest();
-  }
-  return crypto.createHash('sha256').update(key).digest();
+  const rawKey = getOrCreateInstallationKey();
+  return crypto.createHash('sha256').update(rawKey).digest();
 }
 
 function encryptDisk(text) {
@@ -572,12 +597,17 @@ const db = {
     writeLocalData(data);
   },
 
+  getOrCreateInstallationKey,
+
   /**
    * Read all data belonging strictly to the requested user
    */
   async readUserData(userId) {
     if (isSupabaseEnabled && supabase) {
-      const uid = userId || 'u-default';
+      if (!userId) {
+        return JSON.parse(JSON.stringify(initialSeedData));
+      }
+      const uid = userId;
       const [
         userRes,
         accRes,
@@ -684,7 +714,8 @@ const db = {
    */
   async writeUserData(userId, data) {
     if (isSupabaseEnabled && supabase) {
-      const uid = userId || 'u-default';
+      if (!userId) return false;
+      const uid = userId;
       const promises = [];
 
       // 1. Sync accounts for this user
@@ -730,7 +761,7 @@ const db = {
       // 5. Sync budgets
       if (Array.isArray(data.budgets)) {
         const userBudgets = data.budgets
-          .filter(b => b.userId === uid)
+          .filter(b => b.userId === uid || b.ownerId === uid)
           .map(b => ({
             id: b.id || `bgt-${b.category}-${uid}`,
             user_id: uid,
@@ -747,7 +778,7 @@ const db = {
       // 6. Sync savings goals
       if (Array.isArray(data.savingsGoals)) {
         const userGoals = data.savingsGoals
-          .filter(g => g.userId === uid)
+          .filter(g => g.userId === uid || g.ownerId === uid)
           .map(g => ({
             id: g.id || `goal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             user_id: uid,
@@ -765,7 +796,7 @@ const db = {
       // 7. Sync manual assets
       if (Array.isArray(data.manualAssets)) {
         const userAssets = data.manualAssets
-          .filter(a => a.userId === uid)
+          .filter(a => a.userId === uid || a.ownerId === uid)
           .map(a => ({
             id: a.id || `asset-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             user_id: uid,
@@ -808,7 +839,7 @@ const db = {
       // 10. Sync plaid items
       if (Array.isArray(data.plaidItems)) {
         const userPlaids = data.plaidItems
-          .filter(p => p.userId === uid)
+          .filter(p => p.userId === uid || p.ownerId === uid)
           .map(p => ({
             id: p.id || `pi-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             user_id: uid,
@@ -833,6 +864,7 @@ const db = {
    * Delete an item by table and ID
    */
   async deleteItem(table, id, userId) {
+    if (!userId) return;
     if (isSupabaseEnabled && supabase) {
       await supabase.from(table).delete().eq('id', id).eq('user_id', userId);
       return;
@@ -840,7 +872,7 @@ const db = {
 
     const data = readLocalData();
     if (data[table]) {
-      data[table] = data[table].filter(item => !(item.id === id && (!userId || item.ownerId === userId || item.userId === userId)));
+      data[table] = data[table].filter(item => !(item.id === id && (item.ownerId === userId || item.userId === userId)));
       writeLocalData(data);
     }
   }

@@ -8,7 +8,12 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const EventEmitter = require('events');
-const { shouldTriggerWebSearch, retrieveWebContext } = require('./webSearchService');
+const {
+  shouldTriggerWebSearch,
+  retrieveWebContext,
+  sanitizeSearchQuery,
+  sanitizeLocationHint
+} = require('./webSearchService');
 
 const DEFAULT_SYSTEM_PROMPT =
   "You are Klarity, the user's personal financial & lifestyle AI advisor, inspired by Google Gemini. You have live, real-time internet access through Klarity's integrated web search pipeline.\n\n" +
@@ -519,6 +524,7 @@ class LocalModelEngine extends EventEmitter {
    */
   async query({
     query,
+    searchQuery = '',
     enableWebSearch = true,
     locationHint = '',
     financialContext = '',
@@ -538,14 +544,17 @@ class LocalModelEngine extends EventEmitter {
       formattedContext: 'No live web search required for this query.'
     };
 
-    if (enableWebSearch !== false && shouldTriggerWebSearch(query)) {
-      const retrieved = await retrieveWebContext(query, {
+    const sanitizedForSearch = sanitizeSearchQuery(searchQuery || query);
+    const safeLocationHint = sanitizeLocationHint(locationHint);
+
+    if (enableWebSearch !== false && sanitizedForSearch && shouldTriggerWebSearch(sanitizedForSearch)) {
+      const retrieved = await retrieveWebContext(sanitizedForSearch, {
         maxResults: 5,
-        locationHint
+        locationHint: safeLocationHint
       });
       webSearchData = {
         triggered: true,
-        query: retrieved.query || query,
+        query: retrieved.query || sanitizedForSearch,
         results: retrieved.results || [],
         formattedContext: retrieved.formattedContext
       };
