@@ -289,7 +289,7 @@ export function simulatePayoffScenarios(totalBalance, apr = 21.0, customFixedPay
   }
 
   const scenarioA = {
-    title: 'Minimum Payment Trap',
+    title: 'Minimum payments only',
     initialMonthlyPayment: initialMinPayment,
     monthOneInterest: Math.round(monthOneInterest),
     monthOnePrincipal: Math.round(monthOnePrincipal),
@@ -298,7 +298,7 @@ export function simulatePayoffScenarios(totalBalance, apr = 21.0, customFixedPay
     yearsToFreedom: Math.round((monthsA / 12) * 10) / 10,
     totalInterestPaid: Math.round(totalInterestA),
     totalPaid: Math.round(totalPaidA),
-    summary: `${interestSplitPercent}% of your first payment goes straight to interest. Takes ${Math.round(monthsA / 12)}+ years and burns $${Math.round(totalInterestA).toLocaleString()} in interest.`
+    summary: `${interestSplitPercent}% of your first payment goes to interest. Takes ${Math.round(monthsA / 12)}+ years and costs $${Math.round(totalInterestA).toLocaleString()} in interest.`
   };
 
   // -------------------------------------------------------------
@@ -346,14 +346,14 @@ export function simulatePayoffScenarios(totalBalance, apr = 21.0, customFixedPay
   const totalPaidC = balance;
 
   const scenarioC = {
-    title: '0% Bank Hardship / NFCC DMP',
+    title: '0% Bank Relief Plan',
     concessionApr: 0.0,
     monthlyPayment: fixedPayC,
     monthsToFreedom: monthsC,
     totalInterestPaid: 0,
     totalPaid: totalPaidC,
     interestSavedVsA: Math.round(totalInterestA),
-    summary: `Enrolls in internal bank financial relief or NFCC plan. Rate slashed to 0%, card closed, 100% principal payoff in 36 months ($0 interest).`
+    summary: `Enrolls in a bank payment relief or NFCC plan. Rate reduced to 0%, card closed, 100% principal payoff in 36 months ($0 interest).`
   };
 
   // -------------------------------------------------------------
@@ -572,3 +572,130 @@ export function detectRetirementDeposits(transactions = []) {
   }
   return results;
 }
+
+/**
+ * Evaluate statutory income and asset protection summary
+ */
+export function evaluateLegalShield(incomeSources = [], bankBalance = 0) {
+  const ratio = calculateJudgmentProofRatio(incomeSources);
+  return {
+    isJudgmentProof: ratio.isFullyJudgmentProof,
+    protectedMonthlyIncome: ratio.shieldedMonthlyIncome,
+    garnishableIncome: ratio.garnishableMonthlyIncome,
+    lookbackCushion: ratio.lookbackBankCushion,
+    bankBalance: Number(bankBalance) || 0,
+    summaryText: ratio.isFullyJudgmentProof
+      ? 'Your reported retirement and benefit income streams are protected from private creditor garnishment under federal and state law.'
+      : `Approximately $${ratio.shieldedMonthlyIncome.toLocaleString()}/mo of your income comes from protected retirement or benefit sources.`
+  };
+}
+
+/**
+ * Generate a plain-language payment relief guide for a card or issuer
+ */
+export function generateHardshipPlaybook(cardOrCreditor = {}, options = {}) {
+  const isJudgmentProof = options.isJudgmentProof !== false;
+  const userName = options.userName || 'Cardholder';
+  const nameStr = (cardOrCreditor.institution || cardOrCreditor.name || 'Card Issuer').toString();
+  const matchedCreditor = HARDSHIP_CREDITORS.find(c =>
+    nameStr.toLowerCase().includes(c.institution.toLowerCase()) ||
+    nameStr.toLowerCase().includes(c.slug)
+  ) || HARDSHIP_CREDITORS[0];
+
+  const currentBalance = Math.max(0, Number(cardOrCreditor.balance) || 0);
+  const currentApr = Number(cardOrCreditor.apr || cardOrCreditor.standardApr) || 21.99;
+  const mask = cardOrCreditor.mask || cardOrCreditor.last4 || 'XXXX';
+  const monthlyInterest = Math.round(currentBalance * ((currentApr / 100) / 12));
+  const targetMonthly = currentBalance > 0 ? Math.max(25, Math.round(currentBalance / 48)) : 0;
+
+  return {
+    creditorName: cardOrCreditor.name || matchedCreditor.institution,
+    institution: matchedCreditor.institution,
+    department: matchedCreditor.department,
+    phone: matchedCreditor.phone,
+    onlineUrl: matchedCreditor.onlineUrl,
+    typicalTerms: matchedCreditor.typicalTerms,
+    currentBalance,
+    currentApr,
+    targetTerms: {
+      targetAprRange: '6%',
+      estimatedNewMonthlyPayment: targetMonthly,
+      monthlyInterestSaved: monthlyInterest
+    },
+    phoneScript: [
+      matchedCreditor.hardshipPhoneScript(userName, mask, currentBalance),
+      'If the first representative says no program is available, politely ask: "Could you please connect me with your Payment Assistance or Hardship Workout department?"',
+      'Confirm in writing before making your first plan payment: 0% to low fixed APR, no late fees while enrolled, and fixed monthly payments over 36 to 60 months.'
+    ],
+    keyRules: [
+      'Ask specifically for the internal Payment Assistance or Workout department',
+      'Request a 0% to 6% fixed APR over 36 to 60 months',
+      'Understand the card will typically be closed to new purchases',
+      'Never grant third-party debt settlement companies access to your bank account'
+    ],
+    ceaseCollectionLetter: `To Whom It May Concern at ${matchedCreditor.institution},\n\nRegarding Account Ending In: ${mask}\n\nI am writing to notify you that my household income consists of statutorily protected retirement/benefit funds (42 U.S.C. § 407 / State Exemption Statutes). While I intend to resolve my balance in good faith through an internal 0% payment relief plan, please be advised of my protected status and direct any written hardship plan offers to my address on file.\n\nSincerely,\n${userName}`
+  };
+}
+
+/**
+ * Compare 4 payoff and relief options across all active credit cards
+ */
+export function compareDebtOptions(cards = [], extraPayment = 50, options = {}) {
+  const creditCards = (Array.isArray(cards) ? cards : []).filter(c => c.type !== 'debit' && Number(c.balance) > 0);
+  const totalBalance = creditCards.reduce((sum, c) => sum + (Number(c.balance) || 0), 0);
+  const weightedApr = totalBalance > 0
+    ? creditCards.reduce((sum, c) => sum + ((Number(c.balance) || 0) * (Number(c.apr) || 21.0)), 0) / totalBalance
+    : 21.0;
+
+  const baseMin = creditCards.reduce((sum, c) => {
+    const bal = Number(c.balance) || 0;
+    const apr = Number(c.apr) || 21.0;
+    return sum + Math.max(25, Math.round(bal * 0.01 + bal * ((apr / 100) / 12)));
+  }, 0);
+
+  const sim = simulatePayoffScenarios(totalBalance, weightedApr, baseMin + (Number(extraPayment) || 0));
+
+  return [
+    {
+      id: 'minimums',
+      badge: 'Minimum payments only',
+      title: 'Standard minimum payments',
+      description: sim.scenarioA.summary,
+      monthlyPayment: sim.scenarioA.initialMonthlyPayment,
+      monthsToPayoff: sim.scenarioA.monthsToFreedom,
+      totalInterest: sim.scenarioA.totalInterestPaid,
+      recommended: false
+    },
+    {
+      id: 'accelerated',
+      badge: 'Faster payoff',
+      title: `Accelerated (+$${Number(extraPayment) || 0}/mo)`,
+      description: sim.scenarioB.summary,
+      monthlyPayment: sim.scenarioB.monthlyPayment,
+      monthsToPayoff: sim.scenarioB.monthsToFreedom,
+      totalInterest: sim.scenarioB.totalInterestPaid,
+      recommended: false
+    },
+    {
+      id: 'relief_plan',
+      badge: '0% Bank Relief Plan',
+      title: 'Issuer payment relief plan',
+      description: sim.scenarioC.summary,
+      monthlyPayment: sim.scenarioC.monthlyPayment,
+      monthsToPayoff: sim.scenarioC.monthsToFreedom,
+      totalInterest: sim.scenarioC.totalInterestPaid,
+      recommended: true
+    },
+    {
+      id: 'zero_interest_pool',
+      badge: '0% Family or pension loan',
+      title: 'Interest-free payoff plan',
+      description: sim.scenarioD.summary,
+      monthlyPayment: sim.scenarioD.monthlyPayment,
+      monthsToPayoff: sim.scenarioD.monthsToFreedom,
+      totalInterest: sim.scenarioD.totalInterestPaid,
+      recommended: false
+    }
+  ];
+}
+

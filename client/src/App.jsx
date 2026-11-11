@@ -162,6 +162,20 @@ import {
   formatVersionString,
   formatWhatsNewHighlights
 } from './components/SharedAppComponents';
+import { Button, Card, Pill, Toast, ConfirmDialog } from './components/ui';
+import {
+  OverviewPage,
+  TransactionsPage,
+  BillsPage,
+  SubscriptionsPage,
+  CardsPage,
+  BudgetsPage,
+  RetirementPage as RetirementPageView,
+  HouseholdPage,
+  VaultPage,
+  AdvisorPage,
+  SettingsPage
+} from './pages';
 
 export default function App() {
   return <KlarityApp />;
@@ -255,7 +269,7 @@ function KlarityApp() {
 
   const [vaultLockType, setVaultLockType] = useState(() => {
     try {
-      return localStorage.getItem('klarity_vault_lock_type') || (localStorage.getItem('klarity_vault_pin') ? 'pin' : 'pin');
+      return localStorage.getItem('klarity_vault_lock_type') || 'pin';
     } catch {
       return 'pin';
     }
@@ -679,31 +693,25 @@ function KlarityApp() {
     e.preventDefault();
     const clean = lockPinInput.trim();
     if (!clean) {
-      setLockError('Please enter your credentials to unlock.');
+      setLockError('Please enter your security PIN to unlock.');
       return;
     }
-    const currentSaved = localStorage.getItem('klarity_vault_pin') || '1234';
     if (hasMasterPinSet()) {
       const res = await verifyMasterPin(clean);
-      if (res.valid || clean === currentSaved) {
+      if (res.valid) {
         setIsSessionLocked(false);
         setLockPinInput('');
         setLockError('');
         try { sessionStorage.removeItem('klarity_session_locked'); } catch {}
         await reencryptLegacyStorage(clean);
       } else {
-        setLockError(res.error || 'Incorrect security code. Please try again.');
+        setLockError(res.error || 'Incorrect security PIN. Please try again.');
       }
     } else {
-      if (clean === currentSaved || clean.length >= 1) {
-        setIsSessionLocked(false);
-        setLockPinInput('');
-        setLockError('');
-        try { sessionStorage.removeItem('klarity_session_locked'); } catch {}
-        await reencryptLegacyStorage(clean);
-      } else {
-        setLockError('Enter your PIN or password to unlock.');
-      }
+      setIsSessionLocked(false);
+      setLockPinInput('');
+      setLockError('');
+      try { sessionStorage.removeItem('klarity_session_locked'); } catch {}
     }
   };
 
@@ -880,12 +888,17 @@ function KlarityApp() {
 
   useEffect(() => {
     try {
-      localStorage.removeItem('klarity_theme');
-      document.documentElement.classList.remove('dark', 'high-contrast', 'high-contrast-light');
+      localStorage.removeItem('klarity_vault_pin');
+      const savedTheme = localStorage.getItem('klarity_theme');
+      if (savedTheme === 'dark' || savedTheme === 'light') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
     } catch (e) {}
     applyUiPreferences(uiFontScale, uiDensity, uiReduceMotion, uiHighFocus, uiPrivacyMask);
   }, []);
-  const [settingsDisplayName, setSettingsDisplayName] = useState(currentUser?.name || 'Ziyad Elmahi');
+  const [settingsDisplayName, setSettingsDisplayName] = useState(currentUser?.name || '');
   const getInitialUserStorage = (key, fallback = '') => {
     try {
       const savedUser = localStorage.getItem('klarity_user');
@@ -900,8 +913,6 @@ function KlarityApp() {
       if (userVal !== null && userVal !== undefined) return userVal;
       const globalVal = localStorage.getItem(`klarity_${key}`);
       if (globalVal !== null && globalVal !== undefined) return globalVal;
-      const ziyadVal = localStorage.getItem(`klarity_u-ziyad_${key}`);
-      if (ziyadVal !== null && ziyadVal !== undefined) return ziyadVal;
       return fallback;
     } catch {
       return fallback;
@@ -1474,7 +1485,7 @@ function KlarityApp() {
   const [copiedSeniorScript, setCopiedSeniorScript] = useState(false);
   const [incomeSources, setIncomeSources] = useState(() => {
     try {
-      const uid = currentUser?.id || 'u-ziyad';
+      const uid = currentUser?.id || 'default';
       const saved = localStorage.getItem('klarity_' + uid + '_income_sources');
       return saved ? JSON.parse(saved) : ['Social Security', 'CalPERS Public Pension'];
     } catch {
@@ -2225,10 +2236,10 @@ function KlarityApp() {
           setFeatureFlags(prev => ({ ...prev, ...json.featureFlags }));
         }
         if (json.ai) {
-          const storedProv = localStorage.getItem(`klarity_${uid}_ai_provider`) || localStorage.getItem('klarity_ai_provider') || localStorage.getItem('klarity_u-ziyad_ai_provider');
-          const storedMod = localStorage.getItem(`klarity_${uid}_ai_model`) || localStorage.getItem('klarity_ai_model') || localStorage.getItem('klarity_u-ziyad_ai_model');
-          const storedMasked = localStorage.getItem(`klarity_${uid}_ai_masked_key`) || localStorage.getItem('klarity_ai_masked_key') || localStorage.getItem('klarity_u-ziyad_ai_masked_key');
-          const storedStatus = localStorage.getItem(`klarity_${uid}_ai_status`) || localStorage.getItem('klarity_ai_status') || localStorage.getItem('klarity_u-ziyad_ai_status');
+          const storedProv = localStorage.getItem(`klarity_${uid}_ai_provider`) || localStorage.getItem('klarity_ai_provider');
+          const storedMod = localStorage.getItem(`klarity_${uid}_ai_model`) || localStorage.getItem('klarity_ai_model');
+          const storedMasked = localStorage.getItem(`klarity_${uid}_ai_masked_key`) || localStorage.getItem('klarity_ai_masked_key');
+          const storedStatus = localStorage.getItem(`klarity_${uid}_ai_status`) || localStorage.getItem('klarity_ai_status');
 
           let prov = json.ai.provider || storedProv || 'gemini';
           let mod = json.ai.model || storedMod || 'gemini-2.0-flash';
@@ -2414,8 +2425,6 @@ function KlarityApp() {
           localStorage.removeItem(`klarity_${uid}_ai_status`);
           localStorage.removeItem('klarity_ai_masked_key');
           localStorage.removeItem('klarity_ai_status');
-          localStorage.removeItem('klarity_u-ziyad_ai_masked_key');
-          localStorage.removeItem('klarity_u-ziyad_ai_status');
         } catch {}
         setNotificationToast('AI API key removed.');
         setTimeout(() => setNotificationToast(''), 3000);
@@ -2494,7 +2503,7 @@ function KlarityApp() {
   };
 
   const handleToggleIncomeSource = (source) => {
-    const uid = currentUser?.id || 'u-ziyad';
+    const uid = currentUser?.id || 'default';
     setIncomeSources(prev => {
       const exists = prev.includes(source);
       const updated = exists ? prev.filter(s => s !== source) : [...prev, source];
@@ -2506,7 +2515,6 @@ function KlarityApp() {
   };
 
   const handleDisconnectBank = async (itemId, institutionName) => {
-    if (!window.confirm(`Are you sure you want to disconnect ${institutionName || 'this bank'}? Its linked accounts and cards will be removed.`)) return;
     try {
       const res = await fetch(`/api/plaid/items/${itemId}`, { method: 'DELETE' });
       if (res.ok) {
@@ -2911,7 +2919,6 @@ function KlarityApp() {
 
   // Remove / Delete Card or Account
   const handleDeleteAccount = async (accountId, accountName) => {
-    if (!window.confirm(`Are you sure you want to remove ${accountName || 'this card'}?`)) return;
     try {
       const res = await fetch(`/api/accounts/${accountId}`, { method: 'DELETE' });
       if (res.ok) {
@@ -2985,6 +2992,62 @@ function KlarityApp() {
       setTimeout(() => setNotificationToast(''), 4000);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Delete Bill (Confirmed via ConfirmDialog in BillsPage)
+  const handleDeleteBill = async (billId, billName) => {
+    setData(prev => {
+      const nextBills = (prev.bills || []).filter(b => b.id !== billId);
+      const nextState = { ...prev, bills: nextBills };
+      try {
+        localStorage.setItem('klarity_bills', JSON.stringify(nextBills));
+        localStorage.setItem('klarity_finance_data', JSON.stringify(nextState));
+      } catch (e) {}
+      return nextState;
+    });
+    try {
+      await fetch(`/api/bills/${billId}`, { method: 'DELETE' });
+    } catch (e) {}
+    setNotificationToast(`Bill removed: ${billName || 'Bill'}`);
+    setTimeout(() => setNotificationToast(''), 3500);
+  };
+
+  // Delete Manual Asset (Confirmed via ConfirmDialog in CardsPage)
+  const handleDeleteManualAsset = (assetId, assetName) => {
+    setManualAssets(prev => prev.filter(a => a.id !== assetId));
+    setNotificationToast(`Removed ${assetName || 'account'}`);
+    setTimeout(() => setNotificationToast(''), 3000);
+  };
+
+  // Clear All AI Memory (Confirmed via ConfirmDialog in SettingsPage / Advisor modal)
+  const [confirmClearAdvisorMemoryOpen, setConfirmClearAdvisorMemoryOpen] = useState(false);
+  const handleClearAllMemory = () => {
+    const uid = currentUser?.id || 'default';
+    setAiMemory([]);
+    try {
+      localStorage.setItem('klarity_ai_memory', '[]');
+      localStorage.setItem(`klarity_${uid}_ai_memory`, '[]');
+    } catch (e) {}
+    setNotificationToast('Cleared advisor memory.');
+    setTimeout(() => setNotificationToast(''), 3000);
+  };
+
+  const handleManualCheckForUpdate = async () => {
+    setIsCheckingUpdateInSettings(true);
+    try {
+      if (typeof window !== 'undefined' && window.klarityDesktop?.checkForUpdates) {
+        await window.klarityDesktop.checkForUpdates();
+      } else {
+        await fetch('/api/app/update-check');
+      }
+      setNotificationToast('Checked for updates — Klarity is up to date.');
+      setTimeout(() => setNotificationToast(''), 3000);
+    } catch {
+      setNotificationToast('Failed to check for updates.');
+      setTimeout(() => setNotificationToast(''), 3000);
+    } finally {
+      setIsCheckingUpdateInSettings(false);
     }
   };
 
@@ -3076,7 +3139,6 @@ function KlarityApp() {
 
   // Delete Purchase (Transaction)
   const handleDeleteTransaction = async (txId, txName) => {
-    if (!window.confirm(`Delete purchase "${txName || 'this transaction'}"?`)) return;
     try {
       const res = await fetch(`/api/transactions/${txId}`, { method: 'DELETE' });
       if (res.ok) {
@@ -3154,7 +3216,6 @@ function KlarityApp() {
 
   // Delete Subscription
   const handleDeleteSubscription = async (subId, subName) => {
-    if (!window.confirm(`Remove subscription "${subName || 'this subscription'}"?`)) return;
     try {
       const res = await fetch(`/api/subscriptions/${subId}`, { method: 'DELETE' });
       if (res.ok) {
@@ -3849,58 +3910,50 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
     }
   };
 
-  // Splash loading screen while verifying existing stored session (prevents Google sign-in flash)
+  // Splash loading screen while verifying existing stored session
   if (isCheckingSession && !currentUser) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center selection:bg-blue-100">
+      <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)] flex flex-col items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <KlarityLogo className="w-12 h-12 text-[#18457c] animate-pulse" />
-          <span className="font-serif-title text-2xl font-bold tracking-tight text-slate-800">Klarity</span>
+          <KlarityLogo className="w-12 h-12 text-[#1B4B91]" />
+          <span className="font-serif text-[24px] font-semibold tracking-tight text-[var(--ink)]">Klarity</span>
         </div>
       </div>
     );
   }
 
-  // =========================================================================
-  // 1. SIGN IN SCREEN: GOOGLE OAUTH + OPTIONAL EMAIL
-  // =========================================================================
+  // 1. SIGN IN SCREEN: GOOGLE OAUTH + EMAIL
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col justify-between selection:bg-blue-100 selection:text-blue-900">
-        {/* Top Navbar */}
-        <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur px-6 py-4 flex items-center justify-between">
+      <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)] flex flex-col justify-between">
+        <header className="border-b border-[var(--line)] bg-[var(--surface)] px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <KlarityLogo className="w-7 h-7 text-[#18457c] shrink-0" />
-            <span className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">Klarity</span>
+            <KlarityLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
+            <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">Klarity</span>
           </div>
         </header>
 
-        {/* Center Container */}
         <div className="flex-1 flex items-center justify-center px-4 py-12">
-          <div className="max-w-md w-full bg-white border border-slate-200/90 rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col gap-6">
-            
-            {/* Header */}
+          <Card className="max-w-md w-full p-6 sm:p-8 flex flex-col gap-6 shadow-sm">
             <div className="text-center">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200/80 flex items-center justify-center mx-auto mb-3 shadow-xs">
-                <KlarityLogo className="w-7 h-7 text-[#18457c]" />
+              <div className="w-12 h-12 rounded-[12px] bg-[#1B4B91]/10 flex items-center justify-center mx-auto mb-3">
+                <KlarityLogo className="w-7 h-7 text-[#1B4B91]" />
               </div>
-              <h2 className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">
-                Sign In to Klarity
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Manage your real cards, balances, and household bills securely
+              <h1 className="font-serif text-[26px] font-semibold tracking-tight text-[var(--ink)]">
+                Sign in to Klarity
+              </h1>
+              <p className="text-[15px] font-medium text-[var(--muted)] mt-1">
+                Manage your cards, balances, and household bills securely.
               </p>
             </div>
 
-            {/* Error Banner */}
             {authError && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+              <div role="alert" className="p-3.5 rounded-[8px] bg-[#B91C1C]/10 border border-[#B91C1C]/30 text-[#B91C1C] text-[13px] font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{authError}</span>
               </div>
             )}
 
-            {/* REAL GOOGLE OAUTH SIGN IN BUTTON */}
             <div>
               <GoogleSignInButton
                 onAuthSuccess={handleGoogleProfileSuccess}
@@ -3911,28 +3964,27 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-slate-200"></div>
-              <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+              <div className="flex-1 h-px bg-[var(--line)]" />
+              <span className="text-[13px] font-medium text-[var(--muted)]">
                 or use email
               </span>
-              <div className="flex-1 h-px bg-slate-200"></div>
+              <div className="flex-1 h-px bg-[var(--line)]" />
             </div>
 
-            {/* Tab Switcher: Sign In vs Sign Up */}
-            <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl border border-slate-200/80 text-xs font-semibold">
+            <div className="grid grid-cols-2 p-1 bg-[var(--surface-subtle)] rounded-[8px] border border-[var(--line)] text-[13px]">
               <button
                 type="button"
                 onClick={() => {
                   setAuthMode('signin');
                   setAuthError('');
                 }}
-                className={`py-1.5 rounded-lg transition-all ${
+                className={`py-2 rounded-[8px] transition-colors cursor-pointer ${
                   authMode === 'signin'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-[var(--surface)] text-[var(--ink)] font-semibold shadow-2xs'
+                    : 'text-[var(--muted)] hover:text-[var(--ink)] font-medium'
                 }`}
               >
-                Sign In
+                Sign in
               </button>
               <button
                 type="button"
@@ -3940,59 +3992,68 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   setAuthMode('signup');
                   setAuthError('');
                 }}
-                className={`py-1.5 rounded-lg transition-all ${
+                className={`py-2 rounded-[8px] transition-colors cursor-pointer ${
                   authMode === 'signup'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-[var(--surface)] text-[var(--ink)] font-semibold shadow-2xs'
+                    : 'text-[var(--muted)] hover:text-[var(--ink)] font-medium'
                 }`}
               >
-                Sign Up
+                Create account
               </button>
             </div>
 
-            {/* Email Form */}
-            <form onSubmit={handleAuthSubmit} className="flex flex-col gap-3.5 text-xs">
+            <form onSubmit={handleAuthSubmit} className="flex flex-col gap-4">
               {authMode === 'signup' && (
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Your Name</label>
+                  <label htmlFor="auth-name-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
+                    Your name
+                  </label>
                   <input
+                    id="auth-name-input"
                     type="text"
                     required
-                    placeholder="e.g. John Doe"
+                    placeholder="Full name"
                     value={nameInput}
                     onChange={e => setNameInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2.5 text-[15px] font-medium text-[var(--ink)]"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Email Address</label>
+                <label htmlFor="auth-email-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
+                  Email address
+                </label>
                 <input
+                  id="auth-email-input"
                   type="email"
                   required
                   placeholder="name@email.com"
                   value={emailInput}
                   onChange={e => setEmailInput(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2.5 text-[15px] font-medium text-[var(--ink)]"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Password</label>
+                <label htmlFor="auth-password-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
+                  Password
+                </label>
                 <div className="relative">
                   <input
+                    id="auth-password-input"
                     type={showPassword ? 'text' : 'password'}
                     required
                     placeholder={authMode === 'signup' ? 'At least 6 characters' : 'Enter your password'}
                     value={passwordInput}
                     onChange={e => setPasswordInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 pr-10 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 pr-10 py-2.5 text-[15px] font-medium text-[var(--ink)]"
                   />
                   <button
                     type="button"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                    className="absolute right-3 top-2.5 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -4001,37 +4062,34 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
               {authMode === 'signup' && (
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Confirm Password</label>
+                  <label htmlFor="auth-confirm-password-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
+                    Confirm password
+                  </label>
                   <input
+                    id="auth-confirm-password-input"
                     type={showPassword ? 'text' : 'password'}
                     required
                     placeholder="Repeat your password"
                     value={confirmPasswordInput}
                     onChange={e => setConfirmPasswordInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2.5 text-[15px] font-medium text-[var(--ink)]"
                   />
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={isAuthenticating}
-                className="w-full mt-1 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold text-xs tracking-wide transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
-              >
-                <span>
-                  {isAuthenticating
-                    ? 'Processing...'
-                    : authMode === 'signup'
-                    ? 'Create Account'
-                    : 'Sign In with Email'}
-                </span>
-              </button>
+              <Button type="submit" variant="primary" disabled={isAuthenticating} className="w-full mt-1">
+                {isAuthenticating
+                  ? 'Signing in...'
+                  : authMode === 'signup'
+                  ? 'Create account'
+                  : 'Sign in with email'}
+              </Button>
             </form>
-          </div>
+          </Card>
         </div>
 
-        <footer className="border-t border-slate-200 py-4 text-center text-xs text-slate-500">
-          © 2026 Klarity. All personal financial data is AES-256 encrypted and private.
+        <footer className="border-t border-[var(--line)] py-4 text-center text-[13px] font-medium text-[var(--muted)]">
+          © 2026 Klarity. Personal financial data is encrypted and private.
         </footer>
       </div>
     );
@@ -4041,40 +4099,36 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
   if (isSessionLocked) {
     const isPasswordMode = vaultLockType === 'password';
     return (
-      <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col justify-between selection:bg-blue-100">
-        <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur px-6 py-4 flex items-center justify-between">
+      <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)] flex flex-col justify-between">
+        <header className="border-b border-[var(--line)] bg-[var(--surface)] px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <KlarityLogo className="w-7 h-7 text-[#18457c] shrink-0" />
-            <span className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">Klarity</span>
+            <KlarityLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
+            <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">Klarity</span>
           </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="text-xs font-semibold text-rose-600 hover:text-rose-700 cursor-pointer"
-          >
-            Sign Out
-          </button>
+          <Button variant="danger" size="sm" onClick={handleLogout}>
+            Sign out
+          </Button>
         </header>
 
         <div className="flex-1 flex items-center justify-center px-4 py-12">
-          <div className="max-w-md w-full bg-white border border-slate-200/90 rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col gap-6">
+          <Card className="max-w-md w-full p-6 sm:p-8 flex flex-col gap-6 shadow-sm">
             <div className="text-center">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200/80 flex items-center justify-center mx-auto mb-3 text-[#18457c]">
+              <div className="w-12 h-12 rounded-[12px] bg-[#1B4B91]/10 flex items-center justify-center mx-auto mb-3 text-[#1B4B91]">
                 <Lock className="w-6 h-6" />
               </div>
-              <h2 className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">
-                Session Inactive
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
+              <h1 className="font-serif text-[24px] font-semibold tracking-tight text-[var(--ink)]">
+                Session locked
+              </h1>
+              <p className="text-[15px] font-medium text-[var(--muted)] mt-1">
                 Klarity locked automatically after {autoLockMinutes} minutes of inactivity. Enter your {isPasswordMode ? 'master password' : 'security PIN'} to resume.
               </p>
-              <p className="text-[11px] font-semibold text-slate-600 mt-2 bg-slate-50 py-1 px-3 rounded-full inline-block border border-slate-200">
-                {currentUser?.email || 'User'}
-              </p>
+              <div className="mt-2">
+                <Pill variant="neutral">{currentUser?.email || 'Account'}</Pill>
+              </div>
             </div>
 
             {lockError && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+              <div role="alert" className="p-3.5 rounded-[8px] bg-[#B91C1C]/10 border border-[#B91C1C]/30 text-[#B91C1C] text-[13px] font-medium flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{lockError}</span>
               </div>
@@ -4082,41 +4136,39 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
             <form onSubmit={handleUnlockSession} className="flex flex-col gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                  {isPasswordMode ? 'Master Password' : 'Security PIN'}
+                <label htmlFor="session-unlock-input" className="text-[13px] font-medium text-[var(--ink)] block mb-1.5">
+                  {isPasswordMode ? 'Master password' : 'Security PIN'}
                 </label>
                 <input
+                  id="session-unlock-input"
                   type="password"
                   inputMode={isPasswordMode ? 'text' : 'numeric'}
                   autoFocus
                   value={lockPinInput}
                   onChange={e => setLockPinInput(e.target.value)}
-                  placeholder={isPasswordMode ? 'Enter your master password' : '••••'}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-[#18457c]"
+                  placeholder={isPasswordMode ? 'Enter your master password' : 'Enter PIN'}
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2.5 text-[15px] font-medium text-[var(--ink)]"
                 />
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-2.5 px-4 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold text-xs transition-colors cursor-pointer shadow-2xs"
-              >
-                Resume Session
-              </button>
+              <Button type="submit" variant="primary" className="w-full">
+                Resume session
+              </Button>
             </form>
 
-            <div className="text-center pt-2 border-t border-slate-100">
+            <div className="text-center pt-3 border-t border-[var(--line)]">
               <button
                 type="button"
                 onClick={handleLogout}
-                className="text-xs text-slate-500 hover:text-rose-600 transition-colors cursor-pointer"
+                className="text-[13px] font-medium text-[var(--muted)] hover:text-[#B91C1C] transition-colors cursor-pointer"
               >
                 Not you? Sign out of this session
               </button>
             </div>
-          </div>
+          </Card>
         </div>
 
-        <footer className="border-t border-slate-200 py-4 text-center text-xs text-slate-400">
+        <footer className="border-t border-[var(--line)] py-4 text-center text-[13px] font-medium text-[var(--muted)]">
           Session protected by Klarity Security
         </footer>
       </div>
@@ -4303,13 +4355,18 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
   const displayTotalSubs = sourceSubsList.reduce((sum, s) => sum + Number(s.amount || 0), 0);
   const displayTxs = sourceTxsList.slice(0, 4);
 
-  const firstName = currentUser?.name ? currentUser.name.split(' ')[0] : 'Ziyad';
-  const userInitials = (currentUser?.name || 'Ziyad Elmahi')
-    .split(' ')
+  const firstName = currentUser?.name
+    ? currentUser.name.trim().split(/\s+/)[0]
+    : currentUser?.email
+    ? currentUser.email.split('@')[0]
+    : 'there';
+  const userInitials = (currentUser?.name || currentUser?.email || 'U')
+    .split(/[\s@._-]+/)
+    .filter(Boolean)
     .map(p => p[0])
     .join('')
     .slice(0, 2)
-    .toUpperCase() || 'ZE';
+    .toUpperCase() || 'U';
 
   const getTimeGreeting = () => {
     const hr = new Date().getHours();
@@ -5006,8 +5063,63 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
     }
   };
 
+  const normalizedActiveTab = activeTab === 'lifestyle' ? 'household' : activeTab;
+
+  const sidebarSections = [
+    {
+      group: 'Overview',
+      items: [
+        { id: 'dashboard', label: 'Overview', icon: LayoutDashboard, show: true }
+      ]
+    },
+    {
+      group: 'Money',
+      items: [
+        { id: 'transactions', label: 'Transactions', icon: History, show: true },
+        { id: 'bills', label: 'Bills', icon: Receipt, show: true },
+        { id: 'subscriptions', label: 'Subscriptions', icon: Zap, show: true },
+        { id: 'cards', label: 'Cards', icon: CreditCard, show: true },
+        { id: 'budgets', label: 'Budgets', icon: PieChart, show: featureFlags.budgets !== false }
+      ]
+    },
+    {
+      group: 'Plan',
+      items: [
+        { id: 'retirement', label: 'Retirement', icon: Landmark, show: featureFlags.retirement !== false }
+      ]
+    },
+    {
+      group: 'Home and life',
+      items: [
+        { id: 'household', label: 'Household', icon: Home, show: featureFlags.household !== false }
+      ]
+    },
+    {
+      group: 'Vault',
+      items: [
+        { id: 'vault', label: 'Vault', icon: KeyRound, show: featureFlags.vault !== false }
+      ]
+    },
+    {
+      group: 'Advisor',
+      items: [
+        { id: 'advisor', label: 'Advisor', icon: Sparkles, show: true }
+      ]
+    }
+  ];
+
+  const isErrorToast = Boolean(
+    notificationToast &&
+      /(fail|error|invalid|could not|cannot|unable)/i.test(notificationToast)
+  );
+
+  const showToast = (msg) => {
+    setNotificationToast(msg);
+    setTimeout(() => setNotificationToast(''), 4000);
+  };
+
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)] flex font-sans antialiased">
       {linkToken && (
         <PlaidLauncher
           token={linkToken}
@@ -5018,6223 +5130,1984 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
       {/* Hidden CSV Input for Importing Transactions */}
       <input
-        ref={csvInputRef}
         type="file"
+        ref={csvInputRef}
         accept=".csv,text/csv"
-        className="hidden"
         onChange={handleImportCsv}
+        className="hidden"
+        aria-label="Import transactions CSV file"
       />
 
-      {/* Notification Toast */}
-      {notificationToast && (
-        <div className="fixed top-5 right-5 z-50 bg-[#18457c] text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-semibold animate-in fade-in slide-in-from-top-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>{notificationToast}</span>
+      {/* Hidden Multi-File Input for Advisor Sidebar */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        multiple
+        accept="*/*"
+        onChange={(e) => {
+          if (e.target.files?.length) {
+            handleAttachFiles(e.target.files);
+            e.target.value = '';
+          }
+        }}
+        className="hidden"
+        aria-label="Attach files to advisor chat"
+      />
+
+      {/* Toast Notification (Success & Error, Auto-Dismiss) */}
+      <Toast
+        message={notificationToast}
+        type={isErrorToast ? 'error' : 'success'}
+        onDismiss={() => setNotificationToast('')}
+      />
+
+      {/* Undo Toast for Hiding Retirement */}
+      {undoToast && (
+        <div
+          role="status"
+          className="fixed bottom-20 min-[760px]:bottom-6 left-1/2 -translate-x-1/2 z-[150] bg-[var(--surface)] text-[var(--ink)] px-4 py-3 rounded-[12px] shadow-lg border border-[var(--line)] flex items-center gap-4 text-[15px] font-medium"
+        >
+          <span>{undoToast.message}</span>
+          <Button variant="secondary" size="sm" onClick={undoToast.onUndo}>
+            Undo
+          </Button>
         </div>
       )}
 
-      {/* ======================================================================= */}
-      {/* 1. LEFT SIDEBAR (Overview, Transactions, Budgets, Bills, Subscriptions, Cards) */}
-      {/* Stays at standard scale and never requires scrolling to view options   */}
-      {/* ======================================================================= */}
-      <aside className={`shrink-0 border-r border-slate-200/80 bg-[#f8fafc] flex flex-col justify-between h-screen sticky top-0 hidden md:flex transition-all duration-200 ease-in-out relative z-30 select-none ${
-        isSidebarCompact ? 'w-[72px] px-2 py-4' : 'w-60 p-4 xl:p-5'
-      }`}>
-        <div className="flex-1 min-h-0 flex flex-col">
-          {/* Logo Brand & Compact Toggle Button */}
-          {!isSidebarCompact ? (
-            <div className="flex items-center justify-between shrink-0">
-              <div
-                className="flex items-center gap-2.5 cursor-pointer select-none group"
-                onClick={() => setActiveTab('dashboard')}
-              >
-                <KlarityLogo className="w-7 h-7 text-[#18457c] shrink-0 transition-transform group-hover:scale-105" />
-                <h1 className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">
-                  Klarity
-                </h1>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setIsSidebarCompact(true)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 cursor-pointer transition-colors"
-                  aria-label="Compact sidebar"
-                >
-                  <PanelLeftClose className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-2.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => setActiveTab('dashboard')}
-                className="p-1.5 rounded-xl hover:bg-slate-200/60 cursor-pointer transition-transform hover:scale-105 relative group"
-                aria-label="Klarity Overview"
-              >
-                <KlarityLogo className="w-7 h-7 text-[#18457c]" />
-                <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
-                  Overview
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsSidebarCompact(false)}
-                className="p-1.5 rounded-xl text-slate-500 hover:text-[#183b6b] hover:bg-slate-200/60 cursor-pointer transition-colors relative group"
-                aria-label="Expand sidebar"
-              >
-                <PanelLeftOpen className="w-5 h-5 text-[#183b6b]" />
-                <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
-                  Expand sidebar
-                </span>
-              </button>
-            </div>
-          )}
-
-          {/* Navigation Links - Fits cleanly without scrolling */}
-          <nav className={`flex-1 min-h-0 overflow-y-auto pr-0.5 flex flex-col ${isSidebarCompact ? 'items-center gap-1 mt-3' : 'gap-1 mt-4'}`}>
-            {sidebarNavOrder
-              .map(id => SIDEBAR_ITEMS_CONFIG[id])
-              .filter(item => Boolean(item) && (!item.flag || featureFlags[item.flag] !== false))
-              .map(item => {
-                const isActive = activeTab === item.id;
-                const Icon = item.icon;
-                return !isSidebarCompact ? (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setActiveTab(item.id)}
-                    className={`w-full text-left px-3 py-2 rounded-xl text-xs sm:text-[13px] transition-all cursor-pointer flex items-center gap-2.5 ${
-                      isActive
-                        ? 'bg-[#e8edf5] text-[#1e3a8a] font-semibold shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 font-medium'
-                    }`}
-                  >
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
-                    <span className="leading-none">{item.label}</span>
-                  </button>
-                ) : (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setActiveTab(item.id)}
-                    aria-label={item.label}
-                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer relative group ${
-                      isActive
-                        ? 'bg-[#e8edf5] text-[#1e3a8a] shadow-2xs'
-                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
-                    }`}
-                  >
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
-                    {/* Tooltip on hover */}
-                    <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
-                      {item.label}
-                    </span>
-                  </button>
-                );
-              })}
-          </nav>
-        </div>
-
-        {/* Left Sidebar Footer: Refresh App + User Profile */}
-        <div className="shrink-0 flex flex-col gap-2 pt-3 border-t border-slate-200/80">
-          {/* Refresh App Data Button */}
-          {!isSidebarCompact ? (
+      {/* =================================================================== */}
+      {/* LEFT LABELED SIDEBAR (>= 760px)                                     */}
+      {/* =================================================================== */}
+      <aside
+        aria-label="Primary Sidebar Navigation"
+        className="hidden min-[760px]:flex w-60 shrink-0 flex-col justify-between bg-[var(--surface)] border-r border-[var(--line)] h-screen sticky top-0 select-none z-30"
+      >
+        <div className="flex flex-col flex-1 min-h-0 overflow-y-auto px-3.5 py-4 gap-4">
+          {/* Brand Header */}
+          <div className="flex items-center justify-between px-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('dashboard')}
+              className="flex items-center gap-2.5 text-left rounded-[8px] py-1 cursor-pointer"
+            >
+              <KlarityLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
+              <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">
+                Klarity
+              </span>
+            </button>
             <button
               type="button"
               onClick={handleRefreshApp}
               disabled={isRefreshingApp}
-              className="w-full inline-flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] text-xs font-semibold shadow-2xs cursor-pointer transition-all disabled:opacity-50"
-              aria-label="Refresh app data & check for updates"
+              aria-label="Refresh financial data"
+              title="Refresh financial data"
+              className="w-8 h-8 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-[#18457c] shrink-0 ${isRefreshingApp ? 'animate-spin' : ''}`} />
-              <span>{isRefreshingApp ? 'Refreshing...' : 'Refresh'}</span>
-            </button>
-          ) : (
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={handleRefreshApp}
-                disabled={isRefreshingApp}
-                className="w-10 h-10 flex items-center justify-center rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-700 hover:text-[#18457c] shadow-2xs cursor-pointer transition-all relative group"
-                aria-label="Refresh app data & check for updates"
-              >
-                <RefreshCw className={`w-4 h-4 text-[#18457c] ${isRefreshingApp ? 'animate-spin' : ''}`} />
-                <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
-                  Refresh
-                </span>
-              </button>
-            </div>
-          )}
-
-          {/* User Profile Footer */}
-          {!isSidebarCompact ? (
-            <div className="pt-2 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[#183b6b] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                {userInitials}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-slate-900 truncate leading-snug">{currentUser?.name || 'Ziyad Elmahi'}</p>
-                <button
-                  type="button"
-                  onClick={() => setIsSettingsOpen(true)}
-                  className="text-xs text-slate-400 hover:text-slate-700 cursor-pointer transition-colors block leading-none mt-0.5"
-                >
-                  Settings
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="pt-2 flex flex-col items-center">
-              <button
-                type="button"
-                onClick={() => setIsSettingsOpen(true)}
-                aria-label={`Settings (${currentUser?.name || 'User'})`}
-                className="w-9 h-9 rounded-full bg-[#183b6b] hover:ring-2 hover:ring-[#183b6b]/40 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs cursor-pointer transition-all relative group"
-              >
-                {userInitials}
-                <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
-                  Settings
-                </span>
-              </button>
-            </div>
-          )}
-        </div>
-      </aside>
-
-      {/* ======================================================================= */}
-      {/* 2A. MOBILE APP SHELL (< 768px) — Matches Mobile Reference Mockups 1:1 */}
-      {/* ======================================================================= */}
-      <div
-        style={{
-          zoom: contentZoomFactor !== 1 ? contentZoomFactor : undefined
-        }}
-        className="md:hidden flex-1 min-w-0 flex flex-col min-h-screen bg-[#f8fafc] pb-16"
-      >
-        {/* Horizontal Card Filter Pills Helper for Mobile Activity, Budgets, Bills, Subscriptions */}
-        {(() => {
-          const renderMobileCardPills = () => (
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-              <button
-                type="button"
-                onClick={() => setSelectedCardIds([])}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-colors cursor-pointer ${
-                  selectedCardIds.length === 0
-                    ? 'bg-[#18457c] text-white shadow-2xs'
-                    : 'bg-white border border-slate-200/90 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                All cards
-              </button>
-              {allFilterableCards.map(c => {
-                const isSelected = selectedCardIds.includes(c.id);
-                const pillLabel = c.name.toLowerCase() === 'checking'
-                  ? 'Checking'
-                  : `${c.name.split(' ')[0]} ••${c.mask}`;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedCardIds(prev =>
-                        prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
-                      );
-                    }}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium shrink-0 transition-colors cursor-pointer ${
-                      isSelected
-                        ? 'bg-[#18457c] text-white font-semibold shadow-2xs'
-                        : 'bg-white border border-slate-200/90 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    {pillLabel}
-                  </button>
-                );
-              })}
-              {selectedCardIds.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedCardIds([])}
-                  className="px-3 py-1.5 rounded-full text-[11px] font-semibold text-blue-600 bg-blue-50 shrink-0 cursor-pointer"
-                >
-                  Clear filter
-                </button>
-              )}
-            </div>
-          );
-
-          return (
-            <>
-              {/* SCREEN 1: MOBILE HOME (OVERVIEW) */}
-              {activeTab === 'dashboard' && (
-                <div className="p-5 flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <KlarityLogo className="w-7 h-7 text-[#18457c] shrink-0" />
-                      <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">Overview</h1>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsSettingsOpen(true)}
-                      className="w-9 h-9 rounded-full bg-[#18457c] text-white flex items-center justify-center font-bold text-xs shadow-2xs cursor-pointer"
-                      title="Open Settings"
-                    >
-                      {userInitials}
-                    </button>
-                  </div>
-
-                  {/* Available Cash Hero Card */}
-                  <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs">
-                    <p className="text-xs text-slate-500">Available cash</p>
-                    <p className="font-serif-title text-[34px] leading-tight font-bold text-slate-900 mt-1">
-                      {fmtMoney(displayCash)}
-                    </p>
-                    <p className="text-xs font-medium text-emerald-700 mt-1.5">
-                      Covers all bills due in 14 days
-                    </p>
-                  </div>
-
-                  {/* Two Side-by-Side Metric Cards */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs">
-                      <p className="text-xs text-slate-500">Card balances</p>
-                      <p className="font-serif-title text-xl font-bold text-slate-900 mt-1">
-                        {fmtMoney(displayCardBalances)}
-                      </p>
-                    </div>
-                    <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs">
-                      <p className="text-xs text-slate-500">Due in 14 days</p>
-                      <p className="font-serif-title text-xl font-bold text-slate-900 mt-1">
-                        {fmtMoney(displayDue14Sum || 842.15)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Mobile Retirement Prompt (when on, no plans, not dismissed) */}
-                  {featureFlags.retirement !== false && retirementPlans.length === 0 && !retirementPromptDismissed && (
-                    <div className="bg-white rounded-2xl border border-blue-200/80 p-4 shadow-2xs flex flex-col gap-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#18457c] flex items-center justify-center shrink-0">
-                            <Landmark className="w-4 h-4" />
-                          </div>
-                          <span className="text-sm font-bold text-slate-900">Planning for retirement?</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRetirementPromptDismissed(true);
-                            try { localStorage.setItem('klarity_retirement_prompt_dismissed', 'true'); } catch {}
-                          }}
-                          className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
-                          title="Dismiss"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-500">
-                        Forecast your pensions, 401(k), IRAs, and Social Security lifetime benefits.
-                      </p>
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('retirement')}
-                          className="px-4 py-2 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer shadow-2xs hover:bg-[#123561] transition-colors"
-                        >
-                          Set up
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRetirementPromptDismissed(true);
-                            try { localStorage.setItem('klarity_retirement_prompt_dismissed', 'true'); } catch {}
-                            handleHideRetirement();
-                          }}
-                          className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium cursor-pointer transition-colors"
-                        >
-                          Not for me
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Mobile Projected Retirement Income Card (when on and has plans) */}
-                  {featureFlags.retirement !== false && retirementPlans.length > 0 && (
-                    <div
-                      onClick={() => setActiveTab('retirement')}
-                      className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs flex items-center justify-between cursor-pointer hover:border-blue-300 transition-all"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
-                          <Landmark className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 font-medium">Projected retirement income</p>
-                          <p className="font-serif-title text-xl font-bold text-slate-900 mt-0.5">
-                            ${Math.round(projectedRetirementMonthlyIncome).toLocaleString('en-US')}<span className="text-xs font-normal text-slate-500">/mo</span>
-                          </p>
-                        </div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-slate-400" />
-                    </div>
-                  )}
-
-                  {/* Horizontal Scrollable Cards Carousel */}
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900 mb-2.5">Cards</h2>
-                    <div className="flex gap-3 overflow-x-auto pb-2">
-                      {displayCards.map(card => {
-                        const utilPct = Math.min(100, Math.round((card.balance / (card.limit || 5000)) * 100));
-                        return (
-                          <div
-                            key={card.id}
-                            onClick={() => {
-                              setSelectedCardIds([card.id]);
-                              setActiveTab('transactions');
-                            }}
-                            className={`w-[160px] shrink-0 rounded-2xl p-4 text-white flex flex-col justify-between min-h-[142px] shadow-xs cursor-pointer ${
-                              card.bgColor || 'bg-[#18457c]'
-                            }`}
-                          >
-                            <div>
-                              <p className="text-xs font-semibold leading-snug">{card.name}</p>
-                              <p className="text-[11px] text-white/75 mt-0.5">•••• {card.mask}</p>
-                            </div>
-                            <div className="mt-6">
-                              <p className="font-serif-title text-lg font-bold">{fmtMoney(card.balance)}</p>
-                              <div className="w-full h-1 bg-white/25 rounded-full overflow-hidden mt-2">
-                                <div className="bg-white h-full rounded-full" style={{ width: `${utilPct}%` }} />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      <button
-                        type="button"
-                        onClick={() => setIsAddAccountOpen(true)}
-                        className="w-[120px] shrink-0 rounded-2xl border border-dashed border-slate-300 bg-white/50 hover:bg-white text-slate-600 text-xs font-medium flex items-center justify-center min-h-[142px] cursor-pointer"
-                      >
-                        + Add card
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Advisor Callout Box */}
-                  <div className="bg-[#e9eff8] rounded-2xl p-4 flex flex-col gap-3">
-                    <p className="text-xs text-slate-800 leading-relaxed">
-                      <strong className="font-bold text-slate-900">Advisor:</strong> Gas spending is $10 over budget this month. Want to see where else you can adjust?
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('advisor')}
-                      className="self-start px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs"
-                    >
-                      Ask the advisor
-                    </button>
-                  </div>
-
-                  {/* Upcoming Bills */}
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900 mb-2.5">Upcoming bills</h2>
-                    <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
-                      {displayBills.map(bill => (
-                        <div key={bill.id} className="p-4 flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{bill.name}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">
-                              Due {bill.nextDueDate || `Oct ${bill.dueDay || 28}`} · {bill.daysUntil || 3} days
-                            </p>
-                          </div>
-                          <span className="text-sm font-semibold text-slate-900">
-                            {fmtMoney(bill.expectedAmount)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SCREEN 2: MOBILE ACTIVITY (TRANSACTIONS) */}
-              {activeTab === 'transactions' && (
-                <div className="p-5 flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">Activity</h1>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddTxOpen(true)}
-                      className="px-3 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
-                    >
-                      + Add
-                    </button>
-                  </div>
-
-                  {renderMobileCardPills()}
-
-                  <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
-                    {filteredTransactions.length === 0 ? (
-                      <div className="p-8 text-center flex flex-col items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-700">No payments on this card.</p>
-                        {selectedCardIds.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedCardIds([])}
-                            className="mt-1 px-3.5 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
-                          >
-                            Clear filter
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      filteredTransactions.map(t => {
-                        const isIncome = (t.category || '').toLowerCase() === 'income' || (t.name || '').toLowerCase().includes('paycheck') || (t.name || '').toLowerCase().includes('deposit');
-                        return (
-                          <div key={t.id} className="p-4 flex items-center justify-between">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900">{t.name}</p>
-                              <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
-                                <span>{t.date} · {t.category}</span>
-                                {t.pending && (
-                                  <>
-                                    <span>·</span>
-                                    <span className="px-2 py-0.5 rounded-full bg-amber-100/80 text-amber-800 text-[10px] font-semibold">
-                                      Pending
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <span className={`text-sm font-semibold ${isIncome ? 'text-emerald-600' : 'text-slate-900'}`}>
-                              {isIncome ? `+${fmtMoney(Math.abs(t.amount))}` : `-${fmtMoney(Math.abs(t.amount))}`}
-                            </span>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* SCREEN 3: MOBILE BUDGETS */}
-              {activeTab === 'budgets' && (
-                <div className="p-5 flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">Budgets</h1>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddBudgetOpen(true)}
-                      className="px-3 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
-                    >
-                      + Set Limit
-                    </button>
-                  </div>
-
-                  {renderMobileCardPills()}
-
-                  {/* 3-Column Summary Box */}
-                  <div className="bg-white rounded-2xl border border-slate-200/80 p-4 grid grid-cols-3 text-center shadow-2xs">
-                    <div>
-                      <p className="text-xs text-slate-500">Budgeted</p>
-                      <p className="font-serif-title text-lg font-bold text-slate-900 mt-0.5">
-                        {fmtMoney(totalBudgetLimit, 0)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Spent</p>
-                      <p className="font-serif-title text-lg font-bold text-slate-900 mt-0.5">
-                        {fmtMoney(totalBudgetSpent, 0)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Left</p>
-                      <p className="font-serif-title text-lg font-bold text-emerald-700 mt-0.5">
-                        {fmtMoney(Math.max(0, totalBudgetLimit - totalBudgetSpent), 0)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Category Budgets List Card */}
-                  <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
-                    {!hasAnyBudgetPaymentsOnSelectedCard && selectedCardIds.length > 0 ? (
-                      <div className="p-8 text-center flex flex-col items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-700">No payments on this card.</p>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCardIds([])}
-                          className="mt-1 px-3.5 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
-                        >
-                          Clear filter
-                        </button>
-                      </div>
-                    ) : (
-                      computedBudgets.map(b => {
-                        const spentRounded = Math.round(b.spent);
-                        const isOver = spentRounded > b.limit;
-                        const isWarn = !isOver && b.pct >= 80;
-                        return (
-                          <div key={b.id} className="p-4 flex flex-col gap-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-bold text-slate-900">{b.category}</span>
-                              <span className="text-sm text-slate-500">
-                                {fmtMoney(spentRounded, 0)} of {fmtMoney(b.limit, 0)}
-                              </span>
-                            </div>
-                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all ${
-                                  isOver ? 'bg-[#b91c1c]' : isWarn ? 'bg-[#b45309]' : 'bg-[#18457c]'
-                                }`}
-                                style={{ width: `${Math.min(100, b.pct)}%` }}
-                              />
-                            </div>
-                            <div>
-                              {isOver ? (
-                                <span className="text-xs font-medium text-[#b91c1c]">
-                                  {fmtMoney(spentRounded - b.limit, 0)} over
-                                </span>
-                              ) : (
-                                <span className="text-xs text-slate-500">
-                                  {fmtMoney(Math.max(0, b.limit - spentRounded), 0)} left
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* SCREEN 4: MOBILE ADVISOR */}
-              {activeTab === 'advisor' && (
-                <div className="flex-1 flex flex-col justify-between min-h-[calc(100vh-4rem)]">
-                  <div className="px-5 pt-5 pb-2">
-                    <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">Advisor</h1>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto px-5 py-2 flex flex-col gap-3">
-                    {/* Active Chat Thread Messages */}
-                    {chatMessages.map((msg, i) => (
-                      <div
-                        key={i}
-                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`max-w-[90%] rounded-2xl p-3.5 text-xs leading-relaxed flex flex-col gap-2 ${
-                            msg.role === 'user'
-                              ? 'bg-[#18457c] text-white shadow-2xs'
-                              : 'bg-white text-slate-800 border border-slate-200/80 shadow-2xs'
-                          }`}
-                        >
-                          {msg.text && <FormattedChatMessage text={msg.text} isUser={msg.role === 'user'} />}
-                          {msg.role === 'assistant' && Array.isArray(msg.suggestedActions) && msg.suggestedActions.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-slate-100">
-                              {msg.suggestedActions.map((act, actIdx) => (
-                                <button
-                                  key={actIdx}
-                                  type="button"
-                                  onClick={() => handleExecuteSuggestedAction(act)}
-                                  className="px-2.5 py-1 rounded-lg bg-[#eff4f9] hover:bg-[#18457c] text-[#18457c] hover:text-white text-[11px] font-semibold transition-colors cursor-pointer"
-                                >
-                                  {act.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-
-                    {isAiTyping && (
-                      <div className="flex justify-start">
-                        <div className="bg-white border border-slate-200/80 rounded-2xl px-4 py-2.5 text-xs text-slate-500 animate-pulse shadow-2xs">
-                          Advisor is analyzing...
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Bottom Input Bar */}
-                  <form
-                    onSubmit={handleSendChatMessage}
-                    className="bg-white border-t border-slate-200/80 px-4 py-3 flex items-center gap-2 sticky bottom-14"
-                  >
-                    <input
-                      type="text"
-                      placeholder="Ask about your money"
-                      value={chatInput}
-                      onChange={e => setChatInput(e.target.value)}
-                      className="flex-1 bg-slate-100/90 border border-slate-200/90 rounded-full px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500"
-                    />
-                    {isAiTyping ? (
-                      <button
-                        type="button"
-                        onClick={handleStopGeneration}
-                        className="w-9 h-9 rounded-full bg-slate-900 hover:bg-slate-800 active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-sm animate-in fade-in zoom-in-90"
-                        title="Stop response"
-                        aria-label="Stop generating response"
-                      >
-                        <Square className="w-3.5 h-3.5 fill-current text-white" />
-                      </button>
-                    ) : (
-                      <button
-                        type="submit"
-                        disabled={!chatInput.trim() && chatFiles.length === 0}
-                        className="px-4 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 cursor-pointer shrink-0"
-                      >
-                        Send
-                      </button>
-                    )}
-                  </form>
-                </div>
-              )}
-
-              {/* SCREEN 5: MOBILE MORE MENU */}
-              {activeTab === 'more' && (
-                <div className="p-5 flex flex-col gap-4">
-                  <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">More</h1>
-
-                  <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
-                    {[
-                      { label: 'Bills', onClick: () => setActiveTab('bills') },
-                      { label: 'Subscriptions', onClick: () => setActiveTab('subscriptions') },
-                      { label: 'Cards', onClick: () => setActiveTab('cards') },
-                      ...(featureFlags.household !== false ? [{ label: 'Lifestyle', onClick: () => setActiveTab('household') }] : []),
-                      ...(featureFlags.retirement !== false ? [{ label: 'Retirement & Pensions', onClick: () => setActiveTab('retirement') }] : []),
-                      ...(featureFlags.vault !== false ? [{ label: 'Passwords & Accounts', onClick: () => setActiveTab('vault') }] : []),
-                      { label: 'Settings', onClick: () => setIsSettingsOpen(true) }
-                    ].map((item, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={item.onClick}
-                        className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors cursor-pointer"
-                      >
-                        <span className="text-sm font-medium text-slate-900">{item.label}</span>
-                        <span className="text-slate-400 text-base leading-none">›</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs">
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="w-full p-4 text-left text-sm font-medium text-[#b91c1c] hover:bg-rose-50/40 transition-colors cursor-pointer"
-                    >
-                      Sign out
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* SUB-VIEWS FROM MORE: BILLS, SUBSCRIPTIONS, CARDS ON MOBILE */}
-              {activeTab === 'bills' && (
-                <div className="p-5 flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('more')}
-                        className="p-1.5 rounded-lg hover:bg-slate-200/60 text-slate-600 cursor-pointer"
-                      >
-                        <ArrowLeft className="w-4 h-4" />
-                      </button>
-                      <h1 className="font-serif-title text-[24px] font-bold text-slate-900">Bills</h1>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddBillOpen(true)}
-                      className="px-3 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
-                    >
-                      + Add Bill
-                    </button>
-                  </div>
-                  {renderMobileCardPills()}
-                  <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
-                    {filteredBills.length === 0 ? (
-                      <div className="p-8 text-center text-sm font-semibold text-slate-600">No payments on this card.</div>
-                    ) : (
-                      filteredBills.map(b => (
-                        <div key={b.id} className="p-4 flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{b.name}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{b.dueText}</p>
-                          </div>
-                          <span className="text-sm font-semibold text-slate-900">{fmtMoney(b.expectedAmount)}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'subscriptions' && (
-                <div className="p-5 flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('more')}
-                        className="p-1.5 rounded-lg hover:bg-slate-200/60 text-slate-600 cursor-pointer"
-                      >
-                        <ArrowLeft className="w-4 h-4" />
-                      </button>
-                      <h1 className="font-serif-title text-[24px] font-bold text-slate-900">Subscriptions</h1>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddSubOpen(true)}
-                      className="px-3 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
-                    >
-                      + Add
-                    </button>
-                  </div>
-                  {renderMobileCardPills()}
-                  <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
-                    {filteredSubscriptions.length === 0 ? (
-                      <div className="p-8 text-center text-sm font-semibold text-slate-600">No payments on this card.</div>
-                    ) : (
-                      filteredSubscriptions.map(s => (
-                        <div key={s.id} className="p-4 flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{s.name}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{s.renewText}</p>
-                          </div>
-                          <span className="text-sm font-semibold text-slate-900">{fmtMoney(s.amount)}/mo</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'cards' && (
-                <div className="p-5 flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('more')}
-                        className="p-1.5 rounded-lg hover:bg-slate-200/60 text-slate-600 cursor-pointer"
-                      >
-                        <ArrowLeft className="w-4 h-4" />
-                      </button>
-                      <h1 className="font-serif-title text-[24px] font-bold text-slate-900">Cards</h1>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddAccountOpen(true)}
-                      className="px-3 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
-                    >
-                      + Add Card
-                    </button>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    {displayCards.map(card => (
-                      <div
-                        key={card.id}
-                        className={`rounded-2xl p-5 text-white shadow-sm ${card.bgColor || 'bg-[#18457c]'}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold">{card.name}</p>
-                            <p className="text-xs text-white/75">•••• {card.mask}</p>
-                          </div>
-                          <span className="text-xs bg-white/15 px-2.5 py-1 rounded-full">{card.apr}% APR</span>
-                        </div>
-                        <p className="font-serif-title text-2xl font-bold mt-4">{fmtMoney(card.balance)}</p>
-                        <p className="text-[11px] text-white/75 mt-1">Limit {fmtMoney(card.limit, 0)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'retirement' && featureFlags.retirement !== false && (
-                <div className="p-4 sm:p-5 flex flex-col gap-4">
-                  <RetirementPage
-                    retirementPlans={retirementPlans}
-                    onUpdatePlans={setRetirementPlans}
-                    onNavigateBack={() => setActiveTab('dashboard')}
-                    onAskAiAdvisor={(prompt) => {
-                      setChatInput(prompt);
-                      setActiveTab('advisor');
-                    }}
-                    onHideRetirement={handleHideRetirement}
-                  />
-                </div>
-              )}
-
-              {activeTab === 'vault' && featureFlags.vault !== false && (
-                <div className="p-3">
-                  <PasswordVaultPage
-                    vaultItems={vaultItems}
-                    onUpdateVaultItems={setVaultItems}
-                  />
-                </div>
-              )}
-
-              {activeTab === 'household' && featureFlags.household !== false && (
-                <div className="p-5 flex flex-col gap-4">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('more')}
-                      className="p-1.5 rounded-lg hover:bg-slate-200/60 text-slate-600 cursor-pointer"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                    </button>
-                    <h1 className="font-serif-title text-[24px] font-bold text-slate-900">Lifestyle</h1>
-                  </div>
-                  <HouseholdLifestyleHub
-                    bills={data.bills || []}
-                    householdProfile={householdProfile}
-                    onUpdateProfile={setHouseholdProfile}
-                    onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
-                    onAskAiAdvisor={(promptText) => {
-                      setIsAiDrawerOpen(true);
-                      handleSendChatMessage(promptText);
-                    }}
-                  />
-                </div>
-              )}
-            </>
-          );
-        })()}
-
-        {/* Fixed Bottom Navigation Bar (Home, Activity, Budgets, Advisor, More) */}
-        {(() => {
-          const mobileTabs = [
-            { id: 'dashboard', label: 'Home', matchIds: ['dashboard'] },
-            { id: 'transactions', label: 'Activity', matchIds: ['transactions'] },
-            ...(featureFlags.budgets !== false ? [{ id: 'budgets', label: 'Budgets', matchIds: ['budgets'] }] : []),
-            { id: 'advisor', label: 'Advisor', matchIds: ['advisor'] },
-            { id: 'more', label: 'More', matchIds: ['more', 'bills', 'subscriptions', 'cards', 'vault', 'retirement', 'household'] }
-          ];
-          const gridColClass = mobileTabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4';
-          return (
-            <nav
-              style={{
-                zoom: contentZoomFactor !== 1 ? (1 / contentZoomFactor) : undefined
-              }}
-              className={`fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 grid ${gridColClass}`}
-            >
-              {mobileTabs.map(tab => {
-                const isActive = tab.matchIds.includes(activeTab);
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`py-3.5 text-xs text-center transition-colors cursor-pointer border-t-2 ${
-                      isActive
-                        ? 'border-[#18457c] text-[#18457c] font-bold'
-                        : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
-          );
-        })()}
-      </div>
-
-      {/* ======================================================================= */}
-      {/* 2B. DESKTOP CENTER MAIN CONTENT (>= 768px) */}
-      {/* Content scales smoothly with readability preference (up to 200%)       */}
-      {/* User can scroll up & down to view large page content comfortably       */}
-      {/* ======================================================================= */}
-      <main
-        style={{
-          zoom: contentZoomFactor !== 1 ? contentZoomFactor : undefined
-        }}
-        className="hidden md:flex flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex-col gap-5 overflow-y-auto overflow-x-auto relative bg-[#f8fafc] text-slate-800"
-      >
-
-        {/* Top-of-App Auto-Update Banner (Appears whenever an update is pushed out) */}
-        {!updateBannerDismissed && (
-          ((desktopAppInfo.updateStatus?.state === 'available' || desktopAppInfo.updateStatus?.state === 'ready') &&
-            (!desktopAppInfo.updateStatus?.latestVersion || isSemverNewer(desktopAppInfo.updateStatus?.latestVersion, CURRENT_APP_VERSION))) ||
-          desktopAppInfo.updateStatus?.state === 'installing'
-        ) && (
-          <div className="w-full rounded-2xl bg-[#18457c] text-white px-4 py-3 shadow-md flex items-center justify-between gap-3 text-xs animate-in fade-in slide-in-from-top-2">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <Download className="w-4 h-4 text-emerald-300 shrink-0" />
-              <span className="font-semibold truncate">
-                {desktopAppInfo.updateStatus?.state === 'installing'
-                  ? 'Updating Klarity and reopening the app now...'
-                  : 'A new update for Klarity is available! Would you like to update the app now?'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                disabled={desktopAppInfo.updateStatus?.state === 'installing'}
-                onClick={() => window.klarityDesktop?.installUpdateNow?.()}
-                className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white font-bold cursor-pointer transition-colors shadow-2xs"
-              >
-                {desktopAppInfo.updateStatus?.state === 'installing' ? 'Installing...' : 'Install'}
-              </button>
-              {desktopAppInfo.updateStatus?.state !== 'installing' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUpdateBannerDismissed(true);
-                    try {
-                      const curSha = desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
-                      if (curSha) localStorage.setItem('klarity_dismissed_update_sha', curSha);
-                    } catch {}
-                  }}
-                  className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 font-semibold cursor-pointer transition-colors"
-                >
-                  Later
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-
-
-        {plaidError && (
-          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>{plaidError}</span>
-            </div>
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="px-3 py-1 rounded-lg bg-amber-200/60 text-amber-900 font-semibold cursor-pointer text-xs"
-            >
-              Settings
+              <RefreshCw className={`w-4 h-4 ${isRefreshingApp ? 'animate-spin text-[#1B4B91]' : ''}`} />
             </button>
           </div>
-        )}
 
-        {/* --------------------------------------------------------------------- */}
-        {/* TAB: OVERVIEW (DASHBOARD) */}
-        {/* --------------------------------------------------------------------- */}
-        {activeTab === 'dashboard' && (
-          <div className="flex flex-col gap-6">
-            {/* Top Greeting Message */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h1 className="font-serif-title text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-                  Good {getTimeGreeting()}, {firstName}
-                </h1>
-                <p className="text-xs text-slate-500 mt-0.5">Here's where your money stands today.</p>
-              </div>
-              
-            </div>
-
-            {/* Smart Alerts Strip (Bill due soon, Card > 30% utilization, Budget near limit) */}
-            {smartAlerts.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {smartAlerts.slice(0, 2).map(alert => (
-                  <div
-                    key={alert.id}
-                    className={`rounded-xl border p-3.5 flex items-center justify-between gap-3 text-xs shadow-2xs ${
-                      alert.type === 'urgent'
-                        ? 'bg-rose-50/80 border-rose-200 text-rose-900'
-                        : 'bg-amber-50/80 border-amber-200 text-amber-900'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      <AlertCircle className={`w-4 h-4 shrink-0 mt-0.5 ${alert.type === 'urgent' ? 'text-rose-600' : 'text-amber-600'}`} />
-                      <div className="min-w-0">
-                        <p className="font-bold truncate">{alert.title}</p>
-                        <p className="text-[11px] opacity-80 truncate">{alert.detail}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab(alert.actionTab)}
-                      className="px-2.5 py-1 rounded-lg bg-white/80 hover:bg-white text-slate-800 font-semibold text-[11px] border border-black/10 shrink-0 cursor-pointer transition-colors"
-                    >
-                      {alert.actionLabel}
-                    </button>
+          {/* Grouped Labeled Navigation */}
+          <nav className="flex flex-col gap-3.5" aria-label="Main sections">
+            {sidebarSections.map((section) => {
+              const visibleItems = section.items.filter((i) => i.show);
+              if (visibleItems.length === 0) return null;
+              return (
+                <div key={section.group} className="flex flex-col gap-1">
+                  <div className="px-2.5 text-[13px] font-medium text-[var(--muted)]">
+                    {section.group}
                   </div>
-                ))}
-              </div>
-            )}
-
-            {/* 1. Top 3-Metric Summary Card */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 divide-y sm:divide-y-0 gap-4 sm:gap-6">
-              <div>
-                <div className="text-xs text-slate-500 font-medium">Available cash</div>
-                <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-                  {fmtMoney(displayCash)}
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
-                  <span className="text-emerald-700 font-bold">Covers</span>
-                  <span>all bills due in the next 14 days ({fmtMoney(projectedCashAfterBills)} left after bills)</span>
-                </div>
-              </div>
-
-              <div className="pt-4 md:pt-0 md:pl-6">
-                <div className="text-xs text-slate-500 font-medium">Card balances</div>
-                <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-                  {fmtMoney(displayCardBalances)}
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1.5">
-                  Across {displayCards.length} cards
-                </div>
-              </div>
-
-              <div className="pt-4 md:pt-0 md:pl-6">
-                <div className="text-xs text-slate-500 font-medium">Due in 14 days</div>
-                <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-                  {fmtMoney(displayDue14Sum)}
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1.5">
-                  {displayDue14Count} bills
-                </div>
-              </div>
-            </div>
-
-            {/* Desktop Retirement Prompt (when on, no plans, not dismissed) */}
-            {featureFlags.retirement !== false && retirementPlans.length === 0 && !retirementPromptDismissed && (
-              <div className="rounded-xl border border-blue-200/80 bg-gradient-to-r from-blue-50/90 via-sky-50/70 to-blue-50/90 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs shadow-2xs">
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-[#18457c] text-white flex items-center justify-center shadow-2xs shrink-0">
-                    <Landmark className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-900 text-sm">Planning for retirement?</p>
-                    <p className="text-slate-600 text-xs mt-0.5">
-                      Forecast your public pensions (CalPERS, CalSTRS, FERS), 401(k), IRAs, and Social Security estimates.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('retirement')}
-                    className="px-3.5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold text-xs cursor-pointer shadow-2xs transition-colors"
-                  >
-                    Set up
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRetirementPromptDismissed(true);
-                      try { localStorage.setItem('klarity_retirement_prompt_dismissed', 'true'); } catch {}
-                      handleHideRetirement();
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-600 font-medium text-xs border border-slate-200 cursor-pointer transition-colors shadow-2xs"
-                  >
-                    Not for me
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRetirementPromptDismissed(true);
-                      try { localStorage.setItem('klarity_retirement_prompt_dismissed', 'true'); } catch {}
-                    }}
-                    className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer transition-colors"
-                    title="Dismiss"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Desktop Projected Retirement Income Card (when on and has plans) */}
-            {featureFlags.retirement !== false && retirementPlans.length > 0 && (
-              <div
-                onClick={() => setActiveTab('retirement')}
-                className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 hover:border-blue-300 hover:shadow-xs transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
-                    <Landmark className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500 font-medium flex items-center gap-2">
-                      <span>Projected retirement income</span>
-                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">
-                        {retirementPlans.length} {retirementPlans.length === 1 ? 'plan' : 'plans'} tracked
-                      </span>
-                    </div>
-                    <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-                      ${Math.round(projectedRetirementMonthlyIncome).toLocaleString('en-US')}<span className="text-xs font-normal text-slate-500">/mo</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900">
-                  <span>View retirement forecast</span>
-                  <ChevronRight className="w-4 h-4" />
-                </div>
-              </div>
-            )}
-
-            {/* Net Worth & Cash Flow Forecast Card */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
-              <div className="lg:col-span-3 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-semibold text-slate-500">Total Net Worth</span>
-                    <div className="flex items-baseline gap-2.5 mt-0.5">
-                      <span className="text-2xl font-bold text-slate-900">{fmtMoney(totalNetWorth)}</span>
-                      <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                        +4.2% this month
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddManualAssetOpen(true)}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
-                  >
-                    + Manual account
-                  </button>
-                </div>
-
-                {/* SVG Line Chart over 6 Months */}
-                <div className="pt-2">
-                  <svg viewBox="0 0 420 90" className="w-full h-24 overflow-visible">
-                    <defs>
-                      <linearGradient id="nwGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#18457c" stopOpacity="0.18" />
-                        <stop offset="100%" stopColor="#18457c" stopOpacity="0.0" />
-                      </linearGradient>
-                    </defs>
-                    {(() => {
-                      const vals = netWorthHistory.map(h => h.value);
-                      const minV = Math.min(...vals) * 0.95;
-                      const maxV = Math.max(...vals) * 1.05 || 1;
-                      const pts = netWorthHistory.map((h, i) => {
-                        const x = 20 + (i * 380) / (netWorthHistory.length - 1);
-                        const y = 70 - ((h.value - minV) / (maxV - minV || 1)) * 55;
-                        return { x, y, ...h };
-                      });
-                      const polyPoints = pts.map(p => `${p.x},${p.y}`).join(' ');
-                      const areaPoints = `${pts[0].x},72 ${polyPoints} ${pts[pts.length - 1].x},72`;
-                      return (
-                        <>
-                          <polygon points={areaPoints} fill="url(#nwGrad)" />
-                          <polyline
-                            fill="none"
-                            stroke="#18457c"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            points={polyPoints}
-                          />
-                          {pts.map((p, idx) => (
-                            <g key={p.month}>
-                              <circle cx={p.x} cy={p.y} r={idx === pts.length - 1 ? 4 : 3} fill="#18457c" />
-                              <text x={p.x} y={86} textAnchor="middle" className="fill-slate-400 text-[10px]">
-                                {p.month}
-                              </text>
-                            </g>
-                          ))}
-                        </>
-                      );
-                    })()}
-                  </svg>
-                </div>
-              </div>
-
-              {/* Right Column: Cash Flow Forecast & Manual Assets Summary */}
-              <div className="lg:col-span-2 bg-slate-50/80 border border-slate-200/70 rounded-xl p-4 flex flex-col justify-between gap-3 text-xs">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-slate-800">14-Day Cash Flow Forecast</span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">Safe</span>
-                  </div>
-                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                    You'll be at <strong className="text-slate-900">{fmtMoney(projectedCashAfterBills)}</strong> after upcoming bills ({fmtMoney(displayDue14Sum)} due over the next 14 days).
-                  </p>
-                </div>
-                <div className="pt-2.5 border-t border-slate-200/70 flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500">Checking & Cash</span>
-                    <span className="font-semibold text-slate-800">{fmtMoney(displayCash)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500">Savings & Investments</span>
-                    <span className="font-semibold text-slate-800">{fmtMoney(manualPositiveAssets)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500">Credit Debt & Loans</span>
-                    <span className="font-semibold text-rose-700">-{fmtMoney(displayCardBalances + manualLoans)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Cards Section */}
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 mb-3">Cards</h2>
-              <div className="flex items-center gap-4 flex-wrap">
-                {displayCards.map((card) => {
-                  const util = card.limit > 0 ? Math.round((card.balance / card.limit) * 100) : 0;
-                  return (
-                    <div
-                      key={card.id}
-                      onClick={() => {
-                        setSelectedCardIds([card.id]);
-                        setActiveTab('transactions');
-                      }}
-                      title="Click to filter payments for this card"
-                      className={`w-[185px] h-[185px] rounded-2xl p-5 text-white flex flex-col justify-between shadow-xs cursor-pointer hover:scale-[1.02] transition-transform ${card.bgColor || 'bg-[#18457c]'}`}
-                    >
-                      <div>
-                        <div className="text-xs font-semibold tracking-tight">{card.name}</div>
-                        <div className="text-[11px] text-white/70 font-mono mt-0.5">•••• {card.mask}</div>
-                      </div>
-
-                      <div>
-                        <div className="text-xl font-bold tracking-tight mb-2">
-                          {fmtMoney(card.balance)}
-                        </div>
-                        <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden mb-2">
-                          <div
-                            className="h-full bg-white rounded-full transition-all"
-                            style={{ width: `${Math.min(100, Math.max(0, util))}%` }}
-                          />
-                        </div>
-                        <div className="text-[10px] text-white/80">
-                          {util}% of limit · {card.apr}% APR
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* + Add card */}
-                <button
-                  type="button"
-                  onClick={() => setIsAddAccountOpen(true)}
-                  className="w-[185px] h-[185px] rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 hover:bg-slate-100/70 flex flex-col items-center justify-center text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors cursor-pointer group"
-                >
-                  <span className="group-hover:scale-105 transition-transform">+ Add card</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 3. Upcoming bills Card */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 overflow-hidden flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-xs font-bold text-slate-900">Upcoming bills</h2>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddBillOpen(true)}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
-                  >
-                    Add bill
-                  </button>
-                </div>
-
-                <div className="divide-y divide-slate-100">
-                  {displayBills.slice(0, 3).map((bill) => {
-                    const isUrgent = bill.daysUntil != null && bill.daysUntil <= 3;
+                  {visibleItems.map((item) => {
+                    const IconComponent = item.icon;
+                    const isActive = normalizedActiveTab === item.id;
                     return (
-                      <div key={bill.id} className="py-3 flex items-center justify-between gap-4 first:pt-1">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-900">{bill.name}</p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">{bill.dueText}</p>
-                        </div>
-                        <div className="flex items-center gap-4 shrink-0">
-                          <span
-                            className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${
-                              isUrgent ? 'bg-[#fef3c7] text-[#92400e]' : 'bg-[#e0e7ff] text-[#3730a3]'
-                            }`}
-                          >
-                            In {bill.daysUntil} days
-                          </span>
-                          <span className="text-xs font-bold text-slate-900 min-w-16 text-right">
-                            {fmtMoney(bill.amount)}
-                          </span>
-                        </div>
-                      </div>
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setActiveTab(item.id)}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-[8px] text-[15px] transition-colors cursor-pointer text-left ${
+                          isActive
+                            ? 'bg-[#1B4B91] text-white font-semibold'
+                            : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)] font-medium'
+                        }`}
+                      >
+                        <IconComponent className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-[var(--muted)]'}`} />
+                        <span className="truncate">{item.label}</span>
+                      </button>
                     );
                   })}
                 </div>
-              </div>
+              );
+            })}
+          </nav>
+        </div>
 
-              {/* Shaded Total Section */}
-              <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-3.5">
-                <span className="text-slate-500 font-medium">Monthly bills</span>
-                <span className="font-bold text-slate-900">
-                  {fmtMoney(displayTotalMonthlyBills)}
-                </span>
-              </div>
-            </div>
-
-            {/* 4. Bottom 2-Column Row for Subscriptions & Recent purchases */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              {/* Subscriptions Card */}
-              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between overflow-hidden">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-xs font-bold text-slate-900">Subscriptions</h2>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddSubOpen(true)}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
-                    >
-                      Add
-                    </button>
-                  </div>
-
-                  <div className="divide-y divide-slate-100">
-                    {displaySubs.slice(0, 4).map((sub) => (
-                      <div key={sub.id} className="py-2.5 flex items-center justify-between gap-3 first:pt-1">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-900">{sub.name}</p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">{sub.renewText}</p>
-                        </div>
-                        <span className="text-xs font-bold text-slate-900">
-                          {fmtMoney(sub.amount)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Shaded Total Section */}
-                <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-4">
-                  <span className="text-slate-500 font-medium">Total per month</span>
-                  <span className="font-bold text-slate-900">
-                    {fmtMoney(displayTotalSubs)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Recent purchases Card */}
-              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between overflow-hidden">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-xs font-bold text-slate-900">Recent purchases</h2>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('transactions')}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
-                    >
-                      View all
-                    </button>
-                  </div>
-
-                  <div className="divide-y divide-slate-100">
-                    {displayTxs.slice(0, 3).map((tx) => {
-                      const isDeposit = Number(tx.amount) > 0 && ((tx.category || '').toLowerCase() === 'income' || (tx.name || '').toLowerCase().includes('deposit'));
-                      const absAmount = Math.abs(Number(tx.amount));
-                      return (
-                        <div key={tx.id} className="py-2.5 flex items-center justify-between gap-3 first:pt-1">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-900">{tx.name}</p>
-                            <p className="text-[11px] text-slate-400 mt-0.5">{tx.subText}</p>
-                          </div>
-                          <span className={`text-xs font-bold ${isDeposit ? 'text-emerald-700' : 'text-slate-900'}`}>
-                            {isDeposit ? `+${fmtMoney(absAmount)}` : `-${fmtMoney(absAmount)}`}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Shaded Total Section */}
-                <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-4">
-                  <span className="text-slate-500 font-medium">Recent transactions</span>
-                  <span className="font-bold text-slate-900">
-                    {sourceTxsList.length} total recorded
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Household, Utility (PG&E / Water / Gas) & EV Fleet Intelligence Hub */}
-            <HouseholdLifestyleHub
-              bills={data.bills || []}
-              householdProfile={householdProfile}
-              onUpdateProfile={setHouseholdProfile}
-              onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
-              onAskAiAdvisor={(promptText) => {
-                setIsAiDrawerOpen(true);
-                handleSendChatMessage(promptText);
-              }}
-              isOverview={true}
-              onNavigateToLifestyle={() => setActiveTab('household')}
-            />
-          </div>
-        )}
-
-        {/* --------------------------------------------------------------------- */}
-        {/* TAB: BUDGETS & GOALS (Dedicated Page with Multi-Card Filter) */}
-        {/* --------------------------------------------------------------------- */}
-        {activeTab === 'budgets' && (
-          <div className="flex flex-col gap-6">
-            <SubpageHeader
-              title="Budgets & Savings Goals"
-              onBack={() => setActiveTab('dashboard')}
-              actions={[
-                { label: 'Set Category Budget', icon: Plus, onClick: () => setIsAddBudgetOpen(true) },
-                { label: '+ Savings Goal', icon: Target, onClick: () => setIsAddGoalOpen(true) }
-              ]}
-            />
-
-            {/* Filter Bar with Multi-Card Filter Dropdown */}
-            <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="text-xs text-slate-600">
-                <span className="font-semibold text-slate-900">Monthly Spending vs. Limits</span>
-                <span className="text-slate-400 ml-2">
-                  {selectedCardIds.length === 0
-                    ? 'Showing spending across all connected cards & accounts'
-                    : `Filtered to ${selectedCardIds.length} selected ${selectedCardIds.length === 1 ? 'card' : 'cards'}`}
-                </span>
-              </div>
-              <MultiCardFilterDropdown
-                cards={allFilterableCards}
-                selectedCardIds={selectedCardIds}
-                onChangeSelectedCards={setSelectedCardIds}
-              />
-            </div>
-
-            {/* Summary Totals Bar for Budgets */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 divide-y sm:divide-y-0">
-              <div>
-                <span className="text-xs text-slate-500 font-medium">Total Monthly Budget</span>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{fmtMoney(totalBudgetLimit, 0)}</p>
-                <p className="text-[11px] text-slate-400 mt-1">{computedBudgets.length} active categories</p>
-              </div>
-              <div className="pt-3 md:pt-0 md:pl-6">
-                <span className="text-xs text-slate-500 font-medium">Spent This Month</span>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{fmtMoney(totalBudgetSpent)}</p>
-                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-2">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      totalBudgetSpent > totalBudgetLimit ? 'bg-rose-500' : totalBudgetSpent > totalBudgetLimit * 0.8 ? 'bg-amber-500' : 'bg-[#18457c]'
-                    }`}
-                    style={{ width: `${Math.min(100, Math.round((totalBudgetSpent / (totalBudgetLimit || 1)) * 100))}%` }}
-                  />
-                </div>
-              </div>
-              <div className="pt-3 md:pt-0 md:pl-6">
-                <span className="text-xs text-slate-500 font-medium">Remaining Budget</span>
-                <p className={`text-2xl font-bold mt-1 ${totalBudgetLimit - totalBudgetSpent < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
-                  {fmtMoney(Math.max(0, totalBudgetLimit - totalBudgetSpent))}
-                </p>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  {Math.round((totalBudgetSpent / (totalBudgetLimit || 1)) * 100)}% of total limit used
-                </p>
-              </div>
-            </div>
-
-            {!hasAnyBudgetPaymentsOnSelectedCard && selectedCardIds.length > 0 ? (
-              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-10 text-center flex flex-col items-center justify-center gap-3">
-                <CreditCard className="w-8 h-8 text-slate-300" />
-                <p className="text-sm font-bold text-slate-800">No payments on this card.</p>
-                <p className="text-xs text-slate-500 max-w-sm">
-                  There are no recorded purchases, bills, or subscriptions tied to the selected card filter.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setSelectedCardIds([])}
-                  className="px-4 py-2 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
-                >
-                  Clear filter
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* Category Budget Progress Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {computedBudgets.map(b => (
-                    <div key={b.id} className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between gap-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1.5">
-                              <h3 className="text-sm font-bold text-slate-900">{b.category}</h3>
-                              <button
-                                type="button"
-                                onClick={() => setBudgets(prev => prev.filter(item => item.id !== b.id))}
-                                className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
-                                title="Delete budget"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                            {b.isOver && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
-                                Over budget
-                              </span>
-                            )}
-                            {b.isWarning && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                                Near limit ({b.pct}%)
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            {b.diffFromLastMonth > 0
-                              ? `+$${Math.abs(b.diffFromLastMonth).toFixed(0)} vs last month ($${b.lastMonth})`
-                              : `-$${Math.abs(b.diffFromLastMonth).toFixed(0)} vs last month ($${b.lastMonth})`}
-                          </p>
-                        </div>
-
-                        {editingBudgetId === b.id ? (
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="number"
-                              value={editingBudgetLimit}
-                              onChange={e => setEditingBudgetLimit(e.target.value)}
-                              className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-900 outline-none"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const val = parseFloat(editingBudgetLimit);
-                                if (!isNaN(val) && val > 0) {
-                                  setBudgets(prev => prev.map(item => item.id === b.id ? { ...item, limit: val } : item));
-                                }
-                                setEditingBudgetId(null);
-                              }}
-                              className="px-2 py-1 rounded-lg bg-[#18457c] text-white text-[11px] font-semibold cursor-pointer"
-                            >
-                              Save
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="text-right">
-                            <span className="text-xs font-bold text-slate-900">
-                              {fmtMoney(b.spent)} <span className="text-slate-400 font-normal">/ {fmtMoney(b.limit, 0)}</span>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingBudgetId(b.id);
-                                setEditingBudgetLimit(String(b.limit));
-                              }}
-                              className="block ml-auto text-[10px] text-blue-600 hover:underline cursor-pointer mt-0.5"
-                            >
-                              Edit limit
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${
-                              b.isOver ? 'bg-rose-500' : b.isWarning ? 'bg-amber-500' : 'bg-emerald-600'
-                            }`}
-                            style={{ width: `${Math.min(100, Math.max(2, b.pct))}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1.5">
-                          <span>{b.pct}% used</span>
-                          <span>
-                            {b.limit - b.spent >= 0
-                              ? `${fmtMoney(b.limit - b.spent)} left`
-                              : `${fmtMoney(b.spent - b.limit)} over`}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Spending Breakdown by Category Chart (Compared to Last Month) */}
-                <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900">Spending Breakdown by Category</h3>
-                      <p className="text-xs text-slate-500">Current month category share compared to last month</p>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    {computedBudgets.map((b, i) => {
-                      const sharePct = totalBudgetSpent > 0 ? Math.round((b.spent / totalBudgetSpent) * 100) : 0;
-                      const colors = ['bg-[#18457c]', 'bg-emerald-600', 'bg-blue-500', 'bg-indigo-500', 'bg-amber-500', 'bg-teal-600'];
-                      return (
-                        <div key={b.id} className="text-xs">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-semibold text-slate-800">{b.category} ({sharePct}%)</span>
-                            <div className="flex items-center gap-3">
-                              <span className="text-[11px] text-slate-400">Last mo: {fmtMoney(b.lastMonth, 0)}</span>
-                              <span className="font-bold text-slate-900">{fmtMoney(b.spent)}</span>
-                            </div>
-                          </div>
-                          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${colors[i % colors.length]}`}
-                              style={{ width: `${Math.max(3, sharePct)}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Savings Goals Section */}
-            {featureFlags.savingsGoals !== false && (
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Savings Goals</h3>
-                  <p className="text-xs text-slate-500">Track progress and projected completion dates</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsAddGoalOpen(true)}
-                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 cursor-pointer"
-                >
-                  + Add Goal
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {savingsGoals.length === 0 ? (
-                  <div className="col-span-full border border-dashed border-slate-200 rounded-xl p-8 text-center flex flex-col items-center justify-center gap-2 bg-slate-50/50">
-                    <Target className="w-8 h-8 text-slate-300" />
-                    <p className="text-sm font-bold text-slate-700">No active savings goals</p>
-                    <p className="text-xs text-slate-400 max-w-sm">
-                      All sample goals have been removed. Click + Add Goal above to create your own personal savings targets.
-                    </p>
-                  </div>
-                ) : savingsGoals.map(goal => {
-                  const pct = goal.targetAmount > 0 ? Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100)) : 0;
-                  const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
-                  const monthsLeft = goal.monthlyContribution > 0 ? Math.ceil(remaining / goal.monthlyContribution) : 0;
-                  const finishDate = new Date();
-                  finishDate.setMonth(finishDate.getMonth() + monthsLeft);
-                  const projectedDateStr = remaining <= 0
-                    ? 'Goal Reached!'
-                    : `Projected finish: ${finishDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })} (${monthsLeft} mo)`;
-
-                  return (
-                    <div key={goal.id} className="border border-slate-200/90 rounded-xl p-4 flex flex-col justify-between gap-3 bg-slate-50/40">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-xs font-bold text-slate-900">{goal.name}</p>
-                          <p className="text-[11px] text-emerald-700 font-medium mt-0.5">{projectedDateStr}</p>
-                        </div>
-                        <span className="text-xs font-bold text-slate-900">
-                          {fmtMoney(goal.currentAmount, 0)} / {fmtMoney(goal.targetAmount, 0)}
-                        </span>
-                      </div>
-
-                      <div>
-                        <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-emerald-600 rounded-full transition-all"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2">
-                          <span>{pct}% saved · +{fmtMoney(goal.monthlyContribution, 0)}/mo</span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleContributeGoal(goal.id, 100)}
-                              className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold cursor-pointer"
-                            >
-                              +$100
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSavingsGoals(prev => prev.filter(g => g.id !== goal.id))}
-                              className="text-slate-400 hover:text-rose-600 cursor-pointer"
-                              title="Remove goal"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            )}
-          </div>
-        )}
-
-        {/* --------------------------------------------------------------------- */}
-        {/* TAB: BILLS (Dedicated Page with Multi-Card Filter) */}
-        {/* --------------------------------------------------------------------- */}
-        {activeTab === 'bills' && (
-          <div className="flex flex-col gap-6">
-            <SubpageHeader
-              title="Upcoming Bills"
-              onBack={() => setActiveTab('dashboard')}
-              actions={[
-                { label: 'Add Bill', icon: Plus, onClick: () => setIsAddBillOpen(true) },
-                { label: 'Scan PDF', icon: FileText, onClick: () => setIsScanBillOpen(true) }
-              ]}
-            />
-
-
-
-            {/* Filter & Search Bar + Multi-Card Filter Dropdown */}
-            <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex-1 min-w-[200px] text-xs">
-                <Search className="w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search bills by name or provider..."
-                  value={billSearch}
-                  onChange={e => setBillSearch(e.target.value)}
-                  className="bg-transparent outline-none w-full text-slate-800 placeholder-slate-400"
-                />
-              </div>
-              <select
-                value={billFilter}
-                onChange={e => setBillFilter(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 outline-none cursor-pointer"
-              >
-                <option value="all">All Bills</option>
-                <option value="due_soon">Due Soon</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="paid">Paid</option>
-                <option value="Utilities">Utilities</option>
-                <option value="Housing">Housing</option>
-              </select>
-              <MultiCardFilterDropdown
-                cards={allFilterableCards}
-                selectedCardIds={selectedCardIds}
-                onChangeSelectedCards={setSelectedCardIds}
-              />
-            </div>
-
-            {/* Bills List */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 overflow-hidden">
-              {filteredBills.length === 0 ? (
-                <div className="py-10 text-center flex flex-col items-center justify-center gap-2.5">
-                  <Receipt className="w-7 h-7 text-slate-300" />
-                  <p className="text-sm font-bold text-slate-800">No payments on this card.</p>
-                  <p className="text-xs text-slate-500">No bills match the selected card or filter criteria.</p>
-                  {selectedCardIds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCardIds([])}
-                      className="mt-1 px-3.5 py-1.5 rounded-lg bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
-                    >
-                      Clear filter
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {filteredBills.map(bill => (
-                    <div key={bill.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">{bill.name}</p>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className="text-[11px] text-slate-400">
-                            {bill.nextDueDate ? `Due ${bill.nextDueDate}` : `Due Day ${bill.dueDay}`} · {bill.category || 'Utilities'} · {bill.account || 'Checking •••• 4821'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4 self-end sm:self-center">
-                        <span className="text-xs font-bold text-slate-900">{fmtMoney(bill.expectedAmount)}</span>
-                        <button
-                          type="button"
-                          onClick={() => handlePayBill(bill.id, bill.name, bill.expectedAmount)}
-                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                            bill.status === 'paid'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-700'
-                          }`}
-                        >
-                          {bill.status === 'paid' ? 'Paid' : 'Mark Paid'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Shaded Total Section */}
-              <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-3">
-                <span className="text-slate-500 font-medium">Total Monthly Bills ({filteredBills.length} active)</span>
-                <span className="font-bold text-slate-900">{fmtMoney(filteredTotalMonthlyBills)}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* --------------------------------------------------------------------- */}
-        {/* TAB: SUBSCRIPTIONS (Dedicated Page with Multi-Card Filter & Audit) */}
-        {/* --------------------------------------------------------------------- */}
-        {activeTab === 'subscriptions' && (
-          <div className="flex flex-col gap-6">
-            <SubpageHeader
-              title="Subscriptions"
-              onBack={() => setActiveTab('dashboard')}
-              actions={[
-                { label: 'Add Subscription', icon: Plus, onClick: () => setIsAddSubOpen(true) },
-                {
-                  label: 'AI Subscription Audit',
-                  icon: Sparkles,
-                  onClick: () =>
-                    handleSendChatMessage(
-                      `Please perform a full Subscription Audit on my ${sourceSubsList.length} subscriptions totaling ${displayTotalSubs.toFixed(2)}/mo (${sourceSubsList.map(s => `${s.name}: ${s.amount}`).join(', ')}). Flag any price increases, duplicate services, or ways to save.`
-                    )
-                }
-              ]}
-            />
-
-            {/* Recurring Detection & Price Increase Alert */}
-            <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900">
-              <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>
-                  <strong>Recurring Detection:</strong> Netflix increased by <strong>+$2.00/mo</strong> compared to your prior billing cycle. Annual subscription spend is <strong>{fmtMoney(filteredTotalSubscriptions * 12)}/yr</strong>.
-                </span>
-              </div>
-            </div>
-
-            {/* Filter & Search Bar + Multi-Card Filter Dropdown */}
-            <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex-1 min-w-[200px] text-xs">
-                <Search className="w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search subscriptions by service or category..."
-                  value={subSearch}
-                  onChange={e => setSubSearch(e.target.value)}
-                  className="bg-transparent outline-none w-full text-slate-800 placeholder-slate-400"
-                />
-              </div>
-              <select
-                value={subCategoryFilter}
-                onChange={e => setSubCategoryFilter(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 outline-none cursor-pointer"
-              >
-                <option value="all">All Categories</option>
-                <option value="Streaming">Streaming</option>
-                <option value="Music">Music</option>
-                <option value="Cloud Storage">Cloud Storage</option>
-                <option value="AI & Software">AI & Software</option>
-                <option value="Entertainment">Entertainment</option>
-              </select>
-              <MultiCardFilterDropdown
-                cards={allFilterableCards}
-                selectedCardIds={selectedCardIds}
-                onChangeSelectedCards={setSelectedCardIds}
-              />
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 overflow-hidden">
-              {filteredSubscriptions.length === 0 ? (
-                <div className="py-10 text-center flex flex-col items-center justify-center gap-2.5">
-                  <Zap className="w-7 h-7 text-slate-300" />
-                  <p className="text-sm font-bold text-slate-800">No payments on this card.</p>
-                  <p className="text-xs text-slate-500">No recurring subscriptions are tied to the selected card filter.</p>
-                  {selectedCardIds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCardIds([])}
-                      className="mt-1 px-3.5 py-1.5 rounded-lg bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
-                    >
-                      Clear filter
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {filteredSubscriptions.map(sub => (
-                    <div key={sub.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs font-bold text-slate-900">{sub.name}</p>
-                          {(sub.priceIncreased || sub.name.toLowerCase().includes('netflix')) && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                              +$2 price increase
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className="text-[11px] text-slate-400">
-                            {sub.renewalDate ? `Renews ${sub.renewalDate}` : 'Renews monthly'} · {sub.category} · {sub.account || 'Everyday Rewards •••• 4417'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4 self-end sm:self-center">
-                        <span className="text-xs font-bold text-slate-900">{fmtMoney(sub.amount)}/mo</span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSubscription(sub.id, sub.name)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"
-                          title="Delete subscription"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Shaded Total Section */}
-              <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-3">
-                <span className="text-slate-500 font-medium">Total Monthly Subscriptions ({filteredSubscriptions.length} active)</span>
-                <span className="font-bold text-slate-900">{fmtMoney(filteredTotalSubscriptions)}/mo</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* --------------------------------------------------------------------- */}
-        {/* TAB: CARDS & ACCOUNTS (Clean, Unified Hub) */}
-        {/* --------------------------------------------------------------------- */}
-        {activeTab === 'cards' && (() => {
-          const rawCheckingList = checkingAccounts.length > 0
-            ? checkingAccounts
-            : [{ id: 'card-checking-4821', name: 'Checking', institution: 'Chase', mask: '4821', subtype: 'Checking', balance: displayCash }];
-          const totalLimitAll = displayCards.reduce((s, c) => s + Number(c.limit || 0), 0);
-          const totalAvailHeadroom = displayCards.reduce((s, c) => s + Math.max(0, Number(c.limit || 0) - Number(c.balance || 0)), 0);
-          const allCount = displayCards.length + rawCheckingList.length + manualAssets.length;
-
-          return (
-            <div className="flex flex-col gap-5 sm:gap-6">
-              <SubpageHeader
-                title="Cards"
-                subtitle="All your credit cards, checking accounts, and payoff plans in one place."
-                onBack={() => setActiveTab('dashboard')}
-                actions={[
-                  { label: 'Add Card / Bank', icon: Plus, onClick: () => setIsAddAccountOpen(true) },
-                  { label: 'Add Loan or Asset', icon: CreditCard, onClick: () => setIsAddManualAssetOpen(true) },
-                  { label: 'View Debt Payoff', icon: Calculator, onClick: () => setCardsPayoffTab('speed') }
-                ]}
-              />
-
-              {/* 1. TOP OVERVIEW & FILTER BAR */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs flex flex-col gap-4">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Card Debt</span>
-                    <span className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">{fmtMoney(displayCardBalances)}</span>
-                    <span className="text-[11px] text-slate-400 mt-0.5">{displayCards.length} {displayCards.length === 1 ? 'card' : 'cards'}</span>
-                  </div>
-                  <div className="flex flex-col pt-3 sm:pt-0 sm:pl-4">
-                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Available Cash</span>
-                    <span className="text-xl sm:text-2xl font-bold text-emerald-700 mt-0.5">{fmtMoney(displayCash)}</span>
-                    <span className="text-[11px] text-slate-400 mt-0.5">{rawCheckingList.length} checking</span>
-                  </div>
-                  <div className="flex flex-col pt-3 sm:pt-0 sm:pl-4">
-                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Credit Headroom</span>
-                    <span className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">{fmtMoney(totalAvailHeadroom, 0)}</span>
-                    <span className="text-[11px] text-slate-400 mt-0.5">of {fmtMoney(totalLimitAll, 0)} limit</span>
-                  </div>
-                  <div className="flex flex-col pt-3 sm:pt-0 sm:pl-4">
-                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Cash vs Debt</span>
-                    <span className={`text-xl sm:text-2xl font-bold mt-0.5 ${displayCash >= displayCardBalances ? 'text-emerald-700' : 'text-rose-600'}`}>
-                      {displayCash >= displayCardBalances ? `+${fmtMoney(displayCash - displayCardBalances)}` : `-${fmtMoney(displayCardBalances - displayCash)}`}
-                    </span>
-                    <span className="text-[11px] text-slate-400 mt-0.5">
-                      {displayCash >= displayCardBalances ? 'Cash covers debt' : 'Debt exceeds cash'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Filter Selector Tabs */}
-                <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100 overflow-x-auto pb-1">
-                  {[
-                    { id: 'all', label: `All (${allCount})` },
-                    { id: 'credit', label: `Credit (${displayCards.length})` },
-                    { id: 'checking', label: `Debit (${rawCheckingList.length})` },
-                    ...(manualAssets.length > 0 ? [{ id: 'loans', label: `Loans (${manualAssets.length})` }] : [])
-                  ].map(tab => (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setCardsFilter(tab.id)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
-                        cardsFilter === tab.id
-                          ? 'bg-[#18457c] text-white shadow-2xs'
-                          : 'bg-slate-100 hover:bg-slate-200/80 text-slate-600'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 2. UNIFIED CARDS & ACCOUNTS GRID */}
-              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
-                {/* Credit Cards */}
-                {(cardsFilter === 'all' || cardsFilter === 'credit') && displayCards.map(card => {
-                  const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
-                  const isHighUtil = util >= 30;
-                  return (
-                    <div key={card.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between gap-4 hover:border-slate-300 transition-all">
-                      <div>
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-900 truncate">
-                              {card.institution ? `${card.institution} ` : ''}{card.name}
-                            </p>
-                            <p className="text-[11px] text-slate-400 font-mono mt-0.5">•••• {card.mask}</p>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] border border-blue-200">
-                              Credit
-                            </span>
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200/70">
-                              {card.apr || 0}% APR
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="mt-4">
-                          <div className="flex items-baseline justify-between mb-1">
-                            <span className="text-2xl font-bold text-slate-900">{fmtMoney(card.balance)}</span>
-                            <span className="text-xs text-slate-500 font-medium">{fmtMoney(card.limit, 0)} Limit</span>
-                          </div>
-                          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mt-1.5">
-                            <div
-                              className={`h-full rounded-full transition-all ${isHighUtil ? 'bg-amber-500' : 'bg-[#18457c]'}`}
-                              style={{ width: `${Math.max(2, Math.min(100, util))}%` }}
-                            ></div>
-                          </div>
-                          <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5">
-                            <span>{fmtMoney(Math.max(0, card.limit - card.balance), 0)} Available</span>
-                            <span>{Math.round(util)}% Used</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCardIds([card.id]);
-                            setActiveTab('transactions');
-                          }}
-                          className="text-[#18457c] hover:underline font-semibold cursor-pointer"
-                        >
-                          View payments →
-                        </button>
-                        {!String(card.id).startsWith('mock-') && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteAccount(card.id, card.name)}
-                            className="text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Checking & Cash Accounts */}
-                {(cardsFilter === 'all' || cardsFilter === 'checking') && rawCheckingList.map(acc => (
-                  <div key={acc.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between gap-4 hover:border-slate-300 transition-all">
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-900 truncate">
-                            {acc.institution ? `${acc.institution} ` : ''}{acc.name}
-                          </p>
-                          <p className="text-[11px] text-slate-400 font-mono mt-0.5">•••• {acc.mask || '4821'}</p>
-                        </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
-                          Debit
-                        </span>
-                      </div>
-
-                      <div className="mt-4">
-                        <span className="text-2xl font-bold text-slate-900">{fmtMoney(acc.balance)}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('transactions')}
-                        className="text-[#18457c] hover:underline font-semibold cursor-pointer"
-                      >
-                        View payments →
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Manual Loans & Assets */}
-                {(cardsFilter === 'all' || cardsFilter === 'loans') && manualAssets.map(ma => (
-                  <div key={ma.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between gap-4 hover:border-slate-300 transition-all">
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-900 truncate">{ma.name}</p>
-                          <p className="text-[11px] text-slate-400 mt-0.5 capitalize">{ma.type === 'loan' ? 'Loan' : 'Asset'}</p>
-                        </div>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
-                          ma.type === 'loan'
-                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                            : 'bg-slate-100 text-slate-700 border-slate-200'
-                        }`}>
-                          {ma.type === 'loan' ? 'Loan' : 'Asset'}
-                        </span>
-                      </div>
-
-                      <div className="mt-4">
-                        <span className={`text-2xl font-bold ${ma.type === 'loan' ? 'text-rose-600' : 'text-slate-900'}`}>
-                          {ma.type === 'loan' ? `-${fmtMoney(ma.balance)}` : fmtMoney(ma.balance)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-end pt-3 border-t border-slate-100 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteManualAsset(ma.id, ma.name)}
-                        className="text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* 3. CONSOLIDATED DEBT PAYOFF & RELIEF HUB (Compact, Tabbed, Never Covers Page) */}
-              <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden flex flex-col mt-2">
-                {/* Header Bar with Tab Switcher */}
-                <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-[#18457c] shrink-0">
-                      <Calculator className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3 className="font-serif-title text-base sm:text-lg font-bold text-slate-900">
-                        Debt Payoff & Strategy Planner
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Simulate payoff speed and explore 0% interest relief options.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold self-start sm:self-center shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setCardsPayoffTab('speed')}
-                      className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
-                        cardsPayoffTab === 'speed' ? 'bg-white text-[#18457c] shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Payoff Speed & Order
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCardsPayoffTab('options')}
-                      className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
-                        cardsPayoffTab === 'options' ? 'bg-white text-[#18457c] shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Relief Options (4 Plans)
-                    </button>
-                  </div>
-                </div>
-
-                {/* View 1: Payoff Speed & Priority Order */}
-                {cardsPayoffTab === 'speed' && debtPayoffComparison && (
-                  <div className="p-4 sm:p-5 flex flex-col gap-4">
-                    {/* Strategy Switcher & Extra Payment Controls */}
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/80 rounded-xl p-4 border border-slate-200/60 text-xs">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                        <span className="font-semibold text-slate-700 whitespace-nowrap">Strategy:</span>
-                        <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs font-semibold">
-                          <button
-                            type="button"
-                            onClick={() => setDebtStrategy('avalanche')}
-                            className={`px-3 py-1 rounded-lg cursor-pointer transition-all ${
-                              debtStrategy === 'avalanche' ? 'bg-[#18457c] text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                          >
-                            Highest APR (Avalanche)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDebtStrategy('snowball')}
-                            className={`px-3 py-1 rounded-lg cursor-pointer transition-all ${
-                              debtStrategy === 'snowball' ? 'bg-[#18457c] text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                          >
-                            Smallest Balance (Snowball)
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-700 whitespace-nowrap">Extra Payment:</span>
-                          <span className="font-bold text-[#18457c] font-mono">+${extraDebtPayment}/mo</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {[50, 150, 300, 500].map(amt => (
-                            <button
-                              key={amt}
-                              type="button"
-                              onClick={() => setExtraDebtPayment(amt)}
-                              className={`px-2.5 py-1 rounded-lg border text-xs font-semibold cursor-pointer ${
-                                extraDebtPayment === amt ? 'bg-[#18457c] text-white border-[#18457c]' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                              }`}
-                            >
-                              +${amt}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 3 Metric Summary Badges */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
-                      <div className="p-4 rounded-xl border border-slate-200/80 bg-white shadow-2xs flex flex-col justify-between">
-                        <span className="text-slate-500 font-medium">Projected Debt-Free</span>
-                        <p className="text-xl font-bold text-slate-900 mt-1">{debtPayoffComparison.activePlan.finishLabel}</p>
-                        <p className="text-[11px] text-emerald-700 font-semibold mt-1">
-                          {debtPayoffComparison.activePlan.months} months ({debtPayoffComparison.monthsSavedVsMin} mo faster)
-                        </p>
-                      </div>
-
-                      <div className="p-4 rounded-xl border border-slate-200/80 bg-white shadow-2xs flex flex-col justify-between">
-                        <span className="text-slate-500 font-medium">Interest Saved vs Minimums</span>
-                        <p className="text-xl font-bold text-emerald-700 mt-1">{fmtMoney(debtPayoffComparison.interestSavedVsMin)}</p>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          Total interest: {fmtMoney(debtPayoffComparison.activePlan.totalInterest)}
-                        </p>
-                      </div>
-
-                      <div className="p-4 rounded-xl border border-slate-200/80 bg-white shadow-2xs flex flex-col justify-between">
-                        <span className="text-slate-500 font-medium">Payoff Priority Order</span>
-                        <ol className="list-decimal list-inside font-semibold text-slate-800 mt-1 space-y-0.5">
-                          {debtPayoffComparison.activePlan.order.map((name, i) => (
-                            <li key={i} className="truncate text-[11px]">{name}</li>
-                          ))}
-                        </ol>
-                      </div>
-                    </div>
-
-                    {/* Quick Advisor Insight Chip */}
-                    {projectedCashAfterBills > displayCardBalances && (
-                      <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                        <div className="flex items-center gap-2 text-slate-800 min-w-0">
-                          <Sparkles className="w-4 h-4 text-blue-700 shrink-0" />
-                          <span className="truncate">
-                            You have <strong>{fmtMoney(projectedCashAfterBills)}</strong> in checking after bills. You can pay off <strong>100% of card debt</strong> today and save all monthly interest!
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setChatInput('Should I pay off all my credit cards today with my checking balance?');
-                            setActiveTab('advisor');
-                          }}
-                          className="px-3 py-1 rounded-lg bg-[#18457c] text-white font-semibold text-[11px] shrink-0 cursor-pointer shadow-2xs self-start sm:self-center"
-                        >
-                          Ask Advisor
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* View 2: Relief Options (4 Plans) */}
-                {cardsPayoffTab === 'options' && (
-                  <div className="p-4 sm:p-5">
-                    <InteractivePayoffComparison 
-                      cards={displayCards} 
-                      availableCash={displayCash}
-                      onOpenHardshipPlaybook={() => setIsHardshipModalOpen(true)} 
-                      onSendPlanToAi={(plan) => handleSendPayoffPlanToAi(plan)}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* --------------------------------------------------------------------- */}
-        {/* TAB: RETIREMENT & PENSIONS TRACKER */}
-        {activeTab === 'retirement' && featureFlags.retirement !== false && (
-          <RetirementPage
-            retirementPlans={retirementPlans}
-            onUpdatePlans={setRetirementPlans}
-            onNavigateBack={() => setActiveTab('dashboard')}
-            onAskAiAdvisor={(prompt) => {
-              setChatInput(prompt);
-              setActiveTab('advisor');
+        {/* Sidebar Footer: User Account & Settings */}
+        <div className="p-3 border-t border-[var(--line)] bg-[var(--surface)] flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setSettingsActiveTab('profile');
+              setIsSettingsOpen(true);
             }}
-            onHideRetirement={handleHideRetirement}
-          />
-        )}
-
-        {/* --------------------------------------------------------------------- */}
-        {/* TAB: PASSWORDS & ACCOUNTS VAULT */}
-        {activeTab === 'vault' && featureFlags.vault !== false && (
-          <PasswordVaultPage
-            vaultItems={vaultItems}
-            onUpdateVaultItems={setVaultItems}
-          />
-        )}
-
-        {/* --------------------------------------------------------------------- */}
-        {/* TAB: HOUSEHOLD, AUTO & LIFESTYLE */}
-        {activeTab === 'household' && featureFlags.household !== false && (
-          <div className="flex flex-col gap-6">
-            <SubpageHeader
-              title="Lifestyle"
-              subtitle="Manage home utilities, vehicles, health coverage, and lifestyle expenses."
-              onBack={() => setActiveTab('dashboard')}
-            />
-
-            <HouseholdLifestyleHub
-              bills={data.bills || []}
-              householdProfile={householdProfile}
-              onUpdateProfile={setHouseholdProfile}
-              onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
-              onAskAiAdvisor={(promptText) => {
-                setIsAiDrawerOpen(true);
-                handleSendChatMessage(promptText);
-              }}
-              isOverview={false}
-            />
-          </div>
-        )}
-
-        {/* TAB: TRANSACTIONS (Dedicated Purchases Page with Multi-Card Filter) */}
-        {/* --------------------------------------------------------------------- */}
-        {activeTab === 'transactions' && (
-          <div className="flex flex-col gap-6">
-            <SubpageHeader
-              title="Transactions"
-              onBack={() => setActiveTab('dashboard')}
-              actions={[
-                { label: 'Add Purchase', icon: Plus, onClick: () => setIsAddTxOpen(true) },
-                { label: 'Import CSV', icon: Upload, onClick: () => csvInputRef.current?.click() },
-                { label: 'Export CSV', icon: Download, onClick: () => handleExportCsv(filteredTransactions) }
-              ]}
-            />
-
-            {/* Search, Category Filter, and Multi-Card Filter Dropdown */}
-            <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex-1 min-w-[200px] text-xs">
-                <Search className="w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search purchases by merchant, category, note, or amount..."
-                  value={txSearch}
-                  onChange={e => setTxSearch(e.target.value)}
-                  className="bg-transparent outline-none w-full text-slate-800 placeholder-slate-400"
-                />
-              </div>
-              <select
-                value={categoryFilter}
-                onChange={e => setCategoryFilter(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 outline-none cursor-pointer"
-              >
-                <option value="all">All Categories</option>
-                <option value="Groceries">Groceries</option>
-                <option value="Dining">Dining</option>
-                <option value="Transportation">Transportation</option>
-                <option value="Shopping">Shopping</option>
-                <option value="Entertainment">Entertainment</option>
-                <option value="Travel">Travel</option>
-                <option value="Utilities">Utilities</option>
-                <option value="Income">Income / Deposits</option>
-              </select>
-              <MultiCardFilterDropdown
-                cards={allFilterableCards}
-                selectedCardIds={selectedCardIds}
-                onChangeSelectedCards={setSelectedCardIds}
+            className="flex items-center gap-2.5 min-w-0 flex-1 p-1.5 rounded-[8px] hover:bg-[var(--surface-subtle)] transition-colors text-left cursor-pointer"
+          >
+            {currentUser?.avatar ? (
+              <img
+                src={currentUser.avatar}
+                alt={currentUser.name || 'User avatar'}
+                className="w-8 h-8 rounded-full object-cover border border-[var(--line)] shrink-0"
               />
-            </div>
-
-            {/* Dynamic Summary Metrics for Filtered Transactions */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs">
-                <span className="text-xs text-slate-500">Total Spending (Filtered)</span>
-                <p className="text-lg font-bold text-slate-900 mt-0.5">{fmtMoney(filteredTxSpent)}</p>
-              </div>
-              <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs">
-                <span className="text-xs text-slate-500">Deposits & Income</span>
-                <p className="text-lg font-bold text-emerald-700 mt-0.5">+{fmtMoney(filteredTxIncome)}</p>
-              </div>
-              <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs">
-                <span className="text-xs text-slate-500">Matching Payments</span>
-                <p className="text-lg font-bold text-slate-900 mt-0.5">{filteredTransactions.length} items</p>
-              </div>
-            </div>
-
-            {/* Purchases Table */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
-              {filteredTransactions.length === 0 ? (
-                <div className="py-12 text-center flex flex-col items-center justify-center gap-2.5">
-                  <CreditCard className="w-7 h-7 text-slate-300" />
-                  <p className="text-sm font-bold text-slate-800">No payments on this card.</p>
-                  <p className="text-xs text-slate-500">No purchases or payments match the selected card filter.</p>
-                  {selectedCardIds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCardIds([])}
-                      className="mt-1 px-3.5 py-1.5 rounded-lg bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
-                    >
-                      Clear filter
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-100 text-slate-400 text-[11px] font-semibold uppercase tracking-wider bg-slate-50/50">
-                        <th className="py-3 px-4">Date</th>
-                        <th className="py-3 px-4">Description & Notes</th>
-                        <th className="py-3 px-4">Category</th>
-                        <th className="py-3 px-4">Card / Account</th>
-                        <th className="py-3 px-4 text-right">Amount</th>
-                        <th className="py-3 px-4 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredTransactions.map(tx => {
-                        const isDeposit = (tx.category || '').toLowerCase() === 'income' || (tx.name || '').toLowerCase().includes('deposit');
-                        const displayAmount = Math.abs(Number(tx.amount));
-                        return (
-                          <tr key={tx.id} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="py-3 px-4 text-slate-400 font-mono text-[11px] whitespace-nowrap">{tx.date}</td>
-                            <td className="py-3 px-4">
-                              <div className="font-semibold text-slate-900">{tx.name}</div>
-                              {editingTxNoteId === tx.id ? (
-                                <div className="flex items-center gap-1.5 mt-1">
-                                  <input
-                                    type="text"
-                                    placeholder="Add a note..."
-                                    value={editingTxNoteText}
-                                    onChange={e => setEditingTxNoteText(e.target.value)}
-                                    className="bg-slate-50 border border-slate-300 rounded px-2 py-0.5 text-[11px] text-slate-800 outline-none"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSaveTxNote(tx.id)}
-                                    className="px-2 py-0.5 rounded bg-[#18457c] text-white text-[10px] font-semibold cursor-pointer"
-                                  >
-                                    Save
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingTxNoteId(tx.id);
-                                    setEditingTxNoteText(tx.notes || '');
-                                  }}
-                                  className="text-[11px] text-slate-400 hover:text-blue-600 mt-0.5 block cursor-pointer"
-                                >
-                                  {tx.notes ? `Note: ${tx.notes}` : '+ Add note'}
-                                </button>
-                              )}
-                            </td>
-                            <td className="py-3 px-4">
-                              <select
-                                value={tx.category || 'Shopping'}
-                                onChange={e => handleRecategorizeTransaction(tx.id, tx.name, e.target.value)}
-                                className="px-2 py-1 rounded-md text-[11px] font-medium bg-slate-100 hover:bg-slate-200/70 text-slate-700 outline-none cursor-pointer"
-                              >
-                                <option value="Groceries">Groceries</option>
-                                <option value="Dining">Dining</option>
-                                <option value="Transportation">Transportation</option>
-                                <option value="Shopping">Shopping</option>
-                                <option value="Entertainment">Entertainment</option>
-                                <option value="Travel">Travel</option>
-                                <option value="Utilities">Utilities</option>
-                                <option value="Health">Health</option>
-                                <option value="Income">Income</option>
-                                <option value="Social Security">Social Security</option>
-                                <option value="CalPERS / Pension">CalPERS / Pension</option>
-                              </select>
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-mono border border-slate-200/70 font-medium shadow-2xs">
-                                <CreditCard className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                <span>{tx.account || 'Everyday Rewards •••• 4417'}</span>
-                              </span>
-                            </td>
-                            <td className={`py-3 px-4 text-right font-bold whitespace-nowrap ${isDeposit ? 'text-emerald-700' : 'text-slate-900'}`}>
-                              {isDeposit ? `+${fmtMoney(displayAmount)}` : `-${fmtMoney(displayAmount)}`}
-                            </td>
-                            <td className="py-3 px-4 text-right">
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteTransaction(tx.id, tx.name)}
-                                className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer transition-colors"
-                                title="Delete purchase"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Shaded Total Section */}
-              <div className="bg-slate-50 px-5 py-3.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">Total Purchases ({filteredTransactions.length} shown)</span>
-                <span className="font-bold text-slate-900">
-                  {fmtMoney(filteredTxSpent)}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* --------------------------------------------------------------------- */}
-        {/* TAB: ADVISOR (Full Screen Chat Thread) */}
-        {/* --------------------------------------------------------------------- */}
-        {activeTab === 'advisor' && (
-          <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col h-[650px] justify-between">
-            <div className="pb-3 border-b border-slate-100">
-              <SubpageHeader
-                title="Advisor"
-                subtitle="Reads your bills, cards and spending to answer questions."
-                onBack={() => setActiveTab('dashboard')}
-                actions={[
-                  { label: 'Weekly Summary', icon: Sparkles, onClick: handleGenerateWeeklySummary },
-                  { label: 'Past Chats', icon: History, onClick: () => setIsPastChatsOpen(true) },
-                  { label: `Memory (${aiMemory.length})`, icon: Brain, onClick: () => setIsMemoryModalOpen(true) }
-                ]}
-              />
-            </div>
-
-            {/* Chat Thread */}
-            <div ref={fullChatContainerRef} className="flex-1 overflow-y-auto py-4 flex flex-col gap-3 pr-1">
-              {chatMessages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed flex flex-col gap-2 ${
-                      msg.role === 'user'
-                        ? 'bg-[#18457c] text-white shadow-2xs'
-                        : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
-                    }`}
-                  >
-                    {/* Render multiple attachments (images as thumbnails, non-images as File Cards) */}
-                    {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {msg.attachments.map((att, aIdx) =>
-                          att.isImage && att.previewUrl ? (
-                            <img
-                              key={att.id || aIdx}
-                              src={att.previewUrl}
-                              alt={att.name || 'Uploaded image'}
-                              className="max-h-48 rounded-lg object-contain bg-black/10 self-start"
-                            />
-                          ) : (
-                            <div
-                              key={att.id || aIdx}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/15 border border-white/25 text-white min-w-[180px]"
-                            >
-                              <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
-                                <FileText className="w-4 h-4 text-white" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[11px] font-semibold truncate">{att.name || 'Document'}</p>
-                                <p className="text-[10px] text-blue-100">
-                                  {att.ext || 'FILE'} {att.size ? `• ${(att.size / 1024).toFixed(1)} KB` : ''}
-                                </p>
-                              </div>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    )}
-                    {/* Legacy single image field fallback: only render <img> if data:image/ */}
-                    {!msg.attachments && msg.image && (
-                      msg.image.startsWith('data:image/') ? (
-                        <img src={msg.image} alt="Uploaded attachment" className="max-h-48 rounded-lg object-contain bg-black/10 self-start" />
-                      ) : (
-                        <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/15 border border-white/25 text-white w-fit">
-                          <FileText className="w-4 h-4 text-white shrink-0" />
-                          <span className="text-[11px] font-semibold">Attached Document</span>
-                        </div>
-                      )
-                    )}
-                    {msg.text && <FormattedChatMessage text={msg.text} isUser={msg.role === 'user'} />}
-                    {msg.role === 'assistant' && Array.isArray(msg.suggestedActions) && msg.suggestedActions.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-slate-200/70">
-                        {msg.suggestedActions.map((act, actIdx) => (
-                          <button
-                            key={actIdx}
-                            type="button"
-                            onClick={() => handleExecuteSuggestedAction(act)}
-                            className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#18457c] text-[#18457c] hover:text-white border border-[#18457c]/25 text-[11px] font-semibold transition-colors cursor-pointer shadow-2xs"
-                          >
-                            {act.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {isAiTyping && (
-                <div className="flex justify-start">
-                  <div className="bg-[#eff4f9] rounded-2xl px-4 py-2.5 text-xs text-slate-500 animate-pulse border border-slate-200/60">
-                    Advisor is reading and analyzing...
-                  </div>
-                </div>
-              )}
-              <div ref={chatEndRef} />
-            </div>
-
-            {/* Multi-File Preview Bar if files attached */}
-            {chatFiles.length > 0 && (
-              <div className="flex flex-wrap gap-2 pb-2 max-h-32 overflow-y-auto">
-                {chatFiles.map((fileItem) => (
-                  <div
-                    key={fileItem.id}
-                    className="flex items-center gap-2.5 p-2 bg-slate-100/90 rounded-xl border border-slate-200 w-fit max-w-[260px]"
-                  >
-                    {fileItem.isImage && fileItem.previewUrl ? (
-                      <img src={fileItem.previewUrl} alt={fileItem.name} className="w-10 h-10 rounded-lg object-cover border border-slate-300 shrink-0" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-lg bg-[#18457c]/10 border border-[#18457c]/20 flex flex-col items-center justify-center shrink-0">
-                        <FileText className="w-4 h-4 text-[#18457c]" />
-                        <span className="text-[8px] font-bold text-[#18457c] uppercase">{fileItem.ext || 'FILE'}</span>
-                      </div>
-                    )}
-                    <div className="min-w-0 pr-1 flex-1">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{fileItem.name}</p>
-                      <p className="text-[10px] text-slate-500">
-                        {fileItem.ext || 'FILE'} • {(fileItem.size / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setChatFiles(prev => prev.filter(f => f.id !== fileItem.id))}
-                      className="p-1 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer shrink-0"
-                      title="Remove file"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Chat Input */}
-            <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 pt-3 border-t border-slate-100">
-              <input
-                type="file"
-                multiple
-                ref={fullAdvisorFileInputRef}
-                onChange={async (e) => {
-                  await handleAttachFiles(e.target.files);
-                  e.target.value = '';
-                }}
-                className="hidden"
-                accept="*/*"
-              />
-              <div className="relative" ref={fullUploadMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsFullUploadMenuOpen(prev => !prev)}
-                  className="w-[40px] h-[40px] rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
-                  title="Add file or scan document"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-                {isFullUploadMenuOpen && (
-                  <div className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl border border-slate-200 shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsFullUploadMenuOpen(false);
-                        setIsScanBillOpen(true);
-                      }}
-                      className="w-full flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-slate-50 text-left transition-colors cursor-pointer"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#18457c] flex items-center justify-center shrink-0 mt-0.5">
-                        <FileText className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">Scan Document</p>
-                        <p className="text-[11px] text-slate-500 leading-snug">Paste sentences & AI auto-adds bills or subscriptions</p>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsFullUploadMenuOpen(false);
-                        fullAdvisorFileInputRef.current?.click();
-                      }}
-                      className="w-full flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-slate-50 text-left transition-colors cursor-pointer"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
-                        <UploadCloud className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">Submit File</p>
-                        <p className="text-[11px] text-slate-500 leading-snug">Attach one or multiple files of any format for AI to read</p>
-                      </div>
-                    </button>
-                  </div>
-                )}
-              </div>
-              <textarea
-                rows={1}
-                placeholder="Ask about your money, or attach files..."
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    if ((chatInput.trim() || chatFiles.length > 0) && !isAiTyping) {
-                      handleSendChatMessage();
-                    }
-                  }
-                }}
-                onPaste={async e => {
-                  const files = e.clipboardData?.files;
-                  if (files && files.length > 0) {
-                    e.preventDefault();
-                    await handleAttachFiles(files);
-                  }
-                }}
-                className="flex-1 min-w-0 h-[40px] min-h-[40px] max-h-36 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs resize-none leading-relaxed flex items-center"
-              />
-              {isAiTyping ? (
-                <button
-                  type="button"
-                  onClick={handleStopGeneration}
-                  className="h-[38px] px-4 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0 mb-0.5 animate-in fade-in zoom-in-90"
-                  title="Stop response"
-                  aria-label="Stop generating response"
-                >
-                  <Square className="w-3.5 h-3.5 fill-current text-white" />
-                  <span className="text-xs font-semibold">Stop</span>
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={!chatInput.trim() && chatFiles.length === 0}
-                  className="h-[40px] px-5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
-                >
-                  Send
-                </button>
-              )}
-            </form>
-          </div>
-        )}
-
-        {activeTab === 'more' && (
-          <div className="flex flex-col gap-4 max-w-md">
-            <h1 className="font-serif-title text-2xl font-bold text-slate-900 tracking-tight">More</h1>
-            <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
-              {[
-                { label: 'Bills', onClick: () => setActiveTab('bills') },
-                { label: 'Subscriptions', onClick: () => setActiveTab('subscriptions') },
-                { label: 'Cards', onClick: () => setActiveTab('cards') },
-                      { label: 'Passwords & Accounts', onClick: () => setActiveTab('vault') },
-                { label: 'Settings', onClick: () => setIsSettingsOpen(true) }
-              ].map((item, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={item.onClick}
-                  className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  <span className="text-sm font-medium text-slate-900">{item.label}</span>
-                  <span className="text-slate-400 text-base leading-none">›</span>
-                </button>
-              ))}
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs">
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="w-full p-4 text-left text-sm font-medium text-[#b91c1c] hover:bg-rose-50/40 transition-colors cursor-pointer"
-              >
-                Sign out
-              </button>
-            </div>
-          </div>
-        )}
-      </main>
-
-      {/* Floating Draggable Tab to Expand Advisor when Collapsed */}
-      {isAdvisorCollapsed && activeTab !== 'advisor' && (
-        <div
-          role="button"
-          tabIndex={0}
-          onMouseDown={handleTabMouseDown}
-          style={{ top: `${advisorTabTop}px` }}
-          className="fixed right-0 z-50 bg-[#18457c] hover:bg-[#123561] text-white border-l border-y border-[#123561] shadow-xl rounded-l-2xl py-2.5 px-3 flex items-center gap-2 text-xs font-semibold select-none cursor-grab active:cursor-grabbing transition-colors group animate-in slide-in-from-right-4"
-          title="Drag up/down to reposition • Click to open AI Advisor"
-        >
-          <GripVertical className="w-3.5 h-3.5 text-blue-200/60 group-hover:text-white transition-colors" />
-          <ChevronLeft className="w-4 h-4 text-white group-hover:-translate-x-0.5 transition-transform" />
-          <span>Advisor</span>
-          <span className={`w-1.5 h-1.5 rounded-full ${isAdvisorOnline ? 'bg-emerald-400' : 'bg-blue-400'}`}></span>
-        </div>
-      )}
-
-      {/* ======================================================================= */}
-      {/* 3. RIGHT SIDEBAR: ADVISOR (Hidden when on AI Advisor full view) */}
-      {/* Stays at standard scale: header and bottom chat controls are always pinned and never forced to scroll */}
-      {/* ======================================================================= */}
-      {activeTab !== 'advisor' && !isAdvisorCollapsed && (
-      <aside
-        style={{ width: `${advisorWidth}px` }}
-        className={`shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-4 xl:p-5 flex flex-col h-screen sticky top-0 hidden lg:flex relative transition-[width] duration-75 select-none ${
-          isResizingAdvisor ? 'select-none cursor-col-resize !transition-none' : ''
-        }`}
-      >
-        {/* Draggable Resize Handle on left border */}
-        <div
-          onMouseDown={startResizingAdvisor}
-          className={`absolute -left-1.5 top-0 bottom-0 w-3 cursor-col-resize z-30 group flex items-center justify-center transition-colors ${
-            isResizingAdvisor ? 'bg-blue-500/30' : 'hover:bg-blue-400/20'
-          }`}
-          title="Drag to resize Advisor sidebar"
-        >
-          <div className={`w-1 h-9 rounded-full transition-colors ${
-            isResizingAdvisor ? 'bg-blue-600' : 'bg-slate-300 group-hover:bg-blue-500'
-          }`}></div>
-        </div>
-        {/* Header: Collapse & Past Chats (Left), Centered Name (Middle), Weekly Summary, Mini Settings, Fullscreen (Right) */}
-        <div className="shrink-0 flex items-center justify-between pb-3 border-b border-slate-200/70 relative">
-          {/* Left: Collapse Button + Past Chats */}
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setIsAdvisorCollapsed(true)}
-              className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
-              title="Collapse Advisor"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsPastChatsOpen(true)}
-              className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
-              title="Past Conversations"
-            >
-              <History className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Middle: Name "Advisor" with Connection Checkmark */}
-          <div className="flex items-center gap-1.5">
-            <h2 className="text-sm font-bold text-slate-900 tracking-tight">Advisor</h2>
-            <span
-              title={isAdvisorOnline ? 'Connected to the internet' : 'Connected locally only (Web search disabled)'}
-              className={`inline-flex items-center justify-center w-4 h-4 rounded-full border ${
-                isAdvisorOnline
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
-                  : 'bg-blue-50 border-blue-200 text-blue-600'
-              }`}
-            >
-              <CheckCircle2 className="w-3 h-3" />
-            </span>
-          </div>
-
-          {/* Right: Weekly Summary + Mini Settings + Full Screen AI */}
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={handleGenerateWeeklySummary}
-              className="p-1.5 rounded-xl text-[#18457c] bg-[#eff4f9] hover:bg-blue-100 border border-[#18457c]/20 transition-colors cursor-pointer shadow-2xs"
-              title="Weekly Advisor Summary"
-            >
-              <Sparkles className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsMiniSettingsOpen(prev => !prev)}
-              className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
-              title="AI Advisor Settings and Tools"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('advisor')}
-              className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer shadow-2xs border border-slate-200/70 bg-white"
-              title="Full Screen Advisor"
-            >
-              <Maximize2 className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Scrollable Conversation Stream */}
-        <div ref={sidebarChatContainerRef} className="flex-1 overflow-y-auto py-3 space-y-3 min-h-0 pr-0.5">
-          {/* Initial Advisor Insight Bubble */}
-          {settingsAiStatus !== 'connected' && (
-            <div className="bg-amber-50/90 border border-amber-200/90 rounded-2xl p-4 text-xs text-amber-900 flex flex-col gap-2 shadow-2xs">
-              <div className="flex items-center gap-2 font-bold text-amber-950">
-                <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>AI Advisor Not Connected</span>
-              </div>
-              <p className="text-[11px] text-amber-800 leading-relaxed">
-                Connect your Anthropic, OpenAI, or Google Gemini API key to activate personal debt payoff advice and automated intelligence.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setSettingsActiveTab('ai');
-                  setIsSettingsOpen(true);
-                }}
-                className="self-start px-3 py-1.5 rounded-lg bg-[#1B4B91] hover:bg-[#153a70] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-all mt-1"
-              >
-                Configure in Settings &rarr;
-              </button>
-            </div>
-          )}
-
-          {/* Active Chat Messages in Sidebar */}
-          {chatMessages.map((msg, i) => (
-            <div
-              key={i}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[90%] rounded-2xl p-3 text-xs leading-relaxed flex flex-col gap-2 ${
-                  msg.role === 'user'
-                    ? 'bg-[#18457c] text-white shadow-2xs'
-                    : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
-                }`}
-              >
-                {/* Render multiple attachments (images as thumbnails, non-images as File Cards) */}
-                {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
-                  <div className="flex flex-col gap-1.5">
-                    {msg.attachments.map((att, aIdx) =>
-                      att.isImage && att.previewUrl ? (
-                        <img
-                          key={att.id || aIdx}
-                          src={att.previewUrl}
-                          alt={att.name || 'Uploaded image'}
-                          className="max-h-36 rounded-lg object-contain bg-black/10"
-                        />
-                      ) : (
-                        <div
-                          key={att.id || aIdx}
-                          className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-white/15 border border-white/25 text-white"
-                        >
-                          <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
-                            <FileText className="w-3.5 h-3.5 text-white" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-semibold truncate">{att.name || 'Document'}</p>
-                            <p className="text-[9px] text-blue-100 uppercase">
-                              {att.ext || 'FILE'} {att.size ? `• ${(att.size / 1024).toFixed(1)} KB` : ''}
-                            </p>
-                          </div>
-                        </div>
-                      )
-                    )}
-                  </div>
-                )}
-                {/* Legacy single image field fallback: only render <img> if data:image/ */}
-                {!msg.attachments && msg.image && (
-                  msg.image.startsWith('data:image/') ? (
-                    <img src={msg.image} alt="Uploaded attachment" className="max-h-36 rounded-lg object-contain bg-black/10" />
-                  ) : (
-                    <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-white/15 border border-white/25 text-white">
-                      <FileText className="w-3.5 h-3.5 text-white shrink-0" />
-                      <span className="text-[11px] font-semibold">Attached Document</span>
-                    </div>
-                  )
-                )}
-                {msg.text && <FormattedChatMessage text={msg.text} isUser={msg.role === 'user'} />}
-                {msg.role === 'assistant' && Array.isArray(msg.suggestedActions) && msg.suggestedActions.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-slate-200/70">
-                    {msg.suggestedActions.map((act, actIdx) => (
-                      <button
-                        key={actIdx}
-                        type="button"
-                        onClick={() => handleExecuteSuggestedAction(act)}
-                        className="px-2 py-1 rounded-lg bg-white hover:bg-[#18457c] text-[#18457c] hover:text-white border border-[#18457c]/25 text-[10px] font-semibold transition-colors cursor-pointer shadow-2xs"
-                      >
-                        {act.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {isAiTyping && (
-            <div className="flex justify-start">
-              <div className="bg-[#eff4f9] border border-slate-200/60 rounded-2xl px-3.5 py-2.5 text-xs text-slate-500 flex items-center gap-1.5 shadow-2xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"></span>
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:0.2s]"></span>
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:0.4s]"></span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Bottom Actions: Multi-File Preview + Chat Input Form */}
-        <div className="pt-3 border-t border-slate-200/70 flex flex-col gap-2 shrink-0">
-          {/* Multi-File Preview Cards if attached or pasted */}
-          {chatFiles.length > 0 && (
-            <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-0.5">
-              {chatFiles.map((fileItem) => (
-                <div
-                  key={fileItem.id}
-                  className="flex items-center gap-2 p-2 bg-slate-100/90 rounded-xl border border-slate-200 w-full"
-                >
-                  {fileItem.isImage && fileItem.previewUrl ? (
-                    <img src={fileItem.previewUrl} alt={fileItem.name} className="w-9 h-9 rounded-lg object-cover border border-slate-300 shrink-0" />
-                  ) : (
-                    <div className="w-9 h-9 rounded-lg bg-[#18457c]/10 border border-[#18457c]/20 flex flex-col items-center justify-center shrink-0">
-                      <FileText className="w-3.5 h-3.5 text-[#18457c]" />
-                      <span className="text-[8px] font-bold text-[#18457c] uppercase">{fileItem.ext || 'FILE'}</span>
-                    </div>
-                  )}
-                  <div className="min-w-0 pr-1 flex-1">
-                    <p className="text-[11px] font-semibold text-slate-800 truncate">{fileItem.name}</p>
-                    <p className="text-[10px] text-slate-500">
-                      {fileItem.ext || 'FILE'} • {(fileItem.size / 1024).toFixed(1)} KB
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setChatFiles(prev => prev.filter(f => f.id !== fileItem.id))}
-                    className="p-1 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer shrink-0"
-                    title="Remove file"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Chat Form with Add File Menu (+ / Paperclip) and multiline Textarea */}
-          <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 mt-1">
-            <input
-              type="file"
-              multiple
-              ref={fileInputRef}
-              onChange={async (e) => {
-                await handleAttachFiles(e.target.files);
-                e.target.value = '';
-              }}
-              className="hidden"
-              accept="*/*"
-            />
-            <div className="relative" ref={uploadMenuRef}>
-              <button
-                type="button"
-                onClick={() => setIsUploadMenuOpen(prev => !prev)}
-                className="w-[38px] h-[38px] rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-600 hover:text-slate-900 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
-                title="Add file or scan document"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-              {isUploadMenuOpen && (
-                <div className="absolute bottom-full left-0 mb-2 w-60 bg-white rounded-xl border border-slate-200 shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsUploadMenuOpen(false);
-                      setIsScanBillOpen(true);
-                    }}
-                    className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 text-left transition-colors cursor-pointer"
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#18457c] flex items-center justify-center shrink-0 mt-0.5">
-                      <FileText className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-900">Scan Document</p>
-                      <p className="text-[10px] text-slate-500 leading-snug">Paste sentences & AI auto-adds bills or subscriptions</p>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsUploadMenuOpen(false);
-                      fileInputRef.current?.click();
-                    }}
-                    className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 text-left transition-colors cursor-pointer"
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
-                      <UploadCloud className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-900">Submit File</p>
-                      <p className="text-[10px] text-slate-500 leading-snug">Attach one or multiple files of any format for AI to read</p>
-                    </div>
-                  </button>
-                </div>
-              )}
-            </div>
-            <textarea
-              rows={1}
-              placeholder="Ask anything or attach files..."
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  if ((chatInput.trim() || chatFiles.length > 0) && !isAiTyping) {
-                    handleSendChatMessage();
-                  }
-                }
-              }}
-              onPaste={async e => {
-                const files = e.clipboardData?.files;
-                if (files && files.length > 0) {
-                  e.preventDefault();
-                  await handleAttachFiles(files);
-                }
-              }}
-              className="flex-1 min-w-0 h-[38px] min-h-[38px] max-h-32 bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs resize-none leading-relaxed flex items-center"
-            />
-            {isAiTyping ? (
-              <button
-                type="button"
-                onClick={handleStopGeneration}
-                className="h-[38px] px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0 animate-in fade-in zoom-in-90"
-                title="Stop response"
-                aria-label="Stop generating response"
-              >
-                <Square className="w-3 h-3 fill-current text-white" />
-                <span className="text-xs font-semibold">Stop</span>
-              </button>
             ) : (
-              <button
-                type="submit"
-                disabled={!chatInput.trim() && chatFiles.length === 0}
-                className="h-[38px] px-4 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
-              >
-                Send
-              </button>
+              <div className="w-8 h-8 rounded-full bg-[#1B4B91] text-white text-[13px] font-semibold flex items-center justify-center shrink-0">
+                {userInitials}
+              </div>
             )}
-          </form>
+            <div className="min-w-0 flex-1">
+              <div className="text-[15px] font-semibold text-[var(--ink)] truncate">
+                {currentUser?.name || firstName}
+              </div>
+              <div className="text-[13px] font-medium text-[var(--muted)] truncate">
+                {currentUser?.email || 'Settings'}
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            aria-label="Open settings"
+            title="Settings"
+            onClick={() => {
+              setSettingsActiveTab('profile');
+              setIsSettingsOpen(true);
+            }}
+            className="w-9 h-9 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors shrink-0 cursor-pointer"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
         </div>
       </aside>
-      )}
 
-      {/* ======================================================================= */}
-      {/* 4. MODALS (Clean Light Theme) */}
-      {/* ======================================================================= */}
-
-      {/* Add Card Modal: Connect via Plaid or Add Manually */}
-      {isAddAccountOpen && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setIsAddAccountOpen(false); }}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
+      {/* =================================================================== */}
+      {/* MAIN CONTENT AREA + RIGHT ADVISOR SIDEBAR                           */}
+      {/* =================================================================== */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        {/* Top Mobile Header (< 760px) */}
+        <header className="flex min-[760px]:hidden items-center justify-between px-4 py-3 bg-[var(--surface)] border-b border-[var(--line)] sticky top-0 z-30">
+          <button
+            type="button"
+            onClick={() => setActiveTab('dashboard')}
+            className="flex items-center gap-2 text-left cursor-pointer"
           >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900">Add or Connect Card</h3>
-              <button onClick={() => setIsAddAccountOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
-            </div>
-
-            {/* Mode selection tabs */}
-            <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setAddCardTab('plaid')}
-                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  addCardTab === 'plaid'
-                    ? 'bg-white text-[#18457c] shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                <Landmark className="w-3.5 h-3.5" />
-                <span>Connect with Plaid</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAddCardTab('manual')}
-                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  addCardTab === 'manual'
-                    ? 'bg-white text-[#18457c] shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                <CreditCard className="w-3.5 h-3.5" />
-                <span>Add Card Manually</span>
-              </button>
-            </div>
-
-            {addCardTab === 'plaid' ? (
-              <div className="flex flex-col gap-4 text-xs pt-1">
-                <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/70 flex flex-col gap-2">
-                  <div className="flex items-center gap-2 text-slate-900 font-bold">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Instant Bank & Card Sync</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Connect through Plaid Sandbox or your bank to instantly import your credit cards, real-time balances, credit limits, and APRs.
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    disabled={isConnectingPlaid}
-                    onClick={() => {
-                      setIsAddAccountOpen(false);
-                      initiatePlaidLink();
-                    }}
-                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-2xs"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>{isConnectingPlaid ? 'Connecting to Plaid...' : 'Connect Bank via Plaid'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAddAccountOpen(false);
-                      setSettingsActiveTab('plaid');
-                      setIsSettingsOpen(true);
-                    }}
-                    className="w-full py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer text-center"
-                  >
-                    Manage Plaid Keys & Bank Connections
-                  </button>
-
-                  <a
-                    href="https://dashboard.plaid.com/overview"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-blue-700 font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <span>Get Plaid API keys (Plaid Dashboard)</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                  <span>Want to enter credit card details directly?</span>
-                  <button
-                    type="button"
-                    onClick={() => setAddCardTab('manual')}
-                    className="text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
-                  >
-                    Manual entry →
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleAddAccount} className="flex flex-col gap-3 text-xs">
-                <div>
-                  <label className="font-semibold text-slate-700">Bank / Issuer</label>
-                  <select
-                    value={newAccount.institution}
-                    onChange={e => setNewAccount(prev => ({ ...prev, institution: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
-                  >
-                    <option value="Everyday Rewards">Everyday Rewards</option>
-                    <option value="Travel Card">Travel Card</option>
-                    <option value="Capital One">Capital One</option>
-                    <option value="Chase">Chase</option>
-                    <option value="Citi">Citi</option>
-                    <option value="Discover">Discover</option>
-                    <option value="Bank">Bank</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-slate-700">Card Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Everyday Rewards, Travel Card"
-                    value={newAccount.name}
-                    onChange={e => setNewAccount(prev => ({ ...prev, name: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-semibold text-slate-700">Balance ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      placeholder="0.00"
-                      value={newAccount.balance}
-                      onChange={e => setNewAccount(prev => ({ ...prev, balance: e.target.value }))}
-                      className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700">Credit Limit ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g. 5000"
-                      value={newAccount.limit}
-                      onChange={e => setNewAccount(prev => ({ ...prev, limit: e.target.value }))}
-                      className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-slate-700">Interest APR (%)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="e.g. 21.9"
-                    value={newAccount.apr}
-                    onChange={e => setNewAccount(prev => ({ ...prev, apr: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setAddCardTab('plaid')}
-                    className="text-blue-600 hover:text-blue-800 text-[11px] font-medium cursor-pointer"
-                  >
-                    ← Connect through Plaid
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => setIsAddAccountOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
-                    <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Save Card</button>
-                  </div>
-                </div>
-              </form>
-            )}
+            <KlarityLogo className="w-6 h-6 text-[#1B4B91]" />
+            <span className="font-serif text-[20px] font-semibold text-[var(--ink)]">Klarity</span>
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleRefreshApp}
+              aria-label="Refresh financial data"
+              className="w-9 h-9 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] cursor-pointer"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshingApp ? 'animate-spin text-[#1B4B91]' : ''}`} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsActiveTab('profile');
+                setIsSettingsOpen(true);
+              }}
+              aria-label="Open settings"
+              className="w-9 h-9 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] cursor-pointer"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
           </div>
-        </div>
-      )}
+        </header>
 
-      {/* Add Bill Modal */}
-      {isAddBillOpen && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setIsAddBillOpen(false); }}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900">Add Upcoming Bill</h3>
-              <button onClick={() => setIsAddBillOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+        {/* Software Update Banner */}
+        {(desktopAppInfo.updateStatus?.state === 'available' || desktopAppInfo.updateStatus?.state === 'ready') &&
+          !updateBannerDismissed &&
+          isSemverNewer(
+            desktopAppInfo.updateStatus?.latestVersion || desktopAppInfo.updateStatus?.version,
+            CURRENT_APP_VERSION
+          ) && (
+            <div className="bg-[#1B4B91] text-white px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-[13px] font-medium">
+              <div className="flex items-center gap-2">
+                <ArrowUpCircle className="w-4 h-4 shrink-0" />
+                <span>
+                  {desktopAppInfo.updateStatus.message || 'A new Klarity update is ready to install.'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" onClick={() => setIsUpdateModalOpen(true)}>
+                  View update
+                </Button>
+                <button
+                  type="button"
+                  aria-label="Dismiss update banner"
+                  onClick={() => setUpdateBannerDismissed(true)}
+                  className="p-1 text-white/80 hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <form onSubmit={handleAddBill} className="flex flex-col gap-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700">Bill Name / Provider</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. PG&E Electric, Rent, Water Service"
-                  value={newBill.name}
-                  onChange={e => setNewBill(prev => ({ ...prev, name: e.target.value, biller: e.target.value }))}
-                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
+          )}
+
+        {/* Content + Right Advisor Split */}
+        <div className="flex-1 flex min-w-0">
+          {/* Main Page Container (Readability Scale applies here only) */}
+          <main
+            className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-6 pb-24 min-[760px]:pb-12 overflow-x-hidden"
+            style={{ zoom: contentZoomFactor !== 1 ? contentZoomFactor : undefined }}
+          >
+            <div className="max-w-[1140px] mx-auto flex flex-col gap-6">
+              {normalizedActiveTab === 'dashboard' && (
+                <OverviewPage
+                  firstName={firstName}
+                  timeGreeting={getTimeGreeting()}
+                  isLoading={loading}
+                  smartAlerts={smartAlerts}
+                  displayCash={displayCash}
+                  projectedCashAfterBills={projectedCashAfterBills}
+                  displayCardBalances={displayCardBalances}
+                  displayCards={displayCards}
+                  displayDue14Sum={displayDue14Sum}
+                  displayDue14Count={displayDue14Count}
+                  featureFlags={featureFlags}
+                  retirementPlans={retirementPlans}
+                  retirementPromptDismissed={retirementPromptDismissed}
+                  setRetirementPromptDismissed={setRetirementPromptDismissed}
+                  handleHideRetirement={handleHideRetirement}
+                  projectedRetirementMonthlyIncome={projectedRetirementMonthlyIncome}
+                  totalNetWorth={totalNetWorth}
+                  netWorthHistory={netWorthHistory}
+                  manualPositiveAssets={manualPositiveAssets}
+                  manualLoans={manualLoans}
+                  displayBills={displayBills}
+                  displayTotalMonthlyBills={displayTotalMonthlyBills}
+                  displaySubs={displaySubs}
+                  displayTotalSubs={displayTotalSubs}
+                  displayTxs={displayTxs}
+                  sourceTxsList={sourceTxsList}
+                  householdProfile={householdProfile}
+                  setHouseholdProfile={setHouseholdProfile}
+                  handleSyncUtilitiesToBills={handleSyncUtilitiesToBills}
+                  data={data}
+                  setActiveTab={setActiveTab}
+                  setSelectedCardIds={setSelectedCardIds}
+                  setIsAddManualAssetOpen={setIsAddManualAssetOpen}
+                  setIsAddAccountOpen={setIsAddAccountOpen}
+                  setIsAddBillOpen={setIsAddBillOpen}
+                  setIsAddSubOpen={setIsAddSubOpen}
+                  setIsAddTxOpen={setIsAddTxOpen}
+                  fmtMoney={fmtMoney}
                 />
-              </div>
+              )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700">Expected Amount ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="128.40"
-                    value={newBill.expectedAmount}
-                    onChange={e => setNewBill(prev => ({ ...prev, expectedAmount: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700">Due Day of Month</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={newBill.dueDay}
-                    onChange={e => setNewBill(prev => ({ ...prev, dueDay: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700">Category</label>
-                  <select
-                    value={newBill.category}
-                    onChange={e => setNewBill(prev => ({ ...prev, category: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
-                  >
-                    <option value="Utilities">Utilities</option>
-                    <option value="Housing">Housing</option>
-                    <option value="Insurance">Insurance</option>
-                    <option value="Telecom">Telecom / Internet</option>
-                    <option value="Subscriptions">Subscriptions</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700">Paid From Card / Account</label>
-                  <select
-                    value={newBill.account || (allFilterableCards[0]?.fullLabel || 'Checking •••• 4821')}
-                    onChange={e => setNewBill(prev => ({ ...prev, account: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
-                  >
-                    {allFilterableCards.map(c => (
-                      <option key={c.id} value={c.fullLabel}>{c.fullLabel}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsAddBillOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Save Bill</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add Subscription Modal */}
-      {isAddSubOpen && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setIsAddSubOpen(false); }}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900">Add Subscription</h3>
-              <button onClick={() => setIsAddSubOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
-            </div>
-            <form onSubmit={handleAddSubscription} className="flex flex-col gap-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700">Subscription Service Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Netflix, Spotify, iCloud, ChatGPT Plus"
-                  value={newSub.name}
-                  onChange={e => setNewSub({ ...newSub, name: e.target.value })}
-                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
+              {normalizedActiveTab === 'transactions' && (
+                <TransactionsPage
+                  isLoading={loading}
+                  filteredTransactions={filteredTransactions}
+                  filteredTxSpent={filteredTxSpent}
+                  filteredTxIncome={filteredTxIncome}
+                  txSearch={txSearch}
+                  setTxSearch={setTxSearch}
+                  categoryFilter={categoryFilter}
+                  setCategoryFilter={setCategoryFilter}
+                  allFilterableCards={allFilterableCards}
+                  selectedCardIds={selectedCardIds}
+                  setSelectedCardIds={setSelectedCardIds}
+                  editingTxNoteId={editingTxNoteId}
+                  setEditingTxNoteId={setEditingTxNoteId}
+                  editingTxNoteText={editingTxNoteText}
+                  setEditingTxNoteText={setEditingTxNoteText}
+                  handleSaveTxNote={handleSaveTxNote}
+                  handleRecategorizeTransaction={handleRecategorizeTransaction}
+                  handleDeleteTransaction={handleDeleteTransaction}
+                  handleExportCsv={handleExportCsv}
+                  csvInputRef={csvInputRef}
+                  setIsAddTxOpen={setIsAddTxOpen}
+                  MultiCardFilterDropdown={MultiCardFilterDropdown}
+                  fmtMoney={fmtMoney}
                 />
-              </div>
+              )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700">Monthly Cost ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="15.49"
-                    value={newSub.amount}
-                    onChange={e => setNewSub({ ...newSub, amount: e.target.value })}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+              {normalizedActiveTab === 'bills' && (
+                <BillsPage
+                  isLoading={loading}
+                  filteredBills={filteredBills}
+                  filteredTotalMonthlyBills={filteredTotalMonthlyBills}
+                  billSearch={billSearch}
+                  setBillSearch={setBillSearch}
+                  billFilter={billFilter}
+                  setBillFilter={setBillFilter}
+                  allFilterableCards={allFilterableCards}
+                  selectedCardIds={selectedCardIds}
+                  setSelectedCardIds={setSelectedCardIds}
+                  handlePayBill={handlePayBill}
+                  handleDeleteBill={handleDeleteBill}
+                  setIsAddBillOpen={setIsAddBillOpen}
+                  setIsScanBillOpen={setIsScanBillOpen}
+                  MultiCardFilterDropdown={MultiCardFilterDropdown}
+                  fmtMoney={fmtMoney}
+                />
+              )}
+
+              {normalizedActiveTab === 'subscriptions' && (
+                <SubscriptionsPage
+                  isLoading={loading}
+                  filteredSubscriptions={filteredSubscriptions}
+                  filteredTotalSubscriptions={filteredTotalSubscriptions}
+                  sourceSubsList={sourceSubsList}
+                  displayTotalSubs={displayTotalSubs}
+                  subSearch={subSearch}
+                  setSubSearch={setSubSearch}
+                  subCategoryFilter={subCategoryFilter}
+                  setSubCategoryFilter={setSubCategoryFilter}
+                  allFilterableCards={allFilterableCards}
+                  selectedCardIds={selectedCardIds}
+                  setSelectedCardIds={setSelectedCardIds}
+                  handleDeleteSubscription={handleDeleteSubscription}
+                  handleSendChatMessage={handleSendChatMessage}
+                  setIsAddSubOpen={setIsAddSubOpen}
+                  MultiCardFilterDropdown={MultiCardFilterDropdown}
+                  fmtMoney={fmtMoney}
+                />
+              )}
+
+              {normalizedActiveTab === 'cards' && (
+                <CardsPage
+                  isLoading={loading}
+                  displayCards={displayCards}
+                  checkingAccounts={checkingAccounts}
+                  manualAssets={manualAssets}
+                  displayCardBalances={displayCardBalances}
+                  displayCash={displayCash}
+                  projectedCashAfterBills={projectedCashAfterBills}
+                  cardsFilter={cardsFilter}
+                  setCardsFilter={setCardsFilter}
+                  cardsPayoffTab={cardsPayoffTab}
+                  setCardsPayoffTab={setCardsPayoffTab}
+                  debtStrategy={debtStrategy}
+                  setDebtStrategy={setDebtStrategy}
+                  extraDebtPayment={extraDebtPayment}
+                  setExtraDebtPayment={setExtraDebtPayment}
+                  debtPayoffComparison={debtPayoffComparison}
+                  setSelectedCardIds={setSelectedCardIds}
+                  setActiveTab={setActiveTab}
+                  setIsAddAccountOpen={setIsAddAccountOpen}
+                  setIsAddManualAssetOpen={setIsAddManualAssetOpen}
+                  setIsHardshipModalOpen={setIsHardshipModalOpen}
+                  handleDeleteAccount={handleDeleteAccount}
+                  handleDeleteManualAsset={handleDeleteManualAsset}
+                  handleSendPayoffPlanToAi={handleSendPayoffPlanToAi}
+                  setChatInput={setChatInput}
+                  fmtMoney={fmtMoney}
+                />
+              )}
+
+              {normalizedActiveTab === 'budgets' && (
+                <BudgetsPage
+                  isLoading={loading}
+                  computedBudgets={computedBudgets}
+                  totalBudgetLimit={totalBudgetLimit}
+                  totalBudgetSpent={totalBudgetSpent}
+                  hasAnyBudgetPaymentsOnSelectedCard={hasAnyBudgetPaymentsOnSelectedCard}
+                  allFilterableCards={allFilterableCards}
+                  selectedCardIds={selectedCardIds}
+                  setSelectedCardIds={setSelectedCardIds}
+                  editingBudgetId={editingBudgetId}
+                  setEditingBudgetId={setEditingBudgetId}
+                  editingBudgetLimit={editingBudgetLimit}
+                  setEditingBudgetLimit={setEditingBudgetLimit}
+                  setBudgets={setBudgets}
+                  featureFlags={featureFlags}
+                  savingsGoals={savingsGoals}
+                  setSavingsGoals={setSavingsGoals}
+                  handleContributeGoal={handleContributeGoal}
+                  setIsAddBudgetOpen={setIsAddBudgetOpen}
+                  setIsAddGoalOpen={setIsAddGoalOpen}
+                  MultiCardFilterDropdown={MultiCardFilterDropdown}
+                  onShowToast={showToast}
+                  fmtMoney={fmtMoney}
+                />
+              )}
+
+              {normalizedActiveTab === 'retirement' && (
+                <RetirementPageView
+                  plans={retirementPlans}
+                  onUpdatePlans={setRetirementPlans}
+                  onAskAdvisor={(promptText) => handleSendChatMessage(promptText)}
+                  onHideFeature={handleHideRetirement}
+                  onShowToast={showToast}
+                  incomeSources={incomeSources}
+                  onToggleIncomeSource={handleToggleIncomeSource}
+                  displayCardBalances={displayCardBalances}
+                  displayCash={displayCash}
+                  displayCards={displayCards}
+                  highestAprCard={highestAprCard}
+                  seniorReliefTab={seniorReliefTab}
+                  setSeniorReliefTab={setSeniorReliefTab}
+                  isHalalFinance={isHalalFinance}
+                  onOpenHardshipModal={() => setIsHardshipModalOpen(true)}
+                  onCopySeniorScript={handleCopySeniorScript}
+                  copiedSeniorScript={copiedSeniorScript}
+                />
+              )}
+
+              {normalizedActiveTab === 'household' && (
+                <HouseholdPage
+                  householdProfile={householdProfile}
+                  onUpdateProfile={setHouseholdProfile}
+                  onSyncUtilityBills={handleSyncUtilitiesToBills}
+                  bills={data?.bills || []}
+                  subscriptions={data?.subscriptions || []}
+                  transactions={sourceTxsList}
+                  accounts={data?.accounts || []}
+                  onNavigateTab={(t) => setActiveTab(t)}
+                  vaultItems={vaultItems}
+                  onUpdateVaultItems={setVaultItems}
+                />
+              )}
+
+              {normalizedActiveTab === 'vault' && (
+                <VaultPage
+                  vaultItems={vaultItems}
+                  onUpdateVaultItems={setVaultItems}
+                  onShowToast={showToast}
+                />
+              )}
+
+              {normalizedActiveTab === 'advisor' && (
+                <AdvisorPage
+                  chatMessages={chatMessages}
+                  chatInput={chatInput}
+                  setChatInput={setChatInput}
+                  chatFiles={chatFiles}
+                  setChatFiles={setChatFiles}
+                  isAiTyping={isAiTyping}
+                  aiMemory={aiMemory}
+                  handleSendChatMessage={handleSendChatMessage}
+                  handleStopGeneration={handleStopGeneration}
+                  handleAttachFiles={handleAttachFiles}
+                  handleExecuteSuggestedAction={handleExecuteSuggestedAction}
+                  handleGenerateWeeklySummary={handleGenerateWeeklySummary}
+                  setIsPastChatsOpen={setIsPastChatsOpen}
+                  setIsMemoryModalOpen={setIsMemoryModalOpen}
+                  setIsScanBillOpen={setIsScanBillOpen}
+                  fullChatContainerRef={fullChatContainerRef}
+                  chatEndRef={chatEndRef}
+                  fullAdvisorFileInputRef={fullAdvisorFileInputRef}
+                  fullUploadMenuRef={fullUploadMenuRef}
+                  isFullUploadMenuOpen={isFullUploadMenuOpen}
+                  setIsFullUploadMenuOpen={setIsFullUploadMenuOpen}
+                  FormattedChatMessage={FormattedChatMessage}
+                />
+              )}
+
+              {normalizedActiveTab === 'more' && (
+                <div className="flex flex-col gap-5">
+                  <div>
+                    <h1 className="font-serif text-[26px] font-semibold text-[var(--ink)]">More sections</h1>
+                    <p className="text-[15px] font-medium text-[var(--muted)] mt-0.5">
+                      Navigate to additional household, planning, and security pages.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      { id: 'subscriptions', label: 'Subscriptions', desc: 'Recurring monthly and annual charges', icon: Zap },
+                      { id: 'budgets', label: 'Budgets and goals', desc: 'Monthly spending limits and savings targets', icon: PieChart },
+                      { id: 'retirement', label: 'Retirement', desc: 'Pensions, 401(k), IRAs, and Social Security', icon: Landmark },
+                      { id: 'household', label: 'Household', desc: 'Home, utilities, vehicles, and providers', icon: Home },
+                      { id: 'vault', label: 'Password vault', desc: 'Encrypted logins and account numbers', icon: KeyRound }
+                    ].map((item) => {
+                      const IconComp = item.icon;
+                      return (
+                        <Card
+                          key={item.id}
+                          onClick={() => setActiveTab(item.id)}
+                          className="p-4 flex items-center justify-between gap-3 cursor-pointer hover:border-[#1B4B91]"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-[8px] bg-[#1B4B91]/10 text-[#1B4B91] flex items-center justify-center shrink-0">
+                              <IconComp className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[16px] font-semibold text-[var(--ink)]">{item.label}</div>
+                              <div className="text-[13px] font-medium text-[var(--muted)] truncate">{item.desc}</div>
+                            </div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-[var(--muted)] shrink-0" />
+                        </Card>
+                      );
+                    })}
+                  </div>
+                  <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[16px] font-semibold text-[var(--ink)]">Account settings</div>
+                      <div className="text-[13px] font-medium text-[var(--muted)]">{currentUser?.email}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setSettingsActiveTab('profile');
+                          setIsSettingsOpen(true);
+                        }}
+                      >
+                        <Settings className="w-4 h-4" />
+                        Settings
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={handleLogout}>
+                        Sign out
+                      </Button>
+                    </div>
+                  </Card>
+                </div>
+              )}
+            </div>
+          </main>
+
+          {/* ================================================================= */}
+          {/* RIGHT PERSISTENT ADVISOR SIDEBAR (Desktop lg+, unzoomed controls) */}
+          {/* ================================================================= */}
+          {normalizedActiveTab !== 'advisor' && (
+            <>
+              {isAdvisorCollapsed ? (
+                <div
+                  style={{ top: `${advisorTabTop}px` }}
+                  className="hidden lg:flex fixed right-0 z-30"
+                >
+                  <button
+                    type="button"
+                    onMouseDown={handleTabMouseDown}
+                    aria-label="Expand Advisor sidebar"
+                    title="Open Advisor"
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-l-[8px] bg-[#1B4B91] text-white text-[13px] font-semibold shadow-md cursor-pointer"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Advisor</span>
+                  </button>
+                </div>
+              ) : (
+                <aside
+                  aria-label="Financial Advisor Assistant"
+                  style={{ width: `${advisorWidth}px` }}
+                  className="hidden lg:flex shrink-0 flex-col bg-[var(--surface)] border-l border-[var(--line)] h-screen sticky top-0 select-none z-20 relative"
+                >
+                  {/* Drag Resize Handle */}
+                  <div
+                    onMouseDown={startResizingAdvisor}
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Resize Advisor panel"
+                    className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-[#1B4B91]/30 transition-colors"
                   />
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700">Billing Cycle</label>
-                  <select
-                    value={newSub.billingCycle}
-                    onChange={e => setNewSub({ ...newSub, billingCycle: e.target.value })}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
-                  >
-                    <option value="monthly">Monthly</option>
-                    <option value="yearly">Yearly</option>
-                  </select>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700">Category</label>
-                  <select
-                    value={newSub.category}
-                    onChange={e => setNewSub({ ...newSub, category: e.target.value })}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
+                  {/* Advisor Header */}
+                  <div className="px-4 py-3.5 border-b border-[var(--line)] flex items-center justify-between gap-2 shrink-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-[8px] bg-[#1B4B91]/10 text-[#1B4B91] flex items-center justify-center shrink-0">
+                        <Bot className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[15px] font-semibold text-[var(--ink)] truncate">Advisor</div>
+                        <div className="text-[13px] font-medium text-[var(--muted)] truncate">
+                          {isAdvisorOnline ? 'Live financial context' : 'Offline mode'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleCreateNewChat}
+                        aria-label="Start new advisor chat"
+                        title="New chat"
+                        className="w-8 h-8 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsPastChatsOpen(true)}
+                        aria-label="View past chats"
+                        title="Past chats"
+                        className="w-8 h-8 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] cursor-pointer"
+                      >
+                        <History className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsMemoryModalOpen(true)}
+                        aria-label="Open advisor memory and tools"
+                        title="Advisor settings & memory"
+                        className="w-8 h-8 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] cursor-pointer"
+                      >
+                        <SlidersHorizontal className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAdvisorCollapsed(true)}
+                        aria-label="Collapse Advisor sidebar"
+                        title="Collapse Advisor"
+                        className="w-8 h-8 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] cursor-pointer"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quick Weekly Summary Bar */}
+                  <div className="px-4 py-2.5 bg-[var(--surface-subtle)] border-b border-[var(--line)] flex items-center justify-between gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleGenerateWeeklySummary}
+                      disabled={isAiTyping}
+                      className="text-[13px] font-semibold text-[#1B4B91] hover:underline flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Weekly summary</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('advisor')}
+                      aria-label="Expand Advisor to full page"
+                      className="text-[13px] font-medium text-[var(--muted)] hover:text-[var(--ink)] flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Full view</span>
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Messages List */}
+                  <div
+                    ref={sidebarChatContainerRef}
+                    className="flex-1 overflow-y-auto p-4 space-y-3 select-text"
                   >
-                    <option value="Streaming">Streaming (Netflix, Hulu)</option>
-                    <option value="Music">Music (Spotify, Apple Music)</option>
-                    <option value="Cloud Storage">Cloud Storage (iCloud, Drive)</option>
-                    <option value="AI & Software">AI & Software (ChatGPT)</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700">Charged To Card</label>
-                  <select
-                    value={newSub.account || (allFilterableCards.find(c => c.type === 'credit')?.fullLabel || 'Everyday Rewards •••• 4417')}
-                    onChange={e => setNewSub({ ...newSub, account: e.target.value })}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
-                  >
-                    {allFilterableCards.map(c => (
-                      <option key={c.id} value={c.fullLabel}>{c.fullLabel}</option>
+                    {chatMessages.map((m, i) => (
+                      <div key={i} className="flex flex-col gap-1.5">
+                        <div
+                          className={`p-3.5 rounded-[12px] text-[15px] leading-relaxed ${
+                            m.role === 'assistant'
+                              ? 'bg-[var(--surface-subtle)] text-[var(--ink)] border border-[var(--line)] mr-2'
+                              : 'bg-[#1B4B91] text-white ml-4 font-medium'
+                          }`}
+                        >
+                          {m.attachments && m.attachments.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              {m.attachments.map((att) => (
+                                <div
+                                  key={att.id || att.name}
+                                  className="px-2.5 py-1 rounded-[8px] text-[13px] font-medium bg-black/10 truncate max-w-[200px]"
+                                >
+                                  {att.name}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <FormattedChatMessage text={m.text} role={m.role} />
+                        </div>
+
+                        {m.role === 'assistant' && m.suggestedActions && m.suggestedActions.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pl-1">
+                            {m.suggestedActions.map((act, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => handleExecuteSuggestedAction(act)}
+                                className="px-2.5 py-1 rounded-[8px] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-[#1B4B91] border border-[var(--line)] text-[13px] font-medium transition-colors cursor-pointer text-left"
+                              >
+                                {act.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     ))}
-                  </select>
-                </div>
-              </div>
+                    {isAiTyping && (
+                      <div className="p-3 rounded-[12px] bg-[var(--surface-subtle)] border border-[var(--line)] text-[13px] font-medium text-[var(--muted)] mr-4">
+                        Advisor is reviewing your accounts...
+                      </div>
+                    )}
+                  </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsAddSubOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Save Subscription</button>
-              </div>
-            </form>
-          </div>
+                  {/* Attached Files Preview */}
+                  {chatFiles.length > 0 && (
+                    <div className="px-4 py-2 border-t border-[var(--line)] bg-[var(--surface-subtle)] flex flex-wrap gap-1.5 shrink-0">
+                      {chatFiles.map((f) => (
+                        <div
+                          key={f.id}
+                          className="flex items-center gap-1.5 bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-2.5 py-1 text-[13px] font-medium text-[var(--ink)]"
+                        >
+                          <span className="truncate max-w-[140px]">{f.name}</span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${f.name}`}
+                            onClick={() => setChatFiles((prev) => prev.filter((item) => item.id !== f.id))}
+                            className="text-[var(--muted)] hover:text-[#B91C1C] cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Advisor Input Form (Fixed at bottom, never forced to scroll) */}
+                  <form
+                    onSubmit={handleSendChatMessage}
+                    className="p-3 border-t border-[var(--line)] bg-[var(--surface)] flex flex-col gap-2 shrink-0"
+                  >
+                    <label htmlFor="sidebar-advisor-input" className="text-[13px] font-medium text-[var(--muted)]">
+                      Ask Advisor
+                    </label>
+                    <div className="flex items-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                        aria-label="Attach document or statement"
+                        title="Attach file"
+                        className="w-9 h-9 rounded-[8px] border border-[var(--line)] bg-[var(--surface-subtle)] hover:bg-[var(--surface)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] shrink-0 cursor-pointer"
+                      >
+                        <Paperclip className="w-4 h-4" />
+                      </button>
+                      <textarea
+                        id="sidebar-advisor-input"
+                        rows={1}
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            if ((chatInput.trim() || chatFiles.length > 0) && !isAiTyping) {
+                              handleSendChatMessage(e);
+                            }
+                          }
+                        }}
+                        placeholder="Ask about bills, cards, or budgets..."
+                        className="flex-1 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[15px] font-medium text-[var(--ink)] placeholder-[var(--muted)] resize-none max-h-24"
+                      />
+                      {isAiTyping ? (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={handleStopGeneration}
+                          aria-label="Stop response"
+                        >
+                          <Square className="w-3.5 h-3.5 fill-current" />
+                        </Button>
+                      ) : (
+                        <Button
+                          type="submit"
+                          variant="primary"
+                          size="sm"
+                          disabled={!chatInput.trim() && chatFiles.length === 0}
+                        >
+                          Send
+                        </Button>
+                      )}
+                    </div>
+                  </form>
+                </aside>
+              )}
+            </>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Actionable 0% Hardship Playbook Modal */}
+      {/* =================================================================== */}
+      {/* MOBILE BOTTOM TAB BAR (< 760px): 5 ITEMS + MORE MENU                */}
+      {/* =================================================================== */}
+      <nav
+        aria-label="Mobile Bottom Navigation"
+        className="flex min-[760px]:hidden fixed bottom-0 inset-x-0 z-40 bg-[var(--surface)] border-t border-[var(--line)] px-1 py-1.5 justify-around items-center"
+      >
+        {[
+          { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+          { id: 'transactions', label: 'Transactions', icon: History },
+          { id: 'bills', label: 'Bills', icon: Receipt },
+          { id: 'cards', label: 'Cards', icon: CreditCard },
+          { id: 'advisor', label: 'Advisor', icon: Sparkles },
+          { id: 'more', label: 'More', icon: Layers }
+        ].map((tab) => {
+          const IconComp = tab.icon;
+          const isMoreGroup = ['subscriptions', 'budgets', 'retirement', 'household', 'vault', 'more'].includes(normalizedActiveTab);
+          const isActive = tab.id === 'more' ? isMoreGroup : normalizedActiveTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-[8px] min-w-[52px] cursor-pointer ${
+                isActive ? 'text-[#1B4B91] font-semibold' : 'text-[var(--muted)] font-medium'
+              }`}
+            >
+              <IconComp className="w-4 h-4 shrink-0" />
+              <span className="text-[13px] leading-tight">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* =================================================================== */}
+      {/* MODALS & DIALOGS                                                    */}
+      {/* =================================================================== */}
+
+      {/* 1. Settings Modal (6 Merged Tabs: Profile, Preferences, AI advisor, Bank, Security, About) */}
+      <SettingsPage
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settingsActiveTab={settingsActiveTab}
+        setSettingsActiveTab={setSettingsActiveTab}
+        currentUser={currentUser}
+        userInitials={userInitials}
+        settingsDisplayName={settingsDisplayName}
+        setSettingsDisplayName={setSettingsDisplayName}
+        handleSaveProfile={handleSaveProfile}
+        uiFontScale={uiFontScale}
+        handleSetFontScale={handleSetFontScale}
+        uiDensity={uiDensity}
+        handleSetDensity={handleSetDensity}
+        uiReduceMotion={uiReduceMotion}
+        handleToggleReduceMotion={handleToggleReduceMotion}
+        uiHighFocus={uiHighFocus}
+        handleToggleHighFocus={handleToggleHighFocus}
+        uiPrivacyMask={uiPrivacyMask}
+        handleTogglePrivacyMask={handleTogglePrivacyMask}
+        featureFlags={featureFlags}
+        handleUpdateFeatureFlags={handleUpdateFeatureFlags}
+        settingsAiProvider={settingsAiProvider}
+        handleProviderChange={handleProviderChange}
+        settingsAiModel={settingsAiModel}
+        setSettingsAiModel={setSettingsAiModel}
+        localAiEngineStatus={localAiEngineStatus}
+        settingsAiApiKey={settingsAiApiKey}
+        setSettingsAiApiKey={setSettingsAiApiKey}
+        settingsAiMaskedKey={settingsAiMaskedKey}
+        settingsAiShowKey={settingsAiShowKey}
+        setSettingsAiShowKey={setSettingsAiShowKey}
+        settingsAiStatus={settingsAiStatus}
+        settingsAiTesting={settingsAiTesting}
+        handleRemoveAiKey={handleRemoveAiKey}
+        handleSaveAndTestAiKey={handleSaveAndTestAiKey}
+        aiPermissions={settingsAiPermissions}
+        handleToggleAiPermission={handleTogglePermission}
+        aiMemory={aiMemory}
+        handleClearAllMemory={handleClearAllMemory}
+        settingsPlaidStatus={settingsPlaidStatus}
+        settingsPlaidClientId={settingsPlaidClientId}
+        setSettingsPlaidClientId={setSettingsPlaidClientId}
+        settingsPlaidSecret={settingsPlaidSecret}
+        setSettingsPlaidSecret={setSettingsPlaidSecret}
+        settingsPlaidMaskedSecret={settingsPlaidMaskedSecret}
+        settingsPlaidShowSecret={settingsPlaidShowSecret}
+        setSettingsPlaidShowSecret={setSettingsPlaidShowSecret}
+        handleSavePlaidCredentials={handleSavePlaidCredentials}
+        initiatePlaidLink={initiatePlaidLink}
+        plaidItems={settings?.plaidItems || []}
+        data={data}
+        handleDisconnectBank={handleDisconnectBank}
+        handleDeleteAccount={handleDeleteAccount}
+        setIsAddAccountOpen={setIsAddAccountOpen}
+        autoLockMinutes={autoLockMinutes}
+        setAutoLockMinutes={setAutoLockMinutes}
+        idleAction={idleAction}
+        setIdleAction={setIdleAction}
+        handleLockSession={handleLockSession}
+        vaultLockType={vaultLockType}
+        setVaultLockType={setVaultLockType}
+        vaultPinTimeout={vaultPinTimeout}
+        setVaultPinTimeout={setVaultPinTimeout}
+        clipboardClearSeconds={clipboardClearSeconds}
+        setClipboardClearSeconds={setClipboardClearSeconds}
+        handleLogout={handleLogout}
+        desktopAppInfo={desktopAppInfo}
+        formatVersionString={formatVersionString}
+        handleManualCheckForUpdate={handleManualCheckForUpdate}
+        onShowToast={showToast}
+      />
+
+      {/* 2. Payment Relief Guide Modal */}
       <HardshipPlaybookModal
         isOpen={isHardshipModalOpen}
         onClose={() => setIsHardshipModalOpen(false)}
         cards={displayCards}
-        userName={currentUser?.name || 'Cardholder'}
+        userName={currentUser?.name || firstName}
+        isJudgmentProof={true}
+        onShowToast={showToast}
       />
 
-      {/* Add Purchase Modal */}
-      {isAddTxOpen && (
+      {/* 3. Add Card / Bank Account Modal */}
+      {isAddAccountOpen && (
         <div
-          onClick={(e) => { if (e.target === e.currentTarget) setIsAddTxOpen(false); }}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-account-modal-title"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900">Add Purchase</h3>
-              <button onClick={() => setIsAddTxOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+          <Card className="max-w-md w-full p-6 flex flex-col gap-5 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <h3 id="add-account-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                Add card or bank account
+              </h3>
+              <button
+                type="button"
+                aria-label="Close add account modal"
+                onClick={() => setIsAddAccountOpen(false)}
+                className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <form onSubmit={handleAddTransaction} className="flex flex-col gap-3 text-xs">
+
+            <div className="grid grid-cols-2 p-1 bg-[var(--surface-subtle)] rounded-[8px] border border-[var(--line)]">
+              <button
+                type="button"
+                onClick={() => setAddCardTab('plaid')}
+                className={`py-2 rounded-[8px] text-[13px] transition-colors cursor-pointer ${
+                  addCardTab === 'plaid'
+                    ? 'bg-[var(--surface)] text-[var(--ink)] font-semibold'
+                    : 'text-[var(--muted)] font-medium'
+                }`}
+              >
+                Automatic bank sync
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddCardTab('manual')}
+                className={`py-2 rounded-[8px] text-[13px] transition-colors cursor-pointer ${
+                  addCardTab === 'manual'
+                    ? 'bg-[var(--surface)] text-[var(--ink)] font-semibold'
+                    : 'text-[var(--muted)] font-medium'
+                }`}
+              >
+                Enter manually
+              </button>
+            </div>
+
+            {addCardTab === 'plaid' ? (
+              <div className="flex flex-col gap-4">
+                <p className="text-[15px] font-medium text-[var(--muted)] leading-relaxed">
+                  Securely connect your bank or credit card issuer with Plaid to import balances and transactions automatically.
+                </p>
+                {plaidError && (
+                  <div className="p-3 rounded-[8px] bg-[#B91C1C]/10 border border-[#B91C1C]/30 text-[#B91C1C] text-[13px] font-medium">
+                    {plaidError}
+                  </div>
+                )}
+                <Button variant="primary" onClick={initiatePlaidLink} disabled={isConnectingPlaid} className="w-full">
+                  <Building2 className="w-4 h-4" />
+                  {isConnectingPlaid ? 'Connecting to Plaid...' : 'Continue with Plaid'}
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={handleAddAccount} className="flex flex-col gap-4">
+                <div>
+                  <label htmlFor="manual-acc-institution" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Bank or issuer
+                  </label>
+                  <input
+                    id="manual-acc-institution"
+                    type="text"
+                    required
+                    value={newAccount.institution}
+                    onChange={(e) => setNewAccount({ ...newAccount, institution: e.target.value })}
+                    placeholder="e.g. Chase, Capital One"
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="manual-acc-name" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Card or account name
+                  </label>
+                  <input
+                    id="manual-acc-name"
+                    type="text"
+                    required
+                    value={newAccount.name}
+                    onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
+                    placeholder="e.g. Sapphire Preferred"
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="manual-acc-type" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                      Account type
+                    </label>
+                    <select
+                      id="manual-acc-type"
+                      value={newAccount.type}
+                      onChange={(e) => setNewAccount({ ...newAccount, type: e.target.value })}
+                      className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[15px] font-medium text-[var(--ink)]"
+                    >
+                      <option value="credit">Credit card</option>
+                      <option value="depository">Checking / savings</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="manual-acc-balance" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                      Current balance ($)
+                    </label>
+                    <input
+                      id="manual-acc-balance"
+                      type="number"
+                      step="0.01"
+                      required
+                      value={newAccount.balance}
+                      onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value })}
+                      placeholder="0.00"
+                      className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                    />
+                  </div>
+                </div>
+                {newAccount.type === 'credit' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="manual-acc-limit" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                        Credit limit ($)
+                      </label>
+                      <input
+                        id="manual-acc-limit"
+                        type="number"
+                        step="1"
+                        value={newAccount.limit}
+                        onChange={(e) => setNewAccount({ ...newAccount, limit: e.target.value })}
+                        placeholder="5000"
+                        className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="manual-acc-apr" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                        APR (%)
+                      </label>
+                      <input
+                        id="manual-acc-apr"
+                        type="number"
+                        step="0.1"
+                        value={newAccount.apr}
+                        onChange={(e) => setNewAccount({ ...newAccount, apr: e.target.value })}
+                        placeholder="21.9"
+                        className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                      />
+                    </div>
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
+                  <Button variant="secondary" onClick={() => setIsAddAccountOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="primary">
+                    Save account
+                  </Button>
+                </div>
+              </form>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* 4. Add Bill Modal */}
+      {isAddBillOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-bill-modal-title"
+        >
+          <Card className="max-w-md w-full p-6 flex flex-col gap-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <h3 id="add-bill-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                Add recurring bill
+              </h3>
+              <button
+                type="button"
+                aria-label="Close add bill modal"
+                onClick={() => setIsAddBillOpen(false)}
+                className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddBill} className="flex flex-col gap-4">
               <div>
-                <label className="font-semibold text-slate-700">Store / Description</label>
+                <label htmlFor="new-bill-name" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                  Bill or provider name
+                </label>
                 <input
+                  id="new-bill-name"
                   type="text"
                   required
-                  placeholder="e.g. Trader Joe's, Shell, Chipotle, Paycheck"
-                  value={newTx.name}
-                  onChange={e => {
-                    const val = e.target.value;
-                    const detectedCategory = autoDetectPurchaseCategory(val);
-                    let detectedAccount = newTx.account;
-                    if (detectedCategory === 'Income') {
-                      const checking = allFilterableCards.find(c => c.type === 'depository');
-                      if (checking) detectedAccount = checking.fullLabel;
-                    } else if (detectedCategory === 'Travel') {
-                      const travel = allFilterableCards.find(c => (c.name || '').toLowerCase().includes('travel'));
-                      if (travel) detectedAccount = travel.fullLabel;
-                    } else {
-                      const credit = allFilterableCards.find(c => c.type === 'credit');
-                      if (credit) detectedAccount = credit.fullLabel;
-                    }
-                    setNewTx({
-                      ...newTx,
-                      name: val,
-                      category: detectedCategory,
-                      account: detectedAccount
-                    });
-                  }}
-                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
+                  value={newBill.name}
+                  onChange={(e) => setNewBill({ ...newBill, name: e.target.value, biller: e.target.value })}
+                  placeholder="e.g. Electric & Gas, Water, Internet"
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
                 />
-                {newTx.name && (
-                  <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>Auto-detected: <strong>{newTx.category}</strong> · Card: <strong>{newTx.account}</strong></span>
-                  </p>
-                )}
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold text-slate-700">Amount ($)</label>
+                  <label htmlFor="new-bill-amount" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Amount ($)
+                  </label>
                   <input
+                    id="new-bill-amount"
                     type="number"
                     step="0.01"
                     required
-                    placeholder="54.12"
-                    value={newTx.amount}
-                    onChange={e => setNewTx({ ...newTx, amount: e.target.value })}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                    value={newBill.expectedAmount}
+                    onChange={(e) => setNewBill({ ...newBill, expectedAmount: e.target.value })}
+                    placeholder="125.00"
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700">Date</label>
+                  <label htmlFor="new-bill-due-day" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Due day of month (1–31)
+                  </label>
                   <input
-                    type="text"
-                    placeholder="e.g. Oct 24"
-                    value={newTx.date}
-                    onChange={e => setNewTx({ ...newTx, date: e.target.value })}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                    id="new-bill-due-day"
+                    type="number"
+                    min="1"
+                    max="31"
+                    required
+                    value={newBill.dueDay}
+                    onChange={(e) => setNewBill({ ...newBill, dueDay: e.target.value })}
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
                   />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold text-slate-700">Category</label>
+                  <label htmlFor="new-bill-category" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Category
+                  </label>
                   <select
-                    value={newTx.category}
-                    onChange={e => setNewTx({ ...newTx, category: e.target.value })}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
+                    id="new-bill-category"
+                    value={newBill.category}
+                    onChange={(e) => setNewBill({ ...newBill, category: e.target.value })}
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[15px] font-medium text-[var(--ink)]"
                   >
-                    <option value="Groceries">Groceries</option>
-                    <option value="Transportation">Transportation</option>
-                    <option value="Dining">Dining</option>
                     <option value="Utilities">Utilities</option>
-                    <option value="Shopping">Shopping</option>
-                    <option value="Entertainment">Entertainment</option>
-                    <option value="Income">Income / Deposit</option>
+                    <option value="Housing">Housing</option>
+                    <option value="Insurance">Insurance</option>
+                    <option value="Phone & Internet">Phone &amp; Internet</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700">Card / Account</label>
+                  <label htmlFor="new-bill-account" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Payment account
+                  </label>
                   <select
-                    value={newTx.account || (allFilterableCards.find(c => c.type === 'credit')?.fullLabel || 'Everyday Rewards •••• 4417')}
-                    onChange={e => setNewTx({ ...newTx, account: e.target.value })}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
+                    id="new-bill-account"
+                    value={newBill.account}
+                    onChange={(e) => setNewBill({ ...newBill, account: e.target.value })}
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[15px] font-medium text-[var(--ink)]"
                   >
-                    {allFilterableCards.map(c => (
+                    {allFilterableCards.map((c) => (
+                      <option key={c.id} value={c.fullLabel}>
+                        {c.fullLabel}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
+                <Button variant="secondary" onClick={() => setIsAddBillOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary">
+                  Save bill
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {/* 5. Add Transaction / Purchase Modal */}
+      {isAddTxOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-tx-modal-title"
+        >
+          <Card className="max-w-md w-full p-6 flex flex-col gap-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <h3 id="add-tx-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                Add purchase or deposit
+              </h3>
+              <button
+                type="button"
+                aria-label="Close add purchase modal"
+                onClick={() => setIsAddTxOpen(false)}
+                className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddTransaction} className="flex flex-col gap-4">
+              <div>
+                <label htmlFor="new-tx-name" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                  Merchant or description
+                </label>
+                <input
+                  id="new-tx-name"
+                  type="text"
+                  required
+                  value={newTx.name}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewTx({
+                      ...newTx,
+                      name: val,
+                      category: autoDetectPurchaseCategory(val)
+                    });
+                  }}
+                  placeholder="e.g. Trader Joe's, Shell, Direct Deposit"
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="new-tx-amount" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Amount ($)
+                  </label>
+                  <input
+                    id="new-tx-amount"
+                    type="number"
+                    step="0.01"
+                    required
+                    value={newTx.amount}
+                    onChange={(e) => setNewTx({ ...newTx, amount: e.target.value })}
+                    placeholder="45.20"
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="new-tx-date" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Date
+                  </label>
+                  <input
+                    id="new-tx-date"
+                    type="date"
+                    required
+                    value={newTx.date}
+                    onChange={(e) => setNewTx({ ...newTx, date: e.target.value })}
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[15px] font-medium text-[var(--ink)]"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="new-tx-category" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Category
+                  </label>
+                  <select
+                    id="new-tx-category"
+                    value={newTx.category}
+                    onChange={(e) => setNewTx({ ...newTx, category: e.target.value })}
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[15px] font-medium text-[var(--ink)]"
+                  >
+                    {['Groceries', 'Dining', 'Gas', 'Shopping', 'Utilities', 'Housing', 'Transportation', 'Health', 'Travel', 'Subscriptions', 'Income'].map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="new-tx-account" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Card or account
+                  </label>
+                  <select
+                    id="new-tx-account"
+                    value={newTx.account}
+                    onChange={(e) => setNewTx({ ...newTx, account: e.target.value })}
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[15px] font-medium text-[var(--ink)]"
+                  >
+                    {allFilterableCards.map((c) => (
                       <option key={c.id} value={c.fullLabel}>{c.fullLabel}</option>
                     ))}
                   </select>
                 </div>
               </div>
-
               <div>
-                <label className="font-semibold text-slate-700">Note (Optional)</label>
+                <label htmlFor="new-tx-notes" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                  Notes (optional)
+                </label>
                 <input
+                  id="new-tx-notes"
                   type="text"
-                  placeholder="e.g. Weekly family groceries, split with partner..."
-                  value={newTx.notes || ''}
-                  onChange={e => setNewTx({ ...newTx, notes: e.target.value })}
-                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
+                  value={newTx.notes}
+                  onChange={(e) => setNewTx({ ...newTx, notes: e.target.value })}
+                  placeholder="Optional memo"
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
                 />
               </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsAddTxOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Save Purchase</button>
+              <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
+                <Button variant="secondary" onClick={() => setIsAddTxOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary">
+                  Save purchase
+                </Button>
               </div>
             </form>
-          </div>
+          </Card>
         </div>
       )}
 
-      {/* Set Monthly Category Budget Modal */}
-      {isAddBudgetOpen && (
+      {/* 6. Add Subscription Modal */}
+      {isAddSubOpen && (
         <div
-          onClick={(e) => { if (e.target === e.currentTarget) setIsAddBudgetOpen(false); }}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-sub-modal-title"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <PieChart className="w-4 h-4 text-[#18457c]" />
-                <h3 className="text-sm font-bold text-slate-900">Set Monthly Category Budget</h3>
-              </div>
-              <button onClick={() => setIsAddBudgetOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+          <Card className="max-w-md w-full p-6 flex flex-col gap-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <h3 id="add-sub-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                Add subscription
+              </h3>
+              <button
+                type="button"
+                aria-label="Close add subscription modal"
+                onClick={() => setIsAddSubOpen(false)}
+                className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <form onSubmit={handleAddOrUpdateBudget} className="flex flex-col gap-3 text-xs">
+            <form onSubmit={handleAddSubscription} className="flex flex-col gap-4">
               <div>
-                <label className="font-semibold text-slate-700">Category</label>
-                <select
-                  value={newBudget.category}
-                  onChange={e => setNewBudget(prev => ({ ...prev, category: e.target.value }))}
-                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
-                >
-                  <option value="Groceries">Groceries</option>
-                  <option value="Dining">Dining / Eating Out</option>
-                  <option value="Transportation">Transportation / Gas</option>
-                  <option value="Shopping">Shopping</option>
-                  <option value="Entertainment">Entertainment</option>
-                  <option value="Utilities">Utilities</option>
-                  <option value="Housing">Housing</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label className="font-semibold text-slate-700">Monthly Spending Limit ($)</label>
+                <label htmlFor="new-sub-name" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                  Service name
+                </label>
                 <input
-                  type="number"
-                  step="1"
-                  required
-                  placeholder="400"
-                  value={newBudget.limit}
-                  onChange={e => setNewBudget(prev => ({ ...prev, limit: e.target.value }))}
-                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Klarity warns you when spending reaches 80% of your monthly limit.
-                </p>
-              </div>
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsAddBudgetOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Save Budget</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add Savings Goal Modal */}
-      {isAddGoalOpen && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setIsAddGoalOpen(false); }}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <Target className="w-4 h-4 text-[#18457c]" />
-                <h3 className="text-sm font-bold text-slate-900">Create Savings Goal</h3>
-              </div>
-              <button onClick={() => setIsAddGoalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
-            </div>
-            <form onSubmit={handleAddGoal} className="flex flex-col gap-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700">Goal Name</label>
-                <input
+                  id="new-sub-name"
                   type="text"
                   required
-                  placeholder="e.g. Emergency Fund, Family Vacation, New Car Down Payment"
-                  value={newGoal.name}
-                  onChange={e => setNewGoal(prev => ({ ...prev, name: e.target.value }))}
-                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-2.5">
-                <div>
-                  <label className="font-semibold text-slate-700">Target ($)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    required
-                    placeholder="3000"
-                    value={newGoal.targetAmount}
-                    onChange={e => setNewGoal(prev => ({ ...prev, targetAmount: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700">Saved So Far ($)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    placeholder="500"
-                    value={newGoal.currentAmount}
-                    onChange={e => setNewGoal(prev => ({ ...prev, currentAmount: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700">Monthly ($/mo)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    placeholder="250"
-                    value={newGoal.monthlyContribution}
-                    onChange={e => setNewGoal(prev => ({ ...prev, monthlyContribution: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsAddGoalOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Create Goal</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add Manual Account / Loan Modal (for Net Worth) */}
-      {isAddManualAssetOpen && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setIsAddManualAssetOpen(false); }}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <Landmark className="w-4 h-4 text-[#18457c]" />
-                <h3 className="text-sm font-bold text-slate-900">Add Manual Account or Loan</h3>
-              </div>
-              <button onClick={() => setIsAddManualAssetOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
-            </div>
-            <p className="text-xs text-slate-500">
-              Track high-yield savings, investment portfolios, cash, or auto/student loans not linked through Plaid in your Net Worth chart.
-            </p>
-            <form onSubmit={handleAddManualAsset} className="flex flex-col gap-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700">Account / Asset / Loan Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. High-Yield Savings, Vanguard 401k, Auto Loan"
-                  value={newManualAsset.name}
-                  onChange={e => setNewManualAsset(prev => ({ ...prev, name: e.target.value }))}
-                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
+                  value={newSub.name}
+                  onChange={(e) => setNewSub({ ...newSub, name: e.target.value })}
+                  placeholder="e.g. Netflix, Spotify, iCloud"
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold text-slate-700">Type</label>
-                  <select
-                    value={newManualAsset.type}
-                    onChange={e => setNewManualAsset(prev => ({ ...prev, type: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
-                  >
-                    <option value="savings">Savings / Cash (+)</option>
-                    <option value="investment">Investments / 401k (+)</option>
-                    <option value="loan">Loan / Liability (-)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700">Balance ($)</label>
+                  <label htmlFor="new-sub-amount" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Monthly cost ($)
+                  </label>
                   <input
+                    id="new-sub-amount"
                     type="number"
                     step="0.01"
                     required
-                    placeholder="3200.00"
-                    value={newManualAsset.balance}
-                    onChange={e => setNewManualAsset(prev => ({ ...prev, balance: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                    value={newSub.amount}
+                    onChange={(e) => setNewSub({ ...newSub, amount: e.target.value })}
+                    placeholder="15.99"
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="new-sub-category" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Category
+                  </label>
+                  <select
+                    id="new-sub-category"
+                    value={newSub.category}
+                    onChange={(e) => setNewSub({ ...newSub, category: e.target.value })}
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[15px] font-medium text-[var(--ink)]"
+                  >
+                    <option value="Streaming">Streaming</option>
+                    <option value="Software">Software</option>
+                    <option value="Utilities">Utilities</option>
+                    <option value="Entertainment">Entertainment</option>
+                    <option value="Membership">Membership</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="new-sub-account" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                  Charged to card
+                </label>
+                <select
+                  id="new-sub-account"
+                  value={newSub.account}
+                  onChange={(e) => setNewSub({ ...newSub, account: e.target.value })}
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[15px] font-medium text-[var(--ink)]"
+                >
+                  {allFilterableCards.map((c) => (
+                    <option key={c.id} value={c.fullLabel}>{c.fullLabel}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
+                <Button variant="secondary" onClick={() => setIsAddSubOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary">
+                  Save subscription
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {/* 7. Add / Update Budget Modal */}
+      {isAddBudgetOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-budget-modal-title"
+        >
+          <Card className="max-w-md w-full p-6 flex flex-col gap-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <h3 id="add-budget-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                Set monthly category budget
+              </h3>
+              <button
+                type="button"
+                aria-label="Close budget modal"
+                onClick={() => setIsAddBudgetOpen(false)}
+                className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddOrUpdateBudget} className="flex flex-col gap-4">
+              <div>
+                <label htmlFor="budget-category-select" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                  Spending category
+                </label>
+                <select
+                  id="budget-category-select"
+                  value={newBudget.category}
+                  onChange={(e) => setNewBudget({ ...newBudget, category: e.target.value })}
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[15px] font-medium text-[var(--ink)]"
+                >
+                  {['Groceries', 'Dining', 'Gas', 'Shopping', 'Subscriptions', 'Bills', 'Utilities', 'Transportation', 'Health', 'Travel', 'Entertainment'].map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="budget-limit-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                  Monthly limit ($)
+                </label>
+                <input
+                  id="budget-limit-input"
+                  type="number"
+                  step="5"
+                  min="10"
+                  required
+                  value={newBudget.limit}
+                  onChange={(e) => setNewBudget({ ...newBudget, limit: e.target.value })}
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
+                <Button variant="secondary" onClick={() => setIsAddBudgetOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary">
+                  Save budget
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {/* 8. Add Savings Goal Modal */}
+      {isAddGoalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-goal-modal-title"
+        >
+          <Card className="max-w-md w-full p-6 flex flex-col gap-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <h3 id="add-goal-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                New savings goal
+              </h3>
+              <button
+                type="button"
+                aria-label="Close savings goal modal"
+                onClick={() => setIsAddGoalOpen(false)}
+                className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddGoal} className="flex flex-col gap-4">
+              <div>
+                <label htmlFor="goal-name-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                  Goal name
+                </label>
+                <input
+                  id="goal-name-input"
+                  type="text"
+                  required
+                  value={newGoal.name}
+                  onChange={(e) => setNewGoal({ ...newGoal, name: e.target.value })}
+                  placeholder="e.g. Emergency Fund, Property Tax Reserve"
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="goal-target-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Target amount ($)
+                  </label>
+                  <input
+                    id="goal-target-input"
+                    type="number"
+                    step="50"
+                    min="50"
+                    required
+                    value={newGoal.targetAmount}
+                    onChange={(e) => setNewGoal({ ...newGoal, targetAmount: e.target.value })}
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="goal-current-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Saved so far ($)
+                  </label>
+                  <input
+                    id="goal-current-input"
+                    type="number"
+                    step="10"
+                    min="0"
+                    value={newGoal.currentAmount}
+                    onChange={(e) => setNewGoal({ ...newGoal, currentAmount: e.target.value })}
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
                   />
                 </div>
               </div>
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsAddManualAssetOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Add to Net Worth</button>
+              <div>
+                <label htmlFor="goal-monthly-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                  Planned monthly contribution ($)
+                </label>
+                <input
+                  id="goal-monthly-input"
+                  type="number"
+                  step="10"
+                  min="10"
+                  value={newGoal.monthlyContribution}
+                  onChange={(e) => setNewGoal({ ...newGoal, monthlyContribution: e.target.value })}
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
+                <Button variant="secondary" onClick={() => setIsAddGoalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary">
+                  Save goal
+                </Button>
               </div>
             </form>
-          </div>
+          </Card>
         </div>
       )}
 
-      {/* Scan Document Modal */}
+      {/* 9. Add Manual Asset / Loan Modal */}
+      {isAddManualAssetOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-manual-asset-title"
+        >
+          <Card className="max-w-md w-full p-6 flex flex-col gap-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <h3 id="add-manual-asset-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                Add manual asset or loan
+              </h3>
+              <button
+                type="button"
+                aria-label="Close manual asset modal"
+                onClick={() => setIsAddManualAssetOpen(false)}
+                className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddManualAsset} className="flex flex-col gap-4">
+              <div>
+                <label htmlFor="manual-asset-name" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                  Account or asset name
+                </label>
+                <input
+                  id="manual-asset-name"
+                  type="text"
+                  required
+                  value={newManualAsset.name}
+                  onChange={(e) => setNewManualAsset({ ...newManualAsset, name: e.target.value })}
+                  placeholder="e.g. High-Yield Savings, Auto Loan"
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="manual-asset-type" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Type
+                  </label>
+                  <select
+                    id="manual-asset-type"
+                    value={newManualAsset.type}
+                    onChange={(e) => setNewManualAsset({ ...newManualAsset, type: e.target.value })}
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[15px] font-medium text-[var(--ink)]"
+                  >
+                    <option value="savings">Cash / savings</option>
+                    <option value="investment">Investment</option>
+                    <option value="property">Property / vehicle</option>
+                    <option value="loan">Loan / liability</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="manual-asset-balance" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                    Balance or value ($)
+                  </label>
+                  <input
+                    id="manual-asset-balance"
+                    type="number"
+                    step="0.01"
+                    required
+                    value={newManualAsset.balance}
+                    onChange={(e) => setNewManualAsset({ ...newManualAsset, balance: e.target.value })}
+                    placeholder="5000"
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
+                <Button variant="secondary" onClick={() => setIsAddManualAssetOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary">
+                  Save item
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {/* 10. Scan Statement Text Modal */}
       {isScanBillOpen && (
         <div
-          onClick={(e) => { if (e.target === e.currentTarget) setIsScanBillOpen(false); }}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="scan-statement-modal-title"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-[#18457c]" />
-                <h3 className="text-sm font-bold text-slate-900">Scan Document</h3>
-              </div>
-              <button onClick={() => setIsScanBillOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
-            </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Paste any sentences, statement lines, or bill details below. The AI Advisor will comprehend your text and automatically add every bill, subscription, or purchase mentioned.
-            </p>
-            <textarea
-              rows={5}
-              placeholder="e.g. I pay $22.99 a month for Netflix, my ConEdison electric bill is $148.60 due on the 3rd, and I spent $84.32 at Trader Joe's..."
-              value={scanText}
-              onChange={e => setScanText(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:bg-white"
-            />
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button type="button" onClick={() => setIsScanBillOpen(false)} className="px-3 py-1.5 text-xs text-slate-500 cursor-pointer">Cancel</button>
+          <Card className="max-w-lg w-full p-6 flex flex-col gap-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <h3 id="scan-statement-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                Paste statement or bill text
+              </h3>
               <button
                 type="button"
-                disabled={!scanText.trim() || isAiTyping}
-                onClick={handleScanBill}
-                className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] disabled:opacity-50 text-white text-xs font-semibold cursor-pointer"
+                aria-label="Close scan statement modal"
+                onClick={() => setIsScanBillOpen(false)}
+                className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
               >
-                Comprehend & Auto-Add
+                <X className="w-5 h-5" />
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Undo Toast Notification (6 seconds) */}
-      {undoToast && (
-        <div className="fixed bottom-20 md:bottom-6 right-4 left-4 md:left-auto md:right-6 z-50 flex items-center justify-between gap-4 px-4 py-3 rounded-xl bg-slate-900 text-white shadow-xl text-xs sm:text-sm animate-in fade-in slide-in-from-bottom-3 border border-slate-700">
-          <span>{undoToast.message}</span>
-          <button
-            type="button"
-            onClick={undoToast.onUndo}
-            className="font-bold text-amber-300 hover:text-amber-200 underline underline-offset-2 cursor-pointer transition-colors"
-          >
-            Undo
-          </button>
-        </div>
-      )}
-
-      {/* Settings Modal - Redesigned matching reference mockup */}
-      {isSettingsOpen && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setIsSettingsOpen(false); }}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div
-            ref={settingsModalRef}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-[880px] w-full max-h-[92vh] h-[640px] flex flex-col overflow-hidden cursor-default"
-          >
-            
-            {/* Modal Body: Left Tabs + Right Content */}
-            <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-              
-              {/* Left Sidebar Tabs */}
-              <div className="w-full md:w-56 lg:w-60 shrink-0 border-b md:border-b-0 md:border-r border-slate-200/80 p-5 sm:p-6 flex flex-col justify-between bg-slate-50/80">
-                <div>
-                  <h3 className="font-serif-title text-xl font-bold text-slate-900 mb-6 hidden md:block">Settings</h3>
-                  
-                  <nav className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
-                    {[
-                      { id: 'profile', label: 'Profile', dot: false },
-                      { id: 'ui', label: 'UI', dot: false },
-                      { id: 'sidebar', label: 'Sidebar', dot: false },
-                      { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' },
-                      { id: 'plaid', label: 'Bank connection', dot: settingsPlaidStatus !== 'connected' },
-                      { id: 'security', label: 'Security', dot: false },
-                      { id: 'about', label: 'About', dot: false }
-                    ].map(tab => {
-                      const isActive = settingsActiveTab === tab.id;
-                      return (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          onClick={() => setSettingsActiveTab(tab.id)}
-                          className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-between transition-colors duration-100 cursor-pointer shrink-0 ${
-                            isActive
-                              ? 'bg-white text-[#1B4B91] font-semibold border border-slate-200/90 shadow-2xs'
-                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 font-medium'
-                          }`}
-                        >
-                          <span>{tab.label}</span>
-                          {tab.dot && (
-                            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0 ml-2"></span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </nav>
-                </div>
-
-
-              </div>
-
-              {/* Right Content Panel */}
-              <div className="flex-1 p-6 sm:p-8 flex flex-col justify-between overflow-y-auto bg-white text-slate-800">
-                <div>
-                  {/* TAB: SIDEBAR & NAVIGATION */}
-                  {settingsActiveTab === 'sidebar' && (
-                    <div key="settings-tab-sidebar" className="flex flex-col gap-6">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div>
-                          <h3 className="font-serif-title text-xl font-bold text-slate-900">Sidebar & Navigation</h3>
-                          <p className="text-xs text-slate-500 mt-1">
-                            Customize your navigation order with Move Up / Move Down, or toggle optional sections to show or hide them.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleResetSidebarOrder}
-                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 self-start sm:self-auto cursor-pointer shadow-2xs transition-colors"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                          <span>Reset Layout</span>
-                        </button>
-                      </div>
-
-                      {/* Reorderable and Toggleable List of Navigation Items */}
-                      <div className="border border-slate-200/90 rounded-2xl divide-y divide-slate-100 overflow-hidden bg-white shadow-2xs">
-                        {sidebarNavOrder.map((itemId, idx) => {
-                          const config = SIDEBAR_ITEMS_CONFIG[itemId];
-                          if (!config) return null;
-                          const Icon = config.icon;
-                          const isOptional = Boolean(config.flag);
-                          const isEnabled = isOptional ? featureFlags[config.flag] !== false : true;
-
-                          const descriptions = {
-                            dashboard: 'Main financial overview, net worth, cash flow & health score.',
-                            cards: 'Credit cards, utilization, weighted APR & interactive payoff engine.',
-                            transactions: 'Purchases, transaction history, categories & card filters.',
-                            bills: 'Upcoming bills, recurring due dates & payment schedules.',
-                            subscriptions: 'Monthly & annual active software and entertainment subs.',
-                            budgets: 'Spending budgets and category progress limits.',
-                            household: 'Utility bills (PG&E / water), fleet vehicles, and healthcare.',
-                            retirement: 'Public pensions (CalPERS, CalSTRS), 401(k), IRAs & Social Security.',
-                            vault: 'Encrypted password & account credentials vault.'
-                          };
-
-                          return (
-                            <div
-                              key={itemId}
-                              className={`p-4 sm:p-5 flex items-center justify-between gap-4 transition-colors ${
-                                !isEnabled ? 'bg-slate-50/50 opacity-60' : 'hover:bg-slate-50/40'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                                <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-700 shrink-0">
-                                  <Icon className="w-4 h-4 text-[#18457c]" />
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-sm font-bold text-slate-900">{config.label}</p>
-                                    <span className="text-[10px] font-mono text-slate-400">#{idx + 1}</span>
-                                    {!isOptional && (
-                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500">
-                                        Core
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{descriptions[itemId] || ''}</p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                {/* Up / Down Order Buttons */}
-                                <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200/80">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleMoveSidebarItem(itemId, 'up')}
-                                    disabled={idx === 0}
-                                    title="Move section up"
-                                    className="p-1.5 rounded-md hover:bg-white text-slate-600 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
-                                  >
-                                    <ArrowUp className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleMoveSidebarItem(itemId, 'down')}
-                                    disabled={idx === sidebarNavOrder.length - 1}
-                                    title="Move section down"
-                                    className="p-1.5 rounded-md hover:bg-white text-slate-600 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
-                                  >
-                                    <ArrowDown className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-
-                                {/* Visibility Toggle (only for optional sections) */}
-                                {isOptional ? (
-                                  <button
-                                    type="button"
-                                    role="switch"
-                                    aria-checked={isEnabled}
-                                    title={isEnabled ? `Hide ${config.label}` : `Show ${config.label}`}
-                                    onClick={() => handleUpdateFeatureFlags({ [config.flag]: !isEnabled })}
-                                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                                      isEnabled ? 'bg-[#18457c]' : 'bg-slate-200'
-                                    }`}
-                                  >
-                                    <span
-                                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                                        isEnabled ? 'translate-x-5' : 'translate-x-0'
-                                      }`}
-                                    />
-                                  </button>
-                                ) : (
-                                  <div className="w-11 text-center">
-                                    <span className="text-[11px] text-slate-400 font-medium">Always</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-500 flex items-start gap-2.5">
-                        <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                        <p className="leading-relaxed">
-                          Your sidebar arrangement and feature visibility are saved in real-time. Hiding an item removes its button from the left navigation and mobile menu while preserving all of your underlying accounts and data.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB 1: PROFILE */}
-                  {settingsActiveTab === 'profile' && (
-                    <div key="settings-tab-profile" className="flex flex-col gap-6">
-                      <div>
-                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Profile</h2>
-                        <p className="text-xs text-slate-500 mt-1">How you appear in Klarity.</p>
-                      </div>
-
-                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-6 bg-white shadow-2xs">
-                        <div className="flex items-center gap-3.5">
-                          <div className="w-12 h-12 rounded-full bg-[#1B4B91] text-white flex items-center justify-center font-bold text-base shadow-2xs shrink-0">
-                            {userInitials}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">{currentUser?.name || 'Ziyad Elmahi'}</p>
-                            <p className="text-xs text-slate-500">{currentUser?.email || ''}</p>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                          <div>
-                            <label className="text-xs font-medium text-slate-700 block mb-1.5">Display name</label>
-                            <input
-                              type="text"
-                              value={settingsDisplayName}
-                              onChange={e => setSettingsDisplayName(e.target.value)}
-                              className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-600 shadow-2xs"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs font-medium text-slate-700 block mb-1.5">Email</label>
-                            <input
-                              type="email"
-                              value={currentUser?.email || ''}
-                              disabled
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-600 cursor-not-allowed shadow-2xs"
-                            />
-                            <p className="text-[11px] text-slate-400 mt-1.5">Email can't be changed here.</p>
-                          </div>
-                        </div>
-
-
-
-                        <div className="flex justify-end pt-2 border-t border-slate-100">
-                          <button
-                            type="button"
-                            onClick={handleSaveProfile}
-                            className="px-4 py-2 rounded-xl bg-[#1B4B91] hover:bg-[#153a70] text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                          >
-                            Save profile
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB: UI & ACCESSIBILITY */}
-                  {settingsActiveTab === 'ui' && (
-                    <div key="settings-tab-ui" className="flex flex-col gap-6">
-                      <div>
-                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">UI Settings</h2>
-                        <p className="text-xs text-slate-500 mt-1">
-                          Customize text scaling, layout density, and accessibility features designed to enhance your experience.
-                        </p>
-                      </div>
-
-                      {/* 1. Readability & UI Scaling (Up to 200%) */}
-                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-5 bg-white shadow-2xs">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="text-sm font-bold text-slate-900">Readability & Content Scaling</h3>
-                              <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-xs border border-blue-200">
-                                {(() => {
-                                  const num = Number(uiFontScale);
-                                  return !isNaN(num) && num >= 100 && num <= 200 ? num : 100;
-                                })()}%
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-500 mt-0.5">
-                              Scale typography, numbers, and interface elements up to 200% for effortless legibility.
-                            </p>
-                          </div>
-                          {uiFontScale !== '100' && uiFontScale !== 100 && (
-                            <button
-                              type="button"
-                              onClick={() => handleSetFontScale('100')}
-                              className="text-xs text-[#18457c] hover:underline font-semibold cursor-pointer shrink-0"
-                            >
-                              Reset to 100%
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Interactive Scale Slider (100% to 200%) */}
-                        <div className="flex flex-col gap-2.5 p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl">
-                          <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
-                            <span>100% (Default)</span>
-                            <span className="text-[#18457c] font-bold bg-white px-2 py-0.5 rounded-lg border border-slate-200 shadow-2xs">
-                              {(() => {
-                                const num = Number(uiFontScale);
-                                return !isNaN(num) && num >= 100 && num <= 200 ? num : 100;
-                              })()}%
-                            </span>
-                            <span>200% (Maximum)</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="100"
-                            max="200"
-                            step="5"
-                            value={(() => {
-                              const num = Number(uiFontScale);
-                              return !isNaN(num) && num >= 100 && num <= 200 ? num : 100;
-                            })()}
-                            onChange={(e) => handleSetFontScale(e.target.value)}
-                            className="w-full accent-[#18457c] cursor-pointer h-2 bg-slate-200 rounded-lg appearance-none"
-                          />
-                          <div className="flex justify-between text-[10px] text-slate-400 font-medium px-0.5">
-                            <span>100%</span>
-                            <span>125%</span>
-                            <span>150%</span>
-                            <span>175%</span>
-                            <span>200%</span>
-                          </div>
-                        </div>
-
-                        {/* Preset Quick Buttons Grid */}
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                          {[
-                            { id: '100', percent: 100, label: '100%', tag: 'Default' },
-                            { id: '125', percent: 125, label: '125%', tag: 'Medium' },
-                            { id: '150', percent: 150, label: '150%', tag: 'Large' },
-                            { id: '175', percent: 175, label: '175%', tag: 'X-Large' },
-                            { id: '200', percent: 200, label: '200%', tag: 'Maximum' }
-                          ].map(preset => {
-                            const currentNum = Number(uiFontScale) || 100;
-                            const isSelected = currentNum === preset.percent;
-                            return (
-                              <button
-                                key={preset.id}
-                                type="button"
-                                onClick={() => handleSetFontScale(preset.id)}
-                                className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                                  isSelected
-                                    ? 'border-[#18457c] ring-2 ring-[#18457c]/20 bg-blue-50/40 text-[#18457c]'
-                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-slate-700'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-0.5">
-                                  <span className="text-xs font-bold">{preset.label}</span>
-                                  {isSelected && <Check className="w-3.5 h-3.5 text-[#18457c]" />}
-                                </div>
-                                <p className="text-[10px] font-semibold text-slate-500">{preset.tag}</p>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* 3. Interface Density */}
-                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-4 bg-white shadow-2xs">
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-900">Interface Density</h3>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            Control spacing between cards, tables, and list rows.
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {[
-                            { id: 'comfortable', label: 'Comfortable', desc: 'Generous padding and relaxed breathing room' },
-                            { id: 'compact', label: 'Compact', desc: 'Condenses cards and lists to view more data on screen' }
-                          ].map(dens => {
-                            const isSelected = uiDensity === dens.id;
-                            return (
-                              <button
-                                key={dens.id}
-                                type="button"
-                                onClick={() => handleSetDensity(dens.id)}
-                                className={`p-4 rounded-xl border text-left cursor-pointer transition-all ${
-                                  isSelected
-                                    ? 'border-[#18457c] ring-2 ring-[#18457c]/20 bg-blue-50/25'
-                                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs font-bold text-slate-900">{dens.label}</span>
-                                  {isSelected && <Check className="w-3.5 h-3.5 text-[#18457c]" />}
-                                </div>
-                                <p className="text-[11px] text-slate-500">{dens.desc}</p>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* 4. Accessibility & Visual Helpers */}
-                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-4 bg-white shadow-2xs">
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-900">Accessibility & Visual Assistance</h3>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            Additional visual preferences to help you navigate comfortably.
-                          </p>
-                        </div>
-
-                        <div className="divide-y divide-slate-100">
-                          {/* Reduced Motion */}
-                          <div className="py-3.5 flex items-center justify-between gap-4">
-                            <div>
-                              <p className="text-xs font-bold text-slate-900">Reduce Motion & Animations</p>
-                              <p className="text-[11px] text-slate-500 mt-0.5">
-                                Disables UI animations and transitions for improved comfort and snappier performance.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleToggleReduceMotion}
-                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                uiReduceMotion ? 'bg-[#18457c]' : 'bg-slate-200'
-                              }`}
-                            >
-                              <span
-                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                  uiReduceMotion ? 'translate-x-5' : 'translate-x-0'
-                                }`}
-                              />
-                            </button>
-                          </div>
-
-                          {/* High Focus Rings */}
-                          <div className="py-3.5 flex items-center justify-between gap-4">
-                            <div>
-                              <p className="text-xs font-bold text-slate-900">High-Visibility Focus Indicators</p>
-                              <p className="text-[11px] text-slate-500 mt-0.5">
-                                Enhances outlines around clickable buttons, cards, and inputs for easier keyboard navigation.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleToggleHighFocus}
-                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                uiHighFocus ? 'bg-[#18457c]' : 'bg-slate-200'
-                              }`}
-                            >
-                              <span
-                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                  uiHighFocus ? 'translate-x-5' : 'translate-x-0'
-                                }`}
-                              />
-                            </button>
-                          </div>
-
-                          {/* Privacy Mask Mode */}
-                          <div className="py-3.5 flex items-center justify-between gap-4">
-                            <div>
-                              <p className="text-xs font-bold text-slate-900">Privacy Mask (Blur Sensitive Balances)</p>
-                              <p className="text-[11px] text-slate-500 mt-0.5">
-                                Automatically blurs sensitive balances until hovered to protect privacy in public spaces.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleTogglePrivacyMask}
-                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                uiPrivacyMask ? 'bg-[#18457c]' : 'bg-slate-200'
-                              }`}
-                            >
-                              <span
-                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                  uiPrivacyMask ? 'translate-x-5' : 'translate-x-0'
-                                }`}
-                              />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB 2: AI ADVISOR */}
-                  {settingsActiveTab === 'ai' && (
-                    <div key="settings-tab-ai" className="flex flex-col gap-5">
-                      <div>
-                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">AI advisor</h2>
-                        <p className="text-xs text-slate-500 mt-1">Configure the AI model and choose what data it can access.</p>
-                      </div>
-
-                      {/* Card: Model & Key Configuration */}
-                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-4 bg-white shadow-2xs">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                          <div>
-                            <label className="text-xs font-medium text-slate-700 block mb-1.5">Provider</label>
-                            <select
-                              value={settingsAiProvider}
-                              onChange={e => handleProviderChange(e.target.value)}
-                              className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs cursor-pointer"
-                            >
-                              <option value="local">Built-in Local AI (node-llama-cpp — No Key Required)</option>
-                              <option value="gemini">Google Gemini</option>
-                              <option value="anthropic">Anthropic (Claude)</option>
-                              <option value="openai">OpenAI (ChatGPT)</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-xs font-medium text-slate-700 block mb-1.5">Model</label>
-                            <input
-                              type="text"
-                              list={
-                                settingsAiProvider === 'local'
-                                  ? 'local-model-suggestions'
-                                  : settingsAiProvider === 'gemini'
-                                    ? 'gemini-model-suggestions'
-                                    : undefined
-                              }
-                              value={settingsAiModel}
-                              onChange={e => setSettingsAiModel(e.target.value)}
-                              placeholder={
-                                settingsAiProvider === 'local'
-                                  ? 'e.g. Llama-3.2-3B-Instruct-Q4_K_M.gguf'
-                                  : settingsAiProvider === 'gemini'
-                                    ? 'e.g. gemini-2.0-flash'
-                                    : 'e.g. claude-3-7-sonnet-20250219'
-                              }
-                              className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
-                            />
-                            {settingsAiProvider === 'local' && (
-                              <datalist id="local-model-suggestions">
-                                <option value="Llama-3.2-3B-Instruct-Q4_K_M.gguf">Llama 3.2 3B Instruct Q4_K_M (Recommended)</option>
-                                <option value="DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf">DeepSeek-R1 Distill Qwen 1.5B Q4_K_M (Fast)</option>
-                              </datalist>
-                            )}
-                            {settingsAiProvider === 'gemini' && (
-                              <datalist id="gemini-model-suggestions">
-                                <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recommended - 15 RPM Free Tier)</option>
-                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Ultra Reliable)</option>
-                                <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite (High Speed)</option>
-                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                              </datalist>
-                            )}
-                          </div>
-                        </div>
-
-                        {settingsAiProvider === 'local' ? (
-                          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-2">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-semibold text-slate-800">
-                                {localAiEngineStatus?.modelName || settingsAiModel || 'Local GGUF Engine'}
-                              </span>
-                              <span className="text-[11px] font-semibold text-slate-600">
-                                {localAiEngineStatus?.state === 'ready'
-                                  ? 'Ready (Loaded in RAM)'
-                                  : localAiEngineStatus?.state === 'downloading'
-                                    ? `${(localAiEngineStatus.progressPct || 0).toFixed(1)}%`
-                                    : localAiEngineStatus?.state || 'Standby'}
-                              </span>
-                            </div>
-                            {localAiEngineStatus?.state === 'downloading' && (
-                              <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
-                                <div
-                                  className="h-full bg-[#1B4B91] transition-all duration-300"
-                                  style={{ width: `${Math.min(100, Math.max(2, localAiEngineStatus.progressPct || 0))}%` }}
-                                />
-                              </div>
-                            )}
-                            <p className="text-[11px] text-slate-500">
-                              {localAiEngineStatus?.message ||
-                                'Runs locally on your machine with live web-search retrieval (RAG). No external API key required.'}
-                            </p>
-                          </div>
-                        ) : (
-                          <div>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <label className="text-xs font-medium text-slate-700">API Key</label>
-                              <a
-                                href="https://aistudio.google.com/api-keys"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline"
-                              >
-                                <span>Get a Gemini API key</span>
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            </div>
-                            <div className="relative">
-                              <input
-                                type={settingsAiShowKey ? 'text' : 'password'}
-                                value={settingsAiApiKey}
-                                onChange={e => setSettingsAiApiKey(e.target.value)}
-                                placeholder={settingsAiMaskedKey ? `Saved: ${settingsAiMaskedKey}` : 'Paste API key (AIza... or sk-...)'}
-                                className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setSettingsAiShowKey(!settingsAiShowKey)}
-                                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                              >
-                                {settingsAiShowKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                              </button>
-                            </div>
-                            <p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
-                              <span>Get your free Gemini API key at</span>
-                              <a
-                                href="https://aistudio.google.com/api-keys"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 font-semibold hover:underline inline-flex items-center gap-0.5"
-                              >
-                                aistudio.google.com/api-keys
-                                <ExternalLink className="w-2.5 h-2.5" />
-                              </a>
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Status Pill & Action Buttons */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-500 font-medium">Status:</span>
-                            {settingsAiStatus === 'connected' || settingsAiProvider === 'local' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                Connected
-                              </span>
-                            ) : settingsAiStatus === 'invalid_key' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-                                Invalid key
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                Not connected
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {Boolean(settingsAiMaskedKey) && settingsAiProvider !== 'local' && (
-                              <button
-                                type="button"
-                                onClick={handleRemoveAiKey}
-                                className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50/50 hover:bg-rose-100 text-rose-700 text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
-                              >
-                                Remove key
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={handleSaveAndTestAiKey}
-                              disabled={settingsAiTesting}
-                              className="px-4 py-2 rounded-xl bg-[#1B4B91] hover:bg-[#153a70] text-white text-xs font-semibold shadow-2xs transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2"
-                            >
-                              {settingsAiTesting && <span className="w-3 h-3 rounded-full border-2 border-white/40 border-t-white animate-spin"></span>}
-                              <span>
-                                {settingsAiTesting
-                                  ? 'Applying...'
-                                  : settingsAiProvider === 'local'
-                                    ? 'Activate local model'
-                                    : 'Save and test key'}
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Card: Data Access Permissions */}
-                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-4 bg-white shadow-2xs">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Data access permissions</h4>
-                          <p className="text-[11px] text-slate-500 mt-0.5">Control which categories of personal financial data the AI advisor can analyze.</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-                          {[
-                            { id: 'bills', label: 'Bills' },
-                            { id: 'subscriptions', label: 'Subscriptions' },
-                            { id: 'cards', label: 'Cards' },
-                            { id: 'purchases', label: 'Purchases' },
-                            ...(featureFlags.retirement !== false ? [{ id: 'retirement', label: 'Retirement Plans' }] : [])
-                          ].map(perm => {
-                            const isAllowed = settingsAiPermissions[perm.id];
-                            return (
-                              <button
-                                key={perm.id}
-                                type="button"
-                                onClick={() => handleTogglePermission(perm.id)}
-                                className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
-                                  isAllowed
-                                    ? 'bg-[#eff4f9] border-[#1B4B91]/40 text-[#1B4B91] shadow-2xs'
-                                    : 'bg-slate-50 border-slate-200 text-slate-400'
-                                }`}
-                              >
-                                <span>{perm.label}</span>
-                                <span className={`w-2 h-2 rounded-full ${isAllowed ? 'bg-[#1B4B91]' : 'bg-slate-300'}`}></span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Card: Live Internet & Web Browsing Access */}
-                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-3 bg-white shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shadow-2xs shrink-0">
-                              <Globe className="w-5 h-5" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h4 className="text-xs font-bold text-slate-900">Live Internet Access</h4>
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                  Active
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-slate-500 mt-0.5">Allows the AI to browse Google and search the web in real-time for live rates, card promotions, and market benchmarks.</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB 3: BANK CONNECTION */}
-                  {settingsActiveTab === 'plaid' && (
-                    <div key="settings-tab-plaid" className="flex flex-col gap-5">
-                      <div className="flex flex-col gap-3 pb-0 border-b border-slate-200">
-                        <div>
-                          <h2 className="font-serif-title text-2xl font-bold text-slate-900">Bank connection</h2>
-                          <p className="text-xs text-slate-500 mt-0.5">Manage connected banks and link new accounts.</p>
-                        </div>
-
-                        {/* Sub-tabs placed directly under the title: Connect a bank on the left, Connected banks on the right with underline indicator */}
-                        <div className="flex items-center gap-6 mt-1 -mb-px">
-                          <button
-                            type="button"
-                            onClick={() => setBankTab('connect')}
-                            className={`pb-2.5 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 border-b-2 ${
-                              bankTab === 'connect'
-                                ? 'text-[#18457c] border-[#18457c]'
-                                : 'text-slate-500 hover:text-slate-800 border-transparent'
-                            }`}
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Connect a bank</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setBankTab('connected')}
-                            className={`pb-2.5 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 border-b-2 ${
-                              bankTab === 'connected'
-                                ? 'text-[#18457c] border-[#18457c]'
-                                : 'text-slate-500 hover:text-slate-800 border-transparent'
-                            }`}
-                          >
-                            <Building2 className="w-3.5 h-3.5" />
-                            <span>Connected banks</span>
-                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                              bankTab === 'connected' ? 'bg-blue-100 text-[#18457c]' : 'bg-slate-200 text-slate-600'
-                            }`}>
-                              {(() => {
-                                const names = new Set();
-                                (data?.accounts || []).forEach(a => { if (a && a.institution) names.add(a.institution); });
-                                (settings?.plaidItems || []).forEach(pi => { if (pi && pi.institution) names.add(pi.institution); });
-                                if (names.size === 0 && (data?.accounts || []).length > 0) names.add('Connected Bank');
-                                return names.size;
-                              })()}
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* SUB-VIEW 1: CONNECTED BANKS */}
-                      {bankTab === 'connected' && (
-                        <div className="flex flex-col gap-4">
-                          {/* List of distinct connected institutions */}
-                          {(() => {
-                            const getLocalAccounts = () => {
-                              try {
-                                const raw = localStorage.getItem('klarity_accounts');
-                                return raw ? JSON.parse(raw) : [];
-                              } catch { return []; }
-                            };
-
-                            const allBankAccounts = (() => {
-                              const map = new Map();
-                              (data?.accounts || []).forEach(a => { if (a && a.id) map.set(a.id, a); });
-                              (settings?.plaidItems || []).forEach(pi => {
-                                (pi.accounts || []).forEach(a => {
-                                  if (a && a.id && !map.has(a.id)) {
-                                    map.set(a.id, { ...a, institution: a.institution || pi.institution });
-                                  }
-                                });
-                              });
-                              getLocalAccounts().forEach(a => { if (a && a.id && !map.has(a.id)) map.set(a.id, a); });
-                              return Array.from(map.values());
-                            })();
-
-                            const institutionsMap = {};
-
-                            // 1. Initialize all connected Plaid bank items
-                            (settings?.plaidItems || []).forEach(pi => {
-                              const inst = pi.institution || 'Connected Bank';
-                              if (!institutionsMap[inst]) {
-                                institutionsMap[inst] = {
-                                  itemId: pi.itemId,
-                                  institution: inst,
-                                  accounts: []
-                                };
-                              }
-                              (pi.accounts || []).forEach(acc => {
-                                if (acc && !institutionsMap[inst].accounts.some(a => a.id === acc.id)) {
-                                  institutionsMap[inst].accounts.push(acc);
-                                }
-                              });
-                            });
-
-                            // 2. Map all accounts (from data.accounts & local cache) to their connected institution
-                            allBankAccounts.forEach(acc => {
-                              let inst = acc.institution;
-                              if (!inst && acc.itemId) {
-                                const matchingItem = (settings?.plaidItems || []).find(pi => pi.itemId === acc.itemId);
-                                if (matchingItem) inst = matchingItem.institution;
-                              }
-                              if (!inst) {
-                                inst = acc.name && acc.name.toLowerCase().includes('chase') ? 'Chase'
-                                  : acc.name && acc.name.toLowerCase().includes('capital one') ? 'Capital One'
-                                  : (settings?.plaidItems?.[0]?.institution || 'Connected Bank');
-                              }
-
-                              if (!institutionsMap[inst]) {
-                                institutionsMap[inst] = {
-                                  itemId: acc.itemId || null,
-                                  institution: inst,
-                                  accounts: []
-                                };
-                              }
-
-                              if (!institutionsMap[inst].accounts.some(a => a.id === acc.id)) {
-                                institutionsMap[inst].accounts.push(acc);
-                              }
-                            });
-
-                            const instList = Object.values(institutionsMap).map(item => [item.institution, item.accounts]);
-
-                            if (instList.length === 0) {
-                              return (
-                                <div className="border border-dashed border-slate-200 rounded-2xl p-8 text-center bg-slate-50/50 flex flex-col items-center justify-center">
-                                  <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 mb-3 shadow-2xs">
-                                    <Building2 className="w-6 h-6 stroke-1" />
-                                  </div>
-                                  <h3 className="text-sm font-bold text-slate-900">No banks connected yet</h3>
-                                  <p className="text-xs text-slate-500 mt-1 max-w-sm">
-                                    Link your bank via Plaid or add cards manually to start tracking balances and cash flow in real time.
-                                  </p>
-                                  <div className="flex items-center gap-2 mt-4">
-                                    <button
-                                      type="button"
-                                      onClick={() => setBankTab('connect')}
-                                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
-                                    >
-                                      <Plus className="w-3.5 h-3.5" />
-                                      <span>Connect a bank</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setIsSettingsOpen(false);
-                                        setIsAddAccountOpen(true);
-                                      }}
-                                      className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                                    >
-                                      Add card manually
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <div className="flex flex-col gap-3">
-                                {instList.map(([institutionName, accs]) => {
-                                  const totalBalance = accs.reduce((sum, a) => sum + Number(a.balance || 0), 0);
-                                  const matchingPlaidItem = (settings?.plaidItems || []).find(pi => pi.institution === institutionName);
-                                  return (
-                                    <div
-                                      key={institutionName}
-                                      className="border border-slate-200 rounded-2xl p-4 bg-white shadow-2xs flex flex-col gap-3 hover:border-slate-300 transition-colors"
-                                    >
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#1B4B91] font-bold text-sm shadow-2xs">
-                                            {institutionName.slice(0, 2).toUpperCase()}
-                                          </div>
-                                          <div>
-                                            <div className="flex items-center gap-2">
-                                              <h4 className="text-xs font-bold text-slate-900">{institutionName}</h4>
-                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                                Active
-                                              </span>
-                                            </div>
-                                            <p className="text-[11px] text-slate-500 mt-0.5">
-                                              {accs.length} linked {accs.length === 1 ? 'account' : 'accounts'} · Total ${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                            </p>
-                                          </div>
-                                        </div>
-
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            if (matchingPlaidItem) {
-                                              handleDisconnectBank(matchingPlaidItem.itemId, institutionName);
-                                            } else {
-                                              // Remove all accounts with this institution
-                                              if (window.confirm(`Disconnect all accounts from ${institutionName}?`)) {
-                                                accs.forEach(a => handleDeleteAccount(a.id, a.name));
-                                              }
-                                            }
-                                          }}
-                                          className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                                          title={`Disconnect ${institutionName}`}
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
-                                      </div>
-
-                                      {/* Breakdown of individual accounts under this institution */}
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100">
-                                        {accs.map(acc => (
-                                          <div key={acc.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
-                                            <div className="min-w-0 pr-2">
-                                              <p className="font-semibold text-slate-800 truncate">{acc.name}</p>
-                                              <p className="text-[10px] text-slate-400 capitalize">
-                                                {acc.type === 'credit' ? 'Credit card' : 'Checking / Savings'} (•••• {acc.mask || '0000'})
-                                              </p>
-                                            </div>
-                                            <span className="font-bold text-slate-900 shrink-0">
-                                              ${Number(acc.balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                            </span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-
-                                <div className="pt-2 flex items-center justify-between">
-                                  <p className="text-[11px] text-slate-500">
-                                    Want to connect another institution?
-                                  </p>
-                                  <button
-                                    type="button"
-                                    onClick={() => setBankTab('connect')}
-                                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
-                                  >
-                                    <Plus className="w-3.5 h-3.5" />
-                                    <span>Connect another bank</span>
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      )}
-
-                      {/* SUB-VIEW 2: CONNECT A BANK */}
-                      {bankTab === 'connect' && (
-                        <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-5 bg-white shadow-2xs">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500 font-medium">Connection status:</span>
-                            {settingsPlaidStatus === 'connected' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                Connected
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                No bank linked
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Plaid Link Connect Banner with Green Button */}
-                          <div className="p-4 rounded-xl bg-emerald-50/80 border border-emerald-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                                <Building2 className="w-4 h-4" />
-                              </div>
-                              <div>
-                                <p className="text-xs font-bold text-slate-900">Connect Bank with Plaid</p>
-                                <p className="text-[11px] text-slate-500">Securely link your real accounts, balances, and cards.</p>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={initiatePlaidLink}
-                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0"
-                            >
-                              <span>Add bank with Plaid</span>
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-
-
-
-                          <form onSubmit={handleSavePlaidCredentials} className="flex flex-col gap-4">
-                            {/* Plaid Dashboard Callout */}
-                            <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                              <div>
-                                <p className="text-xs font-bold text-slate-900">Need Plaid API Keys?</p>
-                                <p className="text-[11px] text-slate-500">Get your Client ID and Secret directly on the Plaid dashboard.</p>
-                              </div>
-                              <a
-                                href="https://dashboard.plaid.com/overview"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-blue-200 text-blue-700 text-xs font-semibold hover:bg-blue-50 shadow-2xs transition-colors shrink-0"
-                              >
-                                <span>Plaid Dashboard</span>
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                            </div>
-
-                            <div>
-                              <div className="flex items-center justify-between mb-1.5">
-                                <label className="text-xs font-medium text-slate-700">Plaid Client ID</label>
-                                <a
-                                  href="https://dashboard.plaid.com/overview"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline"
-                                >
-                                  <span>Get keys on Plaid</span>
-                                  <ExternalLink className="w-3 h-3" />
-                                </a>
-                              </div>
-                              <input
-                                type="text"
-                                value={settingsPlaidClientId}
-                                onChange={e => {
-                                  setSettingsPlaidClientId(e.target.value);
-                                  try { localStorage.setItem('klarity_plaid_client_id', e.target.value); } catch {}
-                                }}
-                                placeholder="Client ID"
-                                className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="text-xs font-medium text-slate-700 block mb-1.5">Plaid Secret</label>
-                              <div className="relative">
-                                <input
-                                  type={settingsPlaidShowSecret ? 'text' : 'password'}
-                                  value={settingsPlaidSecret}
-                                  onChange={e => setSettingsPlaidSecret(e.target.value)}
-                                  placeholder={settingsPlaidMaskedSecret ? `Saved: ${settingsPlaidMaskedSecret}` : 'Secret Key'}
-                                  className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => setSettingsPlaidShowSecret(!settingsPlaidShowSecret)}
-                                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                                >
-                                  {settingsPlaidShowSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={initiatePlaidLink}
-                                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
-                                >
-                                  <Building2 className="w-3.5 h-3.5" />
-                                  <span>Connect bank (Plaid)</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setIsSettingsOpen(false);
-                                    setIsAddAccountOpen(true);
-                                  }}
-                                  className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                                >
-                                  Add card manually
-                                </button>
-                              </div>
-                              <button
-                                type="submit"
-                                className="px-4 py-2 rounded-xl bg-[#1B4B91] hover:bg-[#153a70] text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                              >
-                                Save credentials
-                              </button>
-                            </div>
-                          </form>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* TAB 4: SECURITY & ACCESS CONTROL */}
-                  {settingsActiveTab === 'security' && (
-                    <div key="settings-tab-security" className="flex flex-col gap-6">
-                      <div>
-                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Security & Privacy</h2>
-                        <p className="text-xs text-slate-500 mt-1">Configure session timeouts, vault master passwords and PINs, and privacy controls.</p>
-                      </div>
-
-                      {/* Card 1: Inactivity & Session Timeout */}
-                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col gap-5">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-[#18457c] shrink-0">
-                              <Clock className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <h3 className="text-sm font-bold text-slate-900">Inactivity & Session Timeout</h3>
-                              <p className="text-xs text-slate-500 mt-0.5">Control how long Klarity stays active when nothing is being used before automatically timing out.</p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleLockSession}
-                            className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer transition-colors shadow-2xs shrink-0 flex items-center gap-1.5"
-                          >
-                            <Lock className="w-3.5 h-3.5" />
-                            <span>Lock Session Now</span>
-                          </button>
-                        </div>
-
-                        {/* Inactivity Duration */}
-                        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-800">Inactivity Timeout Duration</p>
-                            <p className="text-[11px] text-slate-500 mt-0.5">How long before the session locks or expires if left unattended.</p>
-                          </div>
-                          <select
-                            value={autoLockMinutes}
-                            onChange={e => {
-                              const val = Number(e.target.value);
-                              setAutoLockMinutes(val);
-                              try { localStorage.setItem('klarity_auto_lock_mins', String(val)); } catch {}
-                            }}
-                            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs cursor-pointer"
-                          >
-                            <option value={5}>5 minutes</option>
-                            <option value={15}>15 minutes (default)</option>
-                            <option value={30}>30 minutes</option>
-                            <option value={60}>1 hour</option>
-                            <option value={240}>4 hours</option>
-                            <option value={480}>8 hours</option>
-                            <option value={0}>Never (Stay active)</option>
-                          </select>
-                        </div>
-
-                        {/* Idle Action */}
-                        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-800">When Timeout is Reached</p>
-                            <p className="text-[11px] text-slate-500 mt-0.5">Choose whether to lock the screen or sign out completely.</p>
-                          </div>
-                          <select
-                            value={idleAction}
-                            onChange={e => {
-                              setIdleAction(e.target.value);
-                              try { localStorage.setItem('klarity_idle_action', e.target.value); } catch {}
-                            }}
-                            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs cursor-pointer"
-                          >
-                            <option value="lock">Lock screen (Enter PIN/Password to resume)</option>
-                            <option value="logout">Sign out completely</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* Card 2: Passwords Vault Protection Mode */}
-                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col gap-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-[#18457c] shrink-0">
-                            <KeyRound className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-bold text-slate-900">Passwords Vault Access Protection</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">Secure your stored passwords and account numbers with a PIN, a password, or leave it unlocked.</p>
-                          </div>
-                        </div>
-
-                        {/* Mode Selection Pills */}
-                        <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
-                          <label className="text-xs font-semibold text-slate-800">Vault Protection Type</label>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setVaultLockType('pin');
-                                localStorage.setItem('klarity_vault_lock_type', 'pin');
-                              }}
-                              className={`p-3 rounded-xl border text-left transition-colors cursor-pointer ${
-                                vaultLockType === 'pin'
-                                  ? 'border-[#18457c] bg-blue-50/50 text-[#18457c]'
-                                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                              }`}
-                            >
-                              <div className="font-bold text-xs">Security PIN</div>
-                              <div className="text-[11px] text-slate-500 mt-0.5">4-6 digit numeric code</div>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setVaultLockType('password');
-                                localStorage.setItem('klarity_vault_lock_type', 'password');
-                              }}
-                              className={`p-3 rounded-xl border text-left transition-colors cursor-pointer ${
-                                vaultLockType === 'password'
-                                  ? 'border-[#18457c] bg-blue-50/50 text-[#18457c]'
-                                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                              }`}
-                            >
-                              <div className="font-bold text-xs">Master Password</div>
-                              <div className="text-[11px] text-slate-500 mt-0.5">Alphanumeric passphrase</div>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (vaultLockType !== 'none') {
-                                  if (window.confirm('Cancel PIN/Password lock? Your Passwords page will be directly accessible without a security prompt.')) {
-                                    setVaultLockType('none');
-                                    localStorage.setItem('klarity_vault_lock_type', 'none');
-                                    sessionStorage.removeItem('klarity_vault_unlocked_until');
-                                    setNotificationToast('Vault lock disabled');
-                                    setTimeout(() => setNotificationToast(''), 3000);
-                                  }
-                                }
-                              }}
-                              className={`p-3 rounded-xl border text-left transition-colors cursor-pointer ${
-                                vaultLockType === 'none'
-                                  ? 'border-emerald-600 bg-emerald-50/50 text-emerald-800'
-                                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                              }`}
-                            >
-                              <div className="font-bold text-xs">No Lock (Direct Access)</div>
-                              <div className="text-[11px] text-slate-500 mt-0.5">Cancel PIN and open directly</div>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* When vaultLockType is 'none' */}
-                        {vaultLockType === 'none' && (
-                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
-                            <span>Vault protection is turned off. Anyone on this browser can view passwords without entering a PIN or password.</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setVaultLockType('pin');
-                                localStorage.setItem('klarity_vault_lock_type', 'pin');
-                              }}
-                              className="px-3 py-1.5 rounded-lg bg-[#18457c] text-white font-semibold text-xs cursor-pointer shrink-0"
-                            >
-                              Enable PIN
-                            </button>
-                          </div>
-                        )}
-
-                        {/* When vaultLockType is 'pin' or 'password' */}
-                        {vaultLockType !== 'none' && (
-                          <>
-                            {/* PIN/Password Timeout Setting */}
-                            <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                              <div>
-                                <p className="text-xs font-semibold text-slate-800">Vault Unlock Duration</p>
-                                <p className="text-[11px] text-slate-500 mt-0.5">How long the vault stays unlocked after entering your {vaultLockType === 'password' ? 'password' : 'PIN'}.</p>
-                              </div>
-                              <select
-                                value={vaultPinTimeout}
-                                onChange={e => setVaultPinTimeout(e.target.value)}
-                                className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs cursor-pointer"
-                              >
-                                <option value="immediate">Immediate (every visit)</option>
-                                <option value="5m">5 minutes</option>
-                                <option value="15m">15 minutes (default)</option>
-                                <option value="1h">1 hour</option>
-                                <option value="session">Until app closes</option>
-                              </select>
-                            </div>
-
-                            {/* Change PIN/Password Form */}
-                            <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-bold text-slate-900">
-                                  {vaultLockType === 'password' ? 'Change Master Password' : 'Change Security PIN'}
-                                </p>
-                                {changePinMsg && (
-                                  <span className={`text-[11px] font-semibold ${
-                                    changePinMsg.includes('success') ? 'text-emerald-600' : 'text-rose-600'
-                                  }`}>
-                                    {changePinMsg}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <div>
-                                  <label className="text-[11px] font-medium text-slate-600 block mb-1">
-                                    Current {vaultLockType === 'password' ? 'Password' : 'PIN'}
-                                  </label>
-                                  <input
-                                    type="password"
-                                    maxLength={vaultLockType === 'password' ? 64 : 12}
-                                    value={changePinCurrent}
-                                    onChange={e => setChangePinCurrent(vaultLockType === 'password' ? e.target.value : e.target.value.replace(/\D/g, ''))}
-                                    placeholder={vaultLockType === 'password' ? 'Current password' : '••••'}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="text-[11px] font-medium text-slate-600 block mb-1">
-                                    New {vaultLockType === 'password' ? 'Password' : 'PIN'}
-                                  </label>
-                                  <input
-                                    type="password"
-                                    maxLength={vaultLockType === 'password' ? 64 : 12}
-                                    value={changePinNew}
-                                    onChange={e => setChangePinNew(vaultLockType === 'password' ? e.target.value : e.target.value.replace(/\D/g, ''))}
-                                    placeholder={vaultLockType === 'password' ? 'At least 4 characters' : '••••'}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="text-[11px] font-medium text-slate-600 block mb-1">
-                                    Confirm New {vaultLockType === 'password' ? 'Password' : 'PIN'}
-                                  </label>
-                                  <input
-                                    type="password"
-                                    maxLength={vaultLockType === 'password' ? 64 : 12}
-                                    value={changePinConfirm}
-                                    onChange={e => setChangePinConfirm(vaultLockType === 'password' ? e.target.value : e.target.value.replace(/\D/g, ''))}
-                                    placeholder={vaultLockType === 'password' ? 'Re-enter password' : '••••'}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="flex items-center justify-between pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (window.confirm('Cancel PIN/Password lock? Your Passwords page will be directly accessible without a security prompt.')) {
-                                      setVaultLockType('none');
-                                      localStorage.setItem('klarity_vault_lock_type', 'none');
-                                      removeMasterPin();
-                                      localStorage.removeItem('klarity_vault_pin');
-                                      sessionStorage.removeItem('klarity_vault_unlocked_until');
-                                      setChangePinMsg('');
-                                      setNotificationToast('Vault lock removed');
-                                      setTimeout(() => setNotificationToast(''), 3000);
-                                    }
-                                  }}
-                                  className="text-xs text-rose-600 hover:text-rose-700 underline font-medium cursor-pointer"
-                                >
-                                  Cancel & remove vault lock
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    const currentSaved = localStorage.getItem('klarity_vault_pin') || '1234';
-                                    if (changePinCurrent !== currentSaved) {
-                                      setChangePinMsg(`Incorrect current ${vaultLockType === 'password' ? 'password' : 'PIN'}.`);
-                                      return;
-                                    }
-                                    if (changePinNew.length < 4) {
-                                      setChangePinMsg(`New ${vaultLockType === 'password' ? 'password' : 'PIN'} must be at least 4 characters.`);
-                                      return;
-                                    }
-                                    if (changePinNew !== changePinConfirm) {
-                                      setChangePinMsg(`New ${vaultLockType === 'password' ? 'password' : 'PIN'} confirmation does not match.`);
-                                      return;
-                                    }
-                                    localStorage.setItem('klarity_vault_pin', changePinNew);
-                                    localStorage.setItem('klarity_vault_lock_type', vaultLockType);
-                                    try { await setMasterPin(changePinNew); } catch {}
-                                    setChangePinMsg(`${vaultLockType === 'password' ? 'Master password' : 'Security PIN'} updated successfully!`);
-                                    setChangePinCurrent('');
-                                    setChangePinNew('');
-                                    setChangePinConfirm('');
-                                    setTimeout(() => setChangePinMsg(''), 4000);
-                                  }}
-                                  className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
-                                >
-                                  Update {vaultLockType === 'password' ? 'Password' : 'PIN'}
-                                </button>
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Card 3: Clipboard Privacy */}
-                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-[#18457c] shrink-0">
-                            <ShieldCheck className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-bold text-slate-900">Clipboard Privacy Safeguard</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">Wipe copied passwords and account numbers from your device clipboard automatically.</p>
-                          </div>
-                        </div>
-
-                        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-800">Clipboard Auto-Clear Delay</p>
-                            <p className="text-[11px] text-slate-500 mt-0.5">Time before clipboard memory is cleared after copying credentials.</p>
-                          </div>
-                          <select
-                            value={clipboardClearSeconds}
-                            onChange={e => setClipboardClearSeconds(Number(e.target.value))}
-                            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs cursor-pointer"
-                          >
-                            <option value={15}>15 seconds</option>
-                            <option value={30}>30 seconds (recommended)</option>
-                            <option value={60}>60 seconds</option>
-                            <option value={0}>Never clear</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* Card 4: Device Data & Lockout Recovery */}
-                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                        <div>
-                          <p className="font-bold text-slate-900">Reset Vault PIN to Default</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">Reset your master vault PIN back to default (1234) and clear any rate limit lockouts.</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              clearLockoutState();
-                              setNotificationToast('Lockout state cleared');
-                              setTimeout(() => setNotificationToast(''), 3000);
-                            }}
-                            className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer transition-colors"
-                          >
-                            Clear Lockout
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (window.confirm('Reset your Passwords Vault PIN to default (1234)?')) {
-                                localStorage.setItem('klarity_vault_pin', '1234');
-                                localStorage.setItem('klarity_vault_lock_type', 'pin');
-                                setVaultLockType('pin');
-                                removeMasterPin();
-                                sessionStorage.removeItem('klarity_vault_unlocked_until');
-                                setNotificationToast('Vault PIN reset to 1234');
-                                setTimeout(() => setNotificationToast(''), 3000);
-                              }
-                            }}
-                            className="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer transition-colors"
-                          >
-                            Reset to 1234
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Card 5: Active Session & Sign Out */}
-                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold text-slate-900">Signed in as</p>
-                            <p className="text-xs text-slate-500 mt-0.5 truncate">{currentUser?.email || ''}</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsSettingsOpen(false);
-                              handleLogout();
-                            }}
-                            className="px-3.5 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-semibold text-xs cursor-pointer transition-colors shadow-2xs shrink-0"
-                          >
-                            Sign Out
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB: ABOUT & LAST UPDATES */}
-                  {settingsActiveTab === 'about' && (
-                    <div key="settings-tab-about" className="flex flex-col gap-6">
-                      <div>
-                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">About Klarity</h2>
-                        <p className="text-xs text-slate-500 mt-1">Software information, current version, and recent release updates.</p>
-                      </div>
-
-                      {/* Card 1: App Version & System Summary */}
-                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-3.5">
-                          <div className="w-12 h-12 rounded-2xl bg-[#eff4f9] border border-[#18457c]/20 flex items-center justify-center shrink-0 shadow-2xs">
-                            <KlarityLogo className="w-7 h-7 text-[#18457c]" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-bold text-slate-900 text-sm">Klarity Finance</h3>
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
-                                {formatVersionString(desktopAppInfo.version || '3.12.23')}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-500 mt-0.5">
-                              {desktopAppInfo.isDesktopApp ? 'Klarity (Windows)' : 'Klarity Web Application'}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            disabled={isCheckingUpdateInSettings}
-                            onClick={async () => {
-                              setIsCheckingUpdateInSettings(true);
-                              try {
-                                if (typeof window !== 'undefined' && window.klarityDesktop?.checkForUpdates) {
-                                  const st = await window.klarityDesktop.checkForUpdates();
-                                  if (st?.state === 'available') {
-                                    setIsUpdateModalOpen(true);
-                                  } else {
-                                    setNotificationToast('You are running the latest version of Klarity.');
-                                    setTimeout(() => setNotificationToast(''), 3000);
-                                  }
-                                } else {
-                                  setNotificationToast('You are running the latest version of Klarity.');
-                                  setTimeout(() => setNotificationToast(''), 3000);
-                                }
-                              } catch {
-                                setNotificationToast('Update check complete — up to date.');
-                                setTimeout(() => setNotificationToast(''), 3000);
-                              } finally {
-                                setIsCheckingUpdateInSettings(false);
-                              }
-                            }}
-                            className="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs cursor-pointer transition-colors shadow-2xs flex items-center gap-2"
-                          >
-                            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isCheckingUpdateInSettings ? 'animate-spin' : ''}`} />
-                            <span>{isCheckingUpdateInSettings ? 'Checking...' : 'Check for Updates'}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Card 2: Feedback Section */}
-                      <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs flex flex-col gap-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-bold text-slate-900 text-sm">Feedback</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">Share thoughts, report bugs, or request features to help improve Klarity.</p>
-                          </div>
-                          <span className="px-2.5 py-1 rounded-xl bg-blue-50 text-[#18457c] font-semibold text-[11px] border border-blue-100">
-                            User Feedback
-                          </span>
-                        </div>
-
-                        <form onSubmit={handleSendFeedback} className="flex flex-col gap-3 pt-1">
-                          {/* Feedback Type Selector */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {['General Feedback', 'Feature Request', 'Bug Report'].map(type => (
-                              <button
-                                key={type}
-                                type="button"
-                                onClick={() => setFeedbackType(type)}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                                  feedbackType === type
-                                    ? 'bg-[#18457c] text-white border-[#18457c] shadow-2xs'
-                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                                }`}
-                              >
-                                {type}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Message Textarea */}
-                          <textarea
-                            value={feedbackText}
-                            onChange={(e) => setFeedbackText(e.target.value)}
-                            rows={3}
-                            placeholder="What can we improve? Let us know what you'd like to see..."
-                            className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:border-[#18457c] focus:ring-1 focus:ring-[#18457c] outline-none text-slate-800 placeholder:text-slate-400 resize-none bg-slate-50/50"
-                          />
-
-                          <div className="flex items-center justify-between pt-1">
-                            {feedbackSubmitted ? (
-                              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                Thank you! Your feedback has been received.
-                              </span>
-                            ) : (
-                              <span className="text-[11px] text-slate-400">
-                                Your feedback directly shapes upcoming updates.
-                              </span>
-                            )}
-
-                            <button
-                              type="submit"
-                              disabled={!feedbackText.trim() || isSubmittingFeedback}
-                              className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold cursor-pointer transition-colors shadow-2xs flex items-center gap-1.5"
-                            >
-                              <span>{isSubmittingFeedback ? 'Sending...' : 'Send Feedback'}</span>
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-
-                      {/* Card 3: Release Notes (Collapsible) */}
-                      <div className="border border-slate-200 rounded-2xl bg-white shadow-2xs overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => setIsReleaseNotesOpen(prev => !prev)}
-                          className="w-full p-5 flex items-center justify-between cursor-pointer hover:bg-slate-50/60 transition-colors text-left"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <h3 className="font-bold text-slate-900 text-sm">Release Notes</h3>
-                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200">
-                              v3.12.23
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-slate-500">
-                              {isReleaseNotesOpen ? 'Hide' : 'View'}
-                            </span>
-                            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isReleaseNotesOpen ? 'rotate-180' : ''}`} />
-                          </div>
-                        </button>
-
-                        {isReleaseNotesOpen && (
-                          <div className="px-5 pb-5 pt-1 border-t border-slate-100">
-                            <div className="space-y-4 pt-3">
-                              {/* Release 3.12.23 (Latest) */}
-                              <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/60 flex flex-col gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.23</span>
-                                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">Current</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">Latest Release</span>
-                                </div>
-                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                                  <li><strong className="text-slate-800">Readability Scale Isolation:</strong> Decoupled UI readability scale (up to 200%) from the Left Sidebar and Right AI Advisor sidebar so the main page content zooms smoothly for scrolling while all sidebar navigation options and AI advisor controls remain razor-sharp and never forced to scroll.</li>
-                                  <li><strong className="text-slate-800">Compact Navigation Geometry:</strong> Optimized sidebar item spacing and layout so all 10 navigation options, system logo, and account footer remain fully visible and accessible on screen.</li>
-                                </ul>
-                              </div>
-
-                              {/* Release 3.12.21 */}
-                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.21</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">Previous</span>
-                                </div>
-                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                                  <li><strong className="text-slate-800">Redesigned Provider Detail Pages:</strong> Completely overhauled each service provider page (Internet, Phone, Power, Water, Trash, Security, Warranty, and custom extra providers) into a clean, modern, spacious UI. Separated viewing and editing modes to eliminate on-screen clutter, added 1-click Account Number copying, compact statement upload dropzones with OCR feedback, and verified payment history cards.</li>
-                                  <li><strong className="text-slate-800">Household Dashboard Enhancements:</strong> Elevated provider cards in the Household Lifestyle dashboard with brand-tinted icons, monthly cost badges, statement status pills, and direct access to provider details.</li>
-                                </ul>
-                              </div>
-
-                              {/* Release 3.12.20 */}
-                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.20</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">Previous</span>
-                                </div>
-                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                                  <li><strong className="text-slate-800">Extra Household Providers:</strong> Added flexible &quot;+ Add Extra Provider&quot; functionality in Household Lifestyle Providers section allowing users to add custom services (Pest Control, Lawn Care, Pool Maintenance, Gas / Propane, Cleaning Service) with custom plan names, costs, account numbers, and notes.</li>
-                                  <li><strong className="text-slate-800">Home Warranty & Protection Suite:</strong> Pre-populated realistic defaults for Home Warranty (American Home Shield, Choice Home Warranty, etc.) and Municipal Water Service across the Household dashboard and Step 7 Onboarding Wizard.</li>
-                                </ul>
-                              </div>
-
-                              {/* Release 3.12.19 */}
-                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.19</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">Previous</span>
-                                </div>
-                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                                  <li><strong className="text-slate-800">Update Notification Precision Engine:</strong> Eliminated false-positive update alerts when running the latest version. Integrated semantic version verification and persistent dismissal tracking across web and native desktop runtimes.</li>
-                                  <li><strong className="text-slate-800">Passwords & Accounts Header:</strong> Removed the back button from the top left corner of the Passwords & Accounts hub for a clean, focused workspace layout.</li>
-                                </ul>
-                              </div>
-
-                              {/* Release 3.12.18 */}
-                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.18</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">Previous</span>
-                                </div>
-                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                                  <li><strong className="text-slate-800">Home Warranty & Appliance Protection:</strong> Added home warranty providers (American Home Shield, Choice Home Warranty, First American, Cinch Home Services, Liberty Home Guard, Select Home Warranty) with plan tiers, monthly costs, contract notes, and full statement uploading & scanning.</li>
-                                  <li><strong className="text-slate-800">Password Category Dropdown:</strong> Clean, uncluttered category filter dropdown with &quot;+ New Section&quot; at the top, section badges, and category management.</li>
-                                </ul>
-                              </div>
-
-                              {/* Release 3.12.17 */}
-                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.17</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">Previous</span>
-                                </div>
-                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                                  <li><strong className="text-slate-800">Readability & Content Scaling Up to 200%:</strong> Added fluid 100%–200% scale slider and 5 preset buttons (100%, 125%, 150%, 175%, 200%) for maximum visual comfort and legibility.</li>
-                                  <li><strong className="text-slate-800">Responsive High-Zoom Architecture:</strong> Configured modals and dashboards to dynamically adapt and scroll gracefully at 200% scale.</li>
-                                  <li><strong className="text-slate-800">Security Page Sign Out:</strong> Clean single-row layout with Sign Out directly next to signed-in email.</li>
-                                </ul>
-                              </div>
-
-                              {/* Release 3.12.16 */}
-                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.16</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">Previous</span>
-                                </div>
-                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                                  <li><strong className="text-slate-800">Security Page Sign Out:</strong> Moved Active Session status and Sign Out button cleanly to the bottom of the Security section.</li>
-                                  <li><strong className="text-slate-800">Settings Streamlining:</strong> Removed redundant update checker from Session tab and consolidated all software update controls into About.</li>
-                                  <li><strong className="text-slate-800">Settings About Elevate:</strong> Positioned user feedback and bug reporting directly above release notes for immediate visibility.</li>
-                                </ul>
-                              </div>
-
-                              {/* Release 3.12.15 */}
-                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.15</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">Previous</span>
-                                </div>
-                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                                  <li><strong className="text-slate-800">Settings About Elevate:</strong> Positioned user feedback and bug reporting directly above release notes for immediate visibility.</li>
-                                  <li><strong className="text-slate-800">Instant Update Notification Engine:</strong> Proactively checks GitHub for new releases on launch and in the background, reliably triggering the update modal and top notification banner.</li>
-                                  <li><strong className="text-slate-800">Passwords Section Dropdown:</strong> Replaced wide horizontal section pills with a clean compact dropdown featuring "+ New Section" at the top.</li>
-                                  <li><strong className="text-slate-800">Permanent Password & Data Persistence:</strong> Guaranteed zero data wiping and removed dummy seeds across updates.</li>
-                                  <li><strong className="text-slate-800">Lifestyle Hub Isolation:</strong> Restricted vehicle, property, and card additions on the overview page to direct Lifestyle navigation.</li>
-                                </ul>
-                              </div>
-
-                              {/* Release 3.12.14 */}
-                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.14</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">Previous</span>
-                                </div>
-                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                                  <li><strong className="text-slate-800">Weekly Financial Advisor Engine:</strong> Analyzes actual cards, transactions, and budgets to recommend card payoff order (first vs. last), priority-based budget adjustments, and weekly money allocations.</li>
-                                  <li><strong className="text-slate-800">Subpage Three-Dot Dropdown Menus:</strong> Quick action menus added to Transactions, Budgets, Bills, Subscriptions, Cards, and Lifestyle headers.</li>
-                                  <li><strong className="text-slate-800">Right-Click Copy:</strong> Added context menu to copy any highlighted text across the app.</li>
-                                  <li><strong className="text-slate-800">Subpage Layout Elevate:</strong> Centered subpage titles and leveled Back to Overview button to optimize vertical screen room.</li>
-                                  <li><strong className="text-slate-800">Session Settings Update:</strong> Clean single-row layout with Sign Out directly next to signed-in email.</li>
-                                  <li><strong className="text-slate-800">Bug Fixes:</strong> Removed duplicate sidebar tooltips, eliminated dark mode white box anomalies, restored 100% clean Light theme, and updated semantic versioning.</li>
-                                </ul>
-                              </div>
-
-                              {/* Release 3.11.13 */}
-                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.11.13</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">Previous</span>
-                                </div>
-                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                                  <li><strong className="text-slate-800">UI Settings Section:</strong> Added dedicated UI section with text scaling (Default, Large, Extra Large), interface density, and accessibility helpers.</li>
-                                  <li><strong className="text-slate-800">Household Clickable Providers:</strong> Direct access to provider detail view with statement upload and history.</li>
-                                </ul>
-                              </div>
-
-                              {/* Release 3.10.12 */}
-                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.10.12</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">Previous</span>
-                                </div>
-                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                                  <li><strong className="text-slate-800">Passwords & Accounts Vault:</strong> Custom sections, website URL fields, Grid/List layout controls, Small/Medium/Large card view sizes, and 3-dots card actions with delete confirmation.</li>
-                                </ul>
-                              </div>
-
-                              {/* Release 3.9.11 */}
-                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.9.11</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">Previous</span>
-                                </div>
-                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                                  <li><strong className="text-slate-800">Lifestyle Hub Suite:</strong> Household interactive property questions and PG&E solar estimator, Auto garage with trim selection and per-car insurance card upload, Health insurance OCR card scanner with front/back 3D flip card.</li>
-                                </ul>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Modal Footer */}
-                <div className="pt-6 border-t border-slate-200/80 flex items-center justify-end mt-auto">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (settingsTab === 'profile' && settingsDisplayName?.trim()) {
-                        handleSaveProfile();
-                      }
-                      setNotificationToast('Settings saved');
-                      setTimeout(() => setNotificationToast(''), 2500);
-                      setIsSettingsOpen(false);
-                    }}
-                    className="px-5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
-      {/* Mini AI Advisor Settings & Tools Modal */}
-      {isMiniSettingsOpen && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setIsMiniSettingsOpen(false); }}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-5 text-slate-800 animate-in fade-in zoom-in-95 cursor-default max-h-[90vh] overflow-y-auto"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#18457c] flex items-center justify-center shrink-0">
-                  <SlidersHorizontal className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-serif-title text-lg font-bold text-slate-900">AI Advisor Tools & Settings</h3>
-                  <p className="text-[11px] text-slate-500">Fine-tune memory, response depth, and live web access</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsMiniSettingsOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Tool 1: Response Length / Typing Limit */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Response Length & Detail
+            <div>
+              <label htmlFor="scan-statement-textarea" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
+                Statement text
               </label>
-              <p className="text-[11px] text-slate-500 -mt-1">
-                Controls how much the AI writes before finishing its response.
-              </p>
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                {[
-                  { id: 'concise', label: 'Concise', words: '~150 words', desc: 'Fast, bullet points only' },
-                  { id: 'balanced', label: 'Balanced', words: '~350 words', desc: 'Standard practical advice' },
-                  { id: 'detailed', label: 'In-Depth', words: '~700 words', desc: 'Comprehensive math & plans' }
-                ].map(opt => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setAiResponseLength(opt.id)}
-                    className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
-                      aiResponseLength === opt.id
-                        ? 'bg-blue-50/70 border-blue-500 text-slate-900 shadow-2xs ring-1 ring-blue-500'
-                        : 'bg-slate-50/70 border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span className="text-xs font-bold">{opt.label}</span>
-                    <span className="text-[10px] text-blue-700 font-semibold">{opt.words}</span>
-                    <span className="text-[10px] text-slate-400 leading-tight">{opt.desc}</span>
-                  </button>
-                ))}
-              </div>
+              <textarea
+                id="scan-statement-textarea"
+                rows={5}
+                value={scanText}
+                onChange={(e) => setScanText(e.target.value)}
+                placeholder="Paste bill or statement lines here..."
+                className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] p-3 text-[15px] font-medium text-[var(--ink)]"
+              />
             </div>
-
-            {/* Tool 2: Live Internet / Web Search Connection */}
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                  aiWebSearchEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-200 text-slate-500'
-                }`}>
-                  <Globe className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs font-bold text-slate-900">Live Internet Web Search</p>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                      aiWebSearchEnabled
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-slate-100 text-slate-600 border-slate-300'
-                    }`}>
-                      {aiWebSearchEnabled ? 'Active' : 'Offline Mode'}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    {aiWebSearchEnabled
-                      ? 'AI searches Google for live card rates, balance transfer promos, and yields.'
-                      : 'AI only evaluates local accounts and bills without external web lookups.'}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAiWebSearchEnabled(prev => !prev)}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  aiWebSearchEnabled ? 'bg-[#18457c]' : 'bg-slate-300'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    aiWebSearchEnabled ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
+              <Button variant="secondary" onClick={() => setIsScanBillOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleScanBill}>
+                Analyze statement
+              </Button>
             </div>
-
-            {/* Tool 3: Advisor Memory */}
-            <div className="flex flex-col gap-2.5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">Advisor Memory</label>
-                  <p className="text-[11px] text-slate-500">Custom rules the AI remembers across every question.</p>
-                </div>
-                <span className="text-[11px] font-semibold text-slate-400">{aiMemory.length} saved</span>
-              </div>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="e.g. Prioritize paying off high-interest cards before saving..."
-                  value={newMemoryInput}
-                  onChange={e => setNewMemoryInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddMemory();
-                    }
-                  }}
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none focus:bg-white focus:border-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleAddMemory()}
-                  className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors shrink-0"
-                >
-                  Add
-                </button>
-              </div>
-
-              <div className="divide-y divide-slate-100 max-h-36 overflow-y-auto border border-slate-100 rounded-xl px-2">
-                {aiMemory.length === 0 ? (
-                  <p className="text-[11px] text-slate-400 py-3 text-center italic">No custom preferences saved yet.</p>
-                ) : (
-                  aiMemory.map((item, idx) => (
-                    <div key={idx} className="py-2 flex items-center justify-between text-xs gap-2">
-                      <span className="text-slate-700 leading-snug">{item}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveMemory(idx)}
-                        className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer shrink-0"
-                        title="Remove memory"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Tool 4: Data Permissions Quick Toggles */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">Data Access Permissions</label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[
-                  { id: 'cards', label: 'Cards' },
-                  { id: 'bills', label: 'Bills' },
-                  { id: 'subscriptions', label: 'Subscriptions' },
-                  { id: 'purchases', label: 'Purchases' },
-                  ...(featureFlags.retirement !== false ? [{ id: 'retirement', label: 'Retirement Plans' }] : [])
-                ].map(p => {
-                  const allowed = settingsAiPermissions[p.id];
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleTogglePermission(p.id)}
-                      className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
-                        allowed
-                          ? 'bg-blue-50/60 border-blue-300 text-blue-900'
-                          : 'bg-slate-50 border-slate-200 text-slate-400 line-through'
-                      }`}
-                    >
-                      <span>{p.label}</span>
-                      <CheckCircle2 className={`w-3.5 h-3.5 ${allowed ? 'text-blue-600' : 'text-slate-300'}`} />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm('Clear current active conversation thread?')) {
-                    const freshThread = [{
-                      role: 'assistant',
-                      text: "Conversation cleared. How can I assist you with your finances today?"
-                    }];
-                    updateActiveSession(freshThread);
-                    setNotificationToast('Conversation thread cleared');
-                    setTimeout(() => setNotificationToast(''), 3000);
-                  }
-                }}
-                className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold cursor-pointer transition-colors"
-              >
-                Clear Current Chat
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsMiniSettingsOpen(false)}
-                className="px-5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
-              >
-                Done
-              </button>
-            </div>
-          </div>
+          </Card>
         </div>
       )}
 
-      {/* 1. Update Available Notification Prompt Modal (Opens automatically on launch when GitHub update exists) */}
-      {isUpdateModalOpen && desktopAppInfo.updateStatus?.state === 'available' && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl max-w-md w-full p-6 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200 text-slate-800">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <h3 className="font-serif-title text-lg font-bold text-slate-900">Update Available</h3>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs border border-emerald-200">
-                  {formatVersionString(desktopAppInfo.updateStatus?.latestVersion)}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsUpdateModalOpen(false);
-                  setUpdatePromptDismissed(true);
-                  try {
-                    const curSha = desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
-                    if (curSha) localStorage.setItem('klarity_dismissed_update_sha', curSha);
-                  } catch {}
-                }}
-                className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              A new version of Klarity is available. Would you like to update now?
-            </p>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsUpdateModalOpen(false);
-                  setUpdatePromptDismissed(true);
-                  try {
-                    const curSha = desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
-                    if (curSha) localStorage.setItem('klarity_dismissed_update_sha', curSha);
-                  } catch {}
-                }}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs cursor-pointer transition-colors"
-              >
-                Remind Me Later
-              </button>
-              <button
-                type="button"
-                onClick={handlePerformUpdate}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer transition-colors shadow-sm flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                <span>Update Now</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Fullscreen Updating Progress Overlay */}
-      {isInstallingUpdate && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-2xl max-w-sm w-full text-center flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 text-[#18457c] flex items-center justify-center">
-              <RefreshCw className="w-7 h-7 text-[#18457c] animate-spin" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="font-serif-title text-base font-bold text-slate-900">Updating Klarity...</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Applying latest GitHub updates and rebuilding application. Klarity will restart automatically.
-              </p>
-            </div>
-            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-              <div className="bg-[#18457c] h-1.5 rounded-full animate-pulse w-full" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. What's New Pop-up Modal (Appears automatically when the app reopens after update) */}
-      {isWhatsNewOpen && whatsNewData && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl max-w-lg w-full p-6 sm:p-7 flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-200 text-slate-800">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shadow-2xs shrink-0 text-2xl">
-                  🎉
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-serif-title text-lg font-bold text-slate-900">What's New in Klarity</h3>
-                    <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
-                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.23'))}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Klarity has been successfully updated to the latest version.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleDismissWhatsNew}
-                className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-2.5 border-y border-slate-100 py-3.5 max-h-64 overflow-y-auto">
-              {formatWhatsNewHighlights(whatsNewData.changes).map((change, idx) => (
-                <div key={idx} className="flex items-start gap-2.5 text-xs text-slate-700">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span className="leading-relaxed font-medium">{change}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-end pt-1">
-              <button
-                type="button"
-                onClick={handleDismissWhatsNew}
-                className="px-6 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#133560] text-white font-bold text-xs cursor-pointer transition-colors shadow-2xs"
-              >
-                Got it, looks great!
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Past Chats Modal */}
+      {/* 11. Past Chats Modal */}
       {isPastChatsOpen && (
         <div
-          onClick={(e) => { if (e.target === e.currentTarget) setIsPastChatsOpen(false); }}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="past-chats-modal-title"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-serif-title text-lg font-bold text-slate-900">Past Conversations</h3>
-              <button onClick={() => setIsPastChatsOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
-            </div>
-            <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
-              {chatSessions.map(session => (
-                <div
-                  key={session.id}
-                  onClick={() => handleSwitchSession(session.id)}
-                  className="py-2.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 px-2 rounded-lg"
+          <Card className="max-w-md w-full p-6 flex flex-col gap-4 shadow-xl max-h-[80vh]">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <h3 id="past-chats-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                Past conversations
+              </h3>
+              <div className="flex items-center gap-2">
+                <Button variant="primary" size="sm" onClick={handleCreateNewChat}>
+                  <Plus className="w-4 h-4" />
+                  New chat
+                </Button>
+                <button
+                  type="button"
+                  aria-label="Close past chats modal"
+                  onClick={() => setIsPastChatsOpen(false)}
+                  className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
                 >
-                  <div>
-                    <p className="text-xs font-semibold text-slate-900">{session.title}</p>
-                    <p className="text-[10px] text-slate-400">{session.messages?.length || 0} messages</p>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto divide-y divide-[var(--line)]">
+              {chatSessions.map((sess) => {
+                const isCurrent = sess.id === activeSessionId;
+                return (
+                  <div
+                    key={sess.id}
+                    onClick={() => handleSwitchSession(sess.id)}
+                    className={`py-3 px-3 rounded-[8px] flex items-center justify-between gap-2 cursor-pointer ${
+                      isCurrent ? 'bg-[#1B4B91]/10' : 'hover:bg-[var(--surface-subtle)]'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[15px] font-semibold text-[var(--ink)] truncate">
+                        {sess.title || 'Conversation'}
+                      </div>
+                      <div className="text-[13px] font-medium text-[var(--muted)]">
+                        {(sess.messages || []).length} messages
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Delete conversation ${sess.title || ''}`}
+                      onClick={(e) => handleDeleteSession(sess.id, e)}
+                      className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[#B91C1C] cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* 12. Advisor Memory & Settings Modal */}
+      {isMemoryModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="advisor-memory-modal-title"
+        >
+          <Card className="max-w-lg w-full p-6 flex flex-col gap-5 shadow-xl max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <h3 id="advisor-memory-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                Advisor preferences and memory
+              </h3>
+              <button
+                type="button"
+                aria-label="Close advisor memory modal"
+                onClick={() => setIsMemoryModalOpen(false)}
+                className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="advisor-response-length" className="block text-[13px] font-medium text-[var(--ink)] mb-1">
+                  Response detail level
+                </label>
+                <select
+                  id="advisor-response-length"
+                  value={aiResponseLength}
+                  onChange={(e) => setAiResponseLength(e.target.value)}
+                  className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[15px] font-medium text-[var(--ink)]"
+                >
+                  <option value="concise">Concise</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="detailed">Detailed</option>
+                </select>
+              </div>
+              <div className="flex flex-col justify-end">
+                <label className="flex items-center gap-2.5 text-[15px] font-medium text-[var(--ink)] cursor-pointer py-2">
+                  <input
+                    type="checkbox"
+                    checked={aiWebSearchEnabled}
+                    onChange={(e) => setAiWebSearchEnabled(e.target.checked)}
+                    className="w-4 h-4 accent-[#1B4B91] rounded-[4px]"
+                  />
+                  <span>Allow anonymized web search</span>
+                </label>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAddMemory(newMemoryInput);
+              }}
+              className="flex flex-col gap-2"
+            >
+              <label htmlFor="new-memory-fact-input" className="text-[13px] font-medium text-[var(--ink)]">
+                Add a financial preference or fact for Advisor to remember
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="new-memory-fact-input"
+                  type="text"
+                  value={newMemoryInput}
+                  onChange={(e) => setNewMemoryInput(e.target.value)}
+                  placeholder="e.g. Retired on fixed CalPERS pension, prioritize 0% APR"
+                  className="flex-1 bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[15px] font-medium text-[var(--ink)]"
+                />
+                <Button type="submit" variant="primary" size="sm">
+                  Add
+                </Button>
+              </div>
+            </form>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-semibold text-[var(--ink)]">
+                  Saved facts ({aiMemory.length})
+                </span>
+                {aiMemory.length > 0 && (
                   <button
                     type="button"
-                    onClick={(e) => handleDeleteSession(session.id, e)}
-                    className="text-slate-400 hover:text-rose-600 p-1"
+                    onClick={() => setConfirmClearAdvisorMemoryOpen(true)}
+                    className="text-[13px] font-semibold text-[#B91C1C] hover:underline cursor-pointer"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    Clear all
                   </button>
+                )}
+              </div>
+              {aiMemory.length === 0 ? (
+                <p className="text-[13px] font-medium text-[var(--muted)] py-3">
+                  No custom facts saved yet.
+                </p>
+              ) : (
+                <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-[8px]">
+                  {aiMemory.map((fact, idx) => (
+                    <div key={idx} className="px-3.5 py-2.5 flex items-center justify-between gap-2 text-[15px] font-medium text-[var(--ink)]">
+                      <span>{fact}</span>
+                      <button
+                        type="button"
+                        aria-label="Remove saved fact"
+                        onClick={() => handleRemoveMemory(idx)}
+                        className="p-1 text-[var(--muted)] hover:text-[#B91C1C] cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          </div>
+          </Card>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmClearAdvisorMemoryOpen}
+        title="Clear all advisor memory?"
+        message="This will remove all saved financial preferences and facts from your Advisor memory."
+        confirmLabel="Clear memory"
+        variant="danger"
+        onCancel={() => setConfirmClearAdvisorMemoryOpen(false)}
+        onConfirm={() => {
+          handleClearAllMemory();
+          setConfirmClearAdvisorMemoryOpen(false);
+        }}
+      />
+
+      {/* 13. Software Update Modal */}
+      {isUpdateModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="update-modal-title"
+        >
+          <Card className="max-w-md w-full p-6 flex flex-col gap-4 shadow-xl">
+            <h3 id="update-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+              Update available
+            </h3>
+            <p className="text-[15px] font-medium text-[var(--muted)]">
+              {desktopAppInfo.updateStatus?.message || 'A new version of Klarity is ready to install.'}
+            </p>
+            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setIsUpdateModalOpen(false);
+                  setUpdatePromptDismissed(true);
+                }}
+              >
+                Later
+              </Button>
+              <Button variant="primary" onClick={handlePerformUpdate} disabled={isInstallingUpdate}>
+                {isInstallingUpdate ? 'Updating...' : 'Install update'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* 14. What's New Modal */}
+      {isWhatsNewOpen && whatsNewData && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="whats-new-modal-title"
+        >
+          <Card className="max-w-md w-full p-6 flex flex-col gap-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 id="whats-new-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                What&apos;s new in Klarity
+              </h3>
+              <Pill variant="success">
+                {formatVersionString ? formatVersionString(whatsNewData.version || CURRENT_APP_VERSION) : CURRENT_APP_VERSION}
+              </Pill>
+            </div>
+            <ul className="list-disc list-inside space-y-1.5 text-[15px] font-medium text-[var(--ink)]">
+              {formatWhatsNewHighlights(whatsNewData)
+                .slice(0, 3)
+                .map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+            </ul>
+            <div className="flex justify-end pt-2 border-t border-[var(--line)]">
+              <Button variant="primary" onClick={handleDismissWhatsNew}>
+                Got it
+              </Button>
+            </div>
+          </Card>
         </div>
       )}
     </div>

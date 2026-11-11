@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import {
   KeyRound,
-  Download,
   Plus,
   Search,
   Eye,
@@ -13,7 +12,6 @@ import {
   Edit3,
   ExternalLink,
   X,
-  FileSpreadsheet,
   Lock,
   AlertCircle,
   ChevronDown,
@@ -30,19 +28,18 @@ import {
   verifyMasterPin,
   removeMasterPin
 } from '../utils/securityCrypto';
+import { Button, Card, EmptyState, ConfirmDialog, Pill } from './ui';
 
 export const DEFAULT_VAULT_ITEMS = [];
-
-const CATEGORIES = ['All', 'Household', 'Auto', 'Health', 'Banking', 'Other'];
 
 export default function PasswordVaultPage({
   vaultItems = [],
   onUpdateVaultItems,
-  onBack
+  onShowToast
 }) {
   const [vaultLockType, setVaultLockType] = useState(() => {
     try {
-      return localStorage.getItem('klarity_vault_lock_type') || (hasMasterPinSet() ? 'pin' : 'pin');
+      return localStorage.getItem('klarity_vault_lock_type') || 'pin';
     } catch {
       return 'pin';
     }
@@ -50,7 +47,7 @@ export default function PasswordVaultPage({
 
   const [isUnlocked, setIsUnlocked] = useState(() => {
     try {
-      const lockType = localStorage.getItem('klarity_vault_lock_type') || (hasMasterPinSet() ? 'pin' : 'pin');
+      const lockType = localStorage.getItem('klarity_vault_lock_type') || 'pin';
       if (lockType === 'none') return true;
       const timeoutMode = localStorage.getItem('klarity_vault_pin_timeout') || '15m';
       if (timeoutMode === 'immediate') return false;
@@ -60,12 +57,18 @@ export default function PasswordVaultPage({
       return false;
     }
   });
-  const [hasPin, setHasPin] = useState(() => hasMasterPinSet() || Boolean(localStorage.getItem('klarity_vault_pin')));
+  const [hasPin, setHasPin] = useState(() => hasMasterPinSet());
   const [pinInput, setPinInput] = useState('');
   const [pinConfirmInput, setPinConfirmInput] = useState('');
   const [pinError, setPinError] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [isSubmittingPin, setIsSubmittingPin] = useState(false);
+
+  // Change / remove PIN modal state (requires current PIN)
+  const [pinActionMode, setPinActionMode] = useState(null); // 'change' | 'disable' | null
+  const [currentPinVerifyInput, setCurrentPinVerifyInput] = useState('');
+  const [newPinForChange, setNewPinForChange] = useState('');
+  const [confirmPinForChange, setConfirmPinForChange] = useState('');
 
   const setUnlockSession = () => {
     try {
@@ -101,7 +104,7 @@ export default function PasswordVaultPage({
   const [showFormPassword, setShowFormPassword] = useState(false);
   const [expandedCardIds, setExpandedCardIds] = useState({});
 
-  // View layout and card size preferences (persisted to localStorage)
+  // View layout and card size preferences
   const [viewMode, setViewMode] = useState(() => {
     try {
       return localStorage.getItem('klarity_vault_view_mode') || 'grid';
@@ -123,12 +126,17 @@ export default function PasswordVaultPage({
   const [openCardMenuId, setOpenCardMenuId] = useState(null);
   const [itemToDelete, setItemToDelete] = useState(null);
 
+  const notify = (msg, type = 'success') => {
+    if (onShowToast) onShowToast(msg, type);
+  };
+
   const handleToggleFavorite = (itemId) => {
     const updated = (vaultItems || []).map(item =>
       item.id === itemId ? { ...item, isFavorite: !item.isFavorite } : item
     );
     onUpdateVaultItems(updated);
     setOpenCardMenuId(null);
+    notify('Vault updated');
   };
 
   const handleSetViewMode = (mode) => {
@@ -145,7 +153,6 @@ export default function PasswordVaultPage({
     setExpandedCardIds(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Compute all available sections from user-created custom sections and active cards
   const allSections = useMemo(() => {
     const set = new Set();
     (customSections || []).forEach(s => {
@@ -178,7 +185,6 @@ export default function PasswordVaultPage({
 
   const filteredItems = useMemo(() => {
     return (vaultItems || []).filter(item => {
-      // Exclude legacy empty premade placeholders
       if ((item.id === 'v-pge' || item.id === 'v-water') && !item.password && !item.username && !item.accountNumber) {
         return false;
       }
@@ -211,6 +217,7 @@ export default function PasswordVaultPage({
         setClipboardNotice('Copied (auto-clears in 30s)');
         setTimeout(() => setClipboardNotice(''), 4000);
       }
+      notify('Copied to clipboard');
       setTimeout(() => setCopiedKey(''), 2000);
     }
   };
@@ -234,7 +241,6 @@ export default function PasswordVaultPage({
     return 'Household';
   };
 
-  // Excel (.xlsx, .xls) and CSV Auto-Importer
   const handleExcelUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -266,7 +272,6 @@ export default function PasswordVaultPage({
               let website = findVal(['url', 'link', 'web']);
               let notes = findVal(['note', 'memo', 'info', 'comment', 'detail']);
 
-              // Fallback if user has plain columns without standard headers
               if (!service && keys.length >= 2) {
                 const vals = keys.map(k => sanitizeSpreadsheetCell(row[k])).filter(Boolean);
                 if (vals.length >= 2) {
@@ -291,59 +296,27 @@ export default function PasswordVaultPage({
                 });
               }
             });
-          } else {
-            // Check raw array-of-arrays if sheet had no header row
-            const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-            rawRows.forEach((arr, idx) => {
-              if (Array.isArray(arr) && arr.filter(Boolean).length >= 2) {
-                const service = sanitizeSpreadsheetCell(arr[0]);
-                if (service.toLowerCase() === 'service' || service.toLowerCase() === 'name') return;
-                imported.push({
-                  id: `v-raw-${Date.now()}-${idx}`,
-                  service: service || 'Account',
-                  category: inferCategory(service, sheetName),
-                  username: sanitizeSpreadsheetCell(arr[1]),
-                  password: sanitizeSpreadsheetCell(arr[2]),
-                  accountNumber: sanitizeSpreadsheetCell(arr[3]),
-                  website: '',
-                  notes: sanitizeSpreadsheetCell(arr[4])
-                });
-              }
-            });
           }
         });
 
         if (imported.length > 0) {
           onUpdateVaultItems([...imported, ...(vaultItems || [])]);
-          setImportStatus(`Added & encrypted ${imported.length} account${imported.length === 1 ? '' : 's'} from "${file.name}"`);
+          const msg = `Imported ${imported.length} account${imported.length === 1 ? '' : 's'} from "${file.name}"`;
+          setImportStatus(msg);
+          notify(msg);
           setTimeout(() => setImportStatus(''), 5000);
         } else {
-          setImportStatus('No account rows found in file. Use columns: Service, Username, Password, Account #');
+          setImportStatus('No account rows found in file.');
+          notify('No account rows found in file.', 'error');
           setTimeout(() => setImportStatus(''), 5000);
         }
       } catch (err) {
         setImportStatus(`Could not read file: ${err.message}`);
+        notify(`Could not read file: ${err.message}`, 'error');
       }
     };
     reader.readAsArrayBuffer(file);
     e.target.value = '';
-  };
-
-  // Export back to Excel (.xlsx)
-  const handleExportExcel = () => {
-    const exportRows = (vaultItems || []).map(item => ({
-      Service: item.service || '',
-      Category: item.category || 'Household',
-      Username: item.username || '',
-      Password: item.password || '',
-      'Account Number': item.accountNumber || '',
-      Website: item.website || '',
-      Notes: item.notes || ''
-    }));
-    const ws = XLSX.utils.json_to_sheet(exportRows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Accounts & Passwords');
-    XLSX.writeFile(wb, 'Klarity_Accounts_Passwords.xlsx');
   };
 
   const handleCreateSection = () => {
@@ -360,6 +333,7 @@ export default function PasswordVaultPage({
     setSelectedCategory(trimmed);
     setIsAddingSection(false);
     setNewSectionInput('');
+    notify(`Created section "${trimmed}"`);
   };
 
   const handleDeleteSection = (secName) => {
@@ -368,7 +342,6 @@ export default function PasswordVaultPage({
     try {
       localStorage.setItem('klarity_vault_sections', JSON.stringify(nextSections));
     } catch {}
-    // If any items were tagged with this section, reset their category so the section won't reappear
     if ((vaultItems || []).some(item => (item.category || '').toLowerCase() === secName.toLowerCase())) {
       onUpdateVaultItems(
         (vaultItems || []).map(item =>
@@ -379,6 +352,7 @@ export default function PasswordVaultPage({
     if (selectedCategory.toLowerCase() === secName.toLowerCase()) {
       setSelectedCategory('All');
     }
+    notify(`Removed section "${secName}"`);
   };
 
   const handleSaveForm = (e) => {
@@ -386,7 +360,6 @@ export default function PasswordVaultPage({
     if (!formState.service.trim()) return;
 
     const chosenCategory = (formState.category || '').trim() || 'General';
-    // Persist any new section entered by user
     if (chosenCategory && !customSections.some(s => s.toLowerCase() === chosenCategory.toLowerCase())) {
       const nextSections = [...customSections, chosenCategory];
       setCustomSections(nextSections);
@@ -408,6 +381,7 @@ export default function PasswordVaultPage({
         )
       );
       setEditingId(null);
+      notify('Account credentials updated');
     } else {
       const newItem = {
         id: `v-${Date.now()}`,
@@ -417,6 +391,7 @@ export default function PasswordVaultPage({
         website: (formState.website || '').trim()
       };
       onUpdateVaultItems([newItem, ...(vaultItems || [])]);
+      notify('Account credentials saved');
     }
 
     setFormState({
@@ -451,6 +426,7 @@ export default function PasswordVaultPage({
 
   const handleDelete = (id) => {
     onUpdateVaultItems((vaultItems || []).filter(item => item.id !== id));
+    notify('Account removed from vault');
   };
 
   const handleUnlockWithPin = async (e) => {
@@ -463,14 +439,7 @@ export default function PasswordVaultPage({
     setIsSubmittingPin(true);
     setPinError('');
     try {
-      let result = await verifyMasterPin(cleanSecret);
-      if (!result.valid) {
-        const plainFallback = localStorage.getItem('klarity_vault_pin');
-        if (plainFallback && plainFallback.trim() === cleanSecret) {
-          result = { valid: true };
-          try { await setMasterPin(cleanSecret); } catch {}
-        }
-      }
+      const result = await verifyMasterPin(cleanSecret);
       if (result.valid) {
         setUnlockSession();
         setIsUnlocked(true);
@@ -479,7 +448,7 @@ export default function PasswordVaultPage({
       } else {
         setPinError(result.error || `Incorrect ${vaultLockType === 'password' ? 'master password' : 'security PIN'}. Please try again.`);
       }
-    } catch (err) {
+    } catch {
       setPinError(`Failed to verify ${vaultLockType === 'password' ? 'password' : 'PIN'}. Please try again.`);
     } finally {
       setIsSubmittingPin(false);
@@ -491,16 +460,9 @@ export default function PasswordVaultPage({
     const cleanSecret = pinInput.trim();
     const cleanConfirm = pinConfirmInput.trim();
 
-    if (vaultLockType === 'pin') {
-      if (cleanSecret.length < 4) {
-        setPinError('PIN must be at least 4 digits.');
-        return;
-      }
-    } else {
-      if (cleanSecret.length < 4) {
-        setPinError('Password must be at least 4 characters.');
-        return;
-      }
+    if (cleanSecret.length < 4) {
+      setPinError(vaultLockType === 'password' ? 'Password must be at least 4 characters.' : 'PIN must be at least 4 digits.');
+      return;
     }
 
     if (cleanSecret !== cleanConfirm) {
@@ -512,13 +474,14 @@ export default function PasswordVaultPage({
     setPinError('');
     try {
       await setMasterPin(cleanSecret);
-      localStorage.setItem('klarity_vault_pin', cleanSecret);
+      try { localStorage.removeItem('klarity_vault_pin'); } catch {}
       localStorage.setItem('klarity_vault_lock_type', vaultLockType);
       setHasPin(true);
       setUnlockSession();
       setIsUnlocked(true);
       setPinInput('');
       setPinConfirmInput('');
+      notify('Vault lock configured');
     } catch (err) {
       setPinError(err.message || 'Failed to save credentials.');
     } finally {
@@ -526,29 +489,50 @@ export default function PasswordVaultPage({
     }
   };
 
-  const handleResetPin = () => {
-    if (window.confirm(`Are you sure you want to reset your ${vaultLockType === 'password' ? 'Master Password' : 'Security PIN'}? You will be prompted to create a new one.`)) {
-      removeMasterPin();
-      localStorage.removeItem('klarity_vault_pin');
-      setHasPin(false);
-      setPinInput('');
-      setPinConfirmInput('');
-      setPinError('');
+  const handleVerifyAndExecutePinChange = async (e) => {
+    e.preventDefault();
+    setPinError('');
+    if (hasPin) {
+      const check = await verifyMasterPin(currentPinVerifyInput.trim());
+      if (!check.valid) {
+        setPinError(check.error || 'Current PIN or password is incorrect.');
+        return;
+      }
     }
-  };
 
-  const handleCancelLock = () => {
-    if (window.confirm('Cancel PIN/Password lock? Your Passwords page will be directly accessible without a security prompt.')) {
+    if (pinActionMode === 'disable') {
       removeMasterPin();
-      localStorage.removeItem('klarity_vault_pin');
+      try { localStorage.removeItem('klarity_vault_pin'); } catch {}
       localStorage.setItem('klarity_vault_lock_type', 'none');
       sessionStorage.removeItem('klarity_vault_unlocked_until');
       setVaultLockType('none');
       setHasPin(false);
       setIsUnlocked(true);
-      setPinInput('');
-      setPinConfirmInput('');
-      setPinError('');
+      setPinActionMode(null);
+      setCurrentPinVerifyInput('');
+      notify('Vault lock removed');
+      return;
+    }
+
+    if (pinActionMode === 'change') {
+      if (newPinForChange.trim().length < 4) {
+        setPinError('New PIN or password must be at least 4 characters.');
+        return;
+      }
+      if (newPinForChange.trim() !== confirmPinForChange.trim()) {
+        setPinError('New entries do not match.');
+        return;
+      }
+      await setMasterPin(newPinForChange.trim());
+      try { localStorage.removeItem('klarity_vault_pin'); } catch {}
+      setHasPin(true);
+      setUnlockSession();
+      setIsUnlocked(true);
+      setPinActionMode(null);
+      setCurrentPinVerifyInput('');
+      setNewPinForChange('');
+      setConfirmPinForChange('');
+      notify('Vault PIN updated');
     }
   };
 
@@ -564,205 +548,253 @@ export default function PasswordVaultPage({
     const isPasswordMode = vaultLockType === 'password';
     return (
       <div className="flex flex-col gap-6 py-6 sm:py-10 max-w-md mx-auto w-full">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col gap-5">
+        <Card className="p-6 sm:p-8 flex flex-col gap-5">
           <div className="flex flex-col items-center text-center gap-2">
-            <div className="w-12 h-12 rounded-2xl bg-[#18457c] text-white flex items-center justify-center shadow-2xs">
+            <div className="w-12 h-12 rounded-[12px] bg-[#1B4B91] text-white flex items-center justify-center">
               <Lock className="w-6 h-6" />
             </div>
-            <h2 className="font-serif-title text-xl font-bold text-slate-900 dark:text-slate-100">
+            <h2 className="font-serif text-[22px] font-semibold text-[var(--ink)]">
               {hasPin
-                ? (isPasswordMode ? 'Enter Master Password' : 'Enter Security PIN')
-                : (isPasswordMode ? 'Set Up Master Password' : 'Set Up Security PIN')}
+                ? (isPasswordMode ? 'Enter master password' : 'Enter security PIN')
+                : (isPasswordMode ? 'Set up master password' : 'Set up security PIN')}
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed">
+            <p className="text-[13px] font-medium text-[var(--muted)] max-w-xs leading-relaxed">
               {hasPin
                 ? `Enter your ${isPasswordMode ? 'master password' : 'security PIN'} to access your passwords and account credentials.`
-                : `Create a ${isPasswordMode ? 'master password (min 4 characters)' : '4-6 digit security PIN'} to protect your vault.`}
+                : `Create a ${isPasswordMode ? 'master password (at least 4 characters)' : '4 to 6 digit security PIN'} to protect your vault.`}
             </p>
           </div>
 
           {pinError && (
-            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
+            <div className="p-3 rounded-[8px] bg-[#B91C1C]/10 border border-[#B91C1C]/25 text-[#B91C1C] text-[13px] font-medium flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span className="leading-snug">{pinError}</span>
             </div>
           )}
 
-          <form onSubmit={hasPin ? handleUnlockWithPin : handleCreatePin} className="flex flex-col gap-4">
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
-                {hasPin
-                  ? (isPasswordMode ? 'Master Password' : 'Security PIN')
-                  : (isPasswordMode ? 'New Password' : 'New PIN (4-6 digits)')}
-              </label>
-              <div className="relative">
-                <input
-                  type={showPin ? 'text' : 'password'}
-                  inputMode={isPasswordMode ? 'text' : 'numeric'}
-                  maxLength={isPasswordMode ? 64 : 12}
-                  autoFocus
-                  placeholder={isPasswordMode ? 'Enter your master password' : '••••'}
-                  value={pinInput}
-                  onChange={e => setPinInput(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-[#18457c] dark:focus:border-blue-500 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPin(p => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1"
-                >
-                  {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
+          {pinActionMode ? (
+            <form onSubmit={handleVerifyAndExecutePinChange} className="flex flex-col gap-4">
+              {hasPin && (
+                <div>
+                  <label htmlFor="vault-current-pin-input" className="text-[13px] font-medium text-[var(--ink)] block mb-1.5">
+                    Current {isPasswordMode ? 'password' : 'PIN'}
+                  </label>
+                  <input
+                    id="vault-current-pin-input"
+                    type="password"
+                    required
+                    value={currentPinVerifyInput}
+                    onChange={e => setCurrentPinVerifyInput(e.target.value)}
+                    placeholder="Enter current PIN to verify"
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2.5 text-[15px] text-[var(--ink)]"
+                  />
+                </div>
+              )}
 
-            {!hasPin && (
+              {pinActionMode === 'change' && (
+                <>
+                  <div>
+                    <label htmlFor="vault-new-pin-input" className="text-[13px] font-medium text-[var(--ink)] block mb-1.5">
+                      New {isPasswordMode ? 'password' : 'PIN'}
+                    </label>
+                    <input
+                      id="vault-new-pin-input"
+                      type="password"
+                      required
+                      value={newPinForChange}
+                      onChange={e => setNewPinForChange(e.target.value)}
+                      placeholder="At least 4 digits"
+                      className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2.5 text-[15px] text-[var(--ink)]"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="vault-confirm-new-pin-input" className="text-[13px] font-medium text-[var(--ink)] block mb-1.5">
+                      Confirm new {isPasswordMode ? 'password' : 'PIN'}
+                    </label>
+                    <input
+                      id="vault-confirm-new-pin-input"
+                      type="password"
+                      required
+                      value={confirmPinForChange}
+                      onChange={e => setConfirmPinForChange(e.target.value)}
+                      placeholder="Re-enter new PIN"
+                      className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2.5 text-[15px] text-[var(--ink)]"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setPinActionMode(null);
+                    setPinError('');
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" variant={pinActionMode === 'disable' ? 'danger' : 'primary'}>
+                  {pinActionMode === 'disable' ? 'Confirm remove lock' : 'Update PIN'}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={hasPin ? handleUnlockWithPin : handleCreatePin} className="flex flex-col gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                  {isPasswordMode ? 'Confirm Password' : 'Confirm PIN'}
+                <label htmlFor="vault-pin-entry" className="text-[13px] font-medium text-[var(--ink)] block mb-1.5">
+                  {hasPin
+                    ? (isPasswordMode ? 'Master password' : 'Security PIN')
+                    : (isPasswordMode ? 'New password' : 'New PIN (4–6 digits)')}
                 </label>
                 <div className="relative">
                   <input
+                    id="vault-pin-entry"
+                    type={showPin ? 'text' : 'password'}
+                    inputMode={isPasswordMode ? 'text' : 'numeric'}
+                    maxLength={isPasswordMode ? 64 : 12}
+                    autoFocus
+                    placeholder={isPasswordMode ? 'Enter your master password' : '••••'}
+                    value={pinInput}
+                    onChange={e => setPinInput(e.target.value)}
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2.5 text-[15px] text-[var(--ink)]"
+                  />
+                  <button
+                    type="button"
+                    aria-label={showPin ? 'Hide PIN' : 'Show PIN'}
+                    onClick={() => setShowPin(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer p-1 rounded-[8px]"
+                  >
+                    {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {!hasPin && (
+                <div>
+                  <label htmlFor="vault-pin-confirm" className="text-[13px] font-medium text-[var(--ink)] block mb-1.5">
+                    {isPasswordMode ? 'Confirm password' : 'Confirm PIN'}
+                  </label>
+                  <input
+                    id="vault-pin-confirm"
                     type={showPin ? 'text' : 'password'}
                     inputMode={isPasswordMode ? 'text' : 'numeric'}
                     maxLength={isPasswordMode ? 64 : 12}
                     placeholder={isPasswordMode ? 'Re-enter your master password' : '••••'}
                     value={pinConfirmInput}
                     onChange={e => setPinConfirmInput(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-[#18457c] dark:focus:border-blue-500 transition-colors"
+                    className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3.5 py-2.5 text-[15px] text-[var(--ink)]"
                   />
                 </div>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={isSubmittingPin}
-              className="mt-2 w-full py-2.5 px-4 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold text-xs transition-colors cursor-pointer shadow-2xs flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span>
-                {isSubmittingPin
-                  ? 'Verifying...'
-                  : hasPin
-                  ? (isPasswordMode ? 'Unlock with Password' : 'Unlock with PIN')
-                  : (isPasswordMode ? 'Save Password & Access Vault' : 'Set PIN & Access Vault')}
-              </span>
-            </button>
-
-            {/* Switch Mode & Cancel Lock Actions */}
-            <div className="flex flex-col gap-2 pt-3 border-t border-slate-100 text-center text-xs">
-              <div className="flex items-center justify-center gap-3 text-[11px] text-slate-500">
-                {isPasswordMode ? (
-                  <button
-                    type="button"
-                    onClick={() => handleSwitchMode('pin')}
-                    className="hover:text-[#18457c] font-medium underline cursor-pointer"
-                  >
-                    Use a 4-digit PIN instead
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleSwitchMode('password')}
-                    className="hover:text-[#18457c] font-medium underline cursor-pointer"
-                  >
-                    Use a master password instead
-                  </button>
-                )}
-                <span>•</span>
-                <button
-                  type="button"
-                  onClick={handleCancelLock}
-                  className="hover:text-rose-600 font-medium underline cursor-pointer"
-                >
-                  Cancel PIN & don't lock
-                </button>
-              </div>
-
-              {hasPin && (
-                <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
-                  <span>Protected with PBKDF2</span>
-                  <button
-                    type="button"
-                    onClick={handleResetPin}
-                    className="text-slate-500 hover:text-[#18457c] underline cursor-pointer"
-                  >
-                    Reset Credentials
-                  </button>
-                </div>
               )}
-            </div>
-          </form>
-        </div>
+
+              <Button type="submit" variant="primary" disabled={isSubmittingPin} className="w-full mt-1">
+                <Lock className="w-4 h-4" />
+                <span>
+                  {isSubmittingPin
+                    ? 'Verifying...'
+                    : hasPin
+                    ? (isPasswordMode ? 'Unlock with password' : 'Unlock with PIN')
+                    : (isPasswordMode ? 'Save password & open vault' : 'Set PIN & open vault')}
+                </span>
+              </Button>
+
+              <div className="flex flex-col gap-2 pt-3 border-t border-[var(--line)] text-center">
+                <div className="flex flex-wrap items-center justify-center gap-3 text-[13px] text-[var(--muted)]">
+                  {isPasswordMode ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchMode('pin')}
+                      className="hover:text-[#1B4B91] font-medium underline cursor-pointer"
+                    >
+                      Use a PIN instead
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchMode('password')}
+                      className="hover:text-[#1B4B91] font-medium underline cursor-pointer"
+                    >
+                      Use a master password instead
+                    </button>
+                  )}
+                  {hasPin && (
+                    <>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPinActionMode('change');
+                          setPinError('');
+                        }}
+                        className="hover:text-[#1B4B91] font-medium underline cursor-pointer"
+                      >
+                        Change {isPasswordMode ? 'password' : 'PIN'}
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPinActionMode('disable');
+                          setPinError('');
+                        }}
+                        className="hover:text-[#B91C1C] font-medium underline cursor-pointer"
+                      >
+                        Remove lock
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </form>
+          )}
+        </Card>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Top Bar with Main Name in the Middle */}
-      <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-1">
-        {/* Left Spacer */}
-        <div className="hidden sm:block min-w-[40px]" />
-
-        {/* Center: Main Name in the Middle */}
-        <div className="flex flex-col items-center text-center justify-center sm:absolute sm:left-1/2 sm:-translate-x-1/2">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#18457c] text-white flex items-center justify-center shrink-0 shadow-2xs">
-              <KeyRound className="w-4 h-4" />
-            </div>
-            <h2 className="font-serif-title text-xl font-bold text-slate-900 tracking-tight">
-              Passwords & Accounts
-            </h2>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">Logins, passwords & account numbers</p>
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="font-serif text-[26px] font-semibold text-[var(--ink)] tracking-tight">
+            Vault
+          </h1>
+          <p className="text-[15px] font-medium text-[var(--muted)]">
+            Saved logins, passwords, and account numbers
+          </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap sm:ml-auto">
-          {/* View Options: Layout (Grid/List) & Card Size (Small/Medium/Large) */}
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors border ${
-                isViewMenuOpen
-                  ? 'bg-slate-200 text-slate-900 border-slate-300 shadow-2xs'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-transparent'
-              }`}
-              title="Change view layout and card size"
+              aria-label="Change view layout and card size"
             >
-              {viewMode === 'list' ? (
-                <List className="w-3.5 h-3.5 text-slate-600" />
-              ) : (
-                <LayoutGrid className="w-3.5 h-3.5 text-slate-600" />
-              )}
+              {viewMode === 'list' ? <List className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
               <span className="capitalize">{viewMode}</span>
-              <span className="text-[10px] text-slate-400 font-normal capitalize">({cardSize})</span>
-              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isViewMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isViewMenuOpen ? 'rotate-180' : ''}`} />
+            </Button>
 
-            {/* Dropdown Popover Menu */}
             {isViewMenuOpen && (
               <>
-                <div
-                  className="fixed inset-0 z-20"
-                  onClick={() => setIsViewMenuOpen(false)}
-                />
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl border border-slate-200 shadow-xl p-3 z-30 flex flex-col gap-3 text-xs animate-in fade-in zoom-in-95 duration-100 select-none">
-                  {/* Layout Option */}
+                <div className="fixed inset-0 z-20" onClick={() => setIsViewMenuOpen(false)} />
+                <Card className="absolute right-0 top-full mt-2 w-56 p-3 z-30 flex flex-col gap-3 shadow-lg">
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 px-1">
-                      View Layout
+                    <span className="text-[13px] font-medium text-[var(--muted)] block mb-1.5 px-1">
+                      View layout
                     </span>
-                    <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-xl">
+                    <div className="grid grid-cols-2 gap-1.5 bg-[var(--surface-subtle)] p-1 rounded-[8px]">
                       <button
                         type="button"
                         onClick={() => handleSetViewMode('grid')}
-                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg font-bold text-xs cursor-pointer transition-all ${
+                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-[8px] font-medium text-[13px] cursor-pointer transition-all ${
                           viewMode === 'grid'
-                            ? 'bg-white text-[#18457c] shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                            : 'text-[var(--muted)] hover:text-[var(--ink)]'
                         }`}
                       >
                         <LayoutGrid className="w-3.5 h-3.5" />
@@ -771,10 +803,10 @@ export default function PasswordVaultPage({
                       <button
                         type="button"
                         onClick={() => handleSetViewMode('list')}
-                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg font-bold text-xs cursor-pointer transition-all ${
+                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-[8px] font-medium text-[13px] cursor-pointer transition-all ${
                           viewMode === 'list'
-                            ? 'bg-white text-[#18457c] shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                            : 'text-[var(--muted)] hover:text-[var(--ink)]'
                         }`}
                       >
                         <List className="w-3.5 h-3.5" />
@@ -783,50 +815,29 @@ export default function PasswordVaultPage({
                     </div>
                   </div>
 
-                  {/* Card Size Option */}
-                  <div className="border-t border-slate-100 pt-2.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 px-1">
-                      Card Size
+                  <div className="border-t border-[var(--line)] pt-2.5">
+                    <span className="text-[13px] font-medium text-[var(--muted)] block mb-1.5 px-1">
+                      Card size
                     </span>
-                    <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl">
-                      <button
-                        type="button"
-                        onClick={() => handleSetCardSize('small')}
-                        className={`py-1.5 px-1 rounded-lg font-bold text-xs text-center cursor-pointer transition-all ${
-                          cardSize === 'small'
-                            ? 'bg-white text-[#18457c] shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Small
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSetCardSize('medium')}
-                        className={`py-1.5 px-1 rounded-lg font-bold text-xs text-center cursor-pointer transition-all ${
-                          cardSize === 'medium'
-                            ? 'bg-white text-[#18457c] shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Medium
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSetCardSize('large')}
-                        className={`py-1.5 px-1 rounded-lg font-bold text-xs text-center cursor-pointer transition-all ${
-                          cardSize === 'large'
-                            ? 'bg-white text-[#18457c] shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Large
-                      </button>
+                    <div className="grid grid-cols-3 gap-1 bg-[var(--surface-subtle)] p-1 rounded-[8px]">
+                      {['small', 'medium', 'large'].map(sz => (
+                        <button
+                          key={sz}
+                          type="button"
+                          onClick={() => handleSetCardSize(sz)}
+                          className={`py-1.5 px-1 rounded-[8px] font-medium text-[13px] capitalize text-center cursor-pointer transition-all ${
+                            cardSize === sz
+                              ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                              : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                          }`}
+                        >
+                          {sz}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  {/* Bulk expand / collapse */}
-                  <div className="border-t border-slate-100 pt-2 flex items-center justify-between text-[11px] text-slate-500 px-1">
+                  <div className="border-t border-[var(--line)] pt-2 flex items-center justify-between text-[13px] text-[var(--muted)] px-1">
                     <button
                       type="button"
                       onClick={() => {
@@ -834,7 +845,7 @@ export default function PasswordVaultPage({
                         (vaultItems || []).forEach(i => { allExp[i.id] = true; });
                         setExpandedCardIds(allExp);
                       }}
-                      className="hover:text-[#18457c] font-semibold cursor-pointer underline"
+                      className="hover:text-[#1B4B91] font-medium cursor-pointer underline"
                     >
                       Expand all
                     </button>
@@ -842,34 +853,34 @@ export default function PasswordVaultPage({
                     <button
                       type="button"
                       onClick={() => setExpandedCardIds({})}
-                      className="hover:text-slate-800 font-semibold cursor-pointer underline"
+                      className="hover:text-[var(--ink)] font-medium cursor-pointer underline"
                     >
                       Collapse all
                     </button>
                   </div>
-                </div>
+                </Card>
               </>
             )}
           </div>
 
           {vaultLockType === 'none' ? (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => {
                 setVaultLockType('pin');
                 localStorage.setItem('klarity_vault_lock_type', 'pin');
-                setHasPin(false);
+                setHasPin(hasMasterPinSet());
                 setIsUnlocked(false);
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors"
-              title="Set PIN or Password for Passwords Vault"
             >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Add PIN / Password Lock</span>
-            </button>
+              <Lock className="w-4 h-4" />
+              <span>Set PIN lock</span>
+            </Button>
           ) : (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => {
                 try { sessionStorage.removeItem('klarity_vault_unlocked_until'); } catch {}
                 setIsUnlocked(false);
@@ -877,15 +888,15 @@ export default function PasswordVaultPage({
                 setPinConfirmInput('');
                 setPinError('');
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors"
-              title="Lock Passwords Vault"
             >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Lock Vault</span>
-            </button>
+              <Lock className="w-4 h-4" />
+              <span>Lock vault</span>
+            </Button>
           )}
-          <button
-            type="button"
+
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => {
               setEditingId(null);
               setIsCreatingNewSection(false);
@@ -901,55 +912,47 @@ export default function PasswordVaultPage({
               });
               setShowAddForm(!showAddForm);
             }}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-bold cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Account</span>
-          </button>
+            <Plus className="w-4 h-4" />
+            <span>Add account</span>
+          </Button>
         </div>
       </div>
 
-      {/* Upload / Security Status Banner */}
+      {/* Status Notice */}
       {(importStatus || clipboardNotice) && (
-        <div className="px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-semibold flex items-center justify-between">
+        <div className="px-4 py-3 rounded-[8px] bg-[#15803D]/10 border border-[#15803D]/25 text-[13px] text-[#15803D] font-medium flex items-center justify-between">
           <span>{importStatus || clipboardNotice}</span>
           <button
             type="button"
+            aria-label="Dismiss notice"
             onClick={() => {
               setImportStatus('');
               setClipboardNotice('');
             }}
-            className="text-emerald-700 cursor-pointer"
+            className="text-[#15803D] cursor-pointer p-1"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Category Dropdown & Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs">
+      {/* Filter & Search Bar */}
+      <Card className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="relative">
-          {/* Main Category Dropdown Trigger */}
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
-            className={`px-3.5 py-2 rounded-xl text-xs transition-all cursor-pointer whitespace-nowrap font-bold flex items-center gap-2 border select-none ${
-              isCategoryDropdownOpen
-                ? 'bg-[#18457c] text-white border-[#18457c] shadow-2xs'
-                : selectedCategory === 'All'
-                ? 'bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200'
-                : 'bg-blue-50 text-[#18457c] border-blue-200 hover:bg-blue-100 shadow-2xs'
-            }`}
           >
             <span>
               {selectedCategory === 'All'
-                ? `All (${(vaultItems || []).length})`
+                ? `All sections (${(vaultItems || []).length})`
                 : `${selectedCategory} (${(vaultItems || []).filter(i => (i.category || '').toLowerCase() === selectedCategory.toLowerCase()).length})`}
             </span>
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
-          </button>
+            <ChevronDown className={`w-4 h-4 transition-transform ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+          </Button>
 
-          {/* Category Dropdown Menu */}
           {isCategoryDropdownOpen && (
             <>
               <div
@@ -959,12 +962,13 @@ export default function PasswordVaultPage({
                   setIsAddingSection(false);
                 }}
               />
-              <div className="absolute left-0 top-full mt-2 w-64 bg-white rounded-2xl border border-slate-200 shadow-xl py-2 z-40 text-xs flex flex-col animate-in fade-in zoom-in-95 duration-100 select-none">
-                {/* 1. At the top of the dropdown: "+ New Section" Button / Input */}
-                <div className="px-2.5 pb-2 border-b border-slate-100">
+              <Card className="absolute left-0 top-full mt-2 w-64 py-2 z-40 flex flex-col shadow-lg">
+                <div className="px-2.5 pb-2 border-b border-[var(--line)]">
                   {isAddingSection ? (
-                    <div className="flex items-center gap-1 bg-white border border-[#18457c] rounded-xl px-2 py-1.5 shadow-2xs">
+                    <div className="flex items-center gap-1 bg-[var(--surface)] border border-[#1B4B91] rounded-[8px] px-2 py-1.5">
+                      <label htmlFor="new-vault-section-input" className="sr-only">New section name</label>
                       <input
+                        id="new-vault-section-input"
                         type="text"
                         placeholder="Section name..."
                         value={newSectionInput}
@@ -976,47 +980,46 @@ export default function PasswordVaultPage({
                           }
                           if (e.key === 'Escape') setIsAddingSection(false);
                         }}
-                        className="text-xs font-bold text-slate-900 outline-none w-full bg-transparent"
+                        className="text-[13px] font-medium text-[var(--ink)] outline-none w-full bg-transparent"
                         autoFocus
                       />
                       <button
                         type="button"
+                        aria-label="Save section"
                         onClick={() => {
                           handleCreateSection();
                           setIsCategoryDropdownOpen(false);
                         }}
-                        className="p-1 bg-[#18457c] text-white rounded-lg hover:bg-[#123561] cursor-pointer"
-                        title="Save section"
+                        className="p-1 bg-[#1B4B91] text-white rounded-[8px] cursor-pointer"
                       >
-                        <Check className="w-3 h-3" />
+                        <Check className="w-3.5 h-3.5" />
                       </button>
                       <button
                         type="button"
+                        aria-label="Cancel new section"
                         onClick={() => setIsAddingSection(false)}
-                        className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
-                        title="Cancel"
+                        className="p-1 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
                       >
-                        <X className="w-3 h-3" />
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ) : (
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full"
                       onClick={() => {
                         setIsAddingSection(true);
                         setNewSectionInput('');
                       }}
-                      className="w-full px-3 py-2 rounded-xl border border-dashed border-slate-300 hover:border-[#18457c] text-[#18457c] hover:bg-blue-50/70 font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>New Section</span>
-                    </button>
+                      <Plus className="w-4 h-4" />
+                      <span>New section</span>
+                    </Button>
                   )}
                 </div>
 
-                {/* 2. List of Categories */}
                 <div className="max-h-64 overflow-y-auto pt-1 flex flex-col gap-0.5 px-1.5">
-                  {/* All Option */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1024,36 +1027,31 @@ export default function PasswordVaultPage({
                       setIsCategoryDropdownOpen(false);
                       setIsAddingSection(false);
                     }}
-                    className={`w-full px-3 py-2 rounded-xl font-bold flex items-center justify-between text-left cursor-pointer transition-colors ${
+                    className={`w-full px-3 py-2 rounded-[8px] text-[13px] font-medium flex items-center justify-between text-left cursor-pointer transition-colors ${
                       selectedCategory === 'All'
-                        ? 'bg-blue-50 text-[#18457c]'
-                        : 'text-slate-700 hover:bg-slate-50'
+                        ? 'bg-[#1B4B91]/10 text-[#1B4B91]'
+                        : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      {selectedCategory === 'All' ? (
-                        <Check className="w-3.5 h-3.5 text-[#18457c]" />
-                      ) : (
-                        <span className="w-3.5" />
-                      )}
+                      {selectedCategory === 'All' ? <Check className="w-3.5 h-3.5 text-[#1B4B91]" /> : <span className="w-3.5" />}
                       <span>All</span>
                     </div>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-600">
+                    <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
                       {(vaultItems || []).length}
                     </span>
                   </button>
 
-                  {/* User-created Custom Sections */}
                   {allSections.map(sec => {
                     const count = (vaultItems || []).filter(i => (i.category || '').toLowerCase() === sec.toLowerCase()).length;
                     const isSelected = selectedCategory.toLowerCase() === sec.toLowerCase();
                     return (
                       <div
                         key={sec}
-                        className={`group w-full px-3 py-2 rounded-xl font-bold flex items-center justify-between text-left cursor-pointer transition-colors ${
+                        className={`w-full px-3 py-2 rounded-[8px] text-[13px] font-medium flex items-center justify-between text-left cursor-pointer transition-colors ${
                           isSelected
-                            ? 'bg-blue-50 text-[#18457c]'
-                            : 'text-slate-700 hover:bg-slate-50'
+                            ? 'bg-[#1B4B91]/10 text-[#1B4B91]'
+                            : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                         }`}
                         onClick={() => {
                           setSelectedCategory(sec);
@@ -1062,28 +1060,24 @@ export default function PasswordVaultPage({
                         }}
                       >
                         <div className="flex items-center gap-2 truncate pr-2">
-                          {isSelected ? (
-                            <Check className="w-3.5 h-3.5 text-[#18457c] shrink-0" />
-                          ) : (
-                            <span className="w-3.5 shrink-0" />
-                          )}
+                          {isSelected ? <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" /> : <span className="w-3.5 shrink-0" />}
                           <span className="truncate">{sec}</span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-600">
+                          <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
                             {count}
                           </span>
                           {count === 0 && (
                             <button
                               type="button"
+                              aria-label={`Delete empty section ${sec}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteSection(sec);
                               }}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded-md transition-colors"
-                              title={`Delete empty section "${sec}"`}
+                              className="p-1 text-[var(--muted)] hover:text-[#B91C1C] rounded-[8px] transition-colors"
                             >
-                              <X className="w-3 h-3" />
+                              <X className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>
@@ -1091,210 +1085,221 @@ export default function PasswordVaultPage({
                     );
                   })}
                 </div>
-              </div>
+              </Card>
             </>
           )}
         </div>
 
-        {/* Search Bar */}
-        <div className="relative sm:w-64 shrink-0">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        {/* Search Input */}
+        <div className="relative sm:w-72 shrink-0">
+          <label htmlFor="vault-search-input" className="sr-only">Search accounts</label>
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
           <input
+            id="vault-search-input"
             type="text"
             placeholder="Search accounts, logins, notes..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:border-[#18457c]"
+            className="w-full pl-9 pr-3 py-2 text-[15px] bg-[var(--surface)] border border-[var(--line)] rounded-[8px] text-[var(--ink)]"
           />
         </div>
-      </div>
+      </Card>
 
-      {/* Add / Edit Account Form (With Website URL and Custom Section) */}
+      {/* Add / Edit Form */}
       {showAddForm && (
-        <form onSubmit={handleSaveForm} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4 text-xs">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-            <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-              <KeyRound className="w-4 h-4 text-[#18457c]" />
-              <span>{editingId ? 'Edit Account Credentials' : 'Add New Account Credentials'}</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => { setShowAddForm(false); setEditingId(null); }}
-              className="text-slate-400 hover:text-slate-600 cursor-pointer p-1"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {/* 1. Account / Service Name */}
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Account / Service Name <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. PG&E, Chase, Netflix, Kaiser..."
-                value={formState.service}
-                onChange={e => setFormState({ ...formState, service: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-[#18457c] font-semibold text-slate-900"
-              />
+        <Card className="p-5">
+          <form onSubmit={handleSaveForm} className="flex flex-col gap-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--line)]">
+              <span className="font-semibold text-[var(--ink)] text-[16px] flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-[#1B4B91]" />
+                <span>{editingId ? 'Edit account credentials' : 'Add account credentials'}</span>
+              </span>
+              <button
+                type="button"
+                aria-label="Close form"
+                onClick={() => { setShowAddForm(false); setEditingId(null); }}
+                className="text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer p-1 rounded-[8px]"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* 2. Section (Custom user-defined section) */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block font-bold text-slate-700">Section</label>
-                {allSections.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setIsCreatingNewSection(!isCreatingNewSection)}
-                    className="text-[11px] text-[#18457c] hover:underline font-bold cursor-pointer"
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label htmlFor="vault-service-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
+                  Account or service name *
+                </label>
+                <input
+                  id="vault-service-input"
+                  type="text"
+                  required
+                  placeholder="e.g. PG&E, Chase, Netflix, Kaiser"
+                  value={formState.service}
+                  onChange={e => setFormState({ ...formState, service: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-[8px] bg-[var(--surface)] border border-[var(--line)] text-[15px] font-medium text-[var(--ink)]"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label htmlFor="vault-category-input" className="block text-[13px] font-medium text-[var(--ink)]">
+                    Section
+                  </label>
+                  {allSections.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingNewSection(!isCreatingNewSection)}
+                      className="text-[13px] text-[#1B4B91] hover:underline font-medium cursor-pointer"
+                    >
+                      {isCreatingNewSection ? 'Pick existing' : '+ New section'}
+                    </button>
+                  )}
+                </div>
+                {isCreatingNewSection || allSections.length === 0 ? (
+                  <input
+                    id="vault-category-input"
+                    type="text"
+                    placeholder="Type section name..."
+                    value={formState.category || ''}
+                    onChange={e => setFormState({ ...formState, category: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-[8px] bg-[var(--surface)] border border-[#1B4B91] text-[15px] font-medium text-[var(--ink)]"
+                  />
+                ) : (
+                  <select
+                    id="vault-category-input"
+                    value={formState.category || allSections[0] || ''}
+                    onChange={e => {
+                      if (e.target.value === '__new__') {
+                        setIsCreatingNewSection(true);
+                        setFormState({ ...formState, category: '' });
+                      } else {
+                        setFormState({ ...formState, category: e.target.value });
+                      }
+                    }}
+                    className="w-full px-3.5 py-2 rounded-[8px] bg-[var(--surface)] border border-[var(--line)] text-[15px] font-medium text-[var(--ink)] cursor-pointer"
                   >
-                    {isCreatingNewSection ? 'Pick existing' : '+ New section'}
-                  </button>
+                    {allSections.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                    <option value="__new__">+ Create new section...</option>
+                  </select>
                 )}
               </div>
-              {isCreatingNewSection || allSections.length === 0 ? (
+
+              <div>
+                <label htmlFor="vault-website-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
+                  Website URL
+                </label>
                 <input
+                  id="vault-website-input"
                   type="text"
-                  placeholder="Type section name (e.g. Personal, Work, Utilities)..."
-                  value={formState.category || ''}
-                  onChange={e => {
-                    setFormState({ ...formState, category: e.target.value });
-                  }}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-[#18457c] focus:outline-none focus:bg-white text-xs font-semibold text-slate-900"
-                  autoFocus={isCreatingNewSection || allSections.length === 0}
+                  placeholder="e.g. pge.com or https://chase.com"
+                  value={formState.website}
+                  onChange={e => setFormState({ ...formState, website: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-[8px] bg-[var(--surface)] border border-[var(--line)] text-[15px] text-[var(--ink)]"
                 />
-              ) : (
-                <select
-                  value={formState.category || allSections[0] || ''}
-                  onChange={e => {
-                    if (e.target.value === '__new__') {
-                      setIsCreatingNewSection(true);
-                      setFormState({ ...formState, category: '' });
-                    } else {
-                      setFormState({ ...formState, category: e.target.value });
-                    }
-                  }}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:bg-white cursor-pointer"
-                >
-                  {allSections.map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                  <option value="__new__">+ Create new section...</option>
-                </select>
-              )}
-            </div>
+              </div>
 
-            {/* 3. Website URL */}
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Website URL</label>
-              <input
-                type="text"
-                placeholder="e.g. pge.com or https://chase.com"
-                value={formState.website}
-                onChange={e => setFormState({ ...formState, website: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-[#18457c] text-slate-900"
-              />
-            </div>
-
-            {/* 4. Username / Email */}
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Username / Email / Login ID</label>
-              <input
-                type="text"
-                placeholder="Username or email"
-                value={formState.username}
-                onChange={e => setFormState({ ...formState, username: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-[#18457c] text-slate-900 font-mono"
-              />
-            </div>
-
-            {/* 5. Password */}
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Password</label>
-              <div className="relative">
+              <div>
+                <label htmlFor="vault-username-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
+                  Username or email
+                </label>
                 <input
-                  type={showFormPassword ? 'text' : 'password'}
-                  placeholder="Password or Secret PIN"
-                  value={formState.password}
-                  onChange={e => setFormState({ ...formState, password: e.target.value })}
-                  className="w-full pl-3 pr-9 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-[#18457c] text-slate-900 font-mono"
+                  id="vault-username-input"
+                  type="text"
+                  placeholder="Username or email"
+                  value={formState.username}
+                  onChange={e => setFormState({ ...formState, username: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-[8px] bg-[var(--surface)] border border-[var(--line)] text-[15px] text-[var(--ink)]"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowFormPassword(!showFormPassword)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
-                >
-                  {showFormPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
+              </div>
+
+              <div>
+                <label htmlFor="vault-password-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="vault-password-input"
+                    type={showFormPassword ? 'text' : 'password'}
+                    placeholder="Password or PIN"
+                    value={formState.password}
+                    onChange={e => setFormState({ ...formState, password: e.target.value })}
+                    className="w-full pl-3.5 pr-9 py-2 rounded-[8px] bg-[var(--surface)] border border-[var(--line)] text-[15px] text-[var(--ink)]"
+                  />
+                  <button
+                    type="button"
+                    aria-label={showFormPassword ? 'Hide password' : 'Show password'}
+                    onClick={() => setShowFormPassword(!showFormPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--ink)] p-1 cursor-pointer"
+                  >
+                    {showFormPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="vault-acctnum-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
+                  Account number or member ID
+                </label>
+                <input
+                  id="vault-acctnum-input"
+                  type="text"
+                  placeholder="Account #, Member ID, or Policy #"
+                  value={formState.accountNumber}
+                  onChange={e => setFormState({ ...formState, accountNumber: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-[8px] bg-[var(--surface)] border border-[var(--line)] text-[15px] text-[var(--ink)]"
+                />
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label htmlFor="vault-notes-input" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
+                  Notes or security questions (optional)
+                </label>
+                <input
+                  id="vault-notes-input"
+                  type="text"
+                  placeholder="e.g. 2FA recovery code, security questions, renewal date..."
+                  value={formState.notes}
+                  onChange={e => setFormState({ ...formState, notes: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-[8px] bg-[var(--surface)] border border-[var(--line)] text-[15px] text-[var(--ink)]"
+                />
               </div>
             </div>
 
-            {/* 6. Account # / Member ID */}
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Account Number / Member ID</label>
-              <input
-                type="text"
-                placeholder="Account #, Member ID, or Policy #"
-                value={formState.accountNumber}
-                onChange={e => setFormState({ ...formState, accountNumber: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-[#18457c] text-slate-900 font-mono"
-              />
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--line)]">
+              <Button
+                variant="secondary"
+                onClick={() => { setShowAddForm(false); setEditingId(null); }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary">
+                {editingId ? 'Save changes' : 'Save account'}
+              </Button>
             </div>
-
-            {/* 7. Notes */}
-            <div className="sm:col-span-2 lg:col-span-3">
-              <label className="block font-bold text-slate-700 mb-1">Notes / Security Answers (Optional)</label>
-              <input
-                type="text"
-                placeholder="e.g. 2FA recovery code, security questions, renewal date..."
-                value={formState.notes}
-                onChange={e => setFormState({ ...formState, notes: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-[#18457c] text-slate-900"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => { setShowAddForm(false); setEditingId(null); }}
-              className="px-4 py-2 rounded-xl text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 font-bold transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-bold transition-colors cursor-pointer shadow-2xs"
-            >
-              {editingId ? 'Save Changes' : 'Add Card to Section'}
-            </button>
-          </div>
-        </form>
+          </form>
+        </Card>
       )}
 
-      {/* Accounts & Passwords List */}
+      {/* Accounts List */}
       {filteredItems.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-xs text-slate-500">
-          No saved accounts in this section yet. Click <strong>Add Account</strong> to get started.
-        </div>
+        <EmptyState
+          title="No saved accounts in this section"
+          message="Store your household, utility, banking, and healthcare logins securely in one place."
+          actionLabel="Add account"
+          onAction={() => setShowAddForm(true)}
+        />
       ) : (
         <div
           className={
             viewMode === 'list'
-              ? (cardSize === 'small'
-                  ? 'flex flex-col gap-2 w-full max-w-4xl mx-auto'
-                  : cardSize === 'large'
-                  ? 'flex flex-col gap-4 w-full max-w-5xl mx-auto'
-                  : 'flex flex-col gap-3 w-full max-w-4xl mx-auto')
-              : (cardSize === 'small'
-                  ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5'
-                  : cardSize === 'large'
-                  ? 'grid grid-cols-1 md:grid-cols-2 gap-4'
-                  : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5')
+              ? 'flex flex-col gap-3 w-full max-w-4xl mx-auto'
+              : cardSize === 'small'
+              ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3'
+              : cardSize === 'large'
+              ? 'grid grid-cols-1 md:grid-cols-2 gap-4'
+              : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5'
           }
         >
           {filteredItems.map(item => {
@@ -1303,215 +1308,146 @@ export default function PasswordVaultPage({
             const isFav = Boolean(item.isFavorite);
 
             return (
-              <div
+              <Card
                 key={item.id}
-                className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
-                  isFav
-                    ? (isExpanded
-                        ? 'bg-yellow-50/95 border-amber-300 shadow-md ring-2 ring-amber-300/70'
-                        : 'bg-yellow-50/85 border-amber-300/80 shadow-2xs hover:border-amber-400 hover:bg-yellow-50')
-                    : (isExpanded
-                        ? 'bg-white border-[#18457c]/40 shadow-sm ring-1 ring-[#18457c]/10'
-                        : 'bg-white border-slate-200/90 shadow-2xs hover:border-slate-300 hover:shadow-xs')
+                className={`overflow-hidden transition-all ${
+                  isExpanded ? 'border-[#1B4B91]' : ''
                 }`}
               >
-                {/* Collapsible Card Header - Main Name in the middle; Click to expand/collapse */}
                 <button
                   type="button"
                   onClick={() => toggleCardExpand(item.id)}
-                  className={`w-full flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/70 transition-colors select-none ${
-                    cardSize === 'small'
-                      ? 'p-2.5'
-                      : cardSize === 'large'
-                      ? 'p-4 sm:p-5'
-                      : 'p-3.5'
-                  }`}
+                  className="w-full flex items-center justify-between gap-3 p-4 cursor-pointer hover:bg-[var(--surface-subtle)] transition-colors text-left"
                 >
-                  <div className={`rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                    cardSize === 'small'
-                      ? 'w-7 h-7'
-                      : cardSize === 'large'
-                      ? 'w-10 h-10'
-                      : 'w-8 h-8'
-                  } ${
-                    isFav
-                      ? 'bg-amber-400 text-amber-950 shadow-2xs'
-                      : isExpanded
-                      ? 'bg-[#18457c] text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-600'
+                  <div className={`w-9 h-9 rounded-[8px] flex items-center justify-center shrink-0 ${
+                    isExpanded ? 'bg-[#1B4B91] text-white' : 'bg-[var(--surface-subtle)] text-[var(--ink)]'
                   }`}>
-                    <KeyRound className={
-                      cardSize === 'small' ? 'w-3.5 h-3.5' : cardSize === 'large' ? 'w-5 h-5' : 'w-4 h-4'
-                    } />
+                    <KeyRound className="w-4 h-4" />
                   </div>
 
-                  {/* Main Name in the Middle */}
-                  <div className="flex-1 text-center min-w-0 px-2">
-                    <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                      <span className={`font-bold text-slate-900 truncate ${
-                        cardSize === 'small' ? 'text-xs' : cardSize === 'large' ? 'text-base' : 'text-sm'
-                      }`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-[15px] text-[var(--ink)] truncate">
                         {item.service}
                       </span>
                       {isFav && (
-                        <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0 inline-block" />
+                        <Star className="w-3.5 h-3.5 text-[#B45309] fill-[#B45309] shrink-0" />
                       )}
                     </div>
                     {item.category && (
-                      <span className={`font-semibold ${isFav ? 'text-amber-800/80' : 'text-slate-400'} block truncate ${
-                        cardSize === 'small' ? 'text-[9px]' : cardSize === 'large' ? 'text-xs' : 'text-[10px]'
-                      }`}>
+                      <span className="text-[13px] font-medium text-[var(--muted)] block truncate">
                         {item.category}
                       </span>
                     )}
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <div className={`p-1 rounded-lg text-slate-400 transition-transform duration-200 ${
-                      isExpanded ? 'rotate-180 text-[#18457c] bg-blue-50' : ''
-                    }`}>
-                      <ChevronDown className={
-                        cardSize === 'small' ? 'w-3.5 h-3.5' : cardSize === 'large' ? 'w-5 h-5' : 'w-4 h-4'
-                      } />
-                    </div>
+                    <ChevronDown className={`w-4 h-4 text-[var(--muted)] transition-transform ${isExpanded ? 'rotate-180 text-[#1B4B91]' : ''}`} />
                   </div>
                 </button>
 
-                {/* Expanded Details Body */}
                 {isExpanded && (
-                  <div className={`border-t ${isFav ? 'border-amber-200/80 bg-amber-100/30' : 'border-slate-100 bg-slate-50/30'} flex flex-col gap-3 text-xs ${
-                    cardSize === 'small'
-                      ? 'px-3 pb-3 pt-1'
-                      : cardSize === 'large'
-                      ? 'px-5 pb-5 pt-2'
-                      : 'px-4 pb-4 pt-1'
-                  }`}>
-                    {/* Website, Notes & Three Dots Action Menu */}
-                    <div className="flex items-start justify-between gap-2 pt-2">
+                  <div className="border-t border-[var(--line)] bg-[var(--surface-subtle)]/50 px-4 pb-4 pt-3 flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="space-y-1 min-w-0">
                         {item.website && (
-                          <div>
-                            <a
-                              href={item.website.startsWith('http') ? item.website : `https://${item.website}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 text-xs text-[#18457c] hover:underline font-semibold"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              <span className="truncate max-w-[200px]">
-                                {item.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
-                              </span>
-                            </a>
-                          </div>
+                          <a
+                            href={item.website.startsWith('http') ? item.website : `https://${item.website}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-[13px] text-[#1B4B91] hover:underline font-medium"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span className="truncate max-w-[200px]">
+                              {item.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+                            </span>
+                          </a>
                         )}
                         {item.notes && (
-                          <p className={`text-[11px] ${isFav ? 'text-amber-900/80' : 'text-slate-500'}`}>{item.notes}</p>
+                          <p className="text-[13px] font-medium text-[var(--muted)]">{item.notes}</p>
                         )}
                       </div>
 
-                      {/* Three Dots Menu Button (Dropdown: Favorite, Edit, Delete) */}
                       <div className="relative flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                         <button
                           type="button"
+                          aria-label="Account actions"
                           onClick={() => setOpenCardMenuId(openCardMenuId === item.id ? null : item.id)}
-                          className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
-                            openCardMenuId === item.id
-                              ? 'bg-slate-200 text-slate-800'
-                              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
-                          }`}
-                          title="Card actions"
+                          className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface)] cursor-pointer transition-colors"
                         >
                           <MoreVertical className="w-4 h-4" />
                         </button>
 
-                        {/* Dropdown Menu (Favorite, Edit, Delete) */}
                         {openCardMenuId === item.id && (
                           <>
-                            <div
-                              className="fixed inset-0 z-30"
-                              onClick={() => setOpenCardMenuId(null)}
-                            />
-                            <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl border border-slate-200 shadow-xl py-1 z-40 text-xs flex flex-col animate-in fade-in zoom-in-95 duration-100 select-none">
-                              {/* 1. Favorite */}
+                            <div className="fixed inset-0 z-30" onClick={() => setOpenCardMenuId(null)} />
+                            <Card className="absolute right-0 top-full mt-1 w-40 py-1 z-40 flex flex-col shadow-lg">
                               <button
                                 type="button"
                                 onClick={() => handleToggleFavorite(item.id)}
-                                className="w-full px-3 py-2 text-left font-semibold hover:bg-slate-50 flex items-center gap-2 cursor-pointer transition-colors text-slate-700"
+                                className="w-full px-3 py-2 text-left text-[13px] font-medium hover:bg-[var(--surface-subtle)] flex items-center gap-2 cursor-pointer text-[var(--ink)]"
                               >
-                                <Star className={`w-3.5 h-3.5 ${item.isFavorite ? 'text-amber-500 fill-amber-400' : 'text-slate-400'}`} />
+                                <Star className={`w-3.5 h-3.5 ${item.isFavorite ? 'text-[#B45309] fill-[#B45309]' : 'text-[var(--muted)]'}`} />
                                 <span>{item.isFavorite ? 'Unfavorite' : 'Favorite'}</span>
                               </button>
-
-                              {/* 2. Edit */}
                               <button
                                 type="button"
                                 onClick={() => {
                                   setOpenCardMenuId(null);
                                   handleStartEdit(item);
                                 }}
-                                className="w-full px-3 py-2 text-left font-semibold hover:bg-slate-50 flex items-center gap-2 cursor-pointer transition-colors text-slate-700"
+                                className="w-full px-3 py-2 text-left text-[13px] font-medium hover:bg-[var(--surface-subtle)] flex items-center gap-2 cursor-pointer text-[var(--ink)]"
                               >
-                                <Edit3 className="w-3.5 h-3.5 text-slate-400" />
+                                <Edit3 className="w-3.5 h-3.5 text-[var(--muted)]" />
                                 <span>Edit</span>
                               </button>
-
-                              {/* 3. Delete */}
                               <button
                                 type="button"
                                 onClick={() => {
                                   setOpenCardMenuId(null);
                                   setItemToDelete(item);
                                 }}
-                                className="w-full px-3 py-2 text-left font-semibold hover:bg-rose-50 text-rose-600 flex items-center gap-2 cursor-pointer transition-colors border-t border-slate-100"
+                                className="w-full px-3 py-2 text-left text-[13px] font-medium hover:bg-[#B91C1C]/10 text-[#B91C1C] flex items-center gap-2 cursor-pointer border-t border-[var(--line)]"
                               >
-                                <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                <Trash2 className="w-3.5 h-3.5" />
                                 <span>Delete</span>
                               </button>
-                            </div>
+                            </Card>
                           </>
                         )}
                       </div>
                     </div>
 
-                    {/* Credentials Details Grid */}
                     <div className="space-y-2">
                       {/* Username */}
-                      <div className={`flex items-center justify-between ${isFav ? 'bg-white/90 border-amber-200/80' : 'bg-white border-slate-200/70'} rounded-xl border shadow-2xs ${
-                        cardSize === 'small' ? 'px-2 py-1' : cardSize === 'large' ? 'px-3.5 py-2' : 'px-2.5 py-1.5'
-                      }`}>
+                      <div className="flex items-center justify-between bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2">
                         <div className="min-w-0 flex-1">
-                          <span className="text-[10px] text-slate-400 block font-medium">Username / Login</span>
-                          <span className={`font-mono font-semibold text-slate-800 truncate block ${
-                            cardSize === 'large' ? 'text-sm' : 'text-xs'
-                          }`}>
+                          <span className="text-[13px] text-[var(--muted)] block font-medium">Username / login</span>
+                          <span className="text-[15px] font-medium text-[var(--ink)] truncate block">
                             {item.username || '—'}
                           </span>
                         </div>
                         {item.username && (
                           <button
                             type="button"
+                            aria-label="Copy username"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleCopy(item.username, `${item.id}-user`, false);
                             }}
-                            className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                            title="Copy username"
+                            className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer rounded-[8px]"
                           >
-                            {copiedKey === `${item.id}-user` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedKey === `${item.id}-user` ? <Check className="w-4 h-4 text-[#15803D]" /> : <Copy className="w-4 h-4" />}
                           </button>
                         )}
                       </div>
 
                       {/* Password */}
-                      <div className={`flex items-center justify-between ${isFav ? 'bg-white/90 border-amber-200/80' : 'bg-white border-slate-200/70'} rounded-xl border shadow-2xs ${
-                        cardSize === 'small' ? 'px-2 py-1' : cardSize === 'large' ? 'px-3.5 py-2' : 'px-2.5 py-1.5'
-                      }`}>
+                      <div className="flex items-center justify-between bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2">
                         <div className="min-w-0 flex-1">
-                          <span className="text-[10px] text-slate-400 block font-medium">Password</span>
-                          <span className={`font-mono font-semibold text-slate-800 truncate block ${
-                            cardSize === 'large' ? 'text-sm' : 'text-xs'
-                          }`}>
+                          <span className="text-[13px] text-[var(--muted)] block font-medium">Password</span>
+                          <span className="text-[15px] font-medium text-[var(--ink)] truncate block">
                             {item.password ? (isPwVisible ? item.password : '••••••••••') : '—'}
                           </span>
                         </div>
@@ -1519,102 +1455,70 @@ export default function PasswordVaultPage({
                           <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                             <button
                               type="button"
+                              aria-label={isPwVisible ? 'Hide password' : 'Show password'}
                               onClick={() => togglePasswordVisibility(item.id)}
-                              className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                              title={isPwVisible ? 'Hide password' : 'Show password'}
+                              className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer rounded-[8px]"
                             >
-                              {isPwVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              {isPwVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                             <button
                               type="button"
+                              aria-label="Copy password"
                               onClick={() => handleCopy(item.password, `${item.id}-pw`, true)}
-                              className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                              title="Copy password (auto-clears in 30s)"
+                              className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer rounded-[8px]"
                             >
-                              {copiedKey === `${item.id}-pw` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                              {copiedKey === `${item.id}-pw` ? <Check className="w-4 h-4 text-[#15803D]" /> : <Copy className="w-4 h-4" />}
                             </button>
                           </div>
                         )}
                       </div>
 
                       {/* Account Number */}
-                      <div className={`flex items-center justify-between ${isFav ? 'bg-white/90 border-amber-200/80' : 'bg-white border-slate-200/70'} rounded-xl border shadow-2xs ${
-                        cardSize === 'small' ? 'px-2 py-1' : cardSize === 'large' ? 'px-3.5 py-2' : 'px-2.5 py-1.5'
-                      }`}>
+                      <div className="flex items-center justify-between bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2">
                         <div className="min-w-0 flex-1">
-                          <span className="text-[10px] text-slate-400 block font-medium">Account # / Member ID</span>
-                          <span className={`font-mono font-semibold text-slate-800 truncate block ${
-                            cardSize === 'large' ? 'text-sm' : 'text-xs'
-                          }`}>
+                          <span className="text-[13px] text-[var(--muted)] block font-medium">Account # / member ID</span>
+                          <span className="text-[15px] font-medium text-[var(--ink)] truncate block">
                             {item.accountNumber || '—'}
                           </span>
                         </div>
                         {item.accountNumber && (
                           <button
                             type="button"
+                            aria-label="Copy account number"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleCopy(item.accountNumber, `${item.id}-acct`, true);
                             }}
-                            className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                            title="Copy account number (auto-clears in 30s)"
+                            className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer rounded-[8px]"
                           >
-                            {copiedKey === `${item.id}-acct` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedKey === `${item.id}-acct` ? <Check className="w-4 h-4 text-[#15803D]" /> : <Copy className="w-4 h-4" />}
                           </button>
                         )}
                       </div>
                     </div>
                   </div>
                 )}
-              </div>
+              </Card>
             );
           })}
         </div>
       )}
 
-
-      {/* Delete Confirmation Pop-up Modal */}
-      {itemToDelete && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xl max-w-sm w-full animate-in fade-in zoom-in-95 duration-150 flex flex-col gap-4 text-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">Delete Account?</h3>
-                <p className="text-slate-500 text-xs mt-0.5">
-                  Are you sure you want to delete <strong className="text-slate-800">{itemToDelete.service}</strong>?
-                </p>
-              </div>
-            </div>
-
-            <p className="text-slate-400 text-[11px]">
-              This will remove the credentials from your encrypted vault. This action cannot be undone.
-            </p>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setItemToDelete(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleDelete(itemToDelete.id);
-                  setItemToDelete(null);
-                }}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition-colors cursor-pointer shadow-sm"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={Boolean(itemToDelete)}
+        title="Delete account credentials?"
+        message={itemToDelete ? `Are you sure you want to remove "${itemToDelete.service}" from your vault? This action cannot be undone.` : ''}
+        confirmLabel="Delete account"
+        variant="danger"
+        onCancel={() => setItemToDelete(null)}
+        onConfirm={() => {
+          if (itemToDelete) {
+            handleDelete(itemToDelete.id);
+            setItemToDelete(null);
+          }
+        }}
+      />
     </div>
   );
 }

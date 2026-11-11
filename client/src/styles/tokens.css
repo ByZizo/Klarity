@@ -1,0 +1,132 @@
+/* ========================================================================== */
+/* KLARITY DESIGN TOKENS (client/src/styles/tokens.css)                       */
+/* Colors, Spacing, Two-Tier Radius (8px control / 12px card), Typography     */
+/* Includes prefers-color-scheme: dark and [data-theme="dark"] overrides      */
+/* ========================================================================== */
+
+:root,
+[data-theme="light"] {
+  /* Core Palette */
+  --background: #F7F8FA;
+  --surface: #FFFFFF;
+  --surface-subtle: #F1F4F9;
+  --surface-hover: #EBF0F7;
+  --ink: #0F172A;
+  --muted: #526077;
+  --line: #DFE5EE;
+
+  /* Brand & Semantic Status (Brand #1B4B91 as sole accent; green/amber/red for status) */
+  --brand: #1B4B91;
+  --brand-hover: #143A73;
+  --brand-soft: #E8EFF8;
+  --brand-ink: #FFFFFF;
+
+  --success: #15803D;
+  --success-soft: #EAF6EE;
+  --success-line: #BBE5C8;
+
+  --warning: #B45309;
+  --warning-soft: #FEF5E7;
+  --warning-line: #F8D8A5;
+
+  --danger: #B91C1C;
+  --danger-soft: #FDF0F0;
+  --danger-line: #F5C2C2;
+
+  /* Aliases */
+  --bg: var(--background);
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  /* Spacing Scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Strict Two-Radius System: 8px for controls, 12px for cards */
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-sm: 8px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Typography Families & Minimum Sizes */
+  --font-ui: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Source Serif 4', Georgia, serif;
+  --text-label: 13px;
+  --text-body: 15px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #0B111E;
+    --surface: #131C2E;
+    --surface-subtle: #1A263D;
+    --surface-hover: #22304C;
+    --ink: #F1F5F9;
+    --muted: #94A3B8;
+    --line: #263552;
+
+    --brand: #3B76CC;
+    --brand-hover: #528AE0;
+    --brand-soft: #192D4E;
+    --brand-ink: #FFFFFF;
+
+    --success: #22C55E;
+    --success-soft: #112A1F;
+    --success-line: #1E4D35;
+
+    --warning: #F59E0B;
+    --warning-soft: #2C2110;
+    --warning-line: #543D18;
+
+    --danger: #EF4444;
+    --danger-soft: #2D1418;
+    --danger-line: #5C232A;
+
+    color-scheme: dark;
+  }
+}
+
+[data-theme="dark"] {
+  --background: #0B111E;
+  --surface: #131C2E;
+  --surface-subtle: #1A263D;
+  --surface-hover: #22304C;
+  --ink: #F1F5F9;
+  --muted: #94A3B8;
+  --line: #263552;
+
+  --brand: #3B76CC;
+  --brand-hover: #528AE0;
+  --brand-soft: #192D4E;
+  --brand-ink: #FFFFFF;
+
+  --success: #22C55E;
+  --success-soft: #112A1F;
+  --success-line: #1E4D35;
+
+  --warning: #F59E0B;
+  --warning-soft: #2C2110;
+  --warning-line: #543D18;
+
+  --danger: #EF4444;
+  --danger-soft: #2D1418;
+  --danger-line: #5C232A;
+
+  color-scheme: dark;
+}

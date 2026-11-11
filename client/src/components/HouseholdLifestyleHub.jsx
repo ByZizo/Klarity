@@ -72,6 +72,7 @@ import {
   AUTO_INSURANCE_PROVIDERS,
   AUTO_INSURANCE_TYPES
 } from '../utils/householdLifestyleEngine';
+import { ConfirmDialog } from './ui';
 
 
 // Shows the user's own insurance card photo; flips to the back side if one was provided.
@@ -98,7 +99,7 @@ function InsuranceCardFlip({ front, back, flipped, onFlip, onOpen }) {
             type="button"
             onClick={() => onOpen(front, 'Insurance card – Front')}
             style={face}
-            className="rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-slate-700 bg-white cursor-zoom-in"
+            className="rounded-[12px] overflow-hidden shadow-md border border-slate-200 dark:border-slate-700 bg-white cursor-zoom-in"
             aria-label="Open front of card"
           >
             <img src={front} alt="Insurance card front" className="w-full h-full object-cover" />
@@ -108,7 +109,7 @@ function InsuranceCardFlip({ front, back, flipped, onFlip, onOpen }) {
               type="button"
               onClick={() => onOpen(back, 'Insurance card – Back')}
               style={{ ...face, transform: 'rotateY(180deg)' }}
-              className="rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-slate-700 bg-white cursor-zoom-in"
+              className="rounded-[12px] overflow-hidden shadow-md border border-slate-200 dark:border-slate-700 bg-white cursor-zoom-in"
               aria-label="Open back of card"
             >
               <img src={back} alt="Insurance card back" className="w-full h-full object-cover" />
@@ -120,7 +121,7 @@ function InsuranceCardFlip({ front, back, flipped, onFlip, onOpen }) {
         <button
           type="button"
           onClick={onFlip}
-          className="mt-2.5 w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center justify-center gap-1.5"
+          className="mt-2.5 w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center justify-center gap-1.5"
         >
           <RotateCw className="w-3.5 h-3.5" />
           {showBack ? 'Show front' : 'Show back'}
@@ -138,7 +139,7 @@ export const HOUSEHOLD_PROVIDER_CONFIGS = {
     title: 'Home Internet & WiFi',
     category: 'Connectivity & WiFi',
     icon: 'Wifi',
-    colorClass: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800',
+    colorClass: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800',
     providerField: 'internetProvider',
     planField: 'internetPlan',
     accountField: 'internetAccount',
@@ -157,7 +158,7 @@ export const HOUSEHOLD_PROVIDER_CONFIGS = {
     title: 'Mobile Wireless & Cellular',
     category: 'Cellular & Mobile',
     icon: 'Smartphone',
-    colorClass: 'text-purple-600 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800',
+    colorClass: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800',
     providerField: 'phoneProvider',
     planField: 'phonePlan',
     accountField: 'phoneAccount',
@@ -234,7 +235,7 @@ export const HOUSEHOLD_PROVIDER_CONFIGS = {
     title: 'Municipal Water & Sewer',
     category: 'Water & Utilities',
     icon: 'Droplets',
-    colorClass: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800',
+    colorClass: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800',
     providerField: 'waterProvider',
     planField: 'waterPlan',
     accountField: 'waterAccount',
@@ -793,6 +794,8 @@ export default function HouseholdLifestyleHub({
 
   const [isExtraProviderModalOpen, setIsExtraProviderModalOpen] = useState(false);
   const [extraProviderForm, setExtraProviderForm] = useState(null);
+  const [pendingDeleteProviderId, setPendingDeleteProviderId] = useState(null);
+  const [pendingDeleteSource, setPendingDeleteSource] = useState(null);
 
   const handleOpenAddExtraProvider = (prefillType = 'Home Warranty & Protection') => {
     setExtraProviderForm({
@@ -841,7 +844,13 @@ export default function HouseholdLifestyleHub({
   };
 
   const handleDeleteExtraProvider = (id) => {
-    if (!confirm('Remove this provider from household?')) return;
+    setPendingDeleteProviderId(id);
+    setPendingDeleteSource('modal');
+  };
+
+  const executeDeleteExtraProvider = () => {
+    const id = pendingDeleteProviderId;
+    if (!id) return;
     const existingList = Array.isArray(householdProfile.extraProviders) ? householdProfile.extraProviders : [];
     const updatedList = existingList.filter(p => p.id !== id);
     const nextProfile = {
@@ -853,8 +862,16 @@ export default function HouseholdLifestyleHub({
       localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
       localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
     } catch {}
-    setIsExtraProviderModalOpen(false);
-    setExtraProviderForm(null);
+    if (pendingDeleteSource === 'detail') {
+      setSelectedProviderKey(null);
+      setIsEditingProviderDetail(false);
+      setHouseholdView('saved');
+    } else {
+      setIsExtraProviderModalOpen(false);
+      setExtraProviderForm(null);
+    }
+    setPendingDeleteProviderId(null);
+    setPendingDeleteSource(null);
   };
 
   const suggestedQuickCompanies = useMemo(() => {
@@ -935,21 +952,8 @@ export default function HouseholdLifestyleHub({
 
   const handleDeleteProviderFromDetail = () => {
     if (!selectedProviderKey) return;
-    if (!confirm('Remove this provider from household?')) return;
-    const existingList = Array.isArray(householdProfile.extraProviders) ? householdProfile.extraProviders : [];
-    const updatedList = existingList.filter(p => p.id !== selectedProviderKey);
-    const nextProfile = {
-      ...householdProfile,
-      extraProviders: updatedList
-    };
-    onUpdateProfile(nextProfile);
-    try {
-      localStorage.setItem('klarity_household_profile_plain', JSON.stringify(nextProfile));
-      localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
-    } catch {}
-    setSelectedProviderKey(null);
-    setIsEditingProviderDetail(false);
-    setHouseholdView('saved');
+    setPendingDeleteProviderId(selectedProviderKey);
+    setPendingDeleteSource('detail');
   };
 
   const handleUploadProviderDocument = async (e) => {
@@ -2118,10 +2122,10 @@ export default function HouseholdLifestyleHub({
   const foodMonthly = Number(householdProfile.foodMonthly) || (metrics.people * 220);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+    <div className="bg-white rounded-[12px] border border-slate-200/90 shadow-2xs overflow-hidden">
       {/* Simple Clean Section Bar: Household | Auto | Health */}
       <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-1.5 bg-slate-200/70 p-1 rounded-xl text-xs font-bold">
+        <div className="flex items-center gap-1.5 bg-slate-200/70 p-1 rounded-[8px] text-[13px] font-semibold">
           <button
             type="button"
             onClick={() => setSection('household')}
@@ -2156,7 +2160,7 @@ export default function HouseholdLifestyleHub({
 
         <div className="flex items-center gap-2">
           {syncSuccess && (
-            <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
+            <span className="text-[13px] font-semibold text-emerald-700 flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>{syncSuccess}</span>
             </span>
@@ -2173,7 +2177,7 @@ export default function HouseholdLifestyleHub({
           {/* STATE: EMPTY HOUSEHOLD IN OVERVIEW (Redirect to Lifestyle)    */}
           {/* ============================================================= */}
           {isOverview && !hasHouseholdSpecs && (
-            <div className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs p-8 sm:p-12 text-center flex flex-col items-center justify-center gap-2">
+            <div className="bg-white border border-slate-200/90 rounded-[12px] shadow-2xs p-8 sm:p-12 text-center flex flex-col items-center justify-center gap-2">
               <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-[#18457c] mb-1">
                 <Home className="w-6 h-6" />
               </div>
@@ -2198,15 +2202,15 @@ export default function HouseholdLifestyleHub({
           {/* VIEW A: STEP-BY-STEP QUESTIONNAIRE WIZARD                     */}
           {/* ============================================================= */}
           {(!isOverview || hasHouseholdSpecs) && householdView === 'wizard' && (
-            <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm overflow-hidden flex flex-col transition-all">
+            <div className="bg-white border border-slate-200/90 rounded-[12px] shadow-sm overflow-hidden flex flex-col transition-all">
               {/* Wizard Top Header */}
               <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between flex-wrap gap-4">
                 <div>
                   <div className="flex items-center gap-2.5 mb-1 flex-wrap">
-                    <span className="text-[11px] font-bold text-[#18457c] bg-blue-50 border border-blue-200/80 px-2.5 py-0.5 rounded-full tracking-wide">
+                    <span className="text-[13px] font-semibold text-[#18457c] bg-blue-50 border border-blue-200/80 px-2.5 py-0.5 rounded-full tracking-wide">
                       Question {wizardStep} of {totalWizardSteps}
                     </span>
-                    <h3 className="font-bold text-base sm:text-lg text-slate-900 tracking-tight">
+                    <h3 className="font-semibold text-base sm:text-lg text-slate-900 tracking-tight">
                       {wizardStep === 1 && 'Where is your home located?'}
                       {wizardStep === 2 && 'Who lives in your home?'}
                       {wizardStep === 3 && 'What heating & cooling systems do you use?'}
@@ -2216,7 +2220,7 @@ export default function HouseholdLifestyleHub({
                       {wizardStep === 7 && 'Household service providers & plan names'}
                     </h3>
                   </div>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-[13px] text-slate-500">
                     {wizardStep === 1 && 'Enter your address or paste a Zillow link to auto-fill specs, or adjust manually.'}
                     {wizardStep === 2 && 'Helps calculate baseline water, electricity, gas, and food usage.'}
                     {wizardStep === 3 && 'Determines seasonal electric cooling and heating energy loads.'}
@@ -2229,12 +2233,12 @@ export default function HouseholdLifestyleHub({
 
                 {/* Quick Question Selector Dropdown & Skip to Overview */}
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Go to:</span>
+                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1.5 rounded-[8px] shadow-2xs">
+                    <span className="text-[13px] font-semibold text-slate-400 ">Go to:</span>
                     <select
                       value={wizardStep}
                       onChange={e => setWizardStep(Number(e.target.value))}
-                      className="text-xs font-bold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
+                      className="text-[13px] font-semibold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
                     >
                       <option value={1}>1. Home Specs</option>
                       <option value={2}>2. Residents</option>
@@ -2252,7 +2256,7 @@ export default function HouseholdLifestyleHub({
                       setHouseholdView('saved');
                       setIsHouseholdExpanded(true);
                     }}
-                    className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-xl hover:bg-slate-200/60 transition-colors cursor-pointer"
+                    className="text-[13px] font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-[8px] hover:bg-slate-200/60 transition-colors cursor-pointer"
                   >
                     Skip to overview
                   </button>
@@ -2278,7 +2282,7 @@ export default function HouseholdLifestyleHub({
                       key={item.step}
                       type="button"
                       onClick={() => setWizardStep(item.step)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      className={`px-3 py-1.5 rounded-[8px] text-[13px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                         isCurrent
                           ? 'bg-[#18457c] text-white shadow-2xs'
                           : isCompleted
@@ -2300,10 +2304,10 @@ export default function HouseholdLifestyleHub({
                 {/* STEP 1: PROPERTY SPECS & ADDRESS                        */}
                 {/* ------------------------------------------------------- */}
                 {wizardStep === 1 && (
-                  <div className="flex flex-col gap-6 text-xs">
+                  <div className="flex flex-col gap-6 text-[13px]">
                     {/* Safe Property Lookup Bar */}
-                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
-                      <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                    <div className="p-4 sm:p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                      <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
                         <MapPin className="w-4 h-4 text-[#18457c]" />
                         <span>Home Address or Zillow Link</span>
                       </span>
@@ -2314,25 +2318,25 @@ export default function HouseholdLifestyleHub({
                           onChange={e => setPropertyUrlInput(e.target.value)}
                           onKeyDown={e => { if (e.key === 'Enter') handleFetchProperty(); }}
                           placeholder="Search address (e.g. 742 Evergreen Terr, Springfield) or paste Zillow URL..."
-                          className="flex-1 text-xs font-medium text-slate-900 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#18457c]/20"
+                          className="flex-1 text-[13px] font-medium text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#18457c]/20"
                         />
                         <button
                           type="button"
                           disabled={isFetchingProperty}
                           onClick={handleFetchProperty}
-                          className="px-4 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                          className="px-4 py-2.5 rounded-[8px] bg-[#18457c] hover:bg-[#123561] text-white text-[13px] font-semibold transition-all shadow-2xs flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                         >
                           {isFetchingProperty ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
                           <span>Auto-fill Specs</span>
                         </button>
                       </div>
                       {propertyLookupError && (
-                        <p className="text-[11px] font-medium text-amber-700">
+                        <p className="text-[13px] font-medium text-amber-700">
                           {propertyLookupError}
                         </p>
                       )}
                       {propertyLookupSuccess && (
-                        <p className="text-[11px] font-medium text-emerald-700">
+                        <p className="text-[13px] font-medium text-emerald-700">
                           {propertyLookupSuccess}
                         </p>
                       )}
@@ -2340,7 +2344,7 @@ export default function HouseholdLifestyleHub({
 
                     {/* Dwelling Type Selection Cards */}
                     <div>
-                      <span className="text-xs font-bold text-slate-800 block mb-2.5">
+                      <span className="text-[13px] font-semibold text-slate-800 block mb-2.5">
                         What type of dwelling is your home?
                       </span>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -2351,7 +2355,7 @@ export default function HouseholdLifestyleHub({
                               key={d.id}
                               type="button"
                               onClick={() => handleFieldChange('dwellingType', d.id)}
-                              className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                              className={`p-3.5 rounded-[8px] border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
                                 isSelected
                                   ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs'
                                   : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
@@ -2359,8 +2363,8 @@ export default function HouseholdLifestyleHub({
                             >
                               <Home className={`w-4 h-4 ${isSelected ? 'text-[#18457c]' : 'text-slate-400'}`} />
                               <div>
-                                <span className="font-bold text-slate-900 block text-xs">{d.label}</span>
-                                <span className="text-[10px] text-slate-500 block mt-0.5">~{d.defaultSqFt.toLocaleString()} sq ft</span>
+                                <span className="font-semibold text-slate-900 block text-[13px]">{d.label}</span>
+                                <span className="text-[13px] text-slate-500 block mt-0.5">~{d.defaultSqFt.toLocaleString()} sq ft</span>
                               </div>
                             </button>
                           );
@@ -2370,24 +2374,24 @@ export default function HouseholdLifestyleHub({
 
                     {/* Roomy Property Specs Grid */}
                     <div>
-                      <span className="text-xs font-bold text-slate-800 block mb-2.5">
+                      <span className="text-[13px] font-semibold text-slate-800 block mb-2.5">
                         Property Specifications
                       </span>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5">
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Bedrooms</span>
+                        <div className="p-3.5 rounded-[8px] bg-slate-50 border border-slate-200">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Bedrooms</span>
                           <input
                             type="number"
                             min="1"
                             max="12"
                             value={householdProfile.bedrooms || 3}
                             onChange={e => handleFieldChange('bedrooms', Number(e.target.value) || 1)}
-                            className="w-full text-sm font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
+                            className="w-full text-sm font-semibold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
                           />
                         </div>
 
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Bathrooms</span>
+                        <div className="p-3.5 rounded-[8px] bg-slate-50 border border-slate-200">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Bathrooms</span>
                           <input
                             type="number"
                             step="0.5"
@@ -2395,73 +2399,73 @@ export default function HouseholdLifestyleHub({
                             max="10"
                             value={householdProfile.bathrooms || 2}
                             onChange={e => handleFieldChange('bathrooms', Number(e.target.value) || 1)}
-                            className="w-full text-sm font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
+                            className="w-full text-sm font-semibold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
                           />
                         </div>
 
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Interior Size (sq ft)</span>
+                        <div className="p-3.5 rounded-[8px] bg-slate-50 border border-slate-200">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Interior Size (sq ft)</span>
                           <input
                             type="number"
                             min="200"
                             step="50"
                             value={householdProfile.sqFt || 2100}
                             onChange={e => handleFieldChange('sqFt', Number(e.target.value) || 2100)}
-                            className="w-full text-sm font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
+                            className="w-full text-sm font-semibold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
                           />
                         </div>
 
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Year Built</span>
+                        <div className="p-3.5 rounded-[8px] bg-slate-50 border border-slate-200">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Year Built</span>
                           <input
                             type="number"
                             min="1850"
                             max="2030"
                             value={householdProfile.yearBuilt || 2004}
                             onChange={e => handleFieldChange('yearBuilt', Number(e.target.value) || 2004)}
-                            className="w-full text-sm font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
+                            className="w-full text-sm font-semibold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
                           />
                         </div>
 
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Estimated Value</span>
+                        <div className="p-3.5 rounded-[8px] bg-slate-50 border border-slate-200">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Estimated Value</span>
                           <input
                             type="text"
                             value={householdProfile.estimatedValue || '$425,000'}
                             onChange={e => handleFieldChange('estimatedValue', e.target.value)}
                             placeholder="e.g. $425,000"
-                            className="w-full text-sm font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
+                            className="w-full text-sm font-semibold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
                           />
                         </div>
 
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Lot Size</span>
+                        <div className="p-3.5 rounded-[8px] bg-slate-50 border border-slate-200">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Lot Size</span>
                           <input
                             type="text"
                             value={householdProfile.lotSize || '6,500 sq ft'}
                             onChange={e => handleFieldChange('lotSize', e.target.value)}
                             placeholder="e.g. 6,500 sq ft"
-                            className="w-full text-sm font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
+                            className="w-full text-sm font-semibold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
                           />
                         </div>
 
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">County</span>
+                        <div className="p-3.5 rounded-[8px] bg-slate-50 border border-slate-200">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">County</span>
                           <input
                             type="text"
                             value={householdProfile.county || 'Fresno County'}
                             onChange={e => handleFieldChange('county', e.target.value)}
-                            className="w-full text-sm font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
+                            className="w-full text-sm font-semibold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
                           />
                         </div>
 
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Garage</span>
+                        <div className="p-3.5 rounded-[8px] bg-slate-50 border border-slate-200">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Garage</span>
                           <input
                             type="text"
                             value={householdProfile.garage || 'Attached 2-Car Garage'}
                             onChange={e => handleFieldChange('garage', e.target.value)}
-                            className="w-full text-sm font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
+                            className="w-full text-sm font-semibold text-slate-900 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none"
                           />
                         </div>
                       </div>
@@ -2473,20 +2477,20 @@ export default function HouseholdLifestyleHub({
                 {/* STEP 2: WHO LIVES HERE & OWNERSHIP                      */}
                 {/* ------------------------------------------------------- */}
                 {wizardStep === 2 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-[13px]">
                     {/* Household Size Stepper */}
-                    <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-4">
+                    <div className="p-6 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col justify-between gap-4">
                       <div>
-                        <span className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                          <Users className="w-4 h-4 text-indigo-600" />
+                        <span className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                          <Users className="w-4 h-4 text-blue-600" />
                           <span>How many people live in your home?</span>
                         </span>
-                        <p className="text-xs text-slate-500 mt-1">
+                        <p className="text-[13px] text-slate-500 mt-1">
                           Calculates baseline electricity, natural gas, hot water, and groceries.
                         </p>
                       </div>
 
-                      <div className="flex items-center justify-center gap-6 py-4 bg-white rounded-xl border border-slate-200/80">
+                      <div className="flex items-center justify-center gap-6 py-4 bg-white rounded-[8px] border border-slate-200/80">
                         <button
                           type="button"
                           onClick={() => handleFieldChange('householdSize', Math.max(1, (householdProfile.householdSize || 4) - 1))}
@@ -2498,7 +2502,7 @@ export default function HouseholdLifestyleHub({
                           <span className="text-3xl font-black text-slate-900 block tracking-tight">
                             {householdProfile.householdSize || 4}
                           </span>
-                          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                          <span className="text-[13px] font-semibold text-slate-400 ">
                             {(householdProfile.householdSize || 4) === 1 ? 'Person' : 'People'}
                           </span>
                         </div>
@@ -2513,13 +2517,13 @@ export default function HouseholdLifestyleHub({
                     </div>
 
                     {/* Own or Rent Card */}
-                    <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-4">
+                    <div className="p-6 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col justify-between gap-4">
                       <div>
-                        <span className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                           <Home className="w-4 h-4 text-emerald-600" />
                           <span>Do you own or rent?</span>
                         </span>
-                        <p className="text-xs text-slate-500 mt-1">
+                        <p className="text-[13px] text-slate-500 mt-1">
                           Determines property tax and insurance tracking.
                         </p>
                       </div>
@@ -2528,9 +2532,9 @@ export default function HouseholdLifestyleHub({
                         <button
                           type="button"
                           onClick={() => handleFieldChange('ownership', 'own')}
-                          className={`p-4 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
+                          className={`p-4 rounded-[8px] border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
                             (householdProfile.ownership || 'own') === 'own'
-                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-bold text-[#18457c]'
+                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-semibold text-[#18457c]'
                               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                           }`}
                         >
@@ -2541,9 +2545,9 @@ export default function HouseholdLifestyleHub({
                         <button
                           type="button"
                           onClick={() => handleFieldChange('ownership', 'rent')}
-                          className={`p-4 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
+                          className={`p-4 rounded-[8px] border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
                             householdProfile.ownership === 'rent'
-                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-bold text-[#18457c]'
+                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-semibold text-[#18457c]'
                               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                           }`}
                         >
@@ -2553,7 +2557,7 @@ export default function HouseholdLifestyleHub({
                       </div>
 
                       {/* PG&E CARE Discount Toggle */}
-                      <label className="flex items-center gap-3 p-3.5 bg-white rounded-xl border border-slate-200/80 cursor-pointer">
+                      <label className="flex items-center gap-3 p-3.5 bg-white rounded-[8px] border border-slate-200/80 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={Boolean(householdProfile.hasCareDiscount)}
@@ -2561,10 +2565,10 @@ export default function HouseholdLifestyleHub({
                           className="w-4 h-4 rounded text-[#18457c] accent-[#18457c] cursor-pointer"
                         />
                         <div className="flex-1">
-                          <span className="font-bold text-slate-900 block text-xs">
+                          <span className="font-semibold text-slate-900 block text-[13px]">
                             Enrolled in PG&E CARE or FERA Discount?
                           </span>
-                          <span className="text-[11px] text-slate-500 block">
+                          <span className="text-[13px] text-slate-500 block">
                             Applies a 30–35% discount on electric and 20% on natural gas.
                           </span>
                         </div>
@@ -2577,63 +2581,63 @@ export default function HouseholdLifestyleHub({
                 {/* STEP 3: HEATING & COOLING                               */}
                 {/* ------------------------------------------------------- */}
                 {wizardStep === 3 && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-[13px]">
                     {/* Heating */}
-                    <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
-                      <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                    <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                      <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
                         <Flame className="w-4 h-4 text-orange-500" />
                         <span>Home Heating System</span>
                       </span>
                       <select
                         value={householdProfile.heatingType || 'natural_gas_furnace'}
                         onChange={e => handleFieldChange('heatingType', e.target.value)}
-                        className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer"
+                        className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2.5 focus:outline-none cursor-pointer"
                       >
                         {HOME_QUESTIONNAIRE_OPTIONS.heating.map(opt => (
                           <option key={opt.id} value={opt.id}>{opt.label}</option>
                         ))}
                       </select>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[13px] text-slate-500">
                         Natural gas furnaces rely on therms; heat pumps utilize off-peak electricity.
                       </p>
                     </div>
 
                     {/* Cooling */}
-                    <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
-                      <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                    <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                      <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
                         <Zap className="w-4 h-4 text-blue-500" />
                         <span>Air Conditioning / Cooling</span>
                       </span>
                       <select
                         value={householdProfile.coolingType || 'central_ac'}
                         onChange={e => handleFieldChange('coolingType', e.target.value)}
-                        className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer"
+                        className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2.5 focus:outline-none cursor-pointer"
                       >
                         {HOME_QUESTIONNAIRE_OPTIONS.cooling.map(opt => (
                           <option key={opt.id} value={opt.id}>{opt.label}</option>
                         ))}
                       </select>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[13px] text-slate-500">
                         Central A/C creates higher summertime peak loads between 4–9 PM.
                       </p>
                     </div>
 
                     {/* Water Heater */}
-                    <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
-                      <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                    <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                      <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
                         <Droplets className="w-4 h-4 text-emerald-500" />
                         <span>Water Heater</span>
                       </span>
                       <select
                         value={householdProfile.waterHeaterType || 'natural_gas_tank'}
                         onChange={e => handleFieldChange('waterHeaterType', e.target.value)}
-                        className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer"
+                        className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2.5 focus:outline-none cursor-pointer"
                       >
                         {HOME_QUESTIONNAIRE_OPTIONS.waterHeater.map(opt => (
                           <option key={opt.id} value={opt.id}>{opt.label}</option>
                         ))}
                       </select>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[13px] text-slate-500">
                         Hybrid heat pump water heaters use 70% less energy than standard gas tanks.
                       </p>
                     </div>
@@ -2644,19 +2648,19 @@ export default function HouseholdLifestyleHub({
                 {/* STEP 4: ELECTRIC VEHICLE AT HOME                        */}
                 {/* ------------------------------------------------------- */}
                 {wizardStep === 4 && (
-                  <div className="flex flex-col gap-5 text-xs">
+                  <div className="flex flex-col gap-5 text-[13px]">
                     {/* EV Presence Toggle Cards */}
                     <div>
-                      <span className="text-xs font-bold text-slate-800 block mb-2.5">
+                      <span className="text-[13px] font-semibold text-slate-800 block mb-2.5">
                         Do you have an electric vehicle (EV or Plug-in Hybrid) at home?
                       </span>
                       <div className="grid grid-cols-2 gap-4">
                         <button
                           type="button"
                           onClick={() => handleFieldChange('hasEvAtHome', true)}
-                          className={`p-4 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
+                          className={`p-4 rounded-[8px] border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
                             householdProfile.hasEvAtHome !== false
-                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-bold text-[#18457c]'
+                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-semibold text-[#18457c]'
                               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                           }`}
                         >
@@ -2667,9 +2671,9 @@ export default function HouseholdLifestyleHub({
                         <button
                           type="button"
                           onClick={() => handleFieldChange('hasEvAtHome', false)}
-                          className={`p-4 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
+                          className={`p-4 rounded-[8px] border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
                             householdProfile.hasEvAtHome === false
-                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-bold text-[#18457c]'
+                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-semibold text-[#18457c]'
                               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                           }`}
                         >
@@ -2682,8 +2686,8 @@ export default function HouseholdLifestyleHub({
                     {householdProfile.hasEvAtHome !== false && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
                         {/* Charger Type */}
-                        <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-2.5">
-                          <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                        <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-2.5">
+                          <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
                             <BatteryCharging className="w-4 h-4 text-emerald-600" />
                             <span>What type of charger do you have at home?</span>
                           </span>
@@ -2697,14 +2701,14 @@ export default function HouseholdLifestyleHub({
                                 key={c.id}
                                 type="button"
                                 onClick={() => handleFieldChange('evChargerType', c.id)}
-                                className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                                className={`p-2.5 rounded-[8px] border text-center transition-all cursor-pointer ${
                                   (householdProfile.evChargerType || 'level2_240v') === c.id
-                                    ? 'bg-[#18457c] text-white border-[#18457c] shadow-2xs font-bold'
+                                    ? 'bg-[#18457c] text-white border-[#18457c] shadow-2xs font-semibold'
                                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 font-semibold'
                                 }`}
                               >
-                                <span className="block text-xs">{c.label}</span>
-                                <span className={`block text-[10px] ${ (householdProfile.evChargerType || 'level2_240v') === c.id ? 'text-blue-100' : 'text-slate-400'}`}>
+                                <span className="block text-[13px]">{c.label}</span>
+                                <span className={`block text-[13px] ${ (householdProfile.evChargerType || 'level2_240v') === c.id ? 'text-blue-100' : 'text-slate-400'}`}>
                                   {c.sub}
                                 </span>
                               </button>
@@ -2713,8 +2717,8 @@ export default function HouseholdLifestyleHub({
                         </div>
 
                         {/* Frequency */}
-                        <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-2.5">
-                          <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                        <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-2.5">
+                          <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
                             <Zap className="w-4 h-4 text-amber-500" />
                             <span>How often do you charge at home?</span>
                           </span>
@@ -2729,7 +2733,7 @@ export default function HouseholdLifestyleHub({
                                 key={f.id}
                                 type="button"
                                 onClick={() => handleFieldChange('evHomeChargingFrequency', f.id)}
-                                className={`py-2 px-1 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
+                                className={`py-2 px-1 rounded-[8px] border text-center text-[13px] font-semibold transition-all cursor-pointer ${
                                   (householdProfile.evHomeChargingFrequency || 'daily') === f.id
                                     ? 'bg-[#18457c] text-white border-[#18457c] shadow-2xs'
                                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -2744,8 +2748,8 @@ export default function HouseholdLifestyleHub({
                         {/* Daily Miles & Schedule (Only if not never) */}
                         {householdProfile.evHomeChargingFrequency !== 'never' && (
                           <>
-                            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-2">
-                              <span className="font-bold text-slate-900 text-xs">Average daily miles charged at home</span>
+                            <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-2">
+                              <span className="font-semibold text-slate-900 text-[13px]">Average daily miles charged at home</span>
                               <div className="flex items-center gap-3 mt-1">
                                 <input
                                   type="number"
@@ -2754,20 +2758,20 @@ export default function HouseholdLifestyleHub({
                                   step="5"
                                   value={householdProfile.evDailyHomeMiles || 35}
                                   onChange={e => handleFieldChange('evDailyHomeMiles', Number(e.target.value) || 35)}
-                                  className="w-24 text-sm font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                                  className="w-24 text-sm font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                                 />
-                                <span className="text-slate-500 font-medium text-xs">
+                                <span className="text-slate-500 font-medium text-[13px]">
                                   mi/day (~{((Number(householdProfile.evDailyHomeMiles) || 35) * 30).toLocaleString()} mi/mo)
                                 </span>
                               </div>
                             </div>
 
-                            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-2">
-                              <span className="font-bold text-slate-900 text-xs">When do you plug in?</span>
+                            <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-2">
+                              <span className="font-semibold text-slate-900 text-[13px]">When do you plug in?</span>
                               <select
                                 value={householdProfile.evChargingSchedule || 'overnight_offpeak'}
                                 onChange={e => handleFieldChange('evChargingSchedule', e.target.value)}
-                                className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer mt-1"
+                                className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2.5 focus:outline-none cursor-pointer mt-1"
                               >
                                 <option value="overnight_offpeak">Overnight Off-Peak (Midnight – 3 PM cheapest)</option>
                                 <option value="any_time">Any time / Whenever plugged in</option>
@@ -2785,18 +2789,18 @@ export default function HouseholdLifestyleHub({
                 {/* STEP 5: POOL OR SPA                                     */}
                 {/* ------------------------------------------------------- */}
                 {wizardStep === 5 && (
-                  <div className="flex flex-col gap-5 text-xs">
+                  <div className="flex flex-col gap-5 text-[13px]">
                     <div>
-                      <span className="text-xs font-bold text-slate-800 block mb-2.5">
+                      <span className="text-[13px] font-semibold text-slate-800 block mb-2.5">
                         Do you have a swimming pool or hot tub spa?
                       </span>
                       <div className="grid grid-cols-2 gap-4">
                         <button
                           type="button"
                           onClick={() => handleFieldChange('hasPool', false)}
-                          className={`p-4 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
+                          className={`p-4 rounded-[8px] border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
                             !householdProfile.hasPool
-                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-bold text-[#18457c]'
+                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-semibold text-[#18457c]'
                               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                           }`}
                         >
@@ -2807,9 +2811,9 @@ export default function HouseholdLifestyleHub({
                         <button
                           type="button"
                           onClick={() => handleFieldChange('hasPool', true)}
-                          className={`p-4 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
+                          className={`p-4 rounded-[8px] border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
                             Boolean(householdProfile.hasPool)
-                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-bold text-[#18457c]'
+                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-semibold text-[#18457c]'
                               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                           }`}
                         >
@@ -2825,18 +2829,18 @@ export default function HouseholdLifestyleHub({
                 {/* STEP 6: ROOFTOP SOLAR & BATTERY                         */}
                 {/* ------------------------------------------------------- */}
                 {wizardStep === 6 && (
-                  <div className="flex flex-col gap-5 text-xs">
+                  <div className="flex flex-col gap-5 text-[13px]">
                     <div>
-                      <span className="text-xs font-bold text-slate-800 block mb-2.5">
+                      <span className="text-[13px] font-semibold text-slate-800 block mb-2.5">
                         Do you have rooftop solar panels installed?
                       </span>
                       <div className="grid grid-cols-2 gap-4">
                         <button
                           type="button"
                           onClick={() => handleFieldChange('hasSolar', false)}
-                          className={`p-4 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
+                          className={`p-4 rounded-[8px] border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
                             !householdProfile.hasSolar
-                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-bold text-[#18457c]'
+                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-semibold text-[#18457c]'
                               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                           }`}
                         >
@@ -2847,9 +2851,9 @@ export default function HouseholdLifestyleHub({
                         <button
                           type="button"
                           onClick={() => handleFieldChange('hasSolar', true)}
-                          className={`p-4 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
+                          className={`p-4 rounded-[8px] border text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${
                             Boolean(householdProfile.hasSolar)
-                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-bold text-[#18457c]'
+                              ? 'bg-blue-50/80 border-[#18457c] ring-2 ring-[#18457c]/20 shadow-2xs font-semibold text-[#18457c]'
                               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                           }`}
                         >
@@ -2860,22 +2864,22 @@ export default function HouseholdLifestyleHub({
                     </div>
 
                     {Boolean(householdProfile.hasSolar) && (
-                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-4">
+                      <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-4">
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-                          <div className="p-3.5 rounded-xl bg-white border border-slate-200">
-                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">Panels Count</span>
+                          <div className="p-3.5 rounded-[8px] bg-white border border-slate-200">
+                            <span className="text-[13px] font-semibold text-slate-500 block mb-1">Panels Count</span>
                             <input
                               type="number"
                               min="4"
                               max="80"
                               value={householdProfile.solarPanelCount || 20}
                               onChange={e => handleFieldChange('solarPanelCount', Number(e.target.value) || 20)}
-                              className="w-full text-sm font-bold text-slate-900 bg-transparent focus:outline-none"
+                              className="w-full text-sm font-semibold text-slate-900 bg-transparent focus:outline-none"
                             />
                           </div>
 
-                          <div className="p-3.5 rounded-xl bg-white border border-slate-200">
-                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">Watts / Panel</span>
+                          <div className="p-3.5 rounded-[8px] bg-white border border-slate-200">
+                            <span className="text-[13px] font-semibold text-slate-500 block mb-1">Watts / Panel</span>
                             <input
                               type="number"
                               min="200"
@@ -2883,16 +2887,16 @@ export default function HouseholdLifestyleHub({
                               step="10"
                               value={householdProfile.solarWattsPerPanel || 400}
                               onChange={e => handleFieldChange('solarWattsPerPanel', Number(e.target.value) || 400)}
-                              className="w-full text-sm font-bold text-slate-900 bg-transparent focus:outline-none"
+                              className="w-full text-sm font-semibold text-slate-900 bg-transparent focus:outline-none"
                             />
                           </div>
 
-                          <div className="p-3.5 rounded-xl bg-white border border-slate-200">
-                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">Ownership</span>
+                          <div className="p-3.5 rounded-[8px] bg-white border border-slate-200">
+                            <span className="text-[13px] font-semibold text-slate-500 block mb-1">Ownership</span>
                             <select
                               value={householdProfile.solarOwnership || 'owned'}
                               onChange={e => handleFieldChange('solarOwnership', e.target.value)}
-                              className="w-full text-xs font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                              className="w-full text-[13px] font-semibold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
                             >
                               <option value="owned">Owned</option>
                               <option value="leased">Leased</option>
@@ -2900,12 +2904,12 @@ export default function HouseholdLifestyleHub({
                             </select>
                           </div>
 
-                          <div className="p-3.5 rounded-xl bg-white border border-slate-200">
-                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">Net Metering</span>
+                          <div className="p-3.5 rounded-[8px] bg-white border border-slate-200">
+                            <span className="text-[13px] font-semibold text-slate-500 block mb-1">Net Metering</span>
                             <select
                               value={householdProfile.solarBillingPlan || 'nem_2'}
                               onChange={e => handleFieldChange('solarBillingPlan', e.target.value)}
-                              className="w-full text-xs font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                              className="w-full text-[13px] font-semibold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
                             >
                               <option value="nem_2">NEM 2.0</option>
                               <option value="nem_3">NEM 3.0</option>
@@ -2915,13 +2919,13 @@ export default function HouseholdLifestyleHub({
                         </div>
 
                         {/* Battery Storage */}
-                        <div className="p-4 rounded-xl bg-white border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="p-4 rounded-[8px] bg-white border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                           <div>
-                            <span className="font-bold text-slate-900 text-xs block">Home Battery Backup (e.g. Tesla Powerwall)</span>
-                            <span className="text-[11px] text-slate-500 block mt-0.5">Stores solar energy for overnight usage and grid outages.</span>
+                            <span className="font-semibold text-slate-900 text-[13px] block">Home Battery Backup (e.g. Tesla Powerwall)</span>
+                            <span className="text-[13px] text-slate-500 block mt-0.5">Stores solar energy for overnight usage and grid outages.</span>
                           </div>
                           <div className="flex items-center gap-3">
-                            <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-slate-800">
+                            <label className="flex items-center gap-2 cursor-pointer font-semibold text-[13px] text-slate-800">
                               <input
                                 type="checkbox"
                                 checked={Boolean(householdProfile.solarHasBattery)}
@@ -2939,9 +2943,9 @@ export default function HouseholdLifestyleHub({
                                   max="60"
                                   value={householdProfile.solarBatteryCapacityKwh || 13.5}
                                   onChange={e => handleFieldChange('solarBatteryCapacityKwh', Number(e.target.value) || 13.5)}
-                                  className="w-14 font-bold text-slate-900 bg-transparent text-right text-xs focus:outline-none"
+                                  className="w-14 font-semibold text-slate-900 bg-transparent text-right text-[13px] focus:outline-none"
                                 />
-                                <span className="text-[10px] text-slate-500 font-semibold">kWh</span>
+                                <span className="text-[13px] text-slate-500 font-semibold">kWh</span>
                               </div>
                             )}
                           </div>
@@ -2955,23 +2959,23 @@ export default function HouseholdLifestyleHub({
                 {/* STEP 7: SERVICE PROVIDERS & PLAN NAMES                  */}
                 {/* ------------------------------------------------------- */}
                 {wizardStep === 7 && (
-                  <div className="flex flex-col gap-6 text-xs">
+                  <div className="flex flex-col gap-6 text-[13px]">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       {/* 1. Home Internet */}
-                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
-                        <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
-                          <Wifi className="w-4 h-4 text-indigo-600" />
+                      <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                        <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
+                          <Wifi className="w-4 h-4 text-blue-600" />
                           <span>1. Home Internet & WiFi</span>
                         </span>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Provider</span>
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Provider</span>
                           <input
                             type="text"
                             value={householdProfile.internetProvider || ''}
                             onChange={e => handleFieldChange('internetProvider', e.target.value)}
                             placeholder="e.g. Xfinity, AT&T Fiber, Spectrum, Starlink..."
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                           />
                           <div className="flex items-center gap-1.5 flex-wrap mt-2">
                             {['Xfinity', 'AT&T Fiber', 'Spectrum', 'Verizon Fios', 'Frontier', 'Starlink'].map(p => (
@@ -2979,7 +2983,7 @@ export default function HouseholdLifestyleHub({
                                 key={p}
                                 type="button"
                                 onClick={() => handleFieldChange('internetProvider', p)}
-                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.internetProvider === p ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                className={`px-2.5 py-1 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${householdProfile.internetProvider === p ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
                               >
                                 {p}
                               </button>
@@ -2988,7 +2992,7 @@ export default function HouseholdLifestyleHub({
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">
                             Plan Name (enter or pick a suggestion)
                           </span>
                           <input
@@ -2997,7 +3001,7 @@ export default function HouseholdLifestyleHub({
                             value={householdProfile.internetPlan || ''}
                             onChange={e => handleFieldChange('internetPlan', e.target.value)}
                             placeholder="Type plan name, e.g. Gigabit Extra, Fast 300, Performance Pro..."
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                           />
                           <datalist id="internet-plans-list">
                             {suggestedInternetPlans.map(p => (
@@ -3014,15 +3018,15 @@ export default function HouseholdLifestyleHub({
                                     key={p.name}
                                     type="button"
                                     onClick={() => handleFieldChange('internetPlan', p.name)}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                    className={`px-2 py-0.5 rounded text-[13px] font-semibold border transition-colors cursor-pointer flex items-center gap-1 ${
                                       isSelected
-                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
                                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                                     }`}
                                   >
                                     <span>{p.name}</span>
-                                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
-                                      isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-500'
+                                    <span className={`text-[13px] px-1 py-0.2 rounded font-medium ${
+                                      isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-500'
                                     }`}>
                                       {p.tag}
                                     </span>
@@ -3035,33 +3039,33 @@ export default function HouseholdLifestyleHub({
                       </div>
 
                       {/* 2. Mobile & Cell Phone */}
-                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                      <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-3">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
-                            <Smartphone className="w-4 h-4 text-purple-600" />
+                          <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
+                            <Smartphone className="w-4 h-4 text-blue-600" />
                             <span>2. Mobile & Cell Phone</span>
                           </span>
                           <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg border border-slate-200">
-                            <span className="text-[10px] font-semibold text-slate-500">Lines:</span>
+                            <span className="text-[13px] font-semibold text-slate-500">Lines:</span>
                             <input
                               type="number"
                               min="1"
                               max="12"
                               value={householdProfile.phoneLines || 3}
                               onChange={e => handleFieldChange('phoneLines', Number(e.target.value) || 1)}
-                              className="w-7 text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs"
+                              className="w-7 text-center font-semibold text-slate-900 bg-transparent focus:outline-none text-[13px]"
                             />
                           </div>
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Carrier</span>
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Carrier</span>
                           <input
                             type="text"
                             value={householdProfile.phoneProvider || ''}
                             onChange={e => handleFieldChange('phoneProvider', e.target.value)}
                             placeholder="e.g. T-Mobile, AT&T, Verizon, Mint Mobile..."
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                           />
                           <div className="flex items-center gap-1.5 flex-wrap mt-2">
                             {['T-Mobile', 'AT&T', 'Verizon', 'Mint Mobile', 'Google Fi', 'Visible'].map(p => (
@@ -3069,7 +3073,7 @@ export default function HouseholdLifestyleHub({
                                 key={p}
                                 type="button"
                                 onClick={() => handleFieldChange('phoneProvider', p)}
-                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.phoneProvider === p ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                className={`px-2.5 py-1 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${householdProfile.phoneProvider === p ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
                               >
                                 {p}
                               </button>
@@ -3078,7 +3082,7 @@ export default function HouseholdLifestyleHub({
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">
                             Plan Name (enter or pick a suggestion)
                           </span>
                           <input
@@ -3087,7 +3091,7 @@ export default function HouseholdLifestyleHub({
                             value={householdProfile.phonePlan || ''}
                             onChange={e => handleFieldChange('phonePlan', e.target.value)}
                             placeholder="Type plan name, e.g. Go5G Plus, Experience Beyond, Magenta MAX, Simple Choice..."
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                           />
                           <datalist id="phone-plans-list">
                             {suggestedPhonePlans.map(p => (
@@ -3104,15 +3108,15 @@ export default function HouseholdLifestyleHub({
                                     key={p.name}
                                     type="button"
                                     onClick={() => handleFieldChange('phonePlan', p.name)}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                    className={`px-2 py-0.5 rounded text-[13px] font-semibold border transition-colors cursor-pointer flex items-center gap-1 ${
                                       isSelected
-                                        ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
                                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                                     }`}
                                   >
                                     <span>{p.name}</span>
-                                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
-                                      isSelected ? 'bg-purple-700 text-purple-100' : 'bg-slate-100 text-slate-500'
+                                    <span className={`text-[13px] px-1 py-0.2 rounded font-medium ${
+                                      isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-500'
                                     }`}>
                                       {p.tag}
                                     </span>
@@ -3125,19 +3129,19 @@ export default function HouseholdLifestyleHub({
                       </div>
 
                       {/* 3. Electric & Gas Utility */}
-                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
-                        <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                      <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                        <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
                           <Zap className="w-4 h-4 text-amber-500" />
                           <span>3. Electric & Gas Utility Plan</span>
                         </span>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Utility</span>
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Utility</span>
                           <input
                             type="text"
                             value={householdProfile.electricGasProvider || (UTILITY_REGIONS.find(r => r.id === householdProfile.utilityRegionId)?.name || 'Pacific Gas & Electric (PG&E)')}
                             onChange={e => handleFieldChange('electricGasProvider', e.target.value)}
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                           />
                           <div className="flex items-center gap-1.5 flex-wrap mt-2">
                             {['PG&E', 'SCE', 'SDG&E', 'SoCalGas', 'SMUD'].map(p => (
@@ -3145,7 +3149,7 @@ export default function HouseholdLifestyleHub({
                                 key={p}
                                 type="button"
                                 onClick={() => handleFieldChange('electricGasProvider', p)}
-                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.electricGasProvider === p ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                className={`px-2.5 py-1 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${householdProfile.electricGasProvider === p ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
                               >
                                 {p}
                               </button>
@@ -3154,7 +3158,7 @@ export default function HouseholdLifestyleHub({
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">
                             Utility Rate Plan Name
                           </span>
                           <input
@@ -3163,7 +3167,7 @@ export default function HouseholdLifestyleHub({
                             value={householdProfile.electricGasPlan || ''}
                             onChange={e => handleFieldChange('electricGasPlan', e.target.value)}
                             placeholder="Type rate plan, e.g. EV2-A, E-TOU-C, E-ELEC, Tiered E-1, CARE..."
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                           />
                           <datalist id="utility-plans-list">
                             {suggestedUtilityPlans.map(p => (
@@ -3180,14 +3184,14 @@ export default function HouseholdLifestyleHub({
                                     key={p.name}
                                     type="button"
                                     onClick={() => handleFieldChange('electricGasPlan', p.name)}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                    className={`px-2 py-0.5 rounded text-[13px] font-semibold border transition-colors cursor-pointer flex items-center gap-1 ${
                                       isSelected
                                         ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
                                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                                     }`}
                                   >
                                     <span>{p.name}</span>
-                                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                                    <span className={`text-[13px] px-1 py-0.2 rounded font-medium ${
                                       isSelected ? 'bg-amber-700 text-amber-100' : 'bg-slate-100 text-slate-500'
                                     }`}>
                                       {p.tag}
@@ -3201,25 +3205,25 @@ export default function HouseholdLifestyleHub({
                       </div>
 
                       {/* 4. Municipal Trash & Recycling */}
-                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
-                        <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                      <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                        <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
                           <Droplets className="w-4 h-4 text-blue-500" />
                           <span>4. Municipal Trash & Recycling</span>
                         </span>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Provider</span>
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Provider</span>
                           <input
                             type="text"
                             value={householdProfile.trashProvider || ''}
                             onChange={e => handleFieldChange('trashProvider', e.target.value)}
                             placeholder="e.g. City Municipal Utilities, Waste Management..."
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                           />
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">
                             Cart Size / Plan Name
                           </span>
                           <input
@@ -3228,7 +3232,7 @@ export default function HouseholdLifestyleHub({
                             value={householdProfile.trashPlan || ''}
                             onChange={e => handleFieldChange('trashPlan', e.target.value)}
                             placeholder="Type plan, e.g. 64-Gallon Standard, 96-Gallon Large, 32-Gallon Eco..."
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                           />
                           <datalist id="trash-plans-list">
                             {suggestedTrashPlans.map(p => (
@@ -3245,14 +3249,14 @@ export default function HouseholdLifestyleHub({
                                     key={p.name}
                                     type="button"
                                     onClick={() => handleFieldChange('trashPlan', p.name)}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                    className={`px-2 py-0.5 rounded text-[13px] font-semibold border transition-colors cursor-pointer flex items-center gap-1 ${
                                       isSelected
                                         ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
                                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                                     }`}
                                   >
                                     <span>{p.name}</span>
-                                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                                    <span className={`text-[13px] px-1 py-0.2 rounded font-medium ${
                                       isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-500'
                                     }`}>
                                       {p.tag}
@@ -3266,21 +3270,21 @@ export default function HouseholdLifestyleHub({
                       </div>
 
                       {/* 5. Home Security */}
-                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3 md:col-span-2">
-                        <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                      <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-3 md:col-span-2">
+                        <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
                           <ShieldCheck className="w-4 h-4 text-emerald-600" />
                           <span>5. Home Security & Smart Home</span>
                         </span>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
-                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">Brand / System</span>
+                            <span className="text-[13px] font-semibold text-slate-500 block mb-1">Brand / System</span>
                             <input
                               type="text"
                               value={householdProfile.securityProvider || ''}
                               onChange={e => handleFieldChange('securityProvider', e.target.value)}
                               placeholder="e.g. Ring, ADT, SimpliSafe, Nest, Vivint, None..."
-                              className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                              className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                             />
                             <div className="flex items-center gap-1.5 flex-wrap mt-2">
                               {['Ring', 'ADT', 'SimpliSafe', 'Vivint', 'Nest', 'Self-Monitored'].map(p => (
@@ -3288,7 +3292,7 @@ export default function HouseholdLifestyleHub({
                                   key={p}
                                   type="button"
                                   onClick={() => handleFieldChange('securityProvider', p)}
-                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.securityProvider === p ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                  className={`px-2.5 py-1 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${householdProfile.securityProvider === p ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
                                 >
                                   {p}
                                 </button>
@@ -3297,7 +3301,7 @@ export default function HouseholdLifestyleHub({
                           </div>
 
                           <div>
-                            <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                            <span className="text-[13px] font-semibold text-slate-500 block mb-1">
                               Security Plan Name
                             </span>
                             <input
@@ -3306,7 +3310,7 @@ export default function HouseholdLifestyleHub({
                               value={householdProfile.securityPlan || ''}
                               onChange={e => handleFieldChange('securityPlan', e.target.value)}
                               placeholder="Type plan, e.g. Ring Protect Pro, Fast Protect Monitoring, Nest Aware..."
-                              className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                              className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                             />
                             <datalist id="security-plans-list">
                               {suggestedSecurityPlans.map(p => (
@@ -3323,14 +3327,14 @@ export default function HouseholdLifestyleHub({
                                       key={p.name}
                                       type="button"
                                       onClick={() => handleFieldChange('securityPlan', p.name)}
-                                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                      className={`px-2 py-0.5 rounded text-[13px] font-semibold border transition-colors cursor-pointer flex items-center gap-1 ${
                                         isSelected
                                           ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
                                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                                       }`}
                                     >
                                       <span>{p.name}</span>
-                                      <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                                      <span className={`text-[13px] px-1 py-0.2 rounded font-medium ${
                                         isSelected ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-100 text-slate-500'
                                       }`}>
                                         {p.tag}
@@ -3345,20 +3349,20 @@ export default function HouseholdLifestyleHub({
                       </div>
 
                       {/* 6. Home Warranty & Protection */}
-                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
-                        <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                      <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                        <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
                           <Shield className="w-4 h-4 text-rose-600" />
                           <span>6. Home Warranty & Protection</span>
                         </span>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Warranty Company</span>
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Warranty Company</span>
                           <input
                             type="text"
                             value={householdProfile.homeWarrantyProvider || ''}
                             onChange={e => handleFieldChange('homeWarrantyProvider', e.target.value)}
                             placeholder="e.g. American Home Shield, Choice Home Warranty, First American, Cinch..."
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                           />
                           <div className="flex items-center gap-1.5 flex-wrap mt-2">
                             {['American Home Shield', 'Choice Home Warranty', 'First American', 'Cinch Home Services', 'Liberty Home Guard', 'Select Home Warranty', 'None'].map(p => (
@@ -3366,7 +3370,7 @@ export default function HouseholdLifestyleHub({
                                 key={p}
                                 type="button"
                                 onClick={() => handleFieldChange('homeWarrantyProvider', p)}
-                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.homeWarrantyProvider === p ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                className={`px-2.5 py-1 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${householdProfile.homeWarrantyProvider === p ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
                               >
                                 {p}
                               </button>
@@ -3375,7 +3379,7 @@ export default function HouseholdLifestyleHub({
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">
                             Warranty Plan Name
                           </span>
                           <input
@@ -3384,7 +3388,7 @@ export default function HouseholdLifestyleHub({
                             value={householdProfile.homeWarrantyPlan || ''}
                             onChange={e => handleFieldChange('homeWarrantyPlan', e.target.value)}
                             placeholder="Type plan, e.g. ShieldGold, ShieldPlatinum, Total Plan, Basic Plan..."
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                           />
                           <datalist id="warranty-plans-list">
                             {suggestedHomeWarrantyPlans.map(p => (
@@ -3401,14 +3405,14 @@ export default function HouseholdLifestyleHub({
                                     key={p.name}
                                     type="button"
                                     onClick={() => handleFieldChange('homeWarrantyPlan', p.name)}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                    className={`px-2 py-0.5 rounded text-[13px] font-semibold border transition-colors cursor-pointer flex items-center gap-1 ${
                                       isSelected
                                         ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
                                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                                     }`}
                                   >
                                     <span>{p.name}</span>
-                                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                                    <span className={`text-[13px] px-1 py-0.2 rounded font-medium ${
                                       isSelected ? 'bg-rose-700 text-rose-100' : 'bg-slate-100 text-slate-500'
                                     }`}>
                                       {p.tag}
@@ -3422,20 +3426,20 @@ export default function HouseholdLifestyleHub({
                       </div>
 
                       {/* 7. Municipal Water Service */}
-                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
-                        <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
-                          <Droplets className="w-4 h-4 text-cyan-600" />
+                      <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-3">
+                        <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
+                          <Droplets className="w-4 h-4 text-blue-600" />
                           <span>7. Municipal Water Service</span>
                         </span>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">Water Utility / District</span>
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">Water Utility / District</span>
                           <input
                             type="text"
                             value={householdProfile.waterProvider || ''}
                             onChange={e => handleFieldChange('waterProvider', e.target.value)}
                             placeholder="e.g. City Water Works, American Water, County Water District..."
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                           />
                           <div className="flex items-center gap-1.5 flex-wrap mt-2">
                             {['City Water Works', 'County Water District', 'American Water', 'California Water Service', 'None'].map(p => (
@@ -3443,7 +3447,7 @@ export default function HouseholdLifestyleHub({
                                 key={p}
                                 type="button"
                                 onClick={() => handleFieldChange('waterProvider', p)}
-                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${householdProfile.waterProvider === p ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                className={`px-2.5 py-1 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${householdProfile.waterProvider === p ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
                               >
                                 {p}
                               </button>
@@ -3452,7 +3456,7 @@ export default function HouseholdLifestyleHub({
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-semibold text-slate-500 block mb-1">
+                          <span className="text-[13px] font-semibold text-slate-500 block mb-1">
                             Water Rate / Meter Plan
                           </span>
                           <input
@@ -3461,7 +3465,7 @@ export default function HouseholdLifestyleHub({
                             value={householdProfile.waterPlan || ''}
                             onChange={e => handleFieldChange('waterPlan', e.target.value)}
                             placeholder="Type plan, e.g. Standard Residential Meter, Tiered Conservation..."
-                            className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="w-full text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[8px] px-3 py-2 focus:outline-none"
                           />
                           <datalist id="water-plans-list">
                             {suggestedWaterPlans.map(p => (
@@ -3478,15 +3482,15 @@ export default function HouseholdLifestyleHub({
                                     key={p.name}
                                     type="button"
                                     onClick={() => handleFieldChange('waterPlan', p.name)}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                                    className={`px-2 py-0.5 rounded text-[13px] font-semibold border transition-colors cursor-pointer flex items-center gap-1 ${
                                       isSelected
-                                        ? 'bg-cyan-600 text-white border-cyan-600 shadow-2xs'
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
                                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                                     }`}
                                   >
                                     <span>{p.name}</span>
-                                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
-                                      isSelected ? 'bg-cyan-700 text-cyan-100' : 'bg-slate-100 text-slate-500'
+                                    <span className={`text-[13px] px-1 py-0.2 rounded font-medium ${
+                                      isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-500'
                                     }`}>
                                       {p.tag}
                                     </span>
@@ -3499,23 +3503,23 @@ export default function HouseholdLifestyleHub({
                       </div>
 
                       {/* 8. Extra / Custom Household Providers */}
-                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-3 md:col-span-2">
+                      <div className="p-5 rounded-[12px] bg-slate-50 border border-slate-200 flex flex-col gap-3 md:col-span-2">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-purple-600" />
+                          <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-blue-600" />
                             <span>8. Extra Household Providers</span>
                           </span>
                           <button
                             type="button"
                             onClick={() => handleOpenAddExtraProvider()}
-                            className="px-2.5 py-1 rounded-lg bg-[#18457c] text-white text-[10px] font-bold hover:bg-[#123561] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                            className="px-2.5 py-1 rounded-lg bg-[#18457c] text-white text-[13px] font-semibold hover:bg-[#123561] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
                           >
                             <Plus className="w-3 h-3" />
                             <span>Add Extra Provider</span>
                           </button>
                         </div>
 
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-[13px] text-slate-500">
                           Add pest control, lawn care, pool service, propane, or additional protection contracts.
                         </p>
 
@@ -3525,14 +3529,14 @@ export default function HouseholdLifestyleHub({
                               <div
                                 key={p.id}
                                 onClick={() => handleOpenEditExtraProvider(p)}
-                                className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between text-xs cursor-pointer hover:border-[#18457c] transition-colors"
+                                className="p-2.5 rounded-[8px] bg-white border border-slate-200 flex items-center justify-between text-[13px] cursor-pointer hover:border-[#18457c] transition-colors"
                               >
                                 <div className="truncate pr-2">
-                                  <span className="font-bold text-slate-900 block truncate">{p.name}</span>
-                                  <span className="text-[10px] text-slate-500">{p.type} {p.plan ? `· ${p.plan}` : ''}</span>
+                                  <span className="font-semibold text-slate-900 block truncate">{p.name}</span>
+                                  <span className="text-[13px] text-slate-500">{p.type} {p.plan ? `· ${p.plan}` : ''}</span>
                                 </div>
                                 <div className="text-right shrink-0">
-                                  <span className="font-bold text-slate-800 text-xs">{p.monthlyCost ? `$${p.monthlyCost}/mo` : 'Active'}</span>
+                                  <span className="font-semibold text-slate-800 text-[13px]">{p.monthlyCost ? `$${p.monthlyCost}/mo` : 'Active'}</span>
                                 </div>
                               </div>
                             ))}
@@ -3541,7 +3545,7 @@ export default function HouseholdLifestyleHub({
                           <button
                             type="button"
                             onClick={() => handleOpenAddExtraProvider()}
-                            className="w-full py-4 border border-dashed border-slate-300 rounded-xl bg-white hover:bg-purple-50/50 text-[#18457c] text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                            className="w-full py-4 border border-dashed border-slate-300 rounded-[8px] bg-white hover:bg-blue-50/50 text-[#18457c] text-[13px] font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer"
                           >
                             <Plus className="w-3.5 h-3.5" />
                             <span>Click to Add an Extra Provider</span>
@@ -3559,7 +3563,7 @@ export default function HouseholdLifestyleHub({
                   type="button"
                   disabled={wizardStep === 1}
                   onClick={() => setWizardStep(Math.max(1, wizardStep - 1))}
-                  className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-2"
+                  className="px-4 py-2 rounded-[8px] border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 text-slate-700 text-[13px] font-semibold transition-all cursor-pointer flex items-center gap-2"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Previous</span>
@@ -3585,7 +3589,7 @@ export default function HouseholdLifestyleHub({
                     <button
                       type="button"
                       onClick={() => setWizardStep(Math.min(totalWizardSteps, wizardStep + 1))}
-                      className="px-5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-2"
+                      className="px-5 py-2.5 rounded-[8px] bg-[#18457c] hover:bg-[#123561] text-white text-[13px] font-semibold transition-all shadow-sm cursor-pointer flex items-center gap-2"
                     >
                       <span>Next question</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -3594,7 +3598,7 @@ export default function HouseholdLifestyleHub({
                     <button
                       type="button"
                       onClick={handleFinishWizard}
-                      className="px-6 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-2"
+                      className="px-6 py-2.5 rounded-[8px] bg-emerald-700 hover:bg-emerald-800 text-white text-[13px] font-semibold transition-all shadow-sm cursor-pointer flex items-center gap-2"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       <span>Finish & Save Household</span>
@@ -3612,14 +3616,14 @@ export default function HouseholdLifestyleHub({
             <div className="flex flex-col gap-4">
               {/* Header Bar: Clean title matching Health section (no cluttered button in the header) */}
               <div className="px-1">
-                <h2 className="font-bold text-xl text-slate-900 tracking-tight">Household</h2>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <h2 className="font-semibold text-xl text-slate-900 tracking-tight">Household</h2>
+                <p className="text-[13px] text-slate-500 mt-0.5">
                   1 active property · Click card to expand or collapse details
                 </p>
               </div>
 
               {/* Restyled Household Card with Spacious Layout */}
-              <section className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-2xs overflow-hidden transition-all">
+              <section className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-[12px] shadow-2xs overflow-hidden transition-all">
                 {/* 5. Card Header: Address, One Summary Line, Monthly Bills Total & Collapse Arrow */}
                 <div
                   onClick={() => setIsHouseholdExpanded(!isHouseholdExpanded)}
@@ -3627,10 +3631,10 @@ export default function HouseholdLifestyleHub({
                 >
                   {/* Left: Address + One Summary Line */}
                   <div className="min-w-0">
-                    <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base sm:text-lg tracking-tight truncate">
+                    <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base sm:text-lg tracking-tight truncate">
                       {householdProfile.address || 'Household Property'}
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                    <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
                       {DWELLING_TYPES.find(d => d.id === householdProfile.dwellingType)?.label || 'Single-Family House'} · {householdProfile.bedrooms || 3} bd, {householdProfile.bathrooms || 2} ba · {Number(householdProfile.sqFt || 2100).toLocaleString()} sq ft
                     </p>
                   </div>
@@ -3639,13 +3643,13 @@ export default function HouseholdLifestyleHub({
                   <div className="flex items-center gap-4 shrink-0">
                     {actualHouseholdBills.length > 0 ? (
                       <div className="text-right">
-                        <div className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
-                          ${totalActualBills.toLocaleString()}<span className="text-xs font-normal text-slate-400">/mo</span>
+                        <div className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">
+                          ${totalActualBills.toLocaleString()}<span className="text-[13px] font-normal text-slate-400">/mo</span>
                         </div>
-                        <div className="text-[11px] text-slate-400">Monthly bills</div>
+                        <div className="text-[13px] text-slate-400">Monthly bills</div>
                       </div>
                     ) : (
-                      <div className="text-right text-xs text-slate-400">
+                      <div className="text-right text-[13px] text-slate-400">
                         No bills synced
                       </div>
                     )}
@@ -3664,8 +3668,8 @@ export default function HouseholdLifestyleHub({
                 {isHouseholdExpanded && (
                   <div className="border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 sm:px-[36px] pb-10 flex flex-col space-y-14">
                     {/* 4. Sticky Nav Bar: Property, Home systems, Providers, Bills + "Update my answers" */}
-                    <div className="sticky top-0 z-10 -mx-6 sm:-mx-[36px] px-6 sm:px-[36px] py-3.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between flex-wrap gap-3">
-                      <nav className="flex items-center gap-6 overflow-x-auto text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <div className="sticky top-0 z-10 -mx-6 sm:-mx-[36px] px-6 sm:px-[36px] py-3.5 bg-white/95 dark:bg-slate-900/95  border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between flex-wrap gap-3">
+                      <nav className="flex items-center gap-6 overflow-x-auto text-[13px] font-semibold text-slate-600 dark:text-slate-400">
                         <a
                           href="#section-property"
                           onClick={(e) => {
@@ -3718,7 +3722,7 @@ export default function HouseholdLifestyleHub({
                             setHouseholdView('wizard');
                           }
                         }}
-                        className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                        className="px-3.5 py-1.5 rounded-[8px] bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[13px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
                       >
                         <Sliders className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                         <span>{isOverview ? 'Manage in Lifestyle' : 'Update my answers'}</span>
@@ -3730,10 +3734,10 @@ export default function HouseholdLifestyleHub({
                     <div id="section-property" className="scroll-mt-16 pt-2">
                       <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-6">
                         <div>
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                          <h4 className="text-[13px] font-semibold  text-slate-400 dark:text-slate-500">
                             Property
                           </h4>
-                          <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 block">
+                          <span className="text-[13px] text-slate-400 dark:text-slate-500 mt-0.5 block">
                             {householdProfile.zillowImportedAt
                               ? `Zillow verified on ${new Date(householdProfile.zillowImportedAt).toLocaleDateString()}`
                               : 'Property specifications'}
@@ -3749,7 +3753,7 @@ export default function HouseholdLifestyleHub({
                               setHouseholdView('wizard');
                             }
                           }}
-                          className="text-xs font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
+                          className="text-[13px] font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
                         >
                           {isOverview ? 'Manage in Lifestyle' : 'Edit'}
                         </button>
@@ -3757,50 +3761,50 @@ export default function HouseholdLifestyleHub({
 
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-7">
                         <div>
-                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Bedrooms</span>
-                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                          <span className="text-[13px] text-slate-400 dark:text-slate-500 block font-medium">Bedrooms</span>
+                          <span className="text-[19px] leading-snug font-semibold text-slate-900 dark:text-slate-100 block mt-1">
                             {householdProfile.bedrooms || 3} Beds
                           </span>
                         </div>
                         <div>
-                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Bathrooms</span>
-                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                          <span className="text-[13px] text-slate-400 dark:text-slate-500 block font-medium">Bathrooms</span>
+                          <span className="text-[19px] leading-snug font-semibold text-slate-900 dark:text-slate-100 block mt-1">
                             {householdProfile.bathrooms || 2} Baths
                           </span>
                         </div>
                         <div>
-                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Living Area</span>
-                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                          <span className="text-[13px] text-slate-400 dark:text-slate-500 block font-medium">Living Area</span>
+                          <span className="text-[19px] leading-snug font-semibold text-slate-900 dark:text-slate-100 block mt-1">
                             {Number(householdProfile.sqFt || 2100).toLocaleString()} sq ft
                           </span>
                         </div>
                         <div>
-                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Year Built</span>
-                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                          <span className="text-[13px] text-slate-400 dark:text-slate-500 block font-medium">Year Built</span>
+                          <span className="text-[19px] leading-snug font-semibold text-slate-900 dark:text-slate-100 block mt-1">
                             {householdProfile.yearBuilt || 2004}
                           </span>
                         </div>
                         <div>
-                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Lot Size</span>
-                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                          <span className="text-[13px] text-slate-400 dark:text-slate-500 block font-medium">Lot Size</span>
+                          <span className="text-[19px] leading-snug font-semibold text-slate-900 dark:text-slate-100 block mt-1">
                             {householdProfile.lotSize || '6,500 sq ft'}
                           </span>
                         </div>
                         <div>
-                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Estimated Value</span>
-                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                          <span className="text-[13px] text-slate-400 dark:text-slate-500 block font-medium">Estimated Value</span>
+                          <span className="text-[19px] leading-snug font-semibold text-slate-900 dark:text-slate-100 block mt-1">
                             {householdProfile.estimatedValue || '$425,000'}
                           </span>
                         </div>
                         <div>
-                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">County</span>
-                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                          <span className="text-[13px] text-slate-400 dark:text-slate-500 block font-medium">County</span>
+                          <span className="text-[19px] leading-snug font-semibold text-slate-900 dark:text-slate-100 block mt-1">
                             {householdProfile.county || 'Fresno County'}
                           </span>
                         </div>
                         <div>
-                          <span className="text-xs text-slate-400 dark:text-slate-500 block font-medium">Garage</span>
-                          <span className="text-[19px] leading-snug font-bold text-slate-900 dark:text-slate-100 block mt-1">
+                          <span className="text-[13px] text-slate-400 dark:text-slate-500 block font-medium">Garage</span>
+                          <span className="text-[19px] leading-snug font-semibold text-slate-900 dark:text-slate-100 block mt-1">
                             {householdProfile.garage || 'Attached 2-Car'}
                           </span>
                         </div>
@@ -3810,7 +3814,7 @@ export default function HouseholdLifestyleHub({
                     {/* 2. SECTION 2: HOME SYSTEMS (Simple rows, 1px lines, 20px padding, no pills, 'Add solar' link) */}
                     <div id="section-systems" className="scroll-mt-16">
                       <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        <h4 className="text-[13px] font-semibold  text-slate-400 dark:text-slate-500">
                           Home systems
                         </h4>
                         <button
@@ -3823,7 +3827,7 @@ export default function HouseholdLifestyleHub({
                               setHouseholdView('wizard');
                             }
                           }}
-                          className="text-xs font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
+                          className="text-[13px] font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
                         >
                           {isOverview ? 'Manage in Lifestyle' : 'Edit'}
                         </button>
@@ -3837,7 +3841,7 @@ export default function HouseholdLifestyleHub({
                             <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 capitalize block">
                               {(householdProfile.heatingType || 'natural_gas_furnace').replace(/_/g, ' ')} · {(householdProfile.coolingType || 'central_ac').replace(/_/g, ' ')}
                             </span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block capitalize">
+                            <span className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5 block capitalize">
                               Water heater: {(householdProfile.waterHeaterType || 'natural_gas_tank').replace(/_/g, ' ')}
                             </span>
                           </div>
@@ -3853,7 +3857,7 @@ export default function HouseholdLifestyleHub({
                                 : 'No EV at Home'}
                             </span>
                             {householdProfile.hasEvAtHome !== false && householdProfile.evHomeChargingFrequency !== 'never' && (
-                              <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
+                              <span className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5 block">
                                 {householdProfile.evDailyHomeMiles || 35} mi/day · {(householdProfile.evChargingSchedule || 'overnight').replace(/_/g, ' ')}
                               </span>
                             )}
@@ -3869,7 +3873,7 @@ export default function HouseholdLifestyleHub({
                                 <span className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 block">
                                   {(((Number(householdProfile.solarPanelCount) || 20) * (Number(householdProfile.solarWattsPerPanel) || 400)) / 1000).toFixed(2)} kW System
                                 </span>
-                                <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
+                                <span className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5 block">
                                   {householdProfile.solarPanelCount || 20} Panels · {(householdProfile.solarOwnership || 'owned').toUpperCase()}
                                 </span>
                               </>
@@ -3888,7 +3892,7 @@ export default function HouseholdLifestyleHub({
                                       setHouseholdView('wizard');
                                     }
                                   }}
-                                  className="text-xs font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
+                                  className="text-[13px] font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
                                 >
                                   {isOverview ? 'Manage in Lifestyle' : 'Add solar'}
                                 </button>
@@ -3906,7 +3910,7 @@ export default function HouseholdLifestyleHub({
                                 ? `${householdProfile.solarBatteryCapacityKwh || 13.5} kWh Battery`
                                 : 'No Battery Backup'}
                             </span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">
+                            <span className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5 block">
                               Billing plan: {(householdProfile.solarBillingPlan || 'nem_2').toUpperCase()}
                             </span>
                           </div>
@@ -3918,10 +3922,10 @@ export default function HouseholdLifestyleHub({
                     <div id="section-providers" className="scroll-mt-16">
                       <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                         <div className="flex items-center gap-2.5">
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                          <h4 className="text-[13px] font-semibold  text-slate-400 dark:text-slate-500">
                             Providers
                           </h4>
-                          <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                          <span className="text-[13px] px-2 py-0.5 rounded-full font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                             {7 + (householdProfile.extraProviders || []).length}
                           </span>
                         </div>
@@ -3930,7 +3934,7 @@ export default function HouseholdLifestyleHub({
                             <button
                               type="button"
                               onClick={() => handleOpenAddExtraProvider()}
-                              className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/40 text-[#18457c] dark:text-blue-400 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                              className="px-3 py-1.5 rounded-[8px] bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/40 text-[#18457c] dark:text-blue-400 text-[13px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               <span>Add Provider</span>
@@ -3946,7 +3950,7 @@ export default function HouseholdLifestyleHub({
                                 setHouseholdView('wizard');
                               }
                             }}
-                            className="text-xs font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
+                            className="text-[13px] font-semibold text-[#18457c] dark:text-blue-400 hover:underline cursor-pointer"
                           >
                             {isOverview ? 'Manage in Lifestyle' : 'Edit'}
                           </button>
@@ -3957,18 +3961,18 @@ export default function HouseholdLifestyleHub({
                         {/* 1. Internet */}
                         <div
                           onClick={() => handleOpenProvider('internet')}
-                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-[12px] flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                            <div className="w-10 h-10 rounded-[12px] bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-900/40 shadow-2xs group-hover:scale-105 transition-transform">
                               <Wifi className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
                                 Internet & WiFi
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
+                              <span className="text-[13px] text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.internetProvider || 'Xfinity'}
                               </span>
                             </div>
@@ -3976,16 +3980,16 @@ export default function HouseholdLifestyleHub({
                           <div className="flex items-center gap-3 shrink-0 text-right">
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                <span className="text-[13px] sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
                                   {householdProfile.internetPlan || 'Gigabit Extra'}
                                 </span>
                                 {householdProfile.internetMonthlyCost && (
-                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                  <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
                                     ${householdProfile.internetMonthlyCost}/mo
                                   </span>
                                 )}
                               </div>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                              <span className={`text-[13px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
                                 householdProfile.providerDocuments?.internet?.length
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : 'text-slate-400'
@@ -4007,18 +4011,18 @@ export default function HouseholdLifestyleHub({
                         {/* 2. Mobile Wireless */}
                         <div
                           onClick={() => handleOpenProvider('phone')}
-                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-[12px] flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-100 dark:border-purple-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                            <div className="w-10 h-10 rounded-[12px] bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-900/40 shadow-2xs group-hover:scale-105 transition-transform">
                               <Smartphone className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
                                 Mobile Wireless
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
+                              <span className="text-[13px] text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.phoneProvider || 'T-Mobile'} ({householdProfile.phoneLines || 3} lines)
                               </span>
                             </div>
@@ -4026,16 +4030,16 @@ export default function HouseholdLifestyleHub({
                           <div className="flex items-center gap-3 shrink-0 text-right">
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                <span className="text-[13px] sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
                                   {householdProfile.phonePlan || 'Go5G Plus'}
                                 </span>
                                 {householdProfile.phoneMonthlyCost && (
-                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                  <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
                                     ${householdProfile.phoneMonthlyCost}/mo
                                   </span>
                                 )}
                               </div>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                              <span className={`text-[13px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
                                 householdProfile.providerDocuments?.phone?.length
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : 'text-slate-400'
@@ -4057,18 +4061,18 @@ export default function HouseholdLifestyleHub({
                         {/* 3. Electric & Gas Utility */}
                         <div
                           onClick={() => handleOpenProvider('electric')}
-                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-[12px] flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-100 dark:border-amber-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                            <div className="w-10 h-10 rounded-[12px] bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-100 dark:border-amber-900/40 shadow-2xs group-hover:scale-105 transition-transform">
                               <Zap className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
                                 Electric & Gas Utility
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
+                              <span className="text-[13px] text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.electricGasProvider || 'PG&E'}
                               </span>
                             </div>
@@ -4076,16 +4080,16 @@ export default function HouseholdLifestyleHub({
                           <div className="flex items-center gap-3 shrink-0 text-right">
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                <span className="text-[13px] sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
                                   {householdProfile.electricGasPlan || 'EV2-A Home TOU'}
                                 </span>
                                 {householdProfile.electricGasMonthlyCost && (
-                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                  <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
                                     ${householdProfile.electricGasMonthlyCost}/mo
                                   </span>
                                 )}
                               </div>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                              <span className={`text-[13px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
                                 householdProfile.providerDocuments?.electric?.length
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : 'text-slate-400'
@@ -4107,18 +4111,18 @@ export default function HouseholdLifestyleHub({
                         {/* 4. Trash & Recycling */}
                         <div
                           onClick={() => handleOpenProvider('trash')}
-                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-[12px] flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                            <div className="w-10 h-10 rounded-[12px] bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-900/40 shadow-2xs group-hover:scale-105 transition-transform">
                               <Droplets className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
                                 Trash & Recycling
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
+                              <span className="text-[13px] text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.trashProvider || 'City Utilities'}
                               </span>
                             </div>
@@ -4126,16 +4130,16 @@ export default function HouseholdLifestyleHub({
                           <div className="flex items-center gap-3 shrink-0 text-right">
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                <span className="text-[13px] sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
                                   {householdProfile.trashPlan || '64-Gal Cart'}
                                 </span>
                                 {householdProfile.trashMonthlyCost && (
-                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                  <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
                                     ${householdProfile.trashMonthlyCost}/mo
                                   </span>
                                 )}
                               </div>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                              <span className={`text-[13px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
                                 householdProfile.providerDocuments?.trash?.length
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : 'text-slate-400'
@@ -4157,18 +4161,18 @@ export default function HouseholdLifestyleHub({
                         {/* 5. Home Security */}
                         <div
                           onClick={() => handleOpenProvider('security')}
-                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-[12px] flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100 dark:border-emerald-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                            <div className="w-10 h-10 rounded-[12px] bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100 dark:border-emerald-900/40 shadow-2xs group-hover:scale-105 transition-transform">
                               <ShieldCheck className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
                                 Home Security
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
+                              <span className="text-[13px] text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.securityProvider || 'Ring'}
                               </span>
                             </div>
@@ -4176,16 +4180,16 @@ export default function HouseholdLifestyleHub({
                           <div className="flex items-center gap-3 shrink-0 text-right">
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                <span className="text-[13px] sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
                                   {householdProfile.securityPlan || 'Ring Protect Pro'}
                                 </span>
                                 {householdProfile.securityMonthlyCost && (
-                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                  <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
                                     ${householdProfile.securityMonthlyCost}/mo
                                   </span>
                                 )}
                               </div>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                              <span className={`text-[13px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
                                 householdProfile.providerDocuments?.security?.length
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : 'text-slate-400'
@@ -4207,18 +4211,18 @@ export default function HouseholdLifestyleHub({
                         {/* 6. Water Service */}
                         <div
                           onClick={() => handleOpenProvider('water')}
-                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-[12px] flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-10 h-10 rounded-2xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-100 dark:border-cyan-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                            <div className="w-10 h-10 rounded-[12px] bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-900/40 shadow-2xs group-hover:scale-105 transition-transform">
                               <Droplets className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
                                 Water Service
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
+                              <span className="text-[13px] text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.waterProvider || 'City Water Works'}
                               </span>
                             </div>
@@ -4226,16 +4230,16 @@ export default function HouseholdLifestyleHub({
                           <div className="flex items-center gap-3 shrink-0 text-right">
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                <span className="text-[13px] sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
                                   {householdProfile.waterPlan || 'Standard Residential Meter'}
                                 </span>
                                 {householdProfile.waterMonthlyCost && (
-                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                  <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
                                     ${householdProfile.waterMonthlyCost}/mo
                                   </span>
                                 )}
                               </div>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                              <span className={`text-[13px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
                                 householdProfile.providerDocuments?.water?.length
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : 'text-slate-400'
@@ -4257,18 +4261,18 @@ export default function HouseholdLifestyleHub({
                         {/* 7. Home Warranty */}
                         <div
                           onClick={() => handleOpenProvider('homeWarranty')}
-                          className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                          className="py-4 px-3 rounded-[12px] flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                           title="Click to view details and upload statements"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="w-10 h-10 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-100 dark:border-rose-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                            <div className="w-10 h-10 rounded-[12px] bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-100 dark:border-rose-900/40 shadow-2xs group-hover:scale-105 transition-transform">
                               <Shield className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
                                 Home Warranty & Protection
                               </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
+                              <span className="text-[13px] text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                 {householdProfile.homeWarrantyProvider || 'American Home Shield'}
                               </span>
                             </div>
@@ -4276,16 +4280,16 @@ export default function HouseholdLifestyleHub({
                           <div className="flex items-center gap-3 shrink-0 text-right">
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                <span className="text-[13px] sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
                                   {householdProfile.homeWarrantyPlan || 'ShieldGold'}
                                 </span>
                                 {householdProfile.homeWarrantyMonthlyCost && (
-                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                  <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
                                     ${householdProfile.homeWarrantyMonthlyCost}/mo
                                   </span>
                                 )}
                               </div>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                              <span className={`text-[13px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
                                 householdProfile.providerDocuments?.homeWarranty?.length
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : 'text-slate-400'
@@ -4309,23 +4313,23 @@ export default function HouseholdLifestyleHub({
                           <div
                             key={prov.id}
                             onClick={() => handleOpenProvider(prov.id)}
-                            className="py-4 px-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
+                            className="py-4 px-3 rounded-[12px] flex items-center justify-between gap-4 hover:bg-slate-50/90 dark:hover:bg-slate-800/50 cursor-pointer transition-all group select-none"
                             title="Click to view details and upload statements"
                           >
                             <div className="flex items-center gap-3.5 min-w-0">
-                              <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-100 dark:border-purple-900/40 shadow-2xs group-hover:scale-105 transition-transform">
+                              <div className="w-10 h-10 rounded-[12px] bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-900/40 shadow-2xs group-hover:scale-105 transition-transform">
                                 <Sparkles className="w-5 h-5" />
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
+                                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 block group-hover:text-[#18457c] dark:group-hover:text-blue-400 transition-colors">
                                     {prov.type || 'Custom Provider'}
                                   </span>
-                                  <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                                  <span className="text-[13px] px-1.5 py-0.2 rounded font-medium bg-blue-50 text-blue-700 border border-blue-200">
                                     Extra
                                   </span>
                                 </div>
-                                <span className="text-xs text-slate-500 dark:text-slate-400 truncate block mt-0.5">
+                                <span className="text-[13px] text-slate-500 dark:text-slate-400 truncate block mt-0.5">
                                   {prov.name || 'Provider Name'}
                                 </span>
                               </div>
@@ -4333,16 +4337,16 @@ export default function HouseholdLifestyleHub({
                             <div className="flex items-center gap-3 shrink-0 text-right">
                               <div className="flex flex-col items-end gap-1">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
+                                  <span className="text-[13px] sm:text-sm font-semibold text-slate-800 dark:text-slate-200 block">
                                     {prov.plan || 'Active Service'}
                                   </span>
                                   {prov.monthlyCost && (
-                                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                                    <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
                                       ${prov.monthlyCost}/mo
                                     </span>
                                   )}
                                 </div>
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                                <span className={`text-[13px] px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
                                   householdProfile.providerDocuments?.[prov.id]?.length
                                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                     : 'text-slate-400'
@@ -4369,7 +4373,7 @@ export default function HouseholdLifestyleHub({
                           <button
                             type="button"
                             onClick={() => handleOpenAddExtraProvider()}
-                            className="w-full py-3.5 px-4 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-[#18457c] dark:hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/50 text-[#18457c] dark:text-blue-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                            className="w-full py-3.5 px-4 rounded-[12px] border border-dashed border-slate-300 dark:border-slate-700 hover:border-[#18457c] dark:hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/50 text-[#18457c] dark:text-blue-400 text-[13px] font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
                           >
                             <Plus className="w-4 h-4" />
                             <span>Add Extra Provider (Home Warranty, Pest, Pool, Lawn, Gas...)</span>
@@ -4382,18 +4386,18 @@ export default function HouseholdLifestyleHub({
                     <div id="section-bills" className="scroll-mt-16">
                       <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-2">
                         <div>
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                          <h4 className="text-[13px] font-semibold  text-slate-400 dark:text-slate-500">
                             Bills
                           </h4>
-                          <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 block">
+                          <span className="text-[13px] text-slate-400 dark:text-slate-500 mt-0.5 block">
                             Actual bills pulled directly from payments
                           </span>
                         </div>
                         {actualHouseholdBills.length > 0 && (
                           <div className="text-right">
-                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
+                            <span className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">
                               ${totalActualBills.toLocaleString()}
-                              <span className="text-xs font-normal text-slate-400"> /mo</span>
+                              <span className="text-[13px] font-normal text-slate-400"> /mo</span>
                             </span>
                           </div>
                         )}
@@ -4401,9 +4405,9 @@ export default function HouseholdLifestyleHub({
 
                       {actualHouseholdBills.length > 0 ? (
                         <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs min-w-[550px]">
+                          <table className="w-full text-left text-[13px] min-w-[550px]">
                             <thead>
-                              <tr className="border-b border-slate-100 dark:border-slate-800 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                              <tr className="border-b border-slate-100 dark:border-slate-800 text-[13px] font-semibold text-slate-400 dark:text-slate-500 ">
                                 <th className="py-4 pr-4 font-medium">Bill / Provider</th>
                                 <th className="py-4 px-4 font-medium">Category</th>
                                 <th className="py-4 px-4 font-medium">Due date</th>
@@ -4429,21 +4433,21 @@ export default function HouseholdLifestyleHub({
                                       <span>From payments</span>
                                     </span>
                                   </td>
-                                  <td className="py-4 pl-4 text-right font-bold text-slate-900 dark:text-slate-100 text-sm">
+                                  <td className="py-4 pl-4 text-right font-semibold text-slate-900 dark:text-slate-100 text-sm">
                                     ${Number(b.expectedAmount || b.amount || 0).toLocaleString()}
-                                    <span className="text-slate-400 text-xs font-normal"> /mo</span>
+                                    <span className="text-slate-400 text-[13px] font-normal"> /mo</span>
                                   </td>
                                 </tr>
                               ))}
                             </tbody>
                             <tfoot>
                               <tr className="border-t-2 border-slate-200 dark:border-slate-700">
-                                <td colSpan="4" className="py-5 pr-4 text-sm font-bold text-slate-900 dark:text-slate-100">
+                                <td colSpan="4" className="py-5 pr-4 text-sm font-semibold text-slate-900 dark:text-slate-100">
                                   Total monthly bills
                                 </td>
-                                <td className="py-5 pl-4 text-right text-base font-bold text-slate-900 dark:text-slate-100">
+                                <td className="py-5 pl-4 text-right text-base font-semibold text-slate-900 dark:text-slate-100">
                                   ${totalActualBills.toLocaleString()}
-                                  <span className="text-xs font-normal text-slate-400"> /mo</span>
+                                  <span className="text-[13px] font-normal text-slate-400"> /mo</span>
                                 </td>
                               </tr>
                             </tfoot>
@@ -4452,8 +4456,8 @@ export default function HouseholdLifestyleHub({
                       ) : (
                         <div className="py-12 flex flex-col items-center justify-center text-center gap-2">
                           <Receipt className="w-8 h-8 text-slate-300 dark:text-slate-600" />
-                          <b className="text-xs font-bold text-slate-700 dark:text-slate-300">No household bills pulled from payments yet</b>
-                          <p className="text-xs text-slate-400 dark:text-slate-500 max-w-sm">
+                          <b className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">No household bills pulled from payments yet</b>
+                          <p className="text-[13px] text-slate-400 dark:text-slate-500 max-w-sm">
                             Once your payment statements or connected bank accounts sync in Klarity, verified utility and household provider bills will appear here.
                           </p>
                         </div>
@@ -4477,7 +4481,7 @@ export default function HouseholdLifestyleHub({
                 title: extraProv.name || extraProv.type || 'Custom Provider',
                 category: extraProv.type || 'Custom Service',
                 icon: 'Sparkles',
-                colorClass: 'text-purple-600 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800',
+                colorClass: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800',
                 isExtra: true,
                 defaultProvider: extraProv.name || '',
                 defaultPlan: extraProv.plan || '',
@@ -4515,13 +4519,13 @@ export default function HouseholdLifestyleHub({
                         setSelectedProviderKey(null);
                         setIsEditingProviderDetail(false);
                       }}
-                      className="inline-flex items-center gap-2 text-xs font-bold text-[#18457c] dark:text-blue-400 hover:bg-slate-200/70 bg-slate-100 dark:bg-slate-800 px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-2xs"
+                      className="inline-flex items-center gap-2 text-[13px] font-semibold text-[#18457c] dark:text-blue-400 hover:bg-slate-200/70 bg-slate-100 dark:bg-slate-800 px-3.5 py-2 rounded-[8px] transition-all cursor-pointer shadow-2xs"
                     >
                       <ArrowLeft className="w-4 h-4" />
                       <span>Back to Household Providers</span>
                     </button>
-                    <span className="hidden sm:inline text-xs text-slate-400">/</span>
-                    <span className="hidden sm:inline text-xs font-medium text-slate-500 truncate max-w-[200px]">
+                    <span className="hidden sm:inline text-[13px] text-slate-400">/</span>
+                    <span className="hidden sm:inline text-[13px] font-medium text-slate-500 truncate max-w-[200px]">
                       {currentProvider || cfg.label}
                     </span>
                   </div>
@@ -4532,14 +4536,14 @@ export default function HouseholdLifestyleHub({
                         <button
                           type="button"
                           onClick={() => setIsEditingProviderDetail(false)}
-                          className="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer transition-colors"
+                          className="px-3.5 py-2 rounded-[8px] border border-slate-200 text-slate-600 hover:bg-slate-50 text-[13px] font-semibold cursor-pointer transition-colors"
                         >
                           Cancel
                         </button>
                         <button
                           type="button"
                           onClick={handleSaveProviderDetails}
-                          className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-bold transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
+                          className="px-4 py-2 rounded-[8px] bg-[#18457c] hover:bg-[#123561] text-white text-[13px] font-semibold transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
                         >
                           <Check className="w-3.5 h-3.5" />
                           <span>Save Changes</span>
@@ -4550,7 +4554,7 @@ export default function HouseholdLifestyleHub({
                         <button
                           type="button"
                           onClick={() => setIsEditingProviderDetail(true)}
-                          className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
+                          className="px-3.5 py-2 rounded-[8px] border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[13px] font-semibold transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
                         >
                           <Pencil className="w-3.5 h-3.5 text-[#18457c]" />
                           <span>Edit Details</span>
@@ -4559,7 +4563,7 @@ export default function HouseholdLifestyleHub({
                           <button
                             type="button"
                             onClick={handleDeleteProviderFromDetail}
-                            className="px-3 py-2 rounded-xl border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
+                            className="px-3 py-2 rounded-[8px] border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-700 text-[13px] font-semibold transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
                             title="Remove Provider"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -4572,10 +4576,10 @@ export default function HouseholdLifestyleHub({
                 </div>
 
                 {/* 2. Hero Header Card */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs flex flex-col gap-5">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-[12px] p-6 sm:p-7 shadow-xs flex flex-col gap-5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-2xs border ${cfg.colorClass}`}>
+                      <div className={`w-14 h-14 rounded-[12px] flex items-center justify-center shrink-0 shadow-2xs border ${cfg.colorClass}`}>
                         {cfg.icon === 'Wifi' && <Wifi className="w-7 h-7" />}
                         {cfg.icon === 'Smartphone' && <Smartphone className="w-7 h-7" />}
                         {cfg.icon === 'Zap' && <Zap className="w-7 h-7" />}
@@ -4586,18 +4590,18 @@ export default function HouseholdLifestyleHub({
                       </div>
                       <div>
                         <div className="flex items-center gap-2.5 flex-wrap">
-                          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                          <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 dark:text-slate-100 tracking-tight">
                             {currentProvider || 'Provider Name'}
                           </h2>
-                          <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
+                          <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-semibold text-[13px] border border-blue-200">
                             {cfg.category || cfg.title}
                           </span>
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold text-[10px] border border-emerald-200 flex items-center gap-1">
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold text-[13px] border border-emerald-200 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
                             Active Provider
                           </span>
                         </div>
-                        <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                        <p className="text-[13px] sm:text-sm text-slate-500 mt-1">
                           {currentPlan || 'Standard Plan'} {currentAccount ? `· Account #${currentAccount}` : ''}
                         </p>
                       </div>
@@ -4605,9 +4609,9 @@ export default function HouseholdLifestyleHub({
 
                     {/* Quick Stats Pill */}
                     <div className="flex items-center gap-2 self-start sm:self-auto">
-                      <div className="px-3.5 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-right">
-                        <span className="text-[10px] font-semibold text-slate-400 block uppercase tracking-wider">Monthly Rate</span>
-                        <span className="text-lg font-bold text-slate-900 block leading-tight">
+                      <div className="px-3.5 py-2 rounded-[12px] bg-slate-50 border border-slate-200 text-right">
+                        <span className="text-[13px] font-semibold text-slate-400 block ">Monthly Rate</span>
+                        <span className="text-lg font-semibold text-slate-900 block leading-tight">
                           {matchingBills[0]?.amount ? `$${matchingBills[0].amount}/mo` : (currentCost ? `$${currentCost}/mo` : '—')}
                         </span>
                       </div>
@@ -4616,15 +4620,15 @@ export default function HouseholdLifestyleHub({
 
                   {/* 4 Stat Tiles */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                    <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Service Tier</span>
-                      <span className="text-sm font-bold text-slate-800 truncate mt-1">{currentPlan || 'Standard'}</span>
+                    <div className="p-3.5 rounded-[12px] bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
+                      <span className="text-[13px] font-semibold text-slate-400 ">Service Tier</span>
+                      <span className="text-sm font-semibold text-slate-800 truncate mt-1">{currentPlan || 'Standard'}</span>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Account / ID #</span>
+                    <div className="p-3.5 rounded-[12px] bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
+                      <span className="text-[13px] font-semibold text-slate-400 ">Account / ID #</span>
                       <div className="flex items-center justify-between gap-1 mt-1">
-                        <span className="text-xs font-mono font-bold text-slate-800 truncate">{currentAccount || 'Not set'}</span>
+                        <span className="text-[13px]  font-semibold text-slate-800 truncate">{currentAccount || 'Not set'}</span>
                         {currentAccount && (
                           <button
                             type="button"
@@ -4638,14 +4642,14 @@ export default function HouseholdLifestyleHub({
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Documents</span>
-                      <span className="text-sm font-bold text-slate-800 mt-1">{docs.length} on file</span>
+                    <div className="p-3.5 rounded-[12px] bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
+                      <span className="text-[13px] font-semibold text-slate-400 ">Documents</span>
+                      <span className="text-sm font-semibold text-slate-800 mt-1">{docs.length} on file</span>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Billing Status</span>
-                      <span className="text-xs font-bold text-emerald-700 mt-1 flex items-center gap-1">
+                    <div className="p-3.5 rounded-[12px] bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
+                      <span className="text-[13px] font-semibold text-slate-400 ">Billing Status</span>
+                      <span className="text-[13px] font-semibold text-emerald-700 mt-1 flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                         <span>Connected</span>
                       </span>
@@ -4656,15 +4660,15 @@ export default function HouseholdLifestyleHub({
                 {/* 3. Main Content: When Editing Form vs When Viewing */}
                 {isEditingProviderDetail ? (
                   /* Clean Editing Card */
-                  <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-7 shadow-xs flex flex-col gap-5">
+                  <div className="bg-white border border-slate-200/90 rounded-[12px] p-6 sm:p-7 shadow-xs flex flex-col gap-5">
                     <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                       <div>
-                        <h3 className="font-bold text-slate-900 text-sm">Edit Provider & Plan Details</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">Update company name, plan tier, monthly cost, and account notes.</p>
+                        <h3 className="font-semibold text-slate-900 text-sm">Edit Provider & Plan Details</h3>
+                        <p className="text-[13px] text-slate-500 mt-0.5">Update company name, plan tier, monthly cost, and account notes.</p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-[13px]">
                       {/* Provider Name */}
                       <div className="flex flex-col gap-1.5">
                         <label className="font-semibold text-slate-700">Company / Provider Name</label>
@@ -4673,7 +4677,7 @@ export default function HouseholdLifestyleHub({
                           value={providerEditForm?.provider || ''}
                           onChange={e => setProviderEditForm({ ...providerEditForm, provider: e.target.value })}
                           placeholder={cfg.placeholderProvider}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 font-bold text-slate-900 focus:outline-none focus:border-[#18457c]"
+                          className="w-full bg-white border border-slate-200 rounded-[8px] px-3.5 py-2.5 font-semibold text-slate-900 focus:outline-none focus:border-[#18457c]"
                         />
                         {cfg.quickProviders?.length > 0 && (
                           <div className="flex items-center gap-1.5 flex-wrap mt-1">
@@ -4682,7 +4686,7 @@ export default function HouseholdLifestyleHub({
                                 key={p}
                                 type="button"
                                 onClick={() => setProviderEditForm({ ...providerEditForm, provider: p })}
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition-colors cursor-pointer ${
+                                className={`px-2 py-0.5 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${
                                   providerEditForm?.provider === p
                                     ? 'bg-[#18457c] text-white border-[#18457c]'
                                     : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -4703,7 +4707,7 @@ export default function HouseholdLifestyleHub({
                           value={providerEditForm?.plan || ''}
                           onChange={e => setProviderEditForm({ ...providerEditForm, plan: e.target.value })}
                           placeholder={cfg.placeholderPlan}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 font-bold text-slate-900 focus:outline-none focus:border-[#18457c]"
+                          className="w-full bg-white border border-slate-200 rounded-[8px] px-3.5 py-2.5 font-semibold text-slate-900 focus:outline-none focus:border-[#18457c]"
                         />
                         {cfg.quickPlans?.length > 0 && (
                           <div className="flex items-center gap-1.5 flex-wrap mt-1">
@@ -4712,7 +4716,7 @@ export default function HouseholdLifestyleHub({
                                 key={pl}
                                 type="button"
                                 onClick={() => setProviderEditForm({ ...providerEditForm, plan: pl })}
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition-colors cursor-pointer ${
+                                className={`px-2 py-0.5 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${
                                   providerEditForm?.plan === pl
                                     ? 'bg-[#18457c] text-white border-[#18457c]'
                                     : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -4733,7 +4737,7 @@ export default function HouseholdLifestyleHub({
                           value={providerEditForm?.accountNumber || ''}
                           onChange={e => setProviderEditForm({ ...providerEditForm, accountNumber: e.target.value })}
                           placeholder="e.g. 8495-201-9481"
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 font-mono text-slate-900 focus:outline-none focus:border-[#18457c]"
+                          className="w-full bg-white border border-slate-200 rounded-[8px] px-3.5 py-2.5  text-slate-900 focus:outline-none focus:border-[#18457c]"
                         />
                       </div>
 
@@ -4741,14 +4745,14 @@ export default function HouseholdLifestyleHub({
                       <div className="flex flex-col gap-1.5">
                         <label className="font-semibold text-slate-700">Monthly Bill Amount ($)</label>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">$</span>
                           <input
                             type="number"
                             step="0.01"
                             value={providerEditForm?.monthlyCost || ''}
                             onChange={e => setProviderEditForm({ ...providerEditForm, monthlyCost: e.target.value })}
                             placeholder="0.00"
-                            className="w-full bg-white border border-slate-200 rounded-xl pl-7 pr-3.5 py-2.5 font-mono text-slate-900 focus:outline-none focus:border-[#18457c]"
+                            className="w-full bg-white border border-slate-200 rounded-[8px] pl-7 pr-3.5 py-2.5  text-slate-900 focus:outline-none focus:border-[#18457c]"
                           />
                         </div>
                       </div>
@@ -4761,7 +4765,7 @@ export default function HouseholdLifestyleHub({
                           value={providerEditForm?.notes || ''}
                           onChange={e => setProviderEditForm({ ...providerEditForm, notes: e.target.value })}
                           placeholder="Renewal dates, equipment rentals, warranty coverage items, emergency numbers..."
-                          className="w-full bg-white border border-slate-200 rounded-xl p-3 text-slate-800 focus:outline-none focus:border-[#18457c]"
+                          className="w-full bg-white border border-slate-200 rounded-[8px] p-3 text-slate-800 focus:outline-none focus:border-[#18457c]"
                         />
                       </div>
                     </div>
@@ -4770,14 +4774,14 @@ export default function HouseholdLifestyleHub({
                       <button
                         type="button"
                         onClick={() => setIsEditingProviderDetail(false)}
-                        className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer transition-colors"
+                        className="px-4 py-2 rounded-[8px] border border-slate-200 text-slate-600 hover:bg-slate-50 text-[13px] font-semibold cursor-pointer transition-colors"
                       >
                         Cancel
                       </button>
                       <button
                         type="button"
                         onClick={handleSaveProviderDetails}
-                        className="px-5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-bold text-xs cursor-pointer shadow-2xs transition-colors flex items-center gap-1.5"
+                        className="px-5 py-2 rounded-[8px] bg-[#18457c] hover:bg-[#123561] text-white font-semibold text-[13px] cursor-pointer shadow-2xs transition-colors flex items-center gap-1.5"
                       >
                         <Check className="w-4 h-4" />
                         <span>Save Provider Details</span>
@@ -4788,45 +4792,45 @@ export default function HouseholdLifestyleHub({
                   /* Viewing Mode Cards */
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left: Account & Contract Specifications Card */}
-                    <div className="lg:col-span-1 bg-white border border-slate-200/90 rounded-3xl p-6 shadow-xs flex flex-col justify-between gap-5">
+                    <div className="lg:col-span-1 bg-white border border-slate-200/90 rounded-[12px] p-6 shadow-xs flex flex-col justify-between gap-5">
                       <div>
                         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                          <h3 className="font-bold text-slate-900 text-sm">Account Overview</h3>
+                          <h3 className="font-semibold text-slate-900 text-sm">Account Overview</h3>
                           <button
                             type="button"
                             onClick={() => setIsEditingProviderDetail(true)}
-                            className="text-xs text-[#18457c] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                            className="text-[13px] text-[#18457c] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
                           >
                             <Pencil className="w-3 h-3" />
                             <span>Edit</span>
                           </button>
                         </div>
 
-                        <div className="space-y-4 pt-3 text-xs">
+                        <div className="space-y-4 pt-3 text-[13px]">
                           <div>
-                            <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Service Category</span>
-                            <span className="font-bold text-slate-900 mt-0.5 block">{cfg.category || cfg.title}</span>
+                            <span className="text-[13px] font-semibold text-slate-400 block ">Service Category</span>
+                            <span className="font-semibold text-slate-900 mt-0.5 block">{cfg.category || cfg.title}</span>
                           </div>
 
                           <div>
-                            <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Company</span>
-                            <span className="font-bold text-slate-900 mt-0.5 block">{currentProvider || 'Not specified'}</span>
+                            <span className="text-[13px] font-semibold text-slate-400 block ">Company</span>
+                            <span className="font-semibold text-slate-900 mt-0.5 block">{currentProvider || 'Not specified'}</span>
                           </div>
 
                           <div>
-                            <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Active Plan</span>
-                            <span className="font-bold text-slate-900 mt-0.5 block">{currentPlan || 'Not specified'}</span>
+                            <span className="text-[13px] font-semibold text-slate-400 block ">Active Plan</span>
+                            <span className="font-semibold text-slate-900 mt-0.5 block">{currentPlan || 'Not specified'}</span>
                           </div>
 
                           <div>
-                            <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Account / Customer ID</span>
+                            <span className="text-[13px] font-semibold text-slate-400 block ">Account / Customer ID</span>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className="font-mono font-bold text-slate-900">{currentAccount || 'None'}</span>
+                              <span className=" font-semibold text-slate-900">{currentAccount || 'None'}</span>
                               {currentAccount && (
                                 <button
                                   type="button"
                                   onClick={() => handleCopyAccount(currentAccount)}
-                                  className="text-[10px] font-semibold text-[#18457c] hover:underline flex items-center gap-1 cursor-pointer"
+                                  className="text-[13px] font-semibold text-[#18457c] hover:underline flex items-center gap-1 cursor-pointer"
                                 >
                                   {copiedAccount ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
                                   <span>{copiedAccount ? 'Copied' : 'Copy'}</span>
@@ -4836,14 +4840,14 @@ export default function HouseholdLifestyleHub({
                           </div>
 
                           <div>
-                            <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Monthly Rate</span>
-                            <span className="font-bold text-slate-900 mt-0.5 block">
+                            <span className="text-[13px] font-semibold text-slate-400 block ">Monthly Rate</span>
+                            <span className="font-semibold text-slate-900 mt-0.5 block">
                               {currentCost ? `$${parseFloat(currentCost).toFixed(2)} / month` : 'Not specified'}
                             </span>
                           </div>
 
                           <div>
-                            <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Contract / Service Notes</span>
+                            <span className="text-[13px] font-semibold text-slate-400 block ">Contract / Service Notes</span>
                             <p className="text-slate-600 mt-0.5 whitespace-pre-wrap leading-relaxed">
                               {currentNotes || 'No contract terms or notes added yet.'}
                             </p>
@@ -4854,7 +4858,7 @@ export default function HouseholdLifestyleHub({
                       <button
                         type="button"
                         onClick={() => setIsEditingProviderDetail(true)}
-                        className="w-full py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors cursor-pointer shadow-2xs flex items-center justify-center gap-1.5"
+                        className="w-full py-2.5 rounded-[8px] border border-slate-200 hover:bg-slate-50 text-slate-700 text-[13px] font-semibold transition-colors cursor-pointer shadow-2xs flex items-center justify-center gap-1.5"
                       >
                         <Pencil className="w-3.5 h-3.5 text-slate-500" />
                         <span>Edit Account Information</span>
@@ -4864,20 +4868,20 @@ export default function HouseholdLifestyleHub({
                     {/* Right: Statements, Documents & Matching Payments (2 cols) */}
                     <div className="lg:col-span-2 flex flex-col gap-6">
                       {/* Statements & Document Uploader */}
-                      <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-xs flex flex-col gap-4">
+                      <div className="bg-white border border-slate-200/90 rounded-[12px] p-6 shadow-xs flex flex-col gap-4">
                         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                           <div>
-                            <h3 className="font-bold text-slate-900 text-sm">Statements & Contracts</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">Upload bills, rate sheets, or warranties (PDF or image). Klarity auto-extracts your account & cost.</p>
+                            <h3 className="font-semibold text-slate-900 text-sm">Statements & Contracts</h3>
+                            <p className="text-[13px] text-slate-500 mt-0.5">Upload bills, rate sheets, or warranties (PDF or image). Klarity auto-extracts your account & cost.</p>
                           </div>
-                          <span className="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold">
+                          <span className="px-2.5 py-1 rounded-[8px] bg-slate-100 text-slate-600 text-[13px] font-semibold">
                             {docs.length} on file
                           </span>
                         </div>
 
                         {/* Scan status alert */}
                         {providerScanSuccess && (
-                          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2.5">
+                          <div className="p-3.5 rounded-[8px] bg-emerald-50 border border-emerald-200 text-emerald-800 text-[13px] flex items-center gap-2.5">
                             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                             <span className="font-medium">{providerScanSuccess}</span>
                           </div>
@@ -4886,7 +4890,7 @@ export default function HouseholdLifestyleHub({
                         {/* Upload Bar / Dropzone */}
                         <div
                           onClick={() => providerDocInputRef.current?.click()}
-                          className="border-2 border-dashed border-slate-300 hover:border-[#18457c] rounded-2xl p-5 text-center bg-slate-50/60 hover:bg-blue-50/30 cursor-pointer transition-all flex items-center justify-center gap-3.5 group"
+                          className="border-2 border-dashed border-slate-300 hover:border-[#18457c] rounded-[12px] p-5 text-center bg-slate-50/60 hover:bg-blue-50/30 cursor-pointer transition-all flex items-center justify-center gap-3.5 group"
                         >
                           <input
                             ref={providerDocInputRef}
@@ -4895,7 +4899,7 @@ export default function HouseholdLifestyleHub({
                             onChange={handleUploadProviderDocument}
                             className="hidden"
                           />
-                          <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#18457c] flex items-center justify-center group-hover:scale-105 transition-transform shadow-2xs shrink-0">
+                          <div className="w-10 h-10 rounded-[8px] bg-blue-50 text-[#18457c] flex items-center justify-center group-hover:scale-105 transition-transform shadow-2xs shrink-0">
                             {isScanningProviderDoc ? (
                               <RefreshCw className="w-5 h-5 animate-spin" />
                             ) : (
@@ -4903,10 +4907,10 @@ export default function HouseholdLifestyleHub({
                             )}
                           </div>
                           <div className="text-left">
-                            <span className="text-xs sm:text-sm font-bold text-slate-900 block">
+                            <span className="text-[13px] sm:text-sm font-semibold text-slate-900 block">
                               {isScanningProviderDoc ? providerScanProgress : `Upload ${currentProvider || 'Provider'} Statement`}
                             </span>
-                            <span className="text-[11px] text-slate-400 block">
+                            <span className="text-[13px] text-slate-400 block">
                               PDF, PNG, JPG (Account numbers & bill amounts will be auto-scanned)
                             </span>
                           </div>
@@ -4915,26 +4919,26 @@ export default function HouseholdLifestyleHub({
                         {/* Saved Documents */}
                         {docs.length > 0 && (
                           <div className="space-y-2.5 pt-1">
-                            <span className="text-xs font-bold text-slate-700 block">Uploaded Statements</span>
+                            <span className="text-[13px] font-semibold text-slate-700 block">Uploaded Statements</span>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                               {docs.map(doc => (
                                 <div
                                   key={doc.id}
-                                  className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex items-start justify-between gap-2.5"
+                                  className="p-3.5 rounded-[12px] bg-slate-50/70 border border-slate-200/80 flex items-start justify-between gap-2.5"
                                 >
                                   <div className="flex items-start gap-2.5 min-w-0">
-                                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                                    <div className="w-8 h-8 rounded-[8px] bg-white border border-slate-200 flex items-center justify-center shrink-0">
                                       <FileText className="w-4 h-4 text-[#18457c]" />
                                     </div>
                                     <div className="min-w-0">
-                                      <span className="font-semibold text-slate-900 text-xs block truncate" title={doc.name}>
+                                      <span className="font-semibold text-slate-900 text-[13px] block truncate" title={doc.name}>
                                         {doc.name}
                                       </span>
-                                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                                      <span className="text-[13px] text-slate-400 block mt-0.5">
                                         {new Date(doc.uploadedAt).toLocaleDateString()} · {doc.size || 'PDF'}
                                       </span>
                                       {doc.extracted?.accountNumber && (
-                                        <span className="text-[10px] font-mono text-emerald-700 font-semibold block mt-0.5">
+                                        <span className="text-[13px]  text-emerald-700 font-semibold block mt-0.5">
                                           Acct: {doc.extracted.accountNumber}
                                         </span>
                                       )}
@@ -4973,26 +4977,26 @@ export default function HouseholdLifestyleHub({
 
                       {/* Matching Payments / Bills */}
                       {matchingBills.length > 0 && (
-                        <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-xs flex flex-col gap-3">
+                        <div className="bg-white border border-slate-200/90 rounded-[12px] p-6 shadow-xs flex flex-col gap-3">
                           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                            <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                            <span className="font-semibold text-slate-900 text-[13px] flex items-center gap-2">
                               <Receipt className="w-4 h-4 text-emerald-600" />
                               <span>Connected Payments & Bills</span>
                             </span>
-                            <span className="text-[11px] text-slate-400">
+                            <span className="text-[13px] text-slate-400">
                               {matchingBills.length} matched payment{matchingBills.length === 1 ? '' : 's'}
                             </span>
                           </div>
                           <div className="divide-y divide-slate-100">
                             {matchingBills.map(b => (
-                              <div key={b.id} className="py-2.5 flex items-center justify-between text-xs">
+                              <div key={b.id} className="py-2.5 flex items-center justify-between text-[13px]">
                                 <div>
-                                  <span className="font-bold text-slate-900 block">{b.name}</span>
-                                  <span className="text-[10px] text-slate-400">{b.category || 'Utility'} · {b.dueDate ? `Due ${b.dueDate}` : 'Active payment'}</span>
+                                  <span className="font-semibold text-slate-900 block">{b.name}</span>
+                                  <span className="text-[13px] text-slate-400">{b.category || 'Utility'} · {b.dueDate ? `Due ${b.dueDate}` : 'Active payment'}</span>
                                 </div>
                                 <div className="text-right">
-                                  <span className="font-bold text-slate-900 text-sm block">${b.amount}</span>
-                                  <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 justify-end">
+                                  <span className="font-semibold text-slate-900 text-sm block">${b.amount}</span>
+                                  <span className="text-[13px] text-emerald-600 font-semibold flex items-center gap-1 justify-end">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
                                     From payments
                                   </span>
@@ -5030,18 +5034,18 @@ export default function HouseholdLifestyleHub({
 
           {/* Scanning Progress Banner */}
           {isScanningAutoCard && (
-            <div className="p-4 bg-[#E8EEF8] dark:bg-slate-800 border border-[#1B4B91]/20 rounded-xl flex items-center gap-3 text-[#14233B] dark:text-slate-200 text-sm animate-pulse">
+            <div className="p-4 bg-[#E8EEF8] dark:bg-slate-800 border border-[#1B4B91]/20 rounded-[8px] flex items-center gap-3 text-[#14233B] dark:text-slate-200 text-sm ">
               <Loader2 className="w-5 h-5 animate-spin text-[#1B4B91] shrink-0" />
               <div>
                 <span className="font-semibold block">Reading your auto insurance document...</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 block">{autoScanProgress || 'Extracting vehicle, carrier, policy number, driver name, coverage, and deductibles…'}</span>
+                <span className="text-[13px] text-slate-500 dark:text-slate-400 block">{autoScanProgress || 'Extracting vehicle, carrier, policy number, driver name, coverage, and deductibles…'}</span>
               </div>
             </div>
           )}
 
           {/* STATE 1: EMPTY (No vehicles/cards added yet) */}
           {autoView === 'empty' && !isScanningAutoCard && (
-            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
+            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[8px] shadow-xs overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <h2 className="font-semibold text-base text-slate-900 dark:text-white">Auto insurance & vehicles</h2>
               </div>
@@ -5055,7 +5059,7 @@ export default function HouseholdLifestyleHub({
                       if (file) handleProcessAutoInsuranceFile(file);
                     }
                   }}
-                  className="border-1.5 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 sm:p-10 text-center flex flex-col items-center justify-center gap-2"
+                  className="border-1.5 border-dashed border-slate-300 dark:border-slate-700 rounded-[8px] p-8 sm:p-10 text-center flex flex-col items-center justify-center gap-2"
                 >
                   <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-slate-800 flex items-center justify-center text-[#18457c] mb-1">
                     <Car className="w-6 h-6" />
@@ -5098,7 +5102,7 @@ export default function HouseholdLifestyleHub({
                       </button>
                     </div>
                   )}
-                  {!isOverview && <small className="text-xs text-slate-400 mt-1">PDF, PNG, JPG or WebP</small>}
+                  {!isOverview && <small className="text-[13px] text-slate-400 mt-1">PDF, PNG, JPG or WebP</small>}
                 </div>
               </div>
             </section>
@@ -5106,13 +5110,13 @@ export default function HouseholdLifestyleHub({
 
           {/* STATE 2: REVIEW / EDIT ("Check what we read") */}
           {autoView === 'review' && (
-            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
+            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[8px] shadow-xs overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-base text-slate-900 dark:text-white">
                     {editingVehicleId ? 'Edit auto insurance card' : 'Check what we read'}
                   </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-[13px] text-slate-500 dark:text-slate-400">
                     Compare each field with your card before saving.
                   </p>
                 </div>
@@ -5147,12 +5151,12 @@ export default function HouseholdLifestyleHub({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   {/* Driver Name / Named Insured */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">
                       Primary Driver / Named Insured <span className="text-[#18457c]">*</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. ZIYAD O ELMAHI"
+                      placeholder="e.g. Alex Morgan"
                       value={autoReviewForm.driverName}
                       onChange={(e) => setAutoReviewForm({ ...autoReviewForm, driverName: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-medium text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
@@ -5161,7 +5165,7 @@ export default function HouseholdLifestyleHub({
 
                   {/* Insurance Carrier */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">
                       Insurance Carrier <span className="text-[#18457c]">*</span>
                     </label>
                     <input
@@ -5179,7 +5183,7 @@ export default function HouseholdLifestyleHub({
 
                   {/* Policy Number */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">
                       Policy Number <span className="text-[#18457c]">*</span>
                     </label>
                     <input
@@ -5187,13 +5191,13 @@ export default function HouseholdLifestyleHub({
                       placeholder="e.g. G-8821943"
                       value={autoReviewForm.insurancePolicyNumber}
                       onChange={(e) => setAutoReviewForm({ ...autoReviewForm, insurancePolicyNumber: e.target.value })}
-                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm  text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
                     />
                   </div>
 
                   {/* Coverage Type */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Coverage Type</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Coverage Type</label>
                     <select
                       value={autoReviewForm.insuranceCoverage}
                       onChange={(e) => {
@@ -5215,9 +5219,9 @@ export default function HouseholdLifestyleHub({
 
                   {/* Monthly Premium */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Monthly Insurance Premium</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Monthly Insurance Premium</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-2 text-slate-400 font-bold">$</span>
+                      <span className="absolute left-3 top-2 text-slate-400 font-semibold">$</span>
                       <input
                         type="number"
                         placeholder="120"
@@ -5230,9 +5234,9 @@ export default function HouseholdLifestyleHub({
 
                   {/* Deductible */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Comprehensive & Collision Deductible</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Comprehensive & Collision Deductible</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-2 text-slate-400 font-bold">$</span>
+                      <span className="absolute left-3 top-2 text-slate-400 font-semibold">$</span>
                       <input
                         type="number"
                         placeholder="500"
@@ -5245,7 +5249,7 @@ export default function HouseholdLifestyleHub({
 
                   {/* Vehicle Year & Make */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Model Year & Make</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Model Year & Make</label>
                     <div className="grid grid-cols-2 gap-2">
                       <select
                         value={autoReviewForm.year}
@@ -5257,7 +5261,7 @@ export default function HouseholdLifestyleHub({
                             name: `${yr} ${prev.make} ${prev.model}`.replace(/\s+/g, ' ').trim()
                           }));
                         }}
-                        className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-2 text-sm font-bold text-slate-900 dark:text-white"
+                        className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-2 text-sm font-semibold text-slate-900 dark:text-white"
                       >
                         {[2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010, 2005, 2000].map(y => (
                           <option key={y} value={y}>{y}</option>
@@ -5268,26 +5272,26 @@ export default function HouseholdLifestyleHub({
                         placeholder="e.g. Toyota"
                         value={autoReviewForm.make}
                         onChange={(e) => handleAutoFormMakeChange(e.target.value)}
-                        className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-bold text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
+                        className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-semibold text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
                       />
                     </div>
                   </div>
 
                   {/* Model */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Model & Trim</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Model & Trim</label>
                     <input
                       type="text"
                       placeholder="e.g. Camry Hybrid, Model Y, RAV4 Prime..."
                       value={autoReviewForm.model}
                       onChange={(e) => handleAutoFormModelChange(e.target.value)}
-                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-bold text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-semibold text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
                     />
                   </div>
 
                   {/* Ownership & Powertrain */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Ownership & Powertrain</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Ownership & Powertrain</label>
                     <div className="grid grid-cols-2 gap-2">
                       <select
                         value={autoReviewForm.ownership}
@@ -5313,18 +5317,18 @@ export default function HouseholdLifestyleHub({
 
                   {/* VIN */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Vehicle Identification Number (VIN)</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Vehicle Identification Number (VIN)</label>
                     <input
                       type="text"
                       placeholder="17-character VIN"
                       value={autoReviewForm.vin}
                       onChange={(e) => setAutoReviewForm({ ...autoReviewForm, vin: e.target.value.toUpperCase() })}
-                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm  text-slate-900 dark:text-white focus:outline-2 focus:outline-[#18457c]"
                     />
                   </div>
                 </div>
 
-                <label className="flex items-start gap-3 my-5 p-3.5 border border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                <label className="flex items-start gap-3 my-5 p-3.5 border border-slate-200 dark:border-slate-800 rounded-[8px] cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
                   <input
                     type="checkbox"
                     checked={keepAutoCardImage}
@@ -5366,7 +5370,7 @@ export default function HouseholdLifestyleHub({
               <div className="flex items-center justify-between flex-wrap gap-3 px-1">
                 <div>
                   <h2 className="font-semibold text-lg text-slate-900 dark:text-white">Vehicles & Auto insurance</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-[13px] text-slate-500 dark:text-slate-400">
                     {metrics.fleet.vehicles.length === 1 ? '1 active vehicle & insurance card' : `${metrics.fleet.vehicles.length} active vehicles & insurance cards`} · Click any card to expand or minimize
                   </p>
                 </div>
@@ -5374,7 +5378,7 @@ export default function HouseholdLifestyleHub({
                   <button
                     type="button"
                     onClick={() => onNavigateToLifestyle && onNavigateToLifestyle()}
-                    className="px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-xs sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                    className="px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-[13px] sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                   >
                     <span>Manage in Lifestyle</span>
                     <ArrowRight className="w-4 h-4 text-slate-400" />
@@ -5384,7 +5388,7 @@ export default function HouseholdLifestyleHub({
                     <button
                       type="button"
                       onClick={handleAddNewAutoCard}
-                      className="px-3.5 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white font-medium text-xs sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                      className="px-3.5 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white font-medium text-[13px] sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                     >
                       <Upload className="w-4 h-4" />
                       <span>Upload insurance card</span>
@@ -5392,7 +5396,7 @@ export default function HouseholdLifestyleHub({
                     <button
                       type="button"
                       onClick={handleManualAddVehicle}
-                      className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-xs sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                      className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-[13px] sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
                       <Plus className="w-4 h-4" />
                       <span className="hidden sm:inline">Add manually</span>
@@ -5411,7 +5415,7 @@ export default function HouseholdLifestyleHub({
                 return (
                   <section
                     key={v.id || vIdx}
-                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden transition-all"
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[8px] shadow-xs overflow-hidden transition-all"
                   >
                     {/* MINIMIZED HEADER: Vehicle Name, Powertrain, Ownership, Carrier, Cost & Arrow */}
                     <div
@@ -5426,7 +5430,7 @@ export default function HouseholdLifestyleHub({
                         </span>
 
                         {/* 2. Powertrain Badge */}
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[13px] font-semibold  border ${
                           v.type === 'ev'
                             ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                             : v.type === 'hybrid' || v.type === 'phev'
@@ -5438,11 +5442,11 @@ export default function HouseholdLifestyleHub({
 
                         {/* 3. Ownership Badge */}
                         {v.ownership && (
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[13px] font-semibold  border ${
                             v.ownership === 'lease'
                               ? 'bg-amber-50 text-amber-800 border-amber-200'
                               : v.ownership === 'financed'
-                                ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                                ? 'bg-blue-50 text-blue-800 border-blue-200'
                                 : 'bg-slate-50 text-slate-700 border-slate-200'
                           }`}>
                             {v.ownership === 'lease' ? 'Lease' : v.ownership === 'financed' ? 'Financed' : 'Owned'}
@@ -5451,7 +5455,7 @@ export default function HouseholdLifestyleHub({
 
                         {/* 4. Insurance Carrier Badge */}
                         {v.insuranceProvider && (
-                          <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/70">
+                          <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[13px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/70">
                             <ShieldCheck className="w-3.5 h-3.5 text-[#18457c]" />
                             <span>{v.insuranceProvider}</span>
                           </span>
@@ -5459,13 +5463,13 @@ export default function HouseholdLifestyleHub({
 
                         {/* 5. Policy Number or Premium */}
                         {v.insurancePolicyNumber && (
-                          <span className="hidden lg:inline-flex items-center font-mono text-[11px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                          <span className="hidden lg:inline-flex items-center  text-[13px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
                             Pol: {v.insurancePolicyNumber}
                           </span>
                         )}
 
                         {/* 6. Total Monthly Cost */}
-                        <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                        <span className="text-[13px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
                           ${v.totalMonthlyVehicleCost || 0} /mo
                         </span>
                       </div>
@@ -5494,12 +5498,12 @@ export default function HouseholdLifestyleHub({
                         {/* Action buttons on top-right */}
                         <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200/80 dark:border-slate-800">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                            <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                               <ShieldCheck className="w-4 h-4 text-[#18457c]" />
                               <span>{v.insuranceProvider || 'Auto Insurance Policy'}</span>
                             </span>
-                            <span className="text-xs text-slate-400">·</span>
-                            <span className="text-xs text-slate-500 capitalize">
+                            <span className="text-[13px] text-slate-400">·</span>
+                            <span className="text-[13px] text-slate-500 capitalize">
                               {(v.insuranceCoverage || 'full_coverage').replace(/_/g, ' ')}
                             </span>
                           </div>
@@ -5509,7 +5513,7 @@ export default function HouseholdLifestyleHub({
                               <button
                                 type="button"
                                 onClick={() => handleCopyVehiclePolicy(v)}
-                                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
                               >
                                 {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                                 <span>{isCopied ? 'Copied' : 'Copy policy'}</span>
@@ -5525,7 +5529,7 @@ export default function HouseholdLifestyleHub({
                                   handleEditVehicle(v);
                                 }
                               }}
-                              className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                              className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
                             >
                               <Pencil className="w-3.5 h-3.5" />
                               <span>{isOverview ? 'Manage' : 'Edit'}</span>
@@ -5534,7 +5538,7 @@ export default function HouseholdLifestyleHub({
                             <button
                               type="button"
                               onClick={() => handleRemoveVehicle(v.id)}
-                              className="px-2.5 py-1 rounded-lg border border-rose-200 bg-white dark:bg-slate-800 text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                              className="px-2.5 py-1 rounded-lg border border-rose-200 bg-white dark:bg-slate-800 text-[13px] font-medium text-rose-600 hover:bg-rose-50 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                               <span>Delete</span>
@@ -5568,31 +5572,31 @@ export default function HouseholdLifestyleHub({
                               }
 
                               return (
-                                <div className="bg-gradient-to-br from-[#18457c] to-[#0f2d52] text-white rounded-2xl p-5 flex flex-col justify-between aspect-[1.6/1] shadow-md min-h-[190px] max-w-[360px] w-full">
+                                <div className="bg-[#1B4B91] text-white rounded-[12px] p-5 flex flex-col justify-between aspect-[1.6/1] shadow-md min-h-[190px] max-w-[360px] w-full">
                                   <div className="flex items-center justify-between text-[13px] opacity-90">
-                                    <span className="font-bold flex items-center gap-1.5">
+                                    <span className="font-semibold flex items-center gap-1.5">
                                       <ShieldCheck className="w-4 h-4 text-emerald-300" />
                                       <span>{v.insuranceProvider || 'Auto Insurance'}</span>
                                     </span>
-                                    <span className="text-[10px] tracking-wider uppercase font-mono px-2 py-0.5 rounded bg-white/15">
+                                    <span className="text-[13px]   px-2 py-0.5 rounded bg-white/15">
                                       AUTO PROOF
                                     </span>
                                   </div>
 
                                   <div className="my-2">
-                                    <span className="text-[10px] uppercase tracking-wider opacity-75 block">Named Insured</span>
-                                    <span className="font-bold text-base tracking-wide block truncate">
+                                    <span className="text-[13px]  opacity-75 block">Named Insured</span>
+                                    <span className="font-semibold text-base tracking-wide block truncate">
                                       {v.driverName || 'Primary Driver'}
                                     </span>
-                                    <span className="text-xs text-white/90 block mt-0.5 font-medium truncate">
+                                    <span className="text-[13px] text-white/90 block mt-0.5 font-medium truncate">
                                       {v.name}
                                     </span>
                                   </div>
 
                                   <div className="flex items-end justify-between pt-2 border-t border-white/15">
                                     <div>
-                                      <span className="text-[9px] uppercase tracking-wider opacity-75 block">Policy Number</span>
-                                      <span className="font-mono text-xs font-bold tracking-wider">{v.insurancePolicyNumber || 'Not specified'}</span>
+                                      <span className="text-[13px]  opacity-75 block">Policy Number</span>
+                                      <span className=" text-[13px] font-semibold tracking-wider">{v.insurancePolicyNumber || 'Not specified'}</span>
                                     </div>
                                     <button
                                       type="button"
@@ -5604,7 +5608,7 @@ export default function HouseholdLifestyleHub({
                                           handleAddNewAutoCard();
                                         }
                                       }}
-                                      className="px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1"
+                                      className="px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[13px] font-semibold transition-colors cursor-pointer flex items-center gap-1"
                                     >
                                       {isOverview ? <ArrowRight className="w-3 h-3" /> : <Upload className="w-3 h-3" />}
                                       <span>{isOverview ? 'Manage card' : 'Upload photo'}</span>
@@ -5618,11 +5622,11 @@ export default function HouseholdLifestyleHub({
                           {/* Right Column: Key Details & Costs Breakdown */}
                           <div className="lg:col-span-7 flex flex-col gap-3.5">
                             {/* Policy & Coverage Tiles */}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
-                              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Policy Number</span>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[13px]">
+                              <div className="p-3 rounded-[8px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[13px] uppercase font-semibold text-slate-400 block mb-0.5">Policy Number</span>
                                 <div className="flex items-center justify-between gap-1">
-                                  <span className="font-mono font-bold text-slate-900 dark:text-white truncate">
+                                  <span className=" font-semibold text-slate-900 dark:text-white truncate">
                                     {v.insurancePolicyNumber ? (isPolicyRevealed ? v.insurancePolicyNumber : `••• ••• ${v.insurancePolicyNumber.slice(-4)}`) : 'None'}
                                   </span>
                                   {v.insurancePolicyNumber && (
@@ -5637,65 +5641,65 @@ export default function HouseholdLifestyleHub({
                                 </div>
                               </div>
 
-                              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Coverage Type</span>
-                                <span className="font-bold text-slate-900 dark:text-white capitalize block truncate">
+                              <div className="p-3 rounded-[8px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[13px] uppercase font-semibold text-slate-400 block mb-0.5">Coverage Type</span>
+                                <span className="font-semibold text-slate-900 dark:text-white capitalize block truncate">
                                   {(v.insuranceCoverage || 'full_coverage').replace(/_/g, ' ')}
                                 </span>
                               </div>
 
-                              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Insurance Premium</span>
-                                <span className="font-bold text-emerald-700 dark:text-emerald-400 text-sm block">
-                                  ${v.insuranceMonthly || 0} <span className="text-[10px] font-normal text-slate-400">/mo</span>
+                              <div className="p-3 rounded-[8px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[13px] uppercase font-semibold text-slate-400 block mb-0.5">Insurance Premium</span>
+                                <span className="font-semibold text-emerald-700 dark:text-emerald-400 text-sm block">
+                                  ${v.insuranceMonthly || 0} <span className="text-[13px] font-normal text-slate-400">/mo</span>
                                 </span>
                               </div>
 
-                              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Deductible</span>
-                                <span className="font-bold text-slate-900 dark:text-white block">
+                              <div className="p-3 rounded-[8px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[13px] uppercase font-semibold text-slate-400 block mb-0.5">Deductible</span>
+                                <span className="font-semibold text-slate-900 dark:text-white block">
                                   ${v.insuranceDeductible || 500}
                                 </span>
                               </div>
 
-                              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Odometer</span>
-                                <span className="font-bold text-slate-900 dark:text-white block">
+                              <div className="p-3 rounded-[8px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[13px] uppercase font-semibold text-slate-400 block mb-0.5">Odometer</span>
+                                <span className="font-semibold text-slate-900 dark:text-white block">
                                   {v.odometer ? `${Number(v.odometer).toLocaleString()} mi` : 'Not set'}
                                 </span>
                               </div>
 
-                              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Monthly Miles</span>
-                                <span className="font-bold text-slate-900 dark:text-white block">
+                              <div className="p-3 rounded-[8px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[13px] uppercase font-semibold text-slate-400 block mb-0.5">Monthly Miles</span>
+                                <span className="font-semibold text-slate-900 dark:text-white block">
                                   {Number(v.monthlyMiles || 1000).toLocaleString()} mi/mo
                                 </span>
                               </div>
                             </div>
 
                             {/* Monthly Cost Breakdown Bar */}
-                            <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-col gap-2">
-                              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                            <div className="p-3.5 rounded-[8px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-col gap-2">
+                              <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300  block">
                                 Monthly Vehicle Cost Breakdown
                               </span>
-                              <div className={`grid ${v.ownership !== 'owned' && Number(v.monthlyPayment) > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 text-xs pt-1`}>
+                              <div className={`grid ${v.ownership !== 'owned' && Number(v.monthlyPayment) > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 text-[13px] pt-1`}>
                                 <div>
-                                  <span className="text-[10px] text-slate-400 block">{v.type === 'ev' ? 'Charging' : 'Fuel'}</span>
-                                  <span className="font-bold text-slate-900 dark:text-white">${v.monthlyFuelOrChargeCost || 0}/mo</span>
+                                  <span className="text-[13px] text-slate-400 block">{v.type === 'ev' ? 'Charging' : 'Fuel'}</span>
+                                  <span className="font-semibold text-slate-900 dark:text-white">${v.monthlyFuelOrChargeCost || 0}/mo</span>
                                 </div>
                                 <div>
-                                  <span className="text-[10px] text-slate-400 block">Insurance</span>
-                                  <span className="font-bold text-slate-900 dark:text-white">${v.insuranceMonthly || 0}/mo</span>
+                                  <span className="text-[13px] text-slate-400 block">Insurance</span>
+                                  <span className="font-semibold text-slate-900 dark:text-white">${v.insuranceMonthly || 0}/mo</span>
                                 </div>
                                 {v.ownership !== 'owned' && Number(v.monthlyPayment) > 0 && (
                                   <div>
-                                    <span className="text-[10px] text-slate-400 block">{v.ownership === 'lease' ? 'Lease' : 'Payment'}</span>
-                                    <span className="font-bold text-slate-900 dark:text-white">${v.monthlyPayment || 0}/mo</span>
+                                    <span className="text-[13px] text-slate-400 block">{v.ownership === 'lease' ? 'Lease' : 'Payment'}</span>
+                                    <span className="font-semibold text-slate-900 dark:text-white">${v.monthlyPayment || 0}/mo</span>
                                   </div>
                                 )}
                                 <div>
-                                  <span className="text-[10px] text-slate-400 block">Total</span>
-                                  <span className="font-bold text-[#18457c] text-sm">${v.totalMonthlyVehicleCost || 0}/mo</span>
+                                  <span className="text-[13px] text-slate-400 block">Total</span>
+                                  <span className="font-semibold text-[#18457c] text-sm">${v.totalMonthlyVehicleCost || 0}/mo</span>
                                 </div>
                               </div>
                             </div>
@@ -5706,12 +5710,12 @@ export default function HouseholdLifestyleHub({
                                 <button
                                   type="button"
                                   onClick={() => setSelectedEvForChargers(v)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors cursor-pointer shadow-2xs"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[13px] transition-colors cursor-pointer shadow-2xs"
                                 >
                                   <Zap className="w-3.5 h-3.5" />
                                   <span>Free EV Chargers Near Me</span>
                                 </button>
-                                <div className="flex items-center gap-1.5 text-[11px] text-emerald-800 dark:text-emerald-300">
+                                <div className="flex items-center gap-1.5 text-[13px] text-emerald-800 dark:text-emerald-300">
                                   <span>Free Charging: <strong>{v.freeChargingSharePercent || 0}%</strong></span>
                                   <input
                                     type="range"
@@ -5737,18 +5741,18 @@ export default function HouseholdLifestyleHub({
 
           {/* Free EV Chargers Modal */}
           {selectedEvForChargers && (
-            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl p-5 flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
+            <div className="fixed inset-0 bg-slate-900/40  z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-[12px] max-w-xl w-full border border-slate-200 shadow-2xl p-5 flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
                       <Zap className="w-4 h-4" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-900 text-sm">
+                      <h3 className="font-semibold text-slate-900 text-sm">
                         Free EV Chargers for {selectedEvForChargers.name}
                       </h3>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[13px] text-slate-500">
                         Complimentary Level 2 and DC fast charging locations near you.
                       </p>
                     </div>
@@ -5762,14 +5766,14 @@ export default function HouseholdLifestyleHub({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
                   {FREE_EV_CHARGING_GUIDE.map((item, idx) => (
-                    <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-1">
+                    <div key={idx} className="p-3 rounded-[8px] bg-slate-50 border border-slate-200/80 flex flex-col gap-1">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900">{item.category}</span>
-                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">{item.cost}</span>
+                        <span className="font-semibold text-slate-900">{item.category}</span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-[13px]">{item.cost}</span>
                       </div>
-                      <p className="text-slate-600 text-[11px] mt-0.5">{item.locations}</p>
+                      <p className="text-slate-600 text-[13px] mt-0.5">{item.locations}</p>
                     </div>
                   ))}
                 </div>
@@ -5778,7 +5782,7 @@ export default function HouseholdLifestyleHub({
                   <button
                     type="button"
                     onClick={() => setSelectedEvForChargers(null)}
-                    className="px-4 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
+                    className="px-4 py-1.5 rounded-[8px] bg-[#18457c] text-white text-[13px] font-semibold cursor-pointer"
                   >
                     Close
                   </button>
@@ -5810,18 +5814,18 @@ export default function HouseholdLifestyleHub({
 
           {/* Scanning Progress Banner */}
           {isScanningCard && (
-            <div className="p-4 bg-[#E8EEF8] dark:bg-slate-800 border border-[#1B4B91]/20 rounded-xl flex items-center gap-3 text-[#14233B] dark:text-slate-200 text-sm animate-pulse">
+            <div className="p-4 bg-[#E8EEF8] dark:bg-slate-800 border border-[#1B4B91]/20 rounded-[8px] flex items-center gap-3 text-[#14233B] dark:text-slate-200 text-sm ">
               <Loader2 className="w-5 h-5 animate-spin text-[#1B4B91] shrink-0" />
               <div>
                 <span className="font-semibold block">Reading your insurance document...</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 block">{scanProgress || 'Extracting carrier, plan name, member ID, group number, copays, and doctor…'}</span>
+                <span className="text-[13px] text-slate-500 dark:text-slate-400 block">{scanProgress || 'Extracting carrier, plan name, member ID, group number, copays, and doctor…'}</span>
               </div>
             </div>
           )}
 
           {/* STATE 1: EMPTY (No cards added yet) */}
           {healthView === 'empty' && !isScanningCard && (
-            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
+            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[8px] shadow-xs overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <h2 className="font-semibold text-base text-slate-900 dark:text-white">Health insurance</h2>
               </div>
@@ -5835,7 +5839,7 @@ export default function HouseholdLifestyleHub({
                       if (file) handleProcessInsuranceFile(file);
                     }
                   }}
-                  className="border-1.5 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 sm:p-10 text-center flex flex-col items-center justify-center gap-2"
+                  className="border-1.5 border-dashed border-slate-300 dark:border-slate-700 rounded-[8px] p-8 sm:p-10 text-center flex flex-col items-center justify-center gap-2"
                 >
                   <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-slate-800 flex items-center justify-center text-[#18457c] mb-1">
                     <HeartPulse className="w-6 h-6" />
@@ -5878,7 +5882,7 @@ export default function HouseholdLifestyleHub({
                       </button>
                     </div>
                   )}
-                  {!isOverview && <small className="text-xs text-slate-400 mt-1">PDF, PNG, JPG or WebP</small>}
+                  {!isOverview && <small className="text-[13px] text-slate-400 mt-1">PDF, PNG, JPG or WebP</small>}
                 </div>
               </div>
             </section>
@@ -5886,13 +5890,13 @@ export default function HouseholdLifestyleHub({
 
           {/* STATE 2: REVIEW / EDIT ("Check what we read") */}
           {healthView === 'review' && (
-            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
+            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[8px] shadow-xs overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-base text-slate-900 dark:text-white">
                     {editingPolicyId ? 'Edit insurance card' : 'Check what we read'}
                   </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-[13px] text-slate-500 dark:text-slate-400">
                     Compare each field with your card before saving.
                   </p>
                 </div>
@@ -5930,12 +5934,12 @@ export default function HouseholdLifestyleHub({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   {/* Name on insurance card */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">
                       Name on insurance card <span className="text-[#1B4B91]">*</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. ZIYAD O ELMAHI"
+                      placeholder="e.g. Alex Morgan"
                       value={reviewForm.memberName}
                       onChange={(e) => setReviewForm({ ...reviewForm, memberName: e.target.value })}
                       className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-medium text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
@@ -5944,7 +5948,7 @@ export default function HouseholdLifestyleHub({
 
                   {/* Type of insurance */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">
                       Type of insurance <span className="text-[#1B4B91]">*</span>
                     </label>
                     <select
@@ -5963,7 +5967,7 @@ export default function HouseholdLifestyleHub({
 
                   {/* Plan name */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Plan name</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Plan name</label>
                     <input
                       type="text"
                       placeholder="e.g. SignatureValue Alliance HMO"
@@ -5975,7 +5979,7 @@ export default function HouseholdLifestyleHub({
 
                   {/* Carrier */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Carrier</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Carrier</label>
                     <input
                       type="text"
                       placeholder="e.g. UnitedHealthcare, Blue Shield, Kaiser"
@@ -5987,31 +5991,31 @@ export default function HouseholdLifestyleHub({
 
                   {/* Member ID */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Member ID</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Member ID</label>
                     <input
                       type="text"
                       placeholder="e.g. 8750439-04"
                       value={reviewForm.memberId}
                       onChange={(e) => setReviewForm({ ...reviewForm, memberId: e.target.value })}
-                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm  text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                     />
                   </div>
 
                   {/* Group number */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Group number</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Group number</label>
                     <input
                       type="text"
                       placeholder="e.g. 682304"
                       value={reviewForm.groupNumber}
                       onChange={(e) => setReviewForm({ ...reviewForm, groupNumber: e.target.value })}
-                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                      className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-2 text-sm  text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                     />
                   </div>
 
                   {/* Primary care copay */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Primary care copay</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Primary care copay</label>
                     <input
                       type="text"
                       placeholder="e.g. $15"
@@ -6023,7 +6027,7 @@ export default function HouseholdLifestyleHub({
 
                   {/* Specialist copay */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Specialist copay</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Specialist copay</label>
                     <input
                       type="text"
                       placeholder="e.g. $15"
@@ -6035,7 +6039,7 @@ export default function HouseholdLifestyleHub({
 
                   {/* Emergency room copay */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Emergency room copay</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Emergency room copay</label>
                     <input
                       type="text"
                       placeholder="e.g. $50"
@@ -6047,7 +6051,7 @@ export default function HouseholdLifestyleHub({
 
                   {/* Generic prescription */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Generic prescription</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Generic prescription</label>
                     <input
                       type="text"
                       placeholder="e.g. $10"
@@ -6059,7 +6063,7 @@ export default function HouseholdLifestyleHub({
 
                   {/* Deductible */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Deductible</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Deductible</label>
                     <input
                       type="text"
                       placeholder="e.g. $0"
@@ -6071,7 +6075,7 @@ export default function HouseholdLifestyleHub({
 
                   {/* Out of pocket max */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Out-of-pocket maximum</label>
+                    <label className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Out-of-pocket maximum</label>
                     <input
                       type="text"
                       placeholder="e.g. $1,500"
@@ -6085,13 +6089,13 @@ export default function HouseholdLifestyleHub({
                   <div className="md:col-span-2 pt-3 border-t border-slate-200 dark:border-slate-700/80">
                     <div className="flex items-center gap-2 mb-2">
                       <Stethoscope className="w-4 h-4 text-[#1B4B91] dark:text-[#7AA7F0]" />
-                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      <span className="text-[13px] font-semibold  text-slate-700 dark:text-slate-300">
                         Primary Doctor / PCP (Associated with this card)
                       </span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div>
-                        <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Doctor or clinic name</label>
+                        <label className="text-[13px] text-slate-500 dark:text-slate-400 block mb-1">Doctor or clinic name</label>
                         <input
                           type="text"
                           placeholder="e.g. MONTANA, ANTHONY W"
@@ -6101,7 +6105,7 @@ export default function HouseholdLifestyleHub({
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Phone</label>
+                        <label className="text-[13px] text-slate-500 dark:text-slate-400 block mb-1">Phone</label>
                         <input
                           type="tel"
                           placeholder="(559) 299-2200"
@@ -6111,7 +6115,7 @@ export default function HouseholdLifestyleHub({
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Clinic / Office</label>
+                        <label className="text-[13px] text-slate-500 dark:text-slate-400 block mb-1">Clinic / Office</label>
                         <input
                           type="text"
                           placeholder="e.g. SANTE COMMUNITY PHYS-FRESNO"
@@ -6124,7 +6128,7 @@ export default function HouseholdLifestyleHub({
                   </div>
                 </div>
 
-                <label className="flex items-start gap-3 my-5 p-3.5 border border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                <label className="flex items-start gap-3 my-5 p-3.5 border border-slate-200 dark:border-slate-800 rounded-[8px] cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
                   <input
                     type="checkbox"
                     checked={keepCardImage}
@@ -6166,7 +6170,7 @@ export default function HouseholdLifestyleHub({
               <div className="flex items-center justify-between flex-wrap gap-3 px-1">
                 <div>
                   <h2 className="font-semibold text-lg text-slate-900 dark:text-white">Health insurance</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-[13px] text-slate-500 dark:text-slate-400">
                     {policies.length === 1 ? '1 active card' : `${policies.length} active cards`} · Click any card to expand or minimize
                   </p>
                 </div>
@@ -6174,7 +6178,7 @@ export default function HouseholdLifestyleHub({
                   <button
                     type="button"
                     onClick={() => onNavigateToLifestyle && onNavigateToLifestyle()}
-                    className="px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-xs sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                    className="px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-[13px] sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                   >
                     <span>Manage in Lifestyle</span>
                     <ArrowRight className="w-4 h-4 text-slate-400" />
@@ -6184,7 +6188,7 @@ export default function HouseholdLifestyleHub({
                     <button
                       type="button"
                       onClick={handleAddNewCard}
-                      className="px-3.5 py-2 rounded-lg bg-[#1B4B91] hover:bg-[#153c75] text-white font-medium text-xs sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                      className="px-3.5 py-2 rounded-lg bg-[#1B4B91] hover:bg-[#153c75] text-white font-medium text-[13px] sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Add insurance card</span>
@@ -6204,7 +6208,7 @@ export default function HouseholdLifestyleHub({
                 return (
                   <section
                     key={policy.id || pIdx}
-                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden transition-all"
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[8px] shadow-xs overflow-hidden transition-all"
                   >
                     {/* MINIMIZED HEADER: Name on insurance card, What type of insurance, and an arrow that when pressed expands the details below it */}
                     <div
@@ -6219,20 +6223,20 @@ export default function HouseholdLifestyleHub({
                         </span>
 
                         {/* 2. What type of insurance badge */}
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-[#1B4B91] dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[13px] font-semibold bg-blue-100 text-[#1B4B91] dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
                           {policy.insuranceType || 'Medical'}
                         </span>
 
                         {/* Plan & Carrier summary */}
                         {(policy.provider || policy.planName) && (
-                          <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline-block truncate max-w-[280px]">
+                          <span className="text-[13px] text-slate-500 dark:text-slate-400 hidden sm:inline-block truncate max-w-[280px]">
                             {[policy.provider, policy.planName].filter(Boolean).join(' · ')}
                           </span>
                         )}
 
                         {/* Doctor badge in header if assigned */}
                         {policy.doctor?.name && (
-                          <span className="text-xs text-slate-600 dark:text-slate-400 hidden md:inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                          <span className="text-[13px] text-slate-600 dark:text-slate-400 hidden md:inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
                             <Stethoscope className="w-3 h-3 text-[#1B4B91] dark:text-[#7AA7F0]" />
                             <span className="font-medium text-slate-800 dark:text-slate-200">{policy.doctor.name}</span>
                           </span>
@@ -6272,7 +6276,7 @@ export default function HouseholdLifestyleHub({
                                 onOpen={(url, title) => { setViewingCardPhoto(url); setViewingCardTitle(title); }}
                               />
                             ) : (
-                              <div className="bg-[#1B4B91] text-white rounded-2xl p-5 flex flex-col justify-between aspect-[1.6/1] shadow-md min-h-[190px]">
+                              <div className="bg-[#1B4B91] text-white rounded-[12px] p-5 flex flex-col justify-between aspect-[1.6/1] shadow-md min-h-[190px]">
                                 <div className="flex items-center justify-between text-[13px] opacity-90">
                                   <span className="font-medium">{policy.provider || 'Health Insurance'}</span>
                                   {policy.network ? <span className="font-semibold">{policy.network}</span> : null}
@@ -6283,9 +6287,9 @@ export default function HouseholdLifestyleHub({
                                 </div>
 
                                 <div>
-                                  <div className="text-lg font-mono font-medium tracking-wider tabular-nums">
+                                  <div className="text-lg  font-medium tracking-wider tabular-nums">
                                     {policy.memberId || (
-                                      <span className="text-xs opacity-60 font-sans tracking-normal">No Member ID</span>
+                                      <span className="text-[13px] opacity-60 font-sans tracking-normal">No Member ID</span>
                                     )}
                                   </div>
                                 </div>
@@ -6293,7 +6297,7 @@ export default function HouseholdLifestyleHub({
                                 <div className="flex items-center justify-between text-[13px] opacity-90 mt-1">
                                   {policy.groupNumber ? <span>Group {policy.groupNumber}</span> : <span />}
                                   {policy.insuranceType && (
-                                    <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded bg-white/20">
+                                    <span className="text-[13px] font-semibold uppercase px-2 py-0.5 rounded bg-white/20">
                                       {policy.insuranceType}
                                     </span>
                                   )}
@@ -6305,17 +6309,17 @@ export default function HouseholdLifestyleHub({
 
                             {/* Pharmacy RX pills if available */}
                             {(policy.rxBin || policy.rxPcn || policy.rxGrp) && (
-                              <div className="mt-2.5 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-xs grid grid-cols-3 gap-1 text-center font-mono">
+                              <div className="mt-2.5 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-[13px] grid grid-cols-3 gap-1 text-center ">
                                 <div>
-                                  <span className="text-[10px] text-slate-400 block font-sans">Rx BIN</span>
+                                  <span className="text-[13px] text-slate-400 block font-sans">Rx BIN</span>
                                   <b>{policy.rxBin || '—'}</b>
                                 </div>
                                 <div>
-                                  <span className="text-[10px] text-slate-400 block font-sans">Rx PCN</span>
+                                  <span className="text-[13px] text-slate-400 block font-sans">Rx PCN</span>
                                   <b>{policy.rxPcn || '—'}</b>
                                 </div>
                                 <div>
-                                  <span className="text-[10px] text-slate-400 block font-sans">Rx GRP</span>
+                                  <span className="text-[13px] text-slate-400 block font-sans">Rx GRP</span>
                                   <b>{policy.rxGrp || '—'}</b>
                                 </div>
                               </div>
@@ -6365,11 +6369,11 @@ export default function HouseholdLifestyleHub({
                             </div>
 
                             {/* DOCTOR SECTION DIRECTLY IN THIS CARD DROP DOWN */}
-                            <div className="mt-1 p-4.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 flex flex-col gap-3">
+                            <div className="mt-1 p-4.5 rounded-[8px] bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 flex flex-col gap-3">
                               <div className="flex items-center justify-between flex-wrap gap-2">
                                 <div className="flex items-center gap-2">
                                   <Stethoscope className="w-4 h-4 text-[#1B4B91] dark:text-[#7AA7F0]" />
-                                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                  <span className="text-[13px] font-semibold  text-slate-700 dark:text-slate-300">
                                     Doctor / Care Provider
                                   </span>
                                 </div>
@@ -6378,7 +6382,7 @@ export default function HouseholdLifestyleHub({
                                     <button
                                       type="button"
                                       onClick={() => handleOpenDoctorEdit(policy)}
-                                      className="text-xs font-medium text-[#1B4B91] dark:text-[#7AA7F0] hover:underline cursor-pointer"
+                                      className="text-[13px] font-medium text-[#1B4B91] dark:text-[#7AA7F0] hover:underline cursor-pointer"
                                     >
                                       Edit details
                                     </button>
@@ -6389,7 +6393,7 @@ export default function HouseholdLifestyleHub({
                                       setEditingDoctorPolicyId(policy.id);
                                       setInlineDoctorForm({ name: '', specialty: 'Primary care (PCP)', office: '', phone: '' });
                                     }}
-                                    className="text-xs font-medium text-[#1B4B91] dark:text-[#7AA7F0] hover:underline cursor-pointer"
+                                    className="text-[13px] font-medium text-[#1B4B91] dark:text-[#7AA7F0] hover:underline cursor-pointer"
                                   >
                                     + Add new doctor
                                   </button>
@@ -6398,11 +6402,11 @@ export default function HouseholdLifestyleHub({
 
                               {/* Dropdown selector for doctor on this card */}
                               <div className="flex items-center gap-2">
-                                <label className="text-xs text-slate-600 dark:text-slate-400 shrink-0 font-medium">Assigned doctor:</label>
+                                <label className="text-[13px] text-slate-600 dark:text-slate-400 shrink-0 font-medium">Assigned doctor:</label>
                                 <select
                                   value={policy.doctor?.name || ''}
                                   onChange={(e) => handleAssignDoctorToPolicy(policy.id, e.target.value)}
-                                  className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
+                                  className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3 py-1.5 text-[13px] text-slate-900 dark:text-white focus:outline-2 focus:outline-[#1B4B91]"
                                 >
                                   <option value="">— No doctor assigned —</option>
                                   {allAvailableDoctors.map((doc) => (
@@ -6421,14 +6425,14 @@ export default function HouseholdLifestyleHub({
                                     <div className="font-semibold text-slate-900 dark:text-white text-sm">
                                       {policy.doctor.name}
                                     </div>
-                                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    <div className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5">
                                       {[policy.doctor.specialty || 'Primary care (PCP)', policy.doctor.office].filter(Boolean).join(' · ')}
                                     </div>
                                   </div>
                                   {policy.doctor.phone && (
                                     <a
                                       href={`tel:${policy.doctor.phone}`}
-                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-[#1B4B91] dark:text-[#7AA7F0] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[13px] font-medium text-[#1B4B91] dark:text-[#7AA7F0] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs"
                                     >
                                       <Phone className="w-3.5 h-3.5" />
                                       <span>{policy.doctor.phone}</span>
@@ -6442,43 +6446,43 @@ export default function HouseholdLifestyleHub({
                                 <div className="mt-1 flex flex-col gap-3 pt-2.5 border-t border-slate-200 dark:border-slate-700">
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                     <div>
-                                      <label className="text-[11px] text-slate-500 dark:text-slate-400 block mb-0.5">Doctor name</label>
+                                      <label className="text-[13px] text-slate-500 dark:text-slate-400 block mb-0.5">Doctor name</label>
                                       <input
                                         type="text"
                                         placeholder="e.g. Dr. Anthony W Montana"
                                         value={inlineDoctorForm.name}
                                         onChange={(e) => setInlineDoctorForm({ ...inlineDoctorForm, name: e.target.value })}
-                                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+                                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-900 dark:text-white"
                                       />
                                     </div>
                                     <div>
-                                      <label className="text-[11px] text-slate-500 dark:text-slate-400 block mb-0.5">Specialty</label>
+                                      <label className="text-[13px] text-slate-500 dark:text-slate-400 block mb-0.5">Specialty</label>
                                       <input
                                         type="text"
                                         placeholder="Primary care (PCP), Dental…"
                                         value={inlineDoctorForm.specialty}
                                         onChange={(e) => setInlineDoctorForm({ ...inlineDoctorForm, specialty: e.target.value })}
-                                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+                                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-900 dark:text-white"
                                       />
                                     </div>
                                     <div>
-                                      <label className="text-[11px] text-slate-500 dark:text-slate-400 block mb-0.5">Office / Clinic</label>
+                                      <label className="text-[13px] text-slate-500 dark:text-slate-400 block mb-0.5">Office / Clinic</label>
                                       <input
                                         type="text"
                                         placeholder="e.g. Sante Community Phys-Fresno"
                                         value={inlineDoctorForm.office}
                                         onChange={(e) => setInlineDoctorForm({ ...inlineDoctorForm, office: e.target.value })}
-                                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+                                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-900 dark:text-white"
                                       />
                                     </div>
                                     <div>
-                                      <label className="text-[11px] text-slate-500 dark:text-slate-400 block mb-0.5">Phone</label>
+                                      <label className="text-[13px] text-slate-500 dark:text-slate-400 block mb-0.5">Phone</label>
                                       <input
                                         type="tel"
                                         placeholder="(559) 299-2200"
                                         value={inlineDoctorForm.phone}
                                         onChange={(e) => setInlineDoctorForm({ ...inlineDoctorForm, phone: e.target.value })}
-                                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+                                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-900 dark:text-white"
                                       />
                                     </div>
                                   </div>
@@ -6486,14 +6490,14 @@ export default function HouseholdLifestyleHub({
                                     <button
                                       type="button"
                                       onClick={() => setEditingDoctorPolicyId(null)}
-                                      className="px-2.5 py-1 rounded text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+                                      className="px-2.5 py-1 rounded text-[13px] text-slate-500 hover:text-slate-800 dark:hover:text-white cursor-pointer"
                                     >
                                       Cancel
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => handleSaveInlineDoctor(policy.id)}
-                                      className="px-3 py-1 rounded bg-[#1B4B91] hover:bg-[#153c75] text-white text-xs font-medium cursor-pointer"
+                                      className="px-3 py-1 rounded bg-[#1B4B91] hover:bg-[#153c75] text-white text-[13px] font-medium cursor-pointer"
                                     >
                                       Save doctor
                                     </button>
@@ -6513,7 +6517,7 @@ export default function HouseholdLifestyleHub({
                                 setDialogCards(policy.cards);
                                 setShowCardDialog(true);
                               }}
-                              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer"
+                              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer"
                             >
                               View card image
                             </button>
@@ -6527,7 +6531,7 @@ export default function HouseholdLifestyleHub({
                                 handleEditPolicy(policy);
                               }
                             }}
-                            className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                            className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors cursor-pointer"
                           >
                             {isOverview ? 'Manage in Lifestyle' : 'Edit'}
                           </button>
@@ -6535,7 +6539,7 @@ export default function HouseholdLifestyleHub({
                             <button
                               type="button"
                               onClick={() => handleReplaceCard(policy)}
-                              className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                              className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors cursor-pointer"
                             >
                               Replace card
                             </button>
@@ -6543,7 +6547,7 @@ export default function HouseholdLifestyleHub({
                           <button
                             type="button"
                             onClick={() => handleRemovePolicy(policy.id)}
-                            className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#B3261E] hover:text-red-700 transition-colors cursor-pointer"
+                            className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-[#B3261E] hover:text-red-700 transition-colors cursor-pointer"
                           >
                             Remove card
                           </button>
@@ -6562,11 +6566,11 @@ export default function HouseholdLifestyleHub({
       {/* Insurance Card Image Modal Dialog */}
       {showCardDialog && (
         <div
-          className="fixed inset-0 bg-[#0A1423]/55 backdrop-blur-xs flex items-center justify-center p-4 z-50 cursor-pointer"
+          className="fixed inset-0 bg-[#0A1423]/55  flex items-center justify-center p-4 z-50 cursor-pointer"
           onClick={() => setShowCardDialog(false)}
         >
           <div
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl flex flex-col gap-4 cursor-default"
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[12px] p-6 max-w-lg w-full shadow-2xl flex flex-col gap-4 cursor-default"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
@@ -6581,13 +6585,13 @@ export default function HouseholdLifestyleHub({
             </div>
 
             <div className="grid grid-cols-2 gap-3 my-2">
-              <div className="aspect-[1.6/1] border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+              <div className="aspect-[1.6/1] border border-slate-200 dark:border-slate-800 rounded-[8px] bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
                 {(() => {
                   const activeCards = (dialogCards && dialogCards.length > 0)
                     ? dialogCards
                     : (pendingCards.length > 0 ? pendingCards : (policies[0]?.cards || health.cards || []));
                   const card0 = activeCards[0];
-                  if (!card0?.dataUrl) return <span className="text-xs text-slate-400 font-medium">Front</span>;
+                  if (!card0?.dataUrl) return <span className="text-[13px] text-slate-400 font-medium">Front</span>;
                   return card0.dataUrl.startsWith('data:application/pdf') || (card0.name || '').toLowerCase().endsWith('.pdf') ? (
                     <div
                       className="flex flex-col items-center gap-1.5 p-3 text-center cursor-pointer"
@@ -6597,7 +6601,7 @@ export default function HouseholdLifestyleHub({
                       }}
                     >
                       <FileText className="w-8 h-8 text-[#1B4B91]" />
-                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[120px]">
+                      <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300 truncate max-w-[120px]">
                         {card0.name || 'Policy PDF'}
                       </span>
                     </div>
@@ -6615,13 +6619,13 @@ export default function HouseholdLifestyleHub({
                 })()}
               </div>
 
-              <div className="aspect-[1.6/1] border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+              <div className="aspect-[1.6/1] border border-slate-200 dark:border-slate-800 rounded-[8px] bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
                 {(() => {
                   const activeCards = (dialogCards && dialogCards.length > 0)
                     ? dialogCards
                     : (pendingCards.length > 0 ? pendingCards : (policies[0]?.cards || health.cards || []));
                   const card1 = activeCards[1];
-                  if (!card1?.dataUrl) return <span className="text-xs text-slate-400 font-medium">Back</span>;
+                  if (!card1?.dataUrl) return <span className="text-[13px] text-slate-400 font-medium">Back</span>;
                   return (
                     <img
                       src={card1.dataUrl}
@@ -6653,26 +6657,26 @@ export default function HouseholdLifestyleHub({
       {/* Extra Provider Modal Dialog */}
       {isExtraProviderModalOpen && extraProviderForm && (
         <div
-          className="fixed inset-0 bg-[#0A1423]/55 backdrop-blur-xs flex items-center justify-center p-4 z-50 cursor-pointer"
+          className="fixed inset-0 bg-[#0A1423]/55  flex items-center justify-center p-4 z-50 cursor-pointer"
           onClick={() => {
             setIsExtraProviderModalOpen(false);
             setExtraProviderForm(null);
           }}
         >
           <div
-            className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xl max-w-lg w-full p-6 sm:p-7 flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-200 text-slate-800 dark:text-slate-200 max-h-[90vh] overflow-y-auto cursor-default"
+            className="bg-white dark:bg-slate-900 rounded-[12px] border border-slate-200/90 dark:border-slate-800 shadow-2xl max-w-lg w-full p-6 sm:p-7 flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-200 text-slate-800 dark:text-slate-200 max-h-[90vh] overflow-y-auto cursor-default"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-2xs border border-purple-200 dark:border-purple-800">
+                <div className="w-10 h-10 rounded-[12px] bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shadow-2xs border border-blue-200 dark:border-blue-800">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-serif-title text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
+                  <h3 className="font-serif-title text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">
                     {extraProviderForm.isNew ? 'Add Extra Provider' : 'Edit Extra Provider'}
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5">
                     Home warranty, pest control, lawn care, pool, gas, or other services
                   </p>
                 </div>
@@ -6683,7 +6687,7 @@ export default function HouseholdLifestyleHub({
                   setIsExtraProviderModalOpen(false);
                   setExtraProviderForm(null);
                 }}
-                className="p-1 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1 rounded-[8px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 aria-label="Close"
               >
                 <X className="w-5 h-5" />
@@ -6693,13 +6697,13 @@ export default function HouseholdLifestyleHub({
             <div className="space-y-4">
               {/* Category / Type Selector */}
               <div>
-                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                <label className="text-[13px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
                   Service Category
                 </label>
                 <select
                   value={extraProviderForm.type || 'Home Warranty & Protection'}
                   onChange={e => setExtraProviderForm(prev => ({ ...prev, type: e.target.value }))}
-                  className="w-full text-xs font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 focus:outline-none"
+                  className="w-full text-[13px] font-semibold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[8px] px-3.5 py-2.5 focus:outline-none"
                 >
                   <option value="Home Warranty & Protection">Home Warranty & Appliance Protection (HomeShield, Choice...)</option>
                   <option value="Pest Control">Pest Control (Orkin, Terminix...)</option>
@@ -6715,7 +6719,7 @@ export default function HouseholdLifestyleHub({
 
               {/* Provider Company Name with Quick Suggestions */}
               <div>
-                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                <label className="text-[13px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
                   Provider Company Name *
                 </label>
                 <input
@@ -6723,7 +6727,7 @@ export default function HouseholdLifestyleHub({
                   placeholder="e.g. American Home Shield, Choice Home Warranty, Orkin, TruGreen..."
                   value={extraProviderForm.name || ''}
                   onChange={e => setExtraProviderForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full text-xs font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 focus:outline-none"
+                  className="w-full text-[13px] font-semibold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[8px] px-3.5 py-2.5 focus:outline-none"
                   autoFocus
                 />
                 {/* Quick Provider Suggestions for Selected Category */}
@@ -6734,7 +6738,7 @@ export default function HouseholdLifestyleHub({
                         key={c}
                         type="button"
                         onClick={() => setExtraProviderForm(prev => ({ ...prev, name: c }))}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                        className={`px-2.5 py-1 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${
                           extraProviderForm.name === c
                             ? 'bg-[#18457c] text-white border-[#18457c]'
                             : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
@@ -6750,7 +6754,7 @@ export default function HouseholdLifestyleHub({
               {/* Plan Name & Monthly Cost */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                  <label className="text-[13px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
                     Plan / Coverage Name
                   </label>
                   <input
@@ -6758,22 +6762,22 @@ export default function HouseholdLifestyleHub({
                     placeholder="e.g. ShieldGold, Total Plan, Premium..."
                     value={extraProviderForm.plan || ''}
                     onChange={e => setExtraProviderForm(prev => ({ ...prev, plan: e.target.value }))}
-                    className="w-full text-xs font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 focus:outline-none"
+                    className="w-full text-[13px] font-semibold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[8px] px-3.5 py-2.5 focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                  <label className="text-[13px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
                     Monthly Cost ($)
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">$</span>
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-[13px]">$</span>
                     <input
                       type="number"
                       placeholder="e.g. 65"
                       value={extraProviderForm.monthlyCost || ''}
                       onChange={e => setExtraProviderForm(prev => ({ ...prev, monthlyCost: e.target.value }))}
-                      className="w-full text-xs font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3.5 py-2.5 focus:outline-none"
+                      className="w-full text-[13px] font-semibold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[8px] pl-8 pr-3.5 py-2.5 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -6781,7 +6785,7 @@ export default function HouseholdLifestyleHub({
 
               {/* Account / Policy Number */}
               <div>
-                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                <label className="text-[13px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
                   Account Number / Policy #
                 </label>
                 <input
@@ -6789,13 +6793,13 @@ export default function HouseholdLifestyleHub({
                   placeholder="e.g. HW-98218342"
                   value={extraProviderForm.accountNumber || ''}
                   onChange={e => setExtraProviderForm(prev => ({ ...prev, accountNumber: e.target.value }))}
-                  className="w-full text-xs font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 focus:outline-none"
+                  className="w-full text-[13px] font-semibold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[8px] px-3.5 py-2.5 focus:outline-none"
                 />
               </div>
 
               {/* Notes */}
               <div>
-                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                <label className="text-[13px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
                   Notes & Contract Details
                 </label>
                 <textarea
@@ -6803,7 +6807,7 @@ export default function HouseholdLifestyleHub({
                   placeholder="e.g. Deductible is $100 per trade call. Covers AC, plumbing, refrigerator..."
                   value={extraProviderForm.notes || ''}
                   onChange={e => setExtraProviderForm(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full text-xs font-medium text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 focus:outline-none resize-none"
+                  className="w-full text-[13px] font-medium text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[8px] px-3.5 py-2 focus:outline-none resize-none"
                 />
               </div>
             </div>
@@ -6814,7 +6818,7 @@ export default function HouseholdLifestyleHub({
                 <button
                   type="button"
                   onClick={() => handleDeleteExtraProvider(extraProviderForm.id)}
-                  className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5"
+                  className="px-3.5 py-2 rounded-[8px] border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[13px] font-semibold cursor-pointer transition-colors flex items-center gap-1.5"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Delete</span>
@@ -6828,7 +6832,7 @@ export default function HouseholdLifestyleHub({
                     setIsExtraProviderModalOpen(false);
                     setExtraProviderForm(null);
                   }}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs cursor-pointer transition-colors"
+                  className="px-4 py-2 rounded-[8px] border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[13px] cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
@@ -6836,7 +6840,7 @@ export default function HouseholdLifestyleHub({
                   type="button"
                   disabled={!extraProviderForm.name?.trim()}
                   onClick={handleSaveExtraProvider}
-                  className="px-5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] disabled:opacity-50 text-white font-bold text-xs cursor-pointer transition-colors shadow-2xs flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-[8px] bg-[#18457c] hover:bg-[#123561] disabled:opacity-50 text-white font-semibold text-[13px] cursor-pointer transition-colors shadow-2xs flex items-center gap-1.5"
                 >
                   <Check className="w-4 h-4" />
                   <span>Save Provider</span>
@@ -6850,15 +6854,15 @@ export default function HouseholdLifestyleHub({
       {/* Full-Size Insurance Card / PDF Lightbox Modal (Auto & Health) */}
       {viewingCardPhoto && (
         <div
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+          className="fixed inset-0 bg-slate-900/60  z-50 flex items-center justify-center p-4 cursor-pointer"
           onClick={() => setViewingCardPhoto(null)}
         >
           <div
-            className="bg-white rounded-2xl max-w-3xl w-full border border-slate-200 shadow-2xl p-4 flex flex-col gap-3"
+            className="bg-white rounded-[12px] max-w-3xl w-full border border-slate-200 shadow-2xl p-4 flex flex-col gap-3"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+              <span className="font-semibold text-slate-900 text-sm flex items-center gap-1.5">
                 <CreditCard className="w-4 h-4 text-[#18457c]" />
                 <span>{viewingCardTitle || 'Insurance Document'}</span>
               </span>
@@ -6870,7 +6874,7 @@ export default function HouseholdLifestyleHub({
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="max-h-[75vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-xl p-2 border border-slate-200/60">
+            <div className="max-h-[75vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-[8px] p-2 border border-slate-200/60">
               {viewingCardPhoto.startsWith('data:application/pdf') || (viewingCardTitle && viewingCardTitle.toLowerCase().includes('.pdf')) ? (
                 <iframe
                   src={viewingCardPhoto}
@@ -6888,6 +6892,19 @@ export default function HouseholdLifestyleHub({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteProviderId)}
+        title="Remove provider?"
+        message="Are you sure you want to remove this provider from your household?"
+        confirmLabel="Remove provider"
+        variant="danger"
+        onCancel={() => {
+          setPendingDeleteProviderId(null);
+          setPendingDeleteSource(null);
+        }}
+        onConfirm={executeDeleteExtraProvider}
+      />
     </div>
   );
 }

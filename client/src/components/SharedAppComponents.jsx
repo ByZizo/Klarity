@@ -11,7 +11,6 @@ import { jwtDecode } from 'jwt-decode';
 import { marked } from 'marked';
 import { sanitizeHtmlAgainstInjection } from '../utils/securityCrypto';
 
-// Configure marked with GitHub-flavored markdown and automatic line breaks
 marked.setOptions({
   breaks: true,
   gfm: true
@@ -44,8 +43,9 @@ export function formatVersionString(version) {
 export function formatWhatsNewHighlights(changes) {
   if (!Array.isArray(changes) || changes.length === 0) {
     return [
-      "Latest feature enhancements & visual improvements",
-      "Bug fixes & performance improvements"
+      "Shared UI foundation with accessible typography and dark theme",
+      "Modular page layout with labeled navigation and mobile tab bar",
+      "Hardened vault PIN security and per-user data isolation"
     ];
   }
 
@@ -54,7 +54,7 @@ export function formatWhatsNewHighlights(changes) {
   };
 
   const isMajor = (text) => {
-    return /(dark mode|high contrast|theme|appearance|household|vault|password|retirement|ai advisor|report|statement|upload|overview|budget|bills|redesign|add.*feature|introduce)/i.test(text);
+    return /(dark mode|high contrast|theme|appearance|household|vault|password|retirement|ai advisor|report|statement|upload|overview|budget|bills|redesign|add.*feature|introduce|foundation)/i.test(text);
   };
 
   const majorItems = [];
@@ -85,13 +85,13 @@ export function formatWhatsNewHighlights(changes) {
     }
   }
 
-  const finalHighlights = majorItems.slice(0, 3);
+  const finalHighlights = majorItems.slice(0, 2);
   if (finalHighlights.length === 0) {
-    finalHighlights.push("Latest feature updates & interface upgrades");
+    finalHighlights.push("Shared UI foundation with accessible typography and dark theme");
   }
 
-  finalHighlights.push("Bug fixes & performance improvements");
-  return finalHighlights;
+  finalHighlights.push("Bug fixes and security improvements");
+  return finalHighlights.slice(0, 3);
 }
 
 // Universal Subpage Header: Centered title, leveled Back to Overview, and 3-dot dropdown actions menu
@@ -121,51 +121,49 @@ export function SubpageHeader({
   }, [isOpen]);
 
   return (
-    <div className="relative flex items-center justify-between gap-2 sm:gap-4 min-h-[42px] w-full">
-      {/* Left: Back button */}
+    <div className="relative flex flex-wrap items-center justify-between gap-2 sm:gap-4 min-h-[42px] w-full">
       <div className="flex items-center justify-start shrink-0 z-10">
         {onBack && (
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white border border-slate-200/90 hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold shadow-2xs cursor-pointer transition-colors shrink-0"
+            aria-label={backLabel}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] bg-[var(--surface)] border border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--ink)] text-[13px] font-medium cursor-pointer transition-colors shrink-0"
           >
-            <ArrowLeft className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            <ArrowLeft className="w-4 h-4 text-[var(--muted)] shrink-0" aria-hidden="true" />
             <span className="hidden sm:inline">{backLabel}</span>
             <span className="sm:hidden">Back</span>
           </button>
         )}
       </div>
 
-      {/* Center: Title & optional subtitle centered on page */}
       <div className="flex flex-col items-center justify-center text-center min-w-0 flex-1 px-1 sm:px-3">
-        <h2 className="font-serif-title text-xl sm:text-2xl font-bold text-slate-900 tracking-tight leading-tight truncate max-w-full">
+        <h1 className="font-serif-title text-xl sm:text-2xl font-semibold text-[var(--ink)] tracking-tight leading-tight truncate max-w-full">
           {title}
-        </h2>
+        </h1>
         {subtitle && (
-          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate max-w-full">{subtitle}</p>
+          <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5 truncate max-w-full">{subtitle}</p>
         )}
       </div>
 
-      {/* Right: Three-dot dropdown menu */}
       <div className="flex items-center justify-end shrink-0 z-10">
         {actions && actions.length > 0 ? (
           <div className="relative" ref={menuRef}>
             <button
               type="button"
               onClick={() => setIsOpen(!isOpen)}
-              className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-colors cursor-pointer shadow-2xs ${
+              className={`w-9 h-9 flex items-center justify-center rounded-[8px] border transition-colors cursor-pointer ${
                 isOpen
-                  ? 'bg-slate-100 border-slate-300 text-slate-900'
-                  : 'bg-white border-slate-200/90 hover:bg-slate-50 text-slate-600 hover:text-slate-900'
+                  ? 'bg-[var(--surface-subtle)] border-[var(--line)] text-[var(--ink)]'
+                  : 'bg-[var(--surface)] border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)]'
               }`}
-              aria-label="Options menu"
+              aria-label="Page actions"
             >
-              <MoreVertical className="w-4 h-4" />
+              <MoreVertical className="w-4 h-4" aria-hidden="true" />
             </button>
 
             {isOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-slate-200/90 rounded-2xl shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100">
+              <div className="absolute right-0 top-full mt-1.5 w-56 bg-[var(--surface)] border border-[var(--line)] rounded-[12px] shadow-lg py-1.5 z-50">
                 <div className="py-1">
                   {actions.map((act, idx) => {
                     const Icon = act.icon;
@@ -177,9 +175,9 @@ export function SubpageHeader({
                           setIsOpen(false);
                           act.onClick();
                         }}
-                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 text-left cursor-pointer transition-colors"
+                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] text-left cursor-pointer transition-colors"
                       >
-                        {Icon && <Icon className="w-4 h-4 text-[#18457c] shrink-0" />}
+                        {Icon && <Icon className="w-4 h-4 text-[var(--brand)] shrink-0" aria-hidden="true" />}
                         <span>{act.label}</span>
                       </button>
                     );
@@ -234,56 +232,57 @@ export function MultiCardFilterDropdown({ cards, selectedCardIds, onChangeSelect
   };
 
   return (
-    <div className="flex items-center gap-2" ref={dropdownRef}>
+    <div className="flex flex-wrap items-center gap-2" ref={dropdownRef}>
       <div className="relative">
         <button
           type="button"
           onClick={() => setIsOpen(prev => !prev)}
-          className={`flex items-center justify-between gap-2.5 px-3.5 py-2 rounded-lg border text-xs font-medium transition-all cursor-pointer min-w-[175px] ${
+          aria-label="Filter by card or account"
+          className={`flex items-center justify-between gap-2.5 px-3.5 py-2 rounded-[8px] border text-[13px] font-medium transition-colors cursor-pointer ${
             selectedCardIds.length > 0
-              ? 'bg-[#e8edf5] border-[#18457c]/30 text-[#1e3a8a] font-semibold shadow-2xs'
-              : 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100/80'
+              ? 'bg-[var(--brand-soft)] border-[var(--brand)] text-[var(--brand)] font-semibold'
+              : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
           }`}
         >
           <div className="flex items-center gap-2 truncate">
-            <CreditCard className={`w-3.5 h-3.5 shrink-0 ${selectedCardIds.length > 0 ? 'text-[#18457c]' : 'text-slate-500'}`} />
+            <CreditCard className={`w-4 h-4 shrink-0 ${selectedCardIds.length > 0 ? 'text-[var(--brand)]' : 'text-[var(--muted)]'}`} aria-hidden="true" />
             <span className="truncate">{getButtonLabel()}</span>
           </div>
-          <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
         </button>
 
         {isOpen && (
-          <div className="absolute right-0 mt-1.5 w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-40 py-2 animate-in fade-in zoom-in-95">
-            <div className="px-3.5 py-1.5 border-b border-slate-100 flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Filter by Card / Account</span>
+          <div className="absolute right-0 mt-1.5 w-72 max-w-[calc(100vw-2rem)] bg-[var(--surface)] border border-[var(--line)] rounded-[12px] shadow-lg z-40 py-2">
+            <div className="px-3.5 py-1.5 border-b border-[var(--line)] flex items-center justify-between">
+              <span className="text-[13px] font-medium text-[var(--muted)]">Filter by card or account</span>
               {selectedCardIds.length > 0 && (
                 <button
                   type="button"
                   onClick={clearFilter}
-                  className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 cursor-pointer"
+                  className="text-[13px] font-medium text-[var(--brand)] hover:underline cursor-pointer"
                 >
                   Clear filter
                 </button>
               )}
             </div>
 
-            <div className="max-h-64 overflow-y-auto py-1 divide-y divide-slate-50">
+            <div className="max-h-64 overflow-y-auto py-1 divide-y divide-[var(--line)]">
               <button
                 type="button"
                 onClick={clearFilter}
-                className="w-full px-3.5 py-2 text-left text-xs flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
+                className="w-full px-3.5 py-2 text-left text-[13px] flex items-center justify-between hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
-                  <div className={`w-4 h-4 rounded flex items-center justify-center border ${
-                    selectedCardIds.length === 0 ? 'bg-[#18457c] border-[#18457c] text-white' : 'border-slate-300 bg-white'
+                  <div className={`w-4 h-4 rounded-[4px] flex items-center justify-center border ${
+                    selectedCardIds.length === 0 ? 'bg-[var(--brand)] border-[var(--brand)] text-white' : 'border-[var(--line)] bg-[var(--surface)]'
                   }`}>
-                    {selectedCardIds.length === 0 && <Check className="w-3 h-3" />}
+                    {selectedCardIds.length === 0 && <Check className="w-3 h-3" aria-hidden="true" />}
                   </div>
-                  <span className={selectedCardIds.length === 0 ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}>
+                  <span className={selectedCardIds.length === 0 ? 'font-semibold text-[var(--ink)]' : 'font-medium text-[var(--ink)]'}>
                     All cards
                   </span>
                 </div>
-                <span className="text-[10px] text-slate-400">{cards.length} accounts</span>
+                <span className="text-[13px] text-[var(--muted)]">{cards.length} accounts</span>
               </button>
 
               {cards.map(card => {
@@ -293,24 +292,24 @@ export function MultiCardFilterDropdown({ cards, selectedCardIds, onChangeSelect
                     key={card.id}
                     type="button"
                     onClick={() => toggleCard(card.id)}
-                    className="w-full px-3.5 py-2.5 text-left text-xs flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
+                    className="w-full px-3.5 py-2.5 text-left text-[13px] flex items-center justify-between hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                      <div className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ${
-                        isSelected ? 'bg-[#18457c] border-[#18457c] text-white' : 'border-slate-300 bg-white'
+                      <div className={`w-4 h-4 rounded-[4px] flex items-center justify-center border shrink-0 ${
+                        isSelected ? 'bg-[var(--brand)] border-[var(--brand)] text-white' : 'border-[var(--line)] bg-[var(--surface)]'
                       }`}>
-                        {isSelected && <Check className="w-3 h-3" />}
+                        {isSelected && <Check className="w-3 h-3" aria-hidden="true" />}
                       </div>
                       <div className="min-w-0">
-                        <p className={`truncate ${isSelected ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
+                        <p className={`truncate ${isSelected ? 'font-semibold text-[var(--ink)]' : 'font-medium text-[var(--ink)]'}`}>
                           {card.name}
                         </p>
-                        <p className="text-[10px] text-slate-400 font-mono">
+                        <p className="text-[13px] text-[var(--muted)]">
                           •••• {card.mask} · {card.type === 'depository' ? 'Checking / Bank' : 'Credit Card'}
                         </p>
                       </div>
                     </div>
-                    <span className="text-[11px] font-mono text-slate-500 shrink-0">•••• {card.mask}</span>
+                    <span className="text-[13px] text-[var(--muted)] shrink-0">•••• {card.mask}</span>
                   </button>
                 );
               })}
@@ -323,7 +322,7 @@ export function MultiCardFilterDropdown({ cards, selectedCardIds, onChangeSelect
         <button
           type="button"
           onClick={clearFilter}
-          className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-blue-600 hover:text-blue-800 hover:bg-blue-50/80 transition-colors cursor-pointer whitespace-nowrap"
+          className="px-2.5 py-1.5 rounded-[8px] text-[13px] font-medium text-[var(--brand)] hover:bg-[var(--brand-soft)] transition-colors cursor-pointer"
         >
           Clear filter
         </button>
@@ -332,7 +331,7 @@ export function MultiCardFilterDropdown({ cards, selectedCardIds, onChangeSelect
   );
 }
 
-// Gemini-style Markdown Formatter Component
+// Markdown Formatter Component
 export function FormattedChatMessage({ text, isUser }) {
   if (!text) return null;
   const clean = String(text)
@@ -340,17 +339,17 @@ export function FormattedChatMessage({ text, isUser }) {
     .trim();
 
   if (isUser) {
-    return <div className="whitespace-pre-wrap leading-relaxed text-white">{clean}</div>;
+    return <div className="whitespace-pre-wrap leading-relaxed text-white text-[15px]">{clean}</div>;
   }
   let html = '';
   try {
     html = sanitizeHtmlAgainstInjection(marked.parse(clean, { breaks: true, gfm: true }));
   } catch (err) {
-    return <div className="whitespace-pre-wrap leading-relaxed">{clean}</div>;
+    return <div className="whitespace-pre-wrap leading-relaxed text-[15px]">{clean}</div>;
   }
   return (
     <div
-      className="gemini-markdown text-slate-800"
+      className="gemini-markdown text-[var(--ink)]"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
@@ -358,7 +357,6 @@ export function FormattedChatMessage({ text, isUser }) {
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ['207624653160', 'vbp60vuujhl2h8jshvnosad9m2ft75jq.apps.googleusercontent.com'].join('-');
 
-// Real Google Identity Services (GIS) OAuth 2.0 Sign-In Component
 export function GoogleSignInButton({ onAuthSuccess, onError, setIsAuthenticating, isAuthenticating }) {
   useEffect(() => {
     let interval = null;
@@ -494,9 +492,9 @@ export function GoogleSignInButton({ onAuthSuccess, onError, setIsAuthenticating
         type="button"
         onClick={handleClick}
         disabled={isAuthenticating}
-        className="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center justify-center gap-3 transition-all shadow-md active:scale-[0.99] border border-slate-200 cursor-pointer"
+        className="w-full py-2.5 px-4 rounded-[8px] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-[var(--ink)] font-medium text-[15px] flex items-center justify-center gap-3 transition-colors border border-[var(--line)] cursor-pointer"
       >
-        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
           <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
           <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.34 24 12 24z"/>
           <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.15z"/>
@@ -508,7 +506,6 @@ export function GoogleSignInButton({ onAuthSuccess, onError, setIsAuthenticating
   );
 }
 
-// Plaid Link Launcher declared outside render to maintain hook lifecycle integrity
 export function PlaidLauncher({ token, onSuccess, onExit }) {
   const { open, ready } = usePlaidLink({
     token,

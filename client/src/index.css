@@ -1,45 +1,129 @@
 @import "tailwindcss";
+@import "./styles/tokens.css";
 
 @layer base {
-  :root, html, body {
-    color-scheme: light !important;
-    background-color: #f8fafc;
-    color: #1e293b;
-    font-family: 'Public Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  :root,
+  html,
+  body {
+    background-color: var(--background);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: var(--text-body);
+    line-height: 1.5;
+    font-weight: 500;
   }
 
-  .font-serif-title {
-    font-family: 'Source Serif 4', Georgia, serif;
+  h1, h2, .font-serif-title, .font-serif-number {
+    font-family: var(--font-serif);
+    font-weight: 600;
+  }
+
+  label {
+    font-size: var(--text-label);
+    font-weight: 500;
+    color: var(--ink);
   }
 }
 
-/* Guard against any dark mode class */
-html.dark, html.dark body, body.dark {
-  color-scheme: light !important;
-  background-color: #f8fafc !important;
-  color: #1e293b !important;
+/* ========================================================================== */
+/* VISIBLE FOCUS RING (Accessibility Rule #7)                                 */
+/* Every interactive element and outline-none replacement has focus-visible   */
+/* ========================================================================== */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible,
+.outline-none:focus-visible,
+.focus\:outline-none:focus-visible {
+  outline: 2px solid var(--brand) !important;
+  outline-offset: 2px !important;
+}
+
+/* ========================================================================== */
+/* TWO-RADIUS SYSTEM ENFORCEMENT (8px controls, 12px cards)                   */
+/* ========================================================================== */
+.rounded-2xl {
+  border-radius: var(--radius-card) !important;
+}
+
+/* ========================================================================== */
+/* DARK THEME ADAPTATION ([data-theme="dark"])                                */
+/* ========================================================================== */
+[data-theme="dark"] body {
+  background-color: var(--background);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .bg-white,
+[data-theme="dark"] .bg-\[\#f8fafc\],
+[data-theme="dark"] .bg-\[\#F7F8FA\] {
+  background-color: var(--surface) !important;
+  color: var(--ink);
+}
+
+[data-theme="dark"] .bg-slate-50,
+[data-theme="dark"] .bg-slate-50\/80,
+[data-theme="dark"] .bg-slate-50\/60,
+[data-theme="dark"] .bg-slate-50\/50,
+[data-theme="dark"] .bg-slate-100,
+[data-theme="dark"] .bg-slate-100\/80 {
+  background-color: var(--surface-subtle) !important;
+  color: var(--ink);
+}
+
+[data-theme="dark"] .text-slate-900,
+[data-theme="dark"] .text-slate-800,
+[data-theme="dark"] .text-slate-700 {
+  color: var(--ink) !important;
+}
+
+[data-theme="dark"] .text-slate-600,
+[data-theme="dark"] .text-slate-500,
+[data-theme="dark"] .text-slate-400 {
+  color: var(--muted) !important;
+}
+
+[data-theme="dark"] .border-slate-100,
+[data-theme="dark"] .border-slate-200,
+[data-theme="dark"] .border-slate-200\/80,
+[data-theme="dark"] .border-slate-200\/90,
+[data-theme="dark"] .border-slate-300,
+[data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+[data-theme="dark"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--line) !important;
+}
+
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background-color: var(--surface-subtle) !important;
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
 }
 
 /* Custom scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 9999px;
+  background: var(--line);
+  border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--muted);
 }
 
 /* ========================================================================== */
 /* ACCESSIBILITY & UI PREFERENCES (Font Scale, Density, Motion, Focus)        */
-/* Readability scaling is scoped to page content so sidebar and advisor controls */
-/* remain unbloated and never require forced scrolling to see options.        */
+/* Readability scaling is scoped to page content so sidebar and advisor       */
+/* controls remain unbloated and never require forced scrolling.              */
 /* ========================================================================== */
 :root {
   --ui-content-zoom: 1;
@@ -73,25 +157,25 @@ html.reduce-motion *::after {
 }
 
 html.high-focus *:focus-visible {
-  outline: 3px solid #18457c !important;
+  outline: 3px solid var(--brand) !important;
   outline-offset: 2px !important;
 }
 
 html.privacy-mask .privacy-sensitive {
-  filter: blur(6.5px);
+  opacity: 0.12;
   user-select: none;
-  transition: filter 0.15s ease;
+  transition: opacity 0.15s ease;
 }
 html.privacy-mask .privacy-sensitive:hover {
-  filter: none;
+  opacity: 1;
 }
 
-/* Gemini-style Markdown Chat Formatting */
+/* Markdown Chat Formatting */
 .gemini-markdown {
   word-break: break-word;
-  font-size: 0.875rem;
+  font-size: 15px;
   line-height: 1.65;
-  color: #1e293b;
+  color: var(--ink);
 }
 .gemini-markdown > *:first-child {
   margin-top: 0 !important;
@@ -107,21 +191,22 @@ html.privacy-mask .privacy-sensitive:hover {
 .gemini-markdown h2,
 .gemini-markdown h3,
 .gemini-markdown h4 {
-  font-weight: 700 !important;
+  font-family: var(--font-serif);
+  font-weight: 600 !important;
   line-height: 1.35 !important;
   margin-top: 0.85rem !important;
   margin-bottom: 0.4rem !important;
-  color: #0f172a !important;
+  color: var(--ink) !important;
 }
-.gemini-markdown h1 { font-size: 1.05rem !important; }
-.gemini-markdown h2 { font-size: 0.975rem !important; }
-.gemini-markdown h3 { font-size: 0.925rem !important; }
-.gemini-markdown h4 { font-size: 0.875rem !important; }
+.gemini-markdown h1 { font-size: 1.15rem !important; }
+.gemini-markdown h2 { font-size: 1.05rem !important; }
+.gemini-markdown h3 { font-size: 1rem !important; }
+.gemini-markdown h4 { font-size: 0.95rem !important; }
 
 .gemini-markdown strong,
 .gemini-markdown b {
-  font-weight: 700 !important;
-  color: #0f172a !important;
+  font-weight: 600 !important;
+  color: var(--ink) !important;
 }
 
 .gemini-markdown ul,
@@ -143,76 +228,76 @@ html.privacy-mask .privacy-sensitive:hover {
   padding-left: 0.2rem !important;
 }
 .gemini-markdown li::marker {
-  color: #18457c !important;
-  font-weight: bold;
+  color: var(--brand) !important;
+  font-weight: 600;
 }
 
 .gemini-markdown code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.85em;
+  font-family: var(--font-ui);
+  font-size: 0.9em;
   padding: 0.15rem 0.4rem;
-  border-radius: 0.35rem;
-  background-color: rgba(15, 23, 42, 0.08);
-  color: #0f172a;
+  border-radius: var(--radius-control);
+  background-color: var(--surface-subtle);
+  color: var(--ink);
   font-weight: 500;
 }
 .gemini-markdown pre {
   margin: 0.65rem 0;
   padding: 0.75rem 0.95rem;
-  border-radius: 0.6rem;
-  background-color: #0f172a;
-  color: #f8fafc;
+  border-radius: var(--radius-control);
+  background-color: var(--surface-subtle);
+  color: var(--ink);
   overflow-x: auto;
+  border: 1px solid var(--line);
 }
 .gemini-markdown pre code {
   background: transparent;
   padding: 0;
   color: inherit;
-  font-size: 0.825em;
+  font-size: 0.9em;
 }
 
 .gemini-markdown a {
-  color: #18457c;
+  color: var(--brand);
   text-decoration: underline;
   text-underline-offset: 2.5px;
   font-weight: 600;
 }
 .gemini-markdown a:hover {
-  color: #0f2c52;
+  color: var(--brand-hover);
 }
 
 .gemini-markdown hr {
   margin: 0.85rem 0;
   border: 0;
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  border-top: 1px solid var(--line);
 }
 
 .gemini-markdown blockquote {
-  border-left: 3.5px solid #18457c;
+  border-left: 3px solid var(--brand);
   padding-left: 0.75rem;
   margin: 0.65rem 0;
-  color: #475569;
-  font-style: italic;
-  background: rgba(24, 69, 124, 0.04);
-  border-radius: 0 0.4rem 0.4rem 0;
+  color: var(--muted);
+  background: var(--brand-soft);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
 }
 
 .gemini-markdown table {
   width: 100%;
   border-collapse: collapse;
   margin: 0.65rem 0;
-  font-size: 0.825rem;
-  border-radius: 0.5rem;
+  font-size: 13px;
+  border-radius: var(--radius-control);
   overflow: hidden;
 }
 .gemini-markdown th,
 .gemini-markdown td {
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--line);
   padding: 0.45rem 0.65rem;
   text-align: left;
 }
 .gemini-markdown th {
-  background-color: rgba(24, 69, 124, 0.08);
+  background-color: var(--brand-soft);
   font-weight: 600;
-  color: #0f172a;
+  color: var(--ink);
 }
