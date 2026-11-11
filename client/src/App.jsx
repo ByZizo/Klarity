@@ -161,7 +161,8 @@ import {
   isSemverNewer,
   formatVersionString,
   formatWhatsNewHighlights,
-  formatUserFacingReleaseNote
+  formatUserFacingReleaseNote,
+  formatCleanUpdateMessage
 } from './components/SharedAppComponents';
 import { Button, Card, Pill, Toast, ConfirmDialog } from './components/ui';
 import {
@@ -5551,7 +5552,10 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               <div className="flex items-center gap-2">
                 <ArrowUpCircle className="w-4 h-4 shrink-0" />
                 <span>
-                  {desktopAppInfo.updateStatus.message || 'A new Klarity update is ready to install.'}
+                  {formatCleanUpdateMessage(
+                    desktopAppInfo.updateStatus?.message || desktopAppInfo.updateStatus?.commitTitle,
+                    desktopAppInfo.updateStatus?.latestVersion
+                  )}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -7567,32 +7571,13 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               <h3 id="update-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
                 Update available
               </h3>
-              <Pill variant="brand">
-                {desktopAppInfo.updateStatus?.latestVersion
-                  ? formatVersionString(desktopAppInfo.updateStatus.latestVersion)
-                  : `v${CURRENT_APP_VERSION}`}
-                {desktopAppInfo.updateStatus?.commitSha &&
-                !String(desktopAppInfo.updateStatus.commitSha).startsWith('v')
-                  ? ` • ${desktopAppInfo.updateStatus.commitSha}`
-                  : ''}
-              </Pill>
             </div>
-            <p className="text-[15px] font-medium text-[var(--ink)]">
-              {desktopAppInfo.updateStatus?.message || 'A new version of Klarity is ready to install.'}
-            </p>
-            {Array.isArray(desktopAppInfo.updateStatus?.recentChanges) &&
-              desktopAppInfo.updateStatus.recentChanges.length > 0 && (
-                <div className="p-3 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)]">
-                  <div className="text-[13px] font-semibold text-[var(--ink)] mb-1.5">Recent changes:</div>
-                  <ul className="list-disc list-inside space-y-1 text-[13px] font-medium text-[var(--muted)]">
-                    {desktopAppInfo.updateStatus.recentChanges.slice(0, 3).map((change, idx) => (
-                      <li key={idx} className="truncate">
-                        {change}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+            <p className="text-[15px] font-medium text-[var(--ink)] leading-relaxed">
+              {formatCleanUpdateMessage(
+                desktopAppInfo.updateStatus?.message || desktopAppInfo.updateStatus?.commitTitle,
+                desktopAppInfo.updateStatus?.latestVersion
               )}
+            </p>
             <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
               <Button
                 variant="secondary"

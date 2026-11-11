@@ -323,7 +323,7 @@ async function checkForGitHubUpdate() {
         commitDate,
         recentChanges: recentCommits,
         message: commitTitle
-          ? `New update available (${formattedSemVer} • ${remoteSha ? remoteSha.slice(0, 7) : 'latest'}): ${commitTitle}`
+          ? `New update available (${formattedSemVer}): ${commitTitle}`
           : `A new version of Klarity (${formattedSemVer}) is available!`
       });
       return updateStatusState;
