@@ -93,10 +93,14 @@ export default function PasswordVaultPage({
       const saved = localStorage.getItem('klarity_vault_sections');
       if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.some(s => String(s).toLowerCase() === 'favorites')
+            ? parsed
+            : ['Favorites', ...parsed];
+        }
       }
     } catch {}
-    return ['General', 'Utilities', 'Finance', 'Personal'];
+    return ['Favorites', 'General', 'Utilities', 'Finance', 'Personal'];
   });
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [newSectionInput, setNewSectionInput] = useState('');
@@ -154,15 +158,29 @@ export default function PasswordVaultPage({
   };
 
   const allSections = useMemo(() => {
-    const set = new Set();
+    const set = new Set(['Favorites']);
     (customSections || []).forEach(s => {
-      if (s && String(s).trim()) set.add(String(s).trim());
+      if (s && String(s).trim()) {
+        const trimmed = String(s).trim();
+        if (trimmed.toLowerCase() !== 'favorites') set.add(trimmed);
+      }
     });
     (vaultItems || []).forEach(item => {
-      if (item.category && String(item.category).trim()) set.add(String(item.category).trim());
+      if (item.category && String(item.category).trim()) {
+        const trimmed = String(item.category).trim();
+        if (trimmed.toLowerCase() !== 'favorites') set.add(trimmed);
+      }
     });
     return Array.from(set);
   }, [customSections, vaultItems]);
+
+  const getSectionItemCount = (secName) => {
+    const list = vaultItems || [];
+    if ((secName || '').toLowerCase() === 'favorites') {
+      return list.filter(i => Boolean(i.isFavorite) || (i.category || '').toLowerCase() === 'favorites').length;
+    }
+    return list.filter(i => (i.category || '').toLowerCase() === (secName || '').toLowerCase()).length;
+  };
 
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -188,7 +206,11 @@ export default function PasswordVaultPage({
       if ((item.id === 'v-pge' || item.id === 'v-water') && !item.password && !item.username && !item.accountNumber) {
         return false;
       }
-      const matchesCat = selectedCategory === 'All' || (item.category || '').toLowerCase() === selectedCategory.toLowerCase();
+      const matchesCat =
+        selectedCategory === 'All' ||
+        (selectedCategory.toLowerCase() === 'favorites'
+          ? Boolean(item.isFavorite) || (item.category || '').toLowerCase() === 'favorites'
+          : (item.category || '').toLowerCase() === selectedCategory.toLowerCase());
       const q = searchQuery.toLowerCase();
       const matchesSearch =
         !q ||
@@ -376,6 +398,7 @@ export default function PasswordVaultPage({
             ...formState,
             service: formState.service.trim(),
             category: chosenCategory,
+            isFavorite: chosenCategory.toLowerCase() === 'favorites' ? true : item.isFavorite,
             website: (formState.website || '').trim()
           } : item
         )
@@ -388,6 +411,7 @@ export default function PasswordVaultPage({
         ...formState,
         service: formState.service.trim(),
         category: chosenCategory,
+        isFavorite: chosenCategory.toLowerCase() === 'favorites' ? true : Boolean(formState.isFavorite),
         website: (formState.website || '').trim()
       };
       onUpdateVaultItems([newItem, ...(vaultItems || [])]);
@@ -948,7 +972,7 @@ export default function PasswordVaultPage({
             <span>
               {selectedCategory === 'All'
                 ? `All sections (${(vaultItems || []).length})`
-                : `${selectedCategory} (${(vaultItems || []).filter(i => (i.category || '').toLowerCase() === selectedCategory.toLowerCase()).length})`}
+                : `${selectedCategory} (${getSectionItemCount(selectedCategory)})`}
             </span>
             <ChevronDown className={`w-4 h-4 transition-transform ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
           </Button>
@@ -1043,8 +1067,9 @@ export default function PasswordVaultPage({
                   </button>
 
                   {allSections.map(sec => {
-                    const count = (vaultItems || []).filter(i => (i.category || '').toLowerCase() === sec.toLowerCase()).length;
+                    const count = getSectionItemCount(sec);
                     const isSelected = selectedCategory.toLowerCase() === sec.toLowerCase();
+                    const isBuiltInFavorites = sec.toLowerCase() === 'favorites';
                     return (
                       <div
                         key={sec}
@@ -1060,14 +1085,20 @@ export default function PasswordVaultPage({
                         }}
                       >
                         <div className="flex items-center gap-2 truncate pr-2">
-                          {isSelected ? <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" /> : <span className="w-3.5 shrink-0" />}
+                          {isSelected ? (
+                            <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" />
+                          ) : isBuiltInFavorites ? (
+                            <Star className="w-3.5 h-3.5 text-[#B45309] fill-[#B45309] shrink-0" />
+                          ) : (
+                            <span className="w-3.5 shrink-0" />
+                          )}
                           <span className="truncate">{sec}</span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
                             {count}
                           </span>
-                          {count === 0 && (
+                          {count === 0 && !isBuiltInFavorites && (
                             <button
                               type="button"
                               aria-label={`Delete empty section ${sec}`}

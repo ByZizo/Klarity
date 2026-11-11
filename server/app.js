@@ -489,7 +489,7 @@ async function createUserSession(data, userOrId) {
 
 // Global authentication gate for /api routes
 async function requireAuth(req, res, next) {
-  const publicPaths = new Set([
+    const publicPaths = new Set([
     '/auth/register',
     '/auth/login',
     '/auth/setup-owner',
@@ -500,6 +500,8 @@ async function requireAuth(req, res, next) {
     '/household/zillow-lookup',
     '/household/scan-insurance-card',
     '/household',
+    '/ai/chat',
+    '/ai/local-status',
     '/api/auth/register',
     '/api/auth/login',
     '/api/auth/setup-owner',
@@ -510,6 +512,8 @@ async function requireAuth(req, res, next) {
     '/api/household/zillow-lookup',
     '/api/household/scan-insurance-card',
     '/api/household',
+    '/api/ai/chat',
+    '/api/ai/local-status',
     '/api/vault',
     '/vault',
     '/api/feedback',
@@ -3365,22 +3369,151 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
     `- Live Internet Access: Real-time live web search is ACTIVE. You are connected to live internet search results whenever needed. Never say you don't have internet access or that your knowledge is cut off.`
   ].join('\n');
 
+  const buildIntelligentFinancialFallback = () => {
+    const q = (message || '').toLowerCase().trim();
+    const firstName = (currentUser?.name || 'there').split(' ')[0];
+    const cashNum = Number(availableCash || 0);
+    const afterBillsNum = Number(projectedCashAfterBills ?? cashNum);
+    const totalBillsMonthly = userBills.reduce((s, b) => s + Number(b.expectedAmount || 0), 0);
+    const totalSubsMonthly = userSubscriptions.reduce((s, sub) => s + Number(sub.amount || 0), 0);
+    const totalCardDebt = userCards.reduce((s, c) => s + Number(c.balance || 0), 0);
+    const sortedCardsByApr = [...userCards].sort((a, b) => Number(b.apr || 0) - Number(a.apr || 0));
+    const topAprCard = sortedCardsByApr[0];
+
+    if (isWeeklyAdvisorSummary && advisorSnapshot) {
+      return advisorSnapshot;
+    }
+
+    // Check if asking to assign/select bills for a budget
+    if (/select.*bills|assign.*bills|bills.*count.*budget|match.*bills.*budget/i.test(q)) {
+      const targetBudget = (budgets || []).find(b => q.includes((b.category || '').toLowerCase())) || (budgets || [])[0];
+      if (targetBudget) {
+        const bCat = (targetBudget.category || '').toLowerCase();
+        const matchingBills = userBills.filter(bill => {
+          const billText = `${bill.name || ''} ${bill.category || ''}`.toLowerCase();
+          if (bCat.includes('utilit') || bCat.includes('home') || bCat.includes('hous') || bCat.includes('bill')) {
+            return /electric|pg&e|pge|coned|water|gas|trash|internet|wifi|fios|xfinity|at&t|verizon|phone|t-mobile|rent|mortgage|hoa|utility|utilities|housing/i.test(billText);
+          }
+          if (bCat.includes('auto') || bCat.includes('transp') || bCat.includes('car') || bCat.includes('insur')) {
+            return /geico|state farm|progressive|allstate|insurance|auto|car|dmv|fastrak/i.test(billText);
+          }
+          if (bCat.includes('health') || bCat.includes('med')) {
+            return /kaiser|health|medical|dental|doctor|anthem|pharmacy|cvs/i.test(billText);
+          }
+          return billText.includes(bCat);
+        });
+        const chosenBills = matchingBills.length > 0 ? matchingBills : userBills.slice(0, 4);
+        const totalMatched = chosenBills.reduce((s, b) => s + Number(b.expectedAmount || 0), 0);
+        return `### Bills Matched to **${targetBudget.category}** Budget\n\nI reviewed your ${userBills.length} recurring bills and selected **${chosenBills.length} bill${chosenBills.length === 1 ? '' : 's'}** totaling **$${totalMatched.toFixed(2)}/mo** for your **${targetBudget.category}** budget:\n\n` +
+          chosenBills.map(b => `• **${b.name}** — **$${Number(b.expectedAmount || 0).toFixed(2)}/mo** (${b.category || 'Bill'}, due ${b.dueText || 'Day ' + (b.dueDay || 15)})`).join('\n') +
+          `\n\n[ACTION:SET_BUDGET_BILLS:${JSON.stringify({ category: targetBudget.category, billIds: chosenBills.map(b => b.id) })}]`;
+      }
+    }
+
+    if (/^(hi|hello|hey|good morning|good afternoon|good evening|yo|sup)\b/i.test(q) && q.length < 35) {
+      return `Hello ${firstName}! Here is a quick snapshot of your finances today:\n\n` +
+        `• **Available Cash:** $${cashNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ($${afterBillsNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} projected after upcoming bills)\n` +
+        `• **Monthly Bills & Subscriptions:** ${userBills.length} bills ($${totalBillsMonthly.toFixed(2)}/mo) and ${userSubscriptions.length} subscriptions ($${totalSubsMonthly.toFixed(2)}/mo)\n` +
+        `• **Credit Card Balances:** $${totalCardDebt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} across ${userCards.length} card${userCards.length === 1 ? '' : 's'}${topAprCard ? ` (highest APR: **${topAprCard.name}** at **${topAprCard.apr}%**)` : ''}\n\n` +
+        `What would you like to look into—upcoming bills, card payoff strategy, budgets, or subscriptions?`;
+    }
+
+    if (/bill|due|upcoming|utility|utilities|pg&e|pge|electric|water|internet/i.test(q)) {
+      if (userBills.length === 0) {
+        return `You currently have **no recurring bills** scheduled in Klarity. You can add bills on the **Bills** page or tell me a bill name, amount, and due date and I will add it for you.`;
+      }
+      const billLines = userBills.map(b => `• **${b.name}** (${b.category || 'Utilities'}): **$${Number(b.expectedAmount || 0).toFixed(2)}** — ${b.dueText || (b.dueDay ? `Due day ${b.dueDay}` : 'Monthly')}${b.autopay ? ' *(Autopay)*' : ''}`).join('\n');
+      return `### Upcoming Bills Summary\n\nYou have **${userBills.length} recurring bills** totaling **$${totalBillsMonthly.toFixed(2)}/month**:\n\n${billLines}\n\n` +
+        `**Cash Coverage:** With **$${cashNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}** in checking, you have **$${afterBillsNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}** projected remaining after upcoming bills.`;
+    }
+
+    if (/sub|subscription|netflix|spotify|streaming|cancel|recurring/i.test(q)) {
+      if (userSubscriptions.length === 0) {
+        return `You currently have **0 active subscriptions** recorded. Tell me any subscriptions you pay for (for example, *"Netflix is $22.99 a month"*) and I'll add them automatically.`;
+      }
+      const subLines = userSubscriptions.map(s => `• **${s.name}**: **$${Number(s.amount || 0).toFixed(2)}/mo** ($${(Number(s.amount || 0) * 12).toFixed(0)}/yr)`).join('\n');
+      return `### Active Subscriptions Audit\n\nYou have **${userSubscriptions.length} active subscriptions** costing **$${totalSubsMonthly.toFixed(2)}/month** (**$${(totalSubsMonthly * 12).toFixed(2)}/year**):\n\n${subLines}\n\n` +
+        `Canceling even 1–2 underused subscriptions can free up cash to accelerate your highest-APR credit card payoff.`;
+    }
+
+    if (/card|debt|apr|interest|payoff|pay off|balance|credit/i.test(q)) {
+      if (userCards.length === 0) {
+        return `You have **no credit cards** connected right now. You can link a bank or add a card on the **Cards** page.`;
+      }
+      const cardLines = sortedCardsByApr.map((c, idx) => {
+        const bal = Number(c.balance || 0);
+        const apr = Number(c.apr || 0);
+        const monthlyInterest = (bal * (apr / 100)) / 12;
+        return `${idx + 1}. **${c.institution ? c.institution + ' ' : ''}${c.name}** (•••• ${c.mask || '0000'}): **$${bal.toFixed(2)}** at **${apr}% APR** (~$${monthlyInterest.toFixed(2)}/mo interest, min payment $${Number(c.minimumPayment || 25).toFixed(0)})`;
+      }).join('\n');
+      return `### Credit Card Payoff Priority (Avalanche Order)\n\nYour total credit card balance is **$${totalCardDebt.toFixed(2)}** across **${userCards.length} cards**:\n\n${cardLines}\n\n` +
+        (topAprCard ? `**Recommended Action:** Pay minimums on all other cards and direct extra payments toward **${topAprCard.name}** (${topAprCard.apr}% APR) first to save the most in monthly interest.` : '');
+    }
+
+    if (/budget|limit|grocery|groceries|dining|food|spend|spending|transaction|purchase/i.test(q)) {
+      const budgetLines = (budgets && budgets.length > 0)
+        ? budgets.map(b => `• **${b.category}**: **$${Number(b.spent || 0).toFixed(2)}** spent of **$${Number(b.limit || 0).toFixed(0)}** limit (${b.pct || Math.round((Number(b.spent || 0) / Math.max(1, Number(b.limit || 1))) * 100)}%)`).join('\n')
+        : '• No category budgets configured yet.';
+      const recentTxLines = userTransactions.slice(0, 6).map(t => `• **${t.name}** (${t.category || 'Shopping'}): **$${Math.abs(Number(t.amount || 0)).toFixed(2)}** on ${t.date || 'recent'}`).join('\n');
+      return `### Spending & Budgets Breakdown\n\n**Monthly Category Budgets:**\n${budgetLines}\n\n` +
+        (recentTxLines ? `**Recent Purchases:**\n${recentTxLines}` : '');
+    }
+
+    if (/retire|pension|calpers|social security|401k|ira/i.test(q)) {
+      if (!userRetirementPlans || userRetirementPlans.length === 0) {
+        return `You haven't added any retirement plans yet. Visit the **Retirement** page to add a CalPERS pension, Social Security benefit, 401(k), or IRA.`;
+      }
+      const retLines = userRetirementPlans.map(p =>
+        p.planType === 'pension' || p.planType === 'social_security'
+          ? `• **${p.name}**: **$${Number(p.estimatedMonthlyBenefit || 0).toLocaleString()}/mo** estimated benefit`
+          : `• **${p.name}** (${(p.planType || '').toUpperCase()}): **$${Number(p.balance || 0).toLocaleString()}** balance`
+      ).join('\n');
+      return `### Retirement & Pension Summary\n\nHere are your current retirement plans in Klarity:\n\n${retLines}`;
+    }
+
+    if (advisorSnapshot) {
+      return advisorSnapshot;
+    }
+
+    return `### Your Financial Overview\n\n` +
+      `• **Net Worth:** $${Number(netWorth || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+      `• **Checking Cash:** $${cashNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ($${afterBillsNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} after upcoming bills)\n` +
+      `• **Credit Card Debt:** $${totalCardDebt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} across ${userCards.length} cards\n` +
+      `• **Recurring Bills:** $${totalBillsMonthly.toFixed(2)}/mo across ${userBills.length} bills\n` +
+      `• **Subscriptions:** $${totalSubsMonthly.toFixed(2)}/mo across ${userSubscriptions.length} subscriptions\n\n` +
+      `Ask me about any specific bill, credit card, budget category, subscription, or debt payoff plan and I will break down the exact numbers for you.`;
+  };
+
   try {
     let reply = '';
 
     if (isWeeklyAdvisorSummary && advisorSnapshot && provider === 'local') {
       reply = advisorSnapshot;
     } else if (provider === 'local') {
-      const localResult = await localModelEngine.query({
-        query: fullUserPrompt,
-        searchQuery: sanitizedUserQuery,
-        enableWebSearch: webSearchEnabled !== false && fileAttachments.length === 0,
-        locationHint: safeSearchLocation,
-        financialContext: compactFinancialContext,
-        maxTokens: responseLength === 'concise' ? 512 : responseLength === 'detailed' ? 1536 : 1024,
-        temperature: 0.7
-      });
-      reply = (localResult.reply || '').replace(/\[(?:ACTION|NAVIGATE):[\s\S]*?\]/gi, '').trim();
+      if (localModelEngine.status?.state === 'ready') {
+        try {
+          const localResult = await localModelEngine.query({
+            query: fullUserPrompt,
+            searchQuery: sanitizedUserQuery,
+            enableWebSearch: webSearchEnabled !== false && fileAttachments.length === 0,
+            locationHint: safeSearchLocation,
+            financialContext: compactFinancialContext,
+            maxTokens: responseLength === 'concise' ? 512 : responseLength === 'detailed' ? 1536 : 1024,
+            temperature: 0.7
+          });
+          reply = (localResult.reply || '').replace(/\[(?:ACTION|NAVIGATE):[\s\S]*?\]/gi, '').trim();
+        } catch (localErr) {
+          console.warn('[LocalAI] Query failed, using smart financial fallback:', localErr.message);
+          reply = buildIntelligentFinancialFallback();
+        }
+      } else {
+        // Trigger background init without blocking user response for minutes on a 2GB download
+        localModelEngine.initialize().catch(() => {});
+        reply = buildIntelligentFinancialFallback();
+      }
+      if (!reply || !reply.trim()) {
+        reply = buildIntelligentFinancialFallback();
+      }
     } else if (provider === 'anthropic') {
       const anthropicContent = [{ type: 'text', text: fullUserPrompt }];
       for (const att of fileAttachments) {
@@ -3865,6 +3998,17 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
       } catch (e) {}
     }
 
+    const setBudgetBillsRegex = /\[ACTION:SET_BUDGET_BILLS:([\s\S]*?)\]/gi;
+    let sbbMatch;
+    while ((sbbMatch = setBudgetBillsRegex.exec(reply)) !== null) {
+      try {
+        const bbData = JSON.parse(sbbMatch[1]);
+        if (bbData && bbData.category && Array.isArray(bbData.billIds)) {
+          actionsExecuted.push({ type: 'set_budget_bills', item: bbData });
+        }
+      } catch (e) {}
+    }
+
     // 4. Smart Fallback Comprehension for Uploaded Statements & Pasted Natural-Language Sentences
     if (actionsExecuted.length === 0) {
       const combinedInput = `${message || ''}\n${extractedFilesText}\n${fileAttachments.map(a => a.name || '').join(' ')}`;
@@ -4130,7 +4274,11 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
     }
 
     // Strip raw ACTION tags from visible chat text for clean formatting
-    reply = reply.replace(/\[ACTION:[A-Z_]+:[\s\S]*?\]/gi, '').trim();
+    reply = (reply || '').replace(/\[(?:ACTION|NAVIGATE):[A-Z_]*:?[\s\S]*?\]/gi, '').trim();
+
+    if (!reply) {
+      reply = buildIntelligentFinancialFallback().replace(/\[(?:ACTION|NAVIGATE):[A-Z_]*:?[\s\S]*?\]/gi, '').trim();
+    }
 
     return res.json({
       reply,
@@ -4145,7 +4293,8 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
     });
   } catch (err) {
     console.error('AI chat route error:', err);
-    return res.json({ reply: `Advisor error: ${err.message}` });
+    const fallbackReply = buildIntelligentFinancialFallback().replace(/\[(?:ACTION|NAVIGATE):[A-Z_]*:?[\s\S]*?\]/gi, '').trim();
+    return res.json({ reply: fallbackReply || `Here is your current financial summary.` });
   }
 });
 

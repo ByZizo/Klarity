@@ -95,6 +95,13 @@ export function SettingsPage({
   desktopAppInfo = {},
   formatVersionString,
   handleManualCheckForUpdate,
+  feedbackType = 'General Feedback',
+  setFeedbackType,
+  feedbackText = '',
+  setFeedbackText,
+  isSubmittingFeedback = false,
+  feedbackSubmitted = false,
+  handleSendFeedback,
   onShowToast
 }) {
   // Map legacy tab names ('ui', 'sidebar', 'plaid') into the 6 merged tabs
@@ -1176,6 +1183,83 @@ export function SettingsPage({
                       Check for updates
                     </Button>
                   )}
+                </Card>
+
+                {/* Feedback Section */}
+                <Card className="p-5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-[16px] font-semibold text-[var(--ink)]">Feedback</h4>
+                      <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
+                        Share thoughts, report bugs, or request features to help improve Klarity.
+                      </p>
+                    </div>
+                    <Pill variant="brand">User feedback</Pill>
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      if (handleSendFeedback) {
+                        handleSendFeedback(e);
+                      } else {
+                        e.preventDefault();
+                      }
+                    }}
+                    className="flex flex-col gap-3 pt-1"
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {['General Feedback', 'Feature Request', 'Bug Report'].map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setFeedbackType && setFeedbackType(type)}
+                          className={`px-3 py-1.5 rounded-[8px] text-[13px] font-semibold border transition-colors cursor-pointer ${
+                            feedbackType === type
+                              ? 'bg-[#1B4B91] text-white border-[#1B4B91]'
+                              : 'bg-[var(--surface-subtle)] text-[var(--muted)] border-[var(--line)] hover:text-[var(--ink)]'
+                          }`}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div>
+                      <label htmlFor="about-feedback-textarea" className="sr-only">
+                        Your feedback message
+                      </label>
+                      <textarea
+                        id="about-feedback-textarea"
+                        value={feedbackText}
+                        onChange={(e) => setFeedbackText && setFeedbackText(e.target.value)}
+                        rows={3}
+                        placeholder="What can we improve? Let us know what you'd like to see..."
+                        className="w-full text-[15px] font-medium p-3 rounded-[8px] border border-[var(--line)] bg-[var(--surface-subtle)] text-[var(--ink)] placeholder:text-[var(--muted)] resize-none"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      {feedbackSubmitted ? (
+                        <span className="inline-flex items-center gap-1.5 text-[13px] text-[#15803D] font-semibold bg-[#15803D]/10 px-3 py-1.5 rounded-[8px] border border-[#15803D]/25">
+                          <CheckCircle2 className="w-4 h-4" />
+                          Thank you! Your feedback has been received.
+                        </span>
+                      ) : (
+                        <span className="text-[13px] font-medium text-[var(--muted)]">
+                          Your feedback directly shapes upcoming updates.
+                        </span>
+                      )}
+
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="sm"
+                        disabled={!feedbackText.trim() || isSubmittingFeedback}
+                      >
+                        {isSubmittingFeedback ? 'Sending...' : 'Send Feedback'}
+                      </Button>
+                    </div>
+                  </form>
                 </Card>
 
                 {/* Concise 3-line What's New with link to full notes */}
