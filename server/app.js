@@ -3236,6 +3236,9 @@ ${advisorSnapshot ? `\nPre-Computed Live Financial Advisor Analysis (Ground-Trut
 
 Rules:
 1. Provide concise, clear, and empathetic financial guidance based strictly on real numbers and current web knowledge.
+- INTENT-MATCHED RESPONSES (CRITICAL): Always answer EXACTLY what the user asks. If the user asks a question about a specific bill, question, personal detail, or says to remember/commit something to memory, respond directly to that specific topic. Do NOT randomly dump an entire unrequested financial summary, full debt breakdown, or all connected credit cards unless the user specifically asks for a complete summary, overview, or report.
+- AI MEMORY ACTIONS: When the user shares personal details or asks you to remember something (e.g. "I am 23 years old", "remember that I prefer avalanche", "save to memory that my car is a Honda", "add that I'm 23 years old to your memory"):
+  Acknowledge it warmly in 1 or 2 friendly sentences and output the action tag: [ACTION:ADD_MEMORY:{"fact":"User is 23 years old"}]. Do NOT dump unrequested financial accounts.
 ${responseLength === 'concise' ? '- RESPONSE LENGTH: Keep your answer short, concise, and under 150 words. Focus strictly on bullet points and key numbers.' : responseLength === 'detailed' ? '- RESPONSE LENGTH: Provide an in-depth, thorough analysis (~600-800 words) with detailed arithmetic, comparisons, and step-by-step guidance.' : '- RESPONSE LENGTH: Provide a balanced, clear response (~250-400 words) with practical numbers and actionable advice.'}
 ${webSearchEnabled === false ? '- INTERNET ACCESS: Strictly offline/local mode. Do NOT search external web data; base advice strictly on user accounts and bills.' : '- INTERNET ACCESS: Live web search is active. Reference live card promotions and rate benchmarks where helpful.'}
 2. LIVE INTERNET & WEB KNOWLEDGE: Incorporate real-time web facts to recommend specific credit card promotions (e.g. Citi Simplicity, Wells Fargo Reflect, Chase Freedom), balance transfer fees, current HYSA yields, and ways to save money.
@@ -3251,6 +3254,9 @@ ${webSearchEnabled === false ? '- INTERNET ACCESS: Strictly offline/local mode. 
    - For Deleting Budgets: [ACTION:DELETE_BUDGET:{"category":"Groceries"}]
    - For Savings Goals: [ACTION:ADD_GOAL:{"name":"Emergency Fund","targetAmount":3000,"currentAmount":500,"monthlyContribution":250}]
    - For Deleting Savings Goals: [ACTION:DELETE_GOAL:{"name":"Emergency Fund"}]
+   - For Adding to AI Memory / Preferences (e.g. user says "add that I'm 23 to your memory", "remember that I prefer avalanche", "remember my age"):
+     [ACTION:ADD_MEMORY:{"fact":"User is 23 years old"}]
+   - For Removing from AI Memory: [ACTION:DELETE_MEMORY:{"fact":"User is 23 years old"}]
    - For Setting / Verifying Retirement Inflow: [ACTION:SET_INCOME:{"type":"social_security","amount":2185,"label":"Social Security"}] or [ACTION:SET_INCOME:{"type":"calpers","amount":3450,"label":"CalPERS Pension"}]
    - For Adding / Updating Retirement Plan: [ACTION:ADD_RETIREMENT:{"name":"California State Pension","planType":"pension","provider":"CalPERS","tier":"2% at 62","yearsOfService":15,"benefitFactorPct":2.0,"highestAverageSalary":95000,"retirementAge":62,"estimatedMonthlyBenefit":2375}] or [ACTION:ADD_RETIREMENT:{"name":"Workplace 401(k)","planType":"401k","provider":"Fidelity","balance":48500,"employeeContribution":500,"employerMatch":250,"targetRetirementAge":65}]
    - For Deleting Retirement Plan: [ACTION:DELETE_RETIREMENT:{"id":"ret-1"}]
@@ -3382,6 +3388,23 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
 
     if (isWeeklyAdvisorSummary && advisorSnapshot) {
       return advisorSnapshot;
+    }
+
+    // Check if user is asking to add/commit something to AI memory
+    if (/add.*(?:to|in).*memory|remember\s+that|save.*(?:to|in).*memory|commit.*to.*memory/i.test(q)) {
+      let factToSave = message.replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:add\s+(?:that\s+)?|remember\s+(?:that\s+)?|commit\s+(?:that\s+)?|save\s+(?:that\s+)?)/i, '')
+        .replace(/(?:to|in)\s+(?:your\s+)?(?:ai\s+)?memory[\s.]*$/i, '')
+        .replace(/(?:to|in)\s+(?:the\s+)?memory[\s.]*$/i, '')
+        .trim();
+      // Normalize pronouns: "im 23" / "i'm 23" -> "User is 23"
+      factToSave = factToSave
+        .replace(/\bi['’]?m\s+/gi, 'User is ')
+        .replace(/\bi\s+am\s+/gi, 'User is ')
+        .replace(/\bmy\s+/gi, "User's ")
+        .replace(/\bme\s+/gi, 'user ');
+      factToSave = factToSave.charAt(0).toUpperCase() + factToSave.slice(1);
+      if (!factToSave.endsWith('.')) factToSave += '.';
+      return `I've committed that to my memory: **"${factToSave}"**\n\nI'll remember this across your financial sessions!\n\n[ACTION:ADD_MEMORY:{"fact":${JSON.stringify(factToSave)}}]`;
     }
 
     // Check if asking to assign/select bills for a budget
@@ -4005,6 +4028,28 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
         const bbData = JSON.parse(sbbMatch[1]);
         if (bbData && bbData.category && Array.isArray(bbData.billIds)) {
           actionsExecuted.push({ type: 'set_budget_bills', item: bbData });
+        }
+      } catch (e) {}
+    }
+
+    const addMemoryRegex = /\[ACTION:ADD_MEMORY:([\s\S]*?)\]/gi;
+    let amMatch;
+    while ((amMatch = addMemoryRegex.exec(reply)) !== null) {
+      try {
+        const memData = JSON.parse(amMatch[1]);
+        if (memData && memData.fact) {
+          actionsExecuted.push({ type: 'add_memory', item: { fact: memData.fact } });
+        }
+      } catch (e) {}
+    }
+
+    const delMemoryRegex = /\[ACTION:DELETE_MEMORY:([\s\S]*?)\]/gi;
+    let dmMatch;
+    while ((dmMatch = delMemoryRegex.exec(reply)) !== null) {
+      try {
+        const memData = JSON.parse(dmMatch[1]);
+        if (memData && memData.fact) {
+          actionsExecuted.push({ type: 'delete_memory', item: { fact: memData.fact } });
         }
       } catch (e) {}
     }

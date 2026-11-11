@@ -3895,6 +3895,17 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   : b
               )
             );
+          } else if (act.type === 'add_memory' && act.item?.fact) {
+            handleAddMemory(act.item.fact);
+          } else if (act.type === 'delete_memory' && act.item?.fact) {
+            const targetFact = String(act.item.fact).toLowerCase().trim();
+            setAiMemory(prev => prev.filter(m => m.toLowerCase().trim() !== targetFact));
+            const uid = currentUser?.id || 'default';
+            try {
+              const nextMem = aiMemory.filter(m => m.toLowerCase().trim() !== targetFact);
+              localStorage.setItem('klarity_ai_memory', JSON.stringify(nextMem));
+              localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(nextMem));
+            } catch {}
           } else if (act.type === 'goal' && act.item?.name && act.item?.targetAmount) {
             setSavingsGoals(prev => [
               ...prev,
