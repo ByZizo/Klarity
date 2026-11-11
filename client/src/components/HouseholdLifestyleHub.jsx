@@ -1123,13 +1123,14 @@ export default function HouseholdLifestyleHub({
       localStorage.setItem('klarity_household_profile', JSON.stringify(nextProfile));
     } catch {}
   };
-  const [isHouseholdExpanded, setIsHouseholdExpanded] = useState(false);
+  const [isHouseholdExpanded, setIsHouseholdExpanded] = useState(true);
+  const [householdSubTab, setHouseholdSubTab] = useState('property');
   const [wizardStep, setWizardStep] = useState(1);
   const totalWizardSteps = 7;
 
   const handleFinishWizard = () => {
     setHouseholdView('saved');
-    setIsHouseholdExpanded(false); // Minimized in the end, similar to health section!
+    setIsHouseholdExpanded(true);
     try {
       localStorage.setItem('klarity_household_profile_plain', JSON.stringify(householdProfile));
       localStorage.setItem('klarity_household_profile', JSON.stringify(householdProfile));
@@ -3664,53 +3665,81 @@ export default function HouseholdLifestyleHub({
                   </div>
                 </div>
 
-                {/* Expanded Sections Container with 36px horizontal padding and ~56px between sections */}
+                {/* Expanded Sections Container with 36px horizontal padding */}
                 {isHouseholdExpanded && (
-                  <div className="border-t border-[var(--line)] bg-[var(--surface)] px-6 sm:px-[36px] pb-10 flex flex-col space-y-14">
-                    {/* 4. Sticky Nav Bar: Property, Home systems, Providers, Bills + "Update my answers" */}
+                  <div className="border-t border-[var(--line)] bg-[var(--surface)] px-6 sm:px-[36px] pb-8 flex flex-col gap-6">
+                    {/* Household Section Sub-Tabs: Property | Home systems | Providers | Bills */}
                     <div className="sticky top-0 z-10 -mx-6 sm:-mx-[36px] px-6 sm:px-[36px] py-3.5 bg-[var(--surface)]/95 border-b border-[var(--line)] flex items-center justify-between flex-wrap gap-3 backdrop-blur-xs">
-                      <nav className="flex items-center gap-6 overflow-x-auto text-[13px] font-semibold text-[var(--muted)]">
-                        <a
-                          href="#section-property"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            document.getElementById('section-property')?.scrollIntoView({ behavior: 'smooth' });
-                          }}
-                          className="hover:text-[#18457c] dark:hover:text-blue-400 transition-colors cursor-pointer py-1"
+                      <div className="flex items-center gap-1.5 bg-[var(--surface-subtle)] border border-[var(--line)] p-1 rounded-xl text-[13px]">
+                        <button
+                          type="button"
+                          onClick={() => setHouseholdSubTab('property')}
+                          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer font-semibold ${
+                            householdSubTab === 'property'
+                              ? 'bg-[var(--brand)] text-white shadow-2xs'
+                              : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
+                          }`}
                         >
-                          Property
-                        </a>
-                        <a
-                          href="#section-systems"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            document.getElementById('section-systems')?.scrollIntoView({ behavior: 'smooth' });
-                          }}
-                          className="hover:text-[#18457c] dark:hover:text-blue-400 transition-colors cursor-pointer py-1"
+                          <Building className="w-3.5 h-3.5" />
+                          <span>Property</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHouseholdSubTab('systems')}
+                          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer font-semibold ${
+                            householdSubTab === 'systems'
+                              ? 'bg-[var(--brand)] text-white shadow-2xs'
+                              : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
+                          }`}
                         >
-                          Home systems
-                        </a>
-                        <a
-                          href="#section-providers"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            document.getElementById('section-providers')?.scrollIntoView({ behavior: 'smooth' });
-                          }}
-                          className="hover:text-[#18457c] dark:hover:text-blue-400 transition-colors cursor-pointer py-1"
+                          <Zap className="w-3.5 h-3.5" />
+                          <span>Home systems</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHouseholdSubTab('providers')}
+                          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer font-semibold ${
+                            householdSubTab === 'providers'
+                              ? 'bg-[var(--brand)] text-white shadow-2xs'
+                              : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
+                          }`}
                         >
-                          Providers
-                        </a>
-                        <a
-                          href="#section-bills"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            document.getElementById('section-bills')?.scrollIntoView({ behavior: 'smooth' });
-                          }}
-                          className="hover:text-[#18457c] dark:hover:text-blue-400 transition-colors cursor-pointer py-1"
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>Providers</span>
+                          <span
+                            className={`text-[11px] px-1.5 py-0.5 rounded-full ${
+                              householdSubTab === 'providers'
+                                ? 'bg-white/20 text-white'
+                                : 'bg-[var(--surface)] text-[var(--muted)] border border-[var(--line)]'
+                            }`}
+                          >
+                            {7 + (householdProfile.extraProviders || []).length}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHouseholdSubTab('bills')}
+                          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer font-semibold ${
+                            householdSubTab === 'bills'
+                              ? 'bg-[var(--brand)] text-white shadow-2xs'
+                              : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
+                          }`}
                         >
-                          Bills
-                        </a>
-                      </nav>
+                          <Receipt className="w-3.5 h-3.5" />
+                          <span>Bills</span>
+                          {actualHouseholdBills.length > 0 && (
+                            <span
+                              className={`text-[11px] px-1.5 py-0.5 rounded-full ${
+                                householdSubTab === 'bills'
+                                  ? 'bg-white/20 text-white'
+                                  : 'bg-[var(--surface)] text-[var(--muted)] border border-[var(--line)]'
+                              }`}
+                            >
+                              ${totalActualBills.toLocaleString()}
+                            </span>
+                          )}
+                        </button>
+                      </div>
 
                       <button
                         type="button"
@@ -3718,20 +3747,21 @@ export default function HouseholdLifestyleHub({
                           if (isOverview && onNavigateToLifestyle) {
                             onNavigateToLifestyle();
                           } else {
-                            setWizardStep(1);
+                            setWizardStep(householdSubTab === 'systems' ? 4 : householdSubTab === 'providers' ? 7 : 1);
                             setHouseholdView('wizard');
                           }
                         }}
-                        className="px-3.5 py-1.5 rounded-[8px] bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[13px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                        className="px-3.5 py-1.5 rounded-xl bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] text-[13px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer border border-[var(--line)] shadow-2xs"
                       >
-                        <Sliders className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                        <Sliders className="w-3.5 h-3.5 text-[var(--muted)]" />
                         <span>{isOverview ? 'Manage in Lifestyle' : 'Update my answers'}</span>
-                        {isOverview && <ArrowRight className="w-3.5 h-3.5 text-slate-400" />}
+                        {isOverview && <ArrowRight className="w-3.5 h-3.5 text-[var(--muted)]" />}
                       </button>
                     </div>
 
                     {/* 1. SECTION 1: PROPERTY SPECS (Plain 4-column label/value grid, 19px value, no boxes) */}
-                    <div id="section-property" className="scroll-mt-16 pt-2">
+                    {householdSubTab === 'property' && (
+                      <div id="section-property" className="scroll-mt-16 pt-2">
                       <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-6">
                         <div>
                           <h4 className="text-[13px] font-semibold  text-slate-400 dark:text-slate-500">
@@ -3810,9 +3840,11 @@ export default function HouseholdLifestyleHub({
                         </div>
                       </div>
                     </div>
+                    )}
 
                     {/* 2. SECTION 2: HOME SYSTEMS (Simple rows, 1px lines, 20px padding, no pills, 'Add solar' link) */}
-                    <div id="section-systems" className="scroll-mt-16">
+                    {householdSubTab === 'systems' && (
+                    <div id="section-systems" className="scroll-mt-16 pt-2">
                       <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                         <h4 className="text-[13px] font-semibold  text-slate-400 dark:text-slate-500">
                           Home systems
@@ -3917,9 +3949,11 @@ export default function HouseholdLifestyleHub({
                         </div>
                       </div>
                     </div>
+                    )}
 
-                    {/* 2. SECTION 3: SERVICE PROVIDERS (Simple rows, 1px lines, 20px padding, no pills, never truncate plan names) */}
-                    <div id="section-providers" className="scroll-mt-16">
+                    {/* 3. SECTION 3: SERVICE PROVIDERS (Simple rows, 1px lines, 20px padding, no pills, never truncate plan names) */}
+                    {householdSubTab === 'providers' && (
+                    <div id="section-providers" className="scroll-mt-16 pt-2">
                       <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                         <div className="flex items-center gap-2.5">
                           <h4 className="text-[13px] font-semibold  text-slate-400 dark:text-slate-500">
@@ -4381,9 +4415,11 @@ export default function HouseholdLifestyleHub({
                         </div>
                       )}
                     </div>
+                    )}
 
-                    {/* 6. SECTION 4: BILLS TABLE (Spacious rows, small green dot with 'From payments', bold total) */}
-                    <div id="section-bills" className="scroll-mt-16">
+                    {/* 4. SECTION 4: BILLS TABLE (Spacious rows, small green dot with 'From payments', bold total) */}
+                    {householdSubTab === 'bills' && (
+                    <div id="section-bills" className="scroll-mt-16 pt-2">
                       <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-2">
                         <div>
                           <h4 className="text-[13px] font-semibold  text-slate-400 dark:text-slate-500">
@@ -4463,6 +4499,7 @@ export default function HouseholdLifestyleHub({
                         </div>
                       )}
                     </div>
+                    )}
                   </div>
                 )}
               </section>
