@@ -372,6 +372,41 @@ function KlarityApp() {
   };
 
   useEffect(() => {
+    const checkServerUpdate = async () => {
+      try {
+        const res = await fetch(`/api/app/update-check?clientVersion=${encodeURIComponent(CURRENT_APP_VERSION)}&_t=${Date.now()}`);
+        const data = await res.json();
+        if (data && data.ok && data.isUpdateAvailable) {
+          setDesktopAppInfo(prev => ({
+            ...prev,
+            updateStatus: {
+              state: 'available',
+              commitSha: data.sha,
+              fullSha: data.fullSha,
+              currentSha: data.currentSha,
+              latestVersion: data.latestVersion || CURRENT_APP_VERSION,
+              commitTitle: data.message,
+              recentChanges: data.recentChanges || [],
+              message: data.message
+                ? `New update available (v${data.latestVersion || CURRENT_APP_VERSION} • ${data.sha || 'latest'}): ${data.message}`
+                : `A new update for Klarity (v${data.latestVersion || CURRENT_APP_VERSION}) is ready!`
+            }
+          }));
+        } else if (data && data.ok) {
+          setDesktopAppInfo(prev => ({
+            ...prev,
+            updateStatus: {
+              state: 'up-to-date',
+              commitSha: data?.currentSha || data?.sha || 'latest',
+              currentSha: data?.currentSha || data?.sha || 'latest',
+              version: CURRENT_APP_VERSION,
+              message: `Up to date — v${CURRENT_APP_VERSION}${data?.currentSha ? ` (${data.currentSha})` : ''}`
+            }
+          }));
+        }
+      } catch {}
+    };
+
     if (typeof window !== 'undefined' && window.klarityDesktop) {
       window.klarityDesktop.getAppInfo?.().then(info => {
         if (info) setDesktopAppInfo(info);
@@ -379,14 +414,20 @@ function KlarityApp() {
       const unsub = window.klarityDesktop.onUpdateStatus?.((status) => {
         if (status && (status.state === 'available' || status.state === 'ready')) {
           const offeredVer = status.latestVersion || status.version;
-          if (offeredVer && !isSemverNewer(offeredVer, CURRENT_APP_VERSION)) {
-            // Normalize false positive update status when current running app is already on this version
+          const hasNewCommitSha = Boolean(
+            status.commitSha &&
+            status.currentSha &&
+            status.commitSha !== status.currentSha &&
+            !status.commitSha.startsWith('v')
+          );
+          // Only suppress if local version is strictly newer or both version and SHA are already up to date
+          if (offeredVer && !isSemverNewer(offeredVer, CURRENT_APP_VERSION) && !hasNewCommitSha && status.currentSha) {
             setDesktopAppInfo(prev => ({
               ...prev,
               updateStatus: {
                 state: 'up-to-date',
                 version: CURRENT_APP_VERSION,
-                commitSha: status.commitSha || 'latest',
+                commitSha: status.currentSha || status.commitSha || 'latest',
                 message: `Up to date — v${CURRENT_APP_VERSION}`
               }
             }));
@@ -395,45 +436,26 @@ function KlarityApp() {
         }
         setDesktopAppInfo(prev => ({ ...prev, updateStatus: status }));
       });
-      // Proactively check for updates immediately on launch
+      // Proactively check for updates immediately on launch and every 60s
       const t = setTimeout(() => {
         window.klarityDesktop.checkForUpdates?.().catch(() => {});
       }, 1000);
+      const pollTimer = setInterval(() => {
+        window.klarityDesktop.checkForUpdates?.().catch(() => {});
+      }, 60 * 1000);
       return () => {
         clearTimeout(t);
+        clearInterval(pollTimer);
         if (typeof unsub === 'function') unsub();
       };
     } else {
-      // In web browser mode, proactively poll server update check on mount
-      const t = setTimeout(() => {
-        fetch('/api/app/update-check').then(res => res.json()).then(data => {
-          if (data && data.ok && data.isUpdateAvailable && isSemverNewer(data.latestVersion, CURRENT_APP_VERSION)) {
-            setDesktopAppInfo(prev => ({
-              ...prev,
-              updateStatus: {
-                state: 'available',
-                commitSha: data.sha,
-                fullSha: data.fullSha,
-                latestVersion: data.latestVersion,
-                commitTitle: data.message,
-                recentChanges: data.recentChanges || [],
-                message: `A new update for Klarity (${data.latestVersion ? 'v' + data.latestVersion : 'ready'}) is ready!`
-              }
-            }));
-          } else {
-            setDesktopAppInfo(prev => ({
-              ...prev,
-              updateStatus: {
-                state: 'up-to-date',
-                commitSha: data?.currentSha || data?.sha || 'latest',
-                version: CURRENT_APP_VERSION,
-                message: `Up to date — v${CURRENT_APP_VERSION}`
-              }
-            }));
-          }
-        }).catch(() => {});
-      }, 1500);
-      return () => clearTimeout(t);
+      // In web browser mode, proactively poll server update check on mount and every 60s
+      const t = setTimeout(checkServerUpdate, 1200);
+      const pollTimer = setInterval(checkServerUpdate, 60 * 1000);
+      return () => {
+        clearTimeout(t);
+        clearInterval(pollTimer);
+      };
     }
   }, []);
 
@@ -502,14 +524,12 @@ function KlarityApp() {
     }
   };
 
-  // Trigger update notification prompt when Klarity opens and an update is detected
+  // Trigger update notification prompt when Klarity opens or when a new update is pushed to GitHub
   useEffect(() => {
-    if (desktopAppInfo.updateStatus?.state === 'available' && !updatePromptDismissed) {
-      const offeredVer = desktopAppInfo.updateStatus?.latestVersion || desktopAppInfo.updateStatus?.version;
-      // Do not open modal if offered version is not strictly newer than currently running app
-      if (offeredVer && !isSemverNewer(offeredVer, CURRENT_APP_VERSION)) {
-        return;
-      }
+    if (
+      (desktopAppInfo.updateStatus?.state === 'available' || desktopAppInfo.updateStatus?.state === 'ready') &&
+      !updatePromptDismissed
+    ) {
       let alreadyApplied = false;
       try {
         const lastApplied = sessionStorage.getItem('klarity_last_applied_sha');
@@ -3035,17 +3055,65 @@ function KlarityApp() {
 
   const handleManualCheckForUpdate = async () => {
     setIsCheckingUpdateInSettings(true);
+    setUpdatePromptDismissed(false);
+    setUpdateBannerDismissed(false);
     try {
+      localStorage.removeItem('klarity_dismissed_update_sha');
+    } catch {}
+    try {
+      let foundUpdate = false;
+      let statusPayload = null;
+
       if (typeof window !== 'undefined' && window.klarityDesktop?.checkForUpdates) {
-        await window.klarityDesktop.checkForUpdates();
-      } else {
-        await fetch('/api/app/update-check');
+        const st = await window.klarityDesktop.checkForUpdates();
+        if (st && (st.state === 'available' || st.state === 'ready')) {
+          foundUpdate = true;
+          statusPayload = st;
+        }
       }
-      setNotificationToast('Checked for updates — Klarity is up to date.');
-      setTimeout(() => setNotificationToast(''), 3000);
+
+      if (!foundUpdate) {
+        const res = await fetch(`/api/app/update-check?clientVersion=${encodeURIComponent(CURRENT_APP_VERSION)}&_t=${Date.now()}`);
+        const data = await res.json();
+        if (data && data.ok && data.isUpdateAvailable) {
+          foundUpdate = true;
+          statusPayload = {
+            state: 'available',
+            commitSha: data.sha,
+            fullSha: data.fullSha,
+            currentSha: data.currentSha,
+            latestVersion: data.latestVersion || CURRENT_APP_VERSION,
+            commitTitle: data.message,
+            recentChanges: data.recentChanges || [],
+            message: data.message
+              ? `New update available (v${data.latestVersion || CURRENT_APP_VERSION} • ${data.sha || 'latest'}): ${data.message}`
+              : `A new update for Klarity (v${data.latestVersion || CURRENT_APP_VERSION}) is ready!`
+          };
+        } else if (data && data.ok && !statusPayload) {
+          statusPayload = {
+            state: 'up-to-date',
+            commitSha: data?.currentSha || data?.sha || 'latest',
+            currentSha: data?.currentSha || data?.sha || 'latest',
+            version: CURRENT_APP_VERSION,
+            message: `Up to date — v${CURRENT_APP_VERSION}${data?.currentSha ? ` (${data.currentSha})` : ''}`
+          };
+        }
+      }
+
+      if (statusPayload) {
+        setDesktopAppInfo(prev => ({ ...prev, updateStatus: statusPayload }));
+      }
+
+      if (foundUpdate) {
+        setIsUpdateModalOpen(true);
+        setNotificationToast('New update found! Ready to install.');
+      } else {
+        setNotificationToast(`You are running the latest version of Klarity (v${CURRENT_APP_VERSION}).`);
+      }
+      setTimeout(() => setNotificationToast(''), 3500);
     } catch {
-      setNotificationToast('Failed to check for updates.');
-      setTimeout(() => setNotificationToast(''), 3000);
+      setNotificationToast('Failed to check for updates. Please verify your internet connection.');
+      setTimeout(() => setNotificationToast(''), 3500);
     } finally {
       setIsCheckingUpdateInSettings(false);
     }
@@ -5435,11 +5503,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
         {/* Software Update Banner */}
         {(desktopAppInfo.updateStatus?.state === 'available' || desktopAppInfo.updateStatus?.state === 'ready') &&
-          !updateBannerDismissed &&
-          isSemverNewer(
-            desktopAppInfo.updateStatus?.latestVersion || desktopAppInfo.updateStatus?.version,
-            CURRENT_APP_VERSION
-          ) && (
+          !updateBannerDismissed && (
             <div className="bg-[#1B4B91] text-white px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-[13px] font-medium">
               <div className="flex items-center gap-2">
                 <ArrowUpCircle className="w-4 h-4 shrink-0" />
@@ -6268,6 +6332,10 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         desktopAppInfo={desktopAppInfo}
         formatVersionString={formatVersionString}
         handleManualCheckForUpdate={handleManualCheckForUpdate}
+        isCheckingUpdateInSettings={isCheckingUpdateInSettings}
+        onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
+        handlePerformUpdate={handlePerformUpdate}
+        isInstallingUpdate={isInstallingUpdate}
         feedbackType={feedbackType}
         setFeedbackType={setFeedbackType}
         feedbackText={feedbackText}
@@ -7421,24 +7489,55 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       {/* 13. Software Update Modal */}
       {isUpdateModalOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="update-modal-title"
         >
           <Card className="max-w-md w-full p-6 flex flex-col gap-4 shadow-xl">
-            <h3 id="update-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
-              Update available
-            </h3>
-            <p className="text-[15px] font-medium text-[var(--muted)]">
+            <div className="flex items-center justify-between gap-2">
+              <h3 id="update-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+                Update available
+              </h3>
+              <Pill variant="brand">
+                {desktopAppInfo.updateStatus?.latestVersion
+                  ? formatVersionString(desktopAppInfo.updateStatus.latestVersion)
+                  : `v${CURRENT_APP_VERSION}`}
+                {desktopAppInfo.updateStatus?.commitSha &&
+                !String(desktopAppInfo.updateStatus.commitSha).startsWith('v')
+                  ? ` • ${desktopAppInfo.updateStatus.commitSha}`
+                  : ''}
+              </Pill>
+            </div>
+            <p className="text-[15px] font-medium text-[var(--ink)]">
               {desktopAppInfo.updateStatus?.message || 'A new version of Klarity is ready to install.'}
             </p>
+            {Array.isArray(desktopAppInfo.updateStatus?.recentChanges) &&
+              desktopAppInfo.updateStatus.recentChanges.length > 0 && (
+                <div className="p-3 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)]">
+                  <div className="text-[13px] font-semibold text-[var(--ink)] mb-1.5">Recent changes:</div>
+                  <ul className="list-disc list-inside space-y-1 text-[13px] font-medium text-[var(--muted)]">
+                    {desktopAppInfo.updateStatus.recentChanges.slice(0, 3).map((change, idx) => (
+                      <li key={idx} className="truncate">
+                        {change}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
               <Button
                 variant="secondary"
                 onClick={() => {
                   setIsUpdateModalOpen(false);
                   setUpdatePromptDismissed(true);
+                  const pendingSha =
+                    desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
+                  if (pendingSha) {
+                    try {
+                      localStorage.setItem('klarity_dismissed_update_sha', pendingSha);
+                    } catch {}
+                  }
                 }}
               >
                 Later

@@ -4414,22 +4414,47 @@ app.get('/api/feedback', (req, res) => {
   return res.json({ ok: true, feedback: [] });
 });
 
+const SERVER_LAUNCH_SHA = (() => {
+  try {
+    return require('child_process')
+      .execSync('git rev-parse HEAD', { cwd: path.join(__dirname, '..'), windowsHide: true })
+      .toString()
+      .trim();
+  } catch {
+    return '';
+  }
+})();
+
 app.get('/api/app/update-check', async (req, res) => {
   try {
     const repoDir = path.join(__dirname, '..');
-    let localVersion = '3.12.19';
+    let localVersion = '3.12.24';
     try {
       const pkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
       if (pkg && pkg.version) localVersion = pkg.version;
     } catch {}
+    if (req.query?.clientVersion && typeof req.query.clientVersion === 'string') {
+      localVersion = req.query.clientVersion.replace(/^v/i, '');
+    }
 
-    let localSha = '';
+    let localSha = SERVER_LAUNCH_SHA;
+    if (!localSha) {
+      try {
+        localSha = require('child_process').execSync('git rev-parse HEAD', { cwd: repoDir, windowsHide: true }).toString().trim();
+      } catch {}
+    }
+
+    // Fetch latest remote refs quietly if git is available so ancestry checks are accurate
     try {
-      localSha = require('child_process').execSync('git rev-parse HEAD', { cwd: repoDir, windowsHide: true }).toString().trim();
+      require('child_process').execSync('git fetch origin main --quiet', { cwd: repoDir, windowsHide: true, timeout: 6000 });
     } catch {}
 
-    const ghRes = await fetch('https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5', {
-      headers: { 'User-Agent': 'KlarityApp' }
+    const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5&_t=${Date.now()}`, {
+      headers: {
+        'User-Agent': 'KlarityApp',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
     });
     if (ghRes.ok) {
       const commits = await ghRes.json();
@@ -4437,11 +4462,15 @@ app.get('/api/app/update-check', async (req, res) => {
         const latest = commits[0];
         const remoteSha = latest.sha || '';
 
-        // Fetch remote package.json to compare semantic version
+        // Fetch remote package.json to compare semantic version (with cache-busting)
         let remoteVersion = null;
         try {
-          const pkgRes = await fetch('https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json', {
-            headers: { 'User-Agent': 'KlarityApp' }
+          const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json?_t=${Date.now()}`, {
+            headers: {
+              'User-Agent': 'KlarityApp',
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
           });
           if (pkgRes.ok) {
             const pkgData = await pkgRes.json();
@@ -4462,20 +4491,28 @@ app.get('/api/app/update-check', async (req, res) => {
           return false;
         }
 
+        const semverIsNewer = Boolean(remoteVersion && isSemverNewer(remoteVersion, localVersion));
+        const localSemverIsNewer = Boolean(remoteVersion && isSemverNewer(localVersion, remoteVersion));
         let isUpdateAvailable = false;
-        if (remoteVersion && isSemverNewer(remoteVersion, localVersion)) {
+
+        if (semverIsNewer) {
           isUpdateAvailable = true;
-        } else if (remoteSha && localSha && !remoteSha.startsWith(localSha) && !localSha.startsWith(remoteSha)) {
-          // If git is available, verify ancestry
-          try {
-            const isAncestor = require('child_process').execSync(`git merge-base --is-ancestor ${remoteSha} ${localSha} && echo yes`, { cwd: repoDir, windowsHide: true }).toString();
-            if (!isAncestor.includes('yes')) {
-              isUpdateAvailable = true;
-            }
-          } catch {
-            // If ancestry check cannot be determined and versions are identical, do not falsely claim update
-            if (remoteVersion && !isSemverNewer(remoteVersion, localVersion)) {
+        } else if (!localSemverIsNewer && remoteSha && localSha) {
+          if (remoteSha.startsWith(localSha) || localSha.startsWith(remoteSha)) {
+            isUpdateAvailable = false;
+          } else {
+            // Check whether remoteSha is already an ancestor of localSha.
+            // Note: git merge-base --is-ancestor exits with code 1 (throwing in execSync) when remoteSha is NOT an ancestor (i.e. remoteSha is newer).
+            try {
+              require('child_process').execSync(`git merge-base --is-ancestor ${remoteSha} ${localSha}`, {
+                cwd: repoDir,
+                windowsHide: true
+              });
+              // Exit code 0 means remoteSha is already an ancestor of localSha -> no update needed
               isUpdateAvailable = false;
+            } catch {
+              // Non-zero exit code means remoteSha is NOT in localSha's history -> new commit available on GitHub!
+              isUpdateAvailable = true;
             }
           }
         }

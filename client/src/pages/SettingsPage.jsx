@@ -95,6 +95,10 @@ export function SettingsPage({
   desktopAppInfo = {},
   formatVersionString,
   handleManualCheckForUpdate,
+  isCheckingUpdateInSettings = false,
+  onOpenUpdateModal,
+  handlePerformUpdate,
+  isInstallingUpdate = false,
   feedbackType = 'General Feedback',
   setFeedbackType,
   feedbackText = '',
@@ -1165,24 +1169,46 @@ export function SettingsPage({
                   </p>
                 </div>
 
-                <Card className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2.5">
-                      <h4 className="font-serif text-[18px] font-semibold text-[var(--ink)]">Klarity Finance</h4>
-                      <Pill variant="success">
-                        {formatVersionString ? formatVersionString(desktopAppInfo.version || '3.12.23') : 'v3.12.23'}
-                      </Pill>
+                <Card className="p-5 flex flex-col gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <h4 className="font-serif text-[18px] font-semibold text-[var(--ink)]">Klarity Finance</h4>
+                        <Pill variant="success">
+                          {formatVersionString ? formatVersionString(desktopAppInfo.version || '3.12.24') : 'v3.12.24'}
+                        </Pill>
+                      </div>
+                      <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
+                        {desktopAppInfo.isDesktopApp ? 'Klarity Desktop Application' : 'Klarity Web Application'}
+                        {desktopAppInfo.updateStatus?.message ? ` • ${desktopAppInfo.updateStatus.message}` : ''}
+                      </p>
                     </div>
-                    <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
-                      {desktopAppInfo.isDesktopApp ? 'Klarity Desktop Application' : 'Klarity Web Application'}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {(desktopAppInfo.updateStatus?.state === 'available' ||
+                        desktopAppInfo.updateStatus?.state === 'ready') &&
+                        (handlePerformUpdate || onOpenUpdateModal) && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            disabled={isInstallingUpdate}
+                            onClick={handlePerformUpdate || onOpenUpdateModal}
+                          >
+                            {isInstallingUpdate ? 'Updating...' : 'Install update'}
+                          </Button>
+                        )}
+                      {handleManualCheckForUpdate && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={isCheckingUpdateInSettings}
+                          onClick={handleManualCheckForUpdate}
+                        >
+                          <RefreshCw className={`w-4 h-4 ${isCheckingUpdateInSettings ? 'animate-spin' : ''}`} />
+                          {isCheckingUpdateInSettings ? 'Checking...' : 'Check for updates'}
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  {handleManualCheckForUpdate && (
-                    <Button variant="secondary" size="sm" onClick={handleManualCheckForUpdate}>
-                      <RefreshCw className="w-4 h-4" />
-                      Check for updates
-                    </Button>
-                  )}
                 </Card>
 
                 {/* Feedback Section */}

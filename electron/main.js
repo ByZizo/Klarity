@@ -183,27 +183,37 @@ async function checkForGitHubUpdate() {
 
     const currentSha = getRunningCommitSha();
     let currentVersion = app.getVersion();
+    let foundLocalPkg = false;
     try {
       const localPkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
-      if (localPkg && localPkg.version) currentVersion = localPkg.version;
-    } catch {}
-    try {
-      const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
-      if (fs.existsSync(versionFile)) {
-        const iv = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
-        if (iv && iv.version) currentVersion = iv.version;
+      if (localPkg && localPkg.version) {
+        currentVersion = localPkg.version;
+        foundLocalPkg = true;
       }
     } catch {}
+    if (!foundLocalPkg) {
+      try {
+        const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
+        if (fs.existsSync(versionFile)) {
+          const iv = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
+          if (iv && iv.version) currentVersion = iv.version;
+        }
+      } catch {}
+    }
 
     let remoteSha = null;
     let commitTitle = '';
     let commitDate = '';
     let recentCommits = [];
 
-    // 1. Fetch latest commits on main from GitHub API
+    // 1. Fetch latest commits on main from GitHub API (with cache-busting so newly pushed commits appear immediately)
     try {
-      const ghRes = await fetch('https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5', {
-        headers: { 'User-Agent': 'KlarityDesktopApp' }
+      const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5&_t=${Date.now()}`, {
+        headers: {
+          'User-Agent': 'KlarityDesktopApp',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
       });
       if (ghRes.ok) {
         const commits = await ghRes.json();
@@ -230,11 +240,15 @@ async function checkForGitHubUpdate() {
       }
     } catch {}
 
-    // Fetch remote package.json to get semantic version (e.g. 1.8.10)
+    // Fetch remote package.json to get semantic version (with cache-buster for GitHub raw CDN)
     let remoteVersion = null;
     try {
-      const pkgRes = await fetch('https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json', {
-        headers: { 'User-Agent': 'KlarityDesktopApp' }
+      const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json?_t=${Date.now()}`, {
+        headers: {
+          'User-Agent': 'KlarityDesktopApp',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
       });
       if (pkgRes.ok) {
         const pkgData = await pkgRes.json();
@@ -254,7 +268,7 @@ async function checkForGitHubUpdate() {
       } catch (e) {}
     }
 
-    const versionNum = remoteVersion || currentVersion || app.getVersion() || '3.12.14';
+    const versionNum = remoteVersion || currentVersion || app.getVersion() || '3.12.24';
     const cleanSemVer = versionNum.startsWith('v') ? versionNum.slice(1) : versionNum;
     const formattedSemVer = `v${cleanSemVer}`;
 
@@ -271,16 +285,17 @@ async function checkForGitHubUpdate() {
       return false;
     }
 
-    // 3. Verify whether current running version or commit already equals or contains remoteSha
+    // 3. Verify whether an update is available via either SemVer bump OR a newer commit SHA on GitHub
+    const semverIsNewer = Boolean(remoteVersion && currentVersion && isSemverNewer(remoteVersion, currentVersion));
+    const localSemverIsNewer = Boolean(remoteVersion && currentVersion && isSemverNewer(currentVersion, remoteVersion));
     let alreadyUpToDate = false;
 
-    // A. Semantic version verification: if remoteVersion is not strictly newer than currentVersion, it is up to date
-    if (remoteVersion && currentVersion && !isSemverNewer(remoteVersion, currentVersion)) {
+    if (semverIsNewer) {
+      alreadyUpToDate = false;
+    } else if (localSemverIsNewer) {
       alreadyUpToDate = true;
-    }
-
-    // B. Commit SHA verification
-    if (!alreadyUpToDate && remoteSha && currentSha) {
+    } else if (remoteSha && currentSha && !currentSha.startsWith('v')) {
+      // Compare commit SHAs when both are real git hashes
       if (remoteSha.startsWith(currentSha) || currentSha.startsWith(remoteSha)) {
         alreadyUpToDate = true;
       } else {
@@ -291,18 +306,25 @@ async function checkForGitHubUpdate() {
           }
         } catch {}
       }
+    } else {
+      // Packaged build without git SHA: rely on semantic version comparison
+      alreadyUpToDate = !semverIsNewer;
     }
 
-    if (!alreadyUpToDate && remoteSha && currentSha) {
+    if (!alreadyUpToDate && (remoteSha || semverIsNewer)) {
       broadcastUpdateStatus({
         state: 'available',
         latestVersion: formattedSemVer,
-        fullSha: remoteSha,
-        commitSha: remoteSha.slice(0, 7),
+        currentVersion: currentVersion,
+        currentSha: currentSha ? currentSha.slice(0, 7) : '',
+        fullSha: remoteSha || '',
+        commitSha: remoteSha ? remoteSha.slice(0, 7) : formattedSemVer,
         commitTitle: commitTitle || 'New GitHub update available',
         commitDate,
         recentChanges: recentCommits,
-        message: `A new version of Klarity (${formattedSemVer}) is available!`
+        message: commitTitle
+          ? `New update available (${formattedSemVer} • ${remoteSha ? remoteSha.slice(0, 7) : 'latest'}): ${commitTitle}`
+          : `A new version of Klarity (${formattedSemVer}) is available!`
       });
       return updateStatusState;
     }
@@ -319,6 +341,7 @@ async function checkForGitHubUpdate() {
     broadcastUpdateStatus({
       state: 'up-to-date',
       version: currentVersion,
+      currentSha: currentSha ? currentSha.slice(0, 7) : 'latest',
       commitSha: currentSha ? currentSha.slice(0, 7) : 'latest',
       message: `Up to date — v${currentVersion} (${currentSha ? currentSha.slice(0, 7) : 'latest'})`
     });
@@ -478,7 +501,7 @@ async function createDesktopWindow() {
 
   setInterval(() => {
     checkForGitHubUpdate();
-  }, 5 * 60 * 1000);
+  }, 60 * 1000);
 }
 
 // Native Desktop Google Sign-In (RFC 8252 Loopback via Default System Browser — Bypasses all WebView/Passkey blocks)

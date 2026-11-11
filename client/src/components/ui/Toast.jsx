@@ -8,22 +8,26 @@ import { CheckCircle2, AlertCircle, X } from 'lucide-react';
  */
 export function Toast({
   toast,
+  message: messageProp,
+  type: typeProp,
   onDismiss,
   durationMs = 4000
 }) {
+  const activeToast = toast || messageProp;
+
   useEffect(() => {
-    if (!toast) return;
+    if (!activeToast) return;
     const timer = setTimeout(() => {
       if (onDismiss) onDismiss();
     }, durationMs);
     return () => clearTimeout(timer);
-  }, [toast, onDismiss, durationMs]);
+  }, [activeToast, onDismiss, durationMs]);
 
-  if (!toast) return null;
+  if (!activeToast) return null;
 
-  const isObj = typeof toast === 'object' && toast !== null;
-  const message = isObj ? toast.message : String(toast);
-  const type = isObj && toast.type === 'error' ? 'error' : 'success';
+  const isObj = typeof activeToast === 'object' && activeToast !== null;
+  const message = isObj ? activeToast.message : String(activeToast);
+  const type = isObj ? (activeToast.type === 'error' ? 'error' : 'success') : (typeProp === 'error' ? 'error' : 'success');
 
   const isError = type === 'error';
 
