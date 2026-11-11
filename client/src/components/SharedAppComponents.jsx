@@ -40,6 +40,58 @@ export function formatVersionString(version) {
   return str.startsWith('v') ? str : `v${str}`;
 }
 
+export function formatUserFacingReleaseNote(rawText) {
+  if (!rawText || typeof rawText !== 'string') return 'Performance improvements and bug fixes';
+  let text = rawText.trim();
+  text = text.replace(/^(?:feat|fix|perf|refactor|chore|style|test|build|ci|docs)(?:\([^)]+\))?:\s*/i, '');
+  text = text
+    .replace(/\b(?:as requested|what i asked|as shown in (?:the )?(?:image|screenshot|photo)|per feedback|per user request)\b/gi, '')
+    .replace(/\b(?:so i dont have to|so i don't have to)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  const verbReplacements = [
+    [/^bring\s+back\b/i, 'Brought back'],
+    [/^bring\s+abck\b/i, 'Brought back'],
+    [/^brting\s+back\b/i, 'Brought back'],
+    [/^restore\b/i, 'Restored'],
+    [/^fix\b/i, 'Fixed'],
+    [/^resolve\b/i, 'Resolved'],
+    [/^make\b/i, 'Updated'],
+    [/^add\b/i, 'Added'],
+    [/^update\b/i, 'Updated'],
+    [/^improve\b/i, 'Improved'],
+    [/^enhance\b/i, 'Enhanced'],
+    [/^remove\b/i, 'Removed'],
+    [/^delete\b/i, 'Removed'],
+    [/^enable\b/i, 'Enabled'],
+    [/^support\b/i, 'Added support for'],
+    [/^introduce\b/i, 'Introduced'],
+    [/^polish\b/i, 'Polished'],
+    [/^clean\s+up\b/i, 'Cleaned up'],
+    [/^cleanup\b/i, 'Cleaned up'],
+    [/^restyle\b/i, 'Restyled'],
+    [/^reorganize\b/i, 'Reorganized'],
+    [/^allow\b/i, 'Added ability to'],
+    [/^show\b/i, 'Added view for'],
+    [/^hide\b/i, 'Removed display of'],
+    [/^change\b/i, 'Updated']
+  ];
+
+  for (const [pattern, replacement] of verbReplacements) {
+    if (pattern.test(text)) {
+      text = text.replace(pattern, replacement);
+      break;
+    }
+  }
+
+  if (text.length > 0) {
+    text = text.charAt(0).toUpperCase() + text.slice(1);
+  }
+  text = text.replace(/[.;,]+$/, '');
+  return text;
+}
+
 export function formatWhatsNewHighlights(changes) {
   if (!Array.isArray(changes) || changes.length === 0) {
     return [

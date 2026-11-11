@@ -160,7 +160,8 @@ import {
   CURRENT_APP_VERSION,
   isSemverNewer,
   formatVersionString,
-  formatWhatsNewHighlights
+  formatWhatsNewHighlights,
+  formatUserFacingReleaseNote
 } from './components/SharedAppComponents';
 import { Button, Card, Pill, Toast, ConfirmDialog } from './components/ui';
 import {
@@ -377,6 +378,7 @@ function KlarityApp() {
         const res = await fetch(`/api/app/update-check?clientVersion=${encodeURIComponent(CURRENT_APP_VERSION)}&_t=${Date.now()}`);
         const data = await res.json();
         if (data && data.ok && data.isUpdateAvailable) {
+          const humanizedMsg = formatUserFacingReleaseNote(data.message || '');
           setDesktopAppInfo(prev => ({
             ...prev,
             updateStatus: {
@@ -385,11 +387,11 @@ function KlarityApp() {
               fullSha: data.fullSha,
               currentSha: data.currentSha,
               latestVersion: data.latestVersion || CURRENT_APP_VERSION,
-              commitTitle: data.message,
-              recentChanges: data.recentChanges || [],
-              message: data.message
-                ? `New update available (v${data.latestVersion || CURRENT_APP_VERSION} • ${data.sha || 'latest'}): ${data.message}`
-                : `A new update for Klarity (v${data.latestVersion || CURRENT_APP_VERSION}) is ready!`
+              commitTitle: humanizedMsg,
+              recentChanges: (data.recentChanges || []).map(formatUserFacingReleaseNote),
+              message: humanizedMsg
+                ? `${humanizedMsg}.`
+                : `A new update for Klarity (v${data.latestVersion || CURRENT_APP_VERSION}) is ready to install.`
             }
           }));
         } else if (data && data.ok) {
@@ -3096,16 +3098,17 @@ function KlarityApp() {
         const data = await res.json();
         if (data && data.ok && data.isUpdateAvailable) {
           foundUpdate = true;
+          const humanizedMsg = formatUserFacingReleaseNote(data.message || '');
           statusPayload = {
             state: 'available',
             commitSha: data.sha,
             fullSha: data.fullSha,
             currentSha: data.currentSha,
             latestVersion: data.latestVersion || CURRENT_APP_VERSION,
-            commitTitle: data.message,
-            recentChanges: data.recentChanges || [],
-            message: data.message
-              ? `New update available (v${data.latestVersion || CURRENT_APP_VERSION} • ${data.sha || 'latest'}): ${data.message}`
+            commitTitle: humanizedMsg,
+            recentChanges: (data.recentChanges || []).map(formatUserFacingReleaseNote),
+            message: humanizedMsg
+              ? `${humanizedMsg}.`
               : `A new update for Klarity (v${data.latestVersion || CURRENT_APP_VERSION}) is ready!`
           };
         } else if (data && data.ok && !statusPayload) {
