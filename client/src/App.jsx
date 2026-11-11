@@ -589,7 +589,7 @@ function PlaidLauncher({ token, onSuccess, onExit }) {
   return null;
 }
 
-const CURRENT_APP_VERSION = '3.12.21';
+const CURRENT_APP_VERSION = '3.12.22';
 
 function isSemverNewer(remoteVer, currentVer = CURRENT_APP_VERSION) {
   if (!remoteVer || !currentVer) return false;
@@ -607,10 +607,10 @@ function isSemverNewer(remoteVer, currentVer = CURRENT_APP_VERSION) {
 // Helper to format release highlights: only major features, minor items become "Bug fixes"
 
 function formatVersionString(version) {
-  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.21';
+  if (!version || version === '1.8.10' || version === 'v1.8.10') return 'v3.12.22';
   const str = String(version).trim();
   if (/^[0-9a-f]{6,40}$/i.test(str) || str.toLowerCase().includes('commit')) {
-    return 'v3.12.21';
+    return 'v3.12.22';
   }
   return str.startsWith('v') ? str : `v${str}`;
 }
@@ -804,7 +804,7 @@ function KlarityApp() {
         type: feedbackType,
         text: feedbackText.trim(),
         user: currentUser?.email || 'Anonymous',
-        version: '3.12.21',
+        version: '3.12.22',
         createdAt: new Date().toISOString()
       };
       try {
@@ -1303,6 +1303,10 @@ function KlarityApp() {
       const root = document.documentElement;
       root.classList.remove('font-scale-large', 'font-scale-xlarge', 'ui-density-compact', 'reduce-motion', 'high-focus', 'privacy-mask', 'dark', 'high-contrast', 'high-contrast-light');
       
+      // Clear root-level zoom & font-size so viewport, sidebar options, and advisor controls remain unbloated and never force scrolling
+      root.style.zoom = '';
+      root.style.fontSize = '';
+
       let percent = 100;
       if (scale === 'normal' || scale === '100' || scale === 100) percent = 100;
       else if (scale === 'large' || scale === '110') percent = 110;
@@ -1318,11 +1322,7 @@ function KlarityApp() {
       }
 
       const zoomFactor = percent / 100;
-      if ('zoom' in root.style) {
-        root.style.zoom = zoomFactor !== 1 ? `${zoomFactor}` : '';
-      } else {
-        root.style.fontSize = zoomFactor !== 1 ? `${16 * zoomFactor}px` : '';
-      }
+      root.style.setProperty('--ui-content-zoom', `${zoomFactor}`);
 
       if (dens === 'compact') root.classList.add('ui-density-compact');
       if (motion) root.classList.add('reduce-motion');
@@ -1330,6 +1330,25 @@ function KlarityApp() {
       if (mask) root.classList.add('privacy-mask');
     } catch (e) {}
   };
+
+  // Scoped zoom factor applied directly to the scrollable main content page,
+  // leaving the left sidebar navigation and right AI advisor controls at crisp standard scale
+  const contentZoomFactor = useMemo(() => {
+    let percent = 100;
+    if (uiFontScale === 'normal' || uiFontScale === '100' || uiFontScale === 100) percent = 100;
+    else if (uiFontScale === 'large' || uiFontScale === '110') percent = 110;
+    else if (uiFontScale === '125') percent = 125;
+    else if (uiFontScale === 'xlarge' || uiFontScale === '150') percent = 150;
+    else if (uiFontScale === 'huge' || uiFontScale === '175') percent = 175;
+    else if (uiFontScale === 'maximum' || uiFontScale === 'max' || uiFontScale === '200' || uiFontScale === 200) percent = 200;
+    else {
+      const num = Number(uiFontScale);
+      if (!isNaN(num) && num >= 100 && num <= 200) {
+        percent = num;
+      }
+    }
+    return percent / 100;
+  }, [uiFontScale]);
 
   const handleSetFontScale = (scale) => {
     setUiFontScale(scale);
@@ -5521,14 +5540,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
       {/* ======================================================================= */}
       {/* 1. LEFT SIDEBAR (Overview, Transactions, Budgets, Bills, Subscriptions, Cards) */}
+      {/* Stays at standard scale and never requires scrolling to view options   */}
       {/* ======================================================================= */}
-      <aside className={`shrink-0 border-r border-slate-200/80 bg-[#f8fafc] flex flex-col justify-between h-screen sticky top-0 hidden md:flex transition-all duration-200 ease-in-out relative z-30 ${
-        isSidebarCompact ? 'w-[72px] px-2.5 py-5' : 'w-60 p-5'
+      <aside className={`shrink-0 border-r border-slate-200/80 bg-[#f8fafc] flex flex-col justify-between h-screen sticky top-0 hidden md:flex transition-all duration-200 ease-in-out relative z-30 select-none ${
+        isSidebarCompact ? 'w-[72px] px-2 py-4' : 'w-60 p-4 xl:p-5'
       }`}>
-        <div>
+        <div className="flex-1 min-h-0 flex flex-col">
           {/* Logo Brand & Compact Toggle Button */}
           {!isSidebarCompact ? (
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between shrink-0">
               <div
                 className="flex items-center gap-2.5 cursor-pointer select-none group"
                 onClick={() => setActiveTab('dashboard')}
@@ -5542,7 +5562,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 <button
                   type="button"
                   onClick={() => setIsSidebarCompact(true)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 cursor-pointer transition-colors"
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 cursor-pointer transition-colors"
                   aria-label="Compact sidebar"
                 >
                   <PanelLeftClose className="w-5 h-5" />
@@ -5550,7 +5570,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-col items-center gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setActiveTab('dashboard')}
@@ -5565,7 +5585,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               <button
                 type="button"
                 onClick={() => setIsSidebarCompact(false)}
-                className="p-2 rounded-xl text-slate-500 hover:text-[#183b6b] hover:bg-slate-200/60 cursor-pointer transition-colors relative group"
+                className="p-1.5 rounded-xl text-slate-500 hover:text-[#183b6b] hover:bg-slate-200/60 cursor-pointer transition-colors relative group"
                 aria-label="Expand sidebar"
               >
                 <PanelLeftOpen className="w-5 h-5 text-[#183b6b]" />
@@ -5576,8 +5596,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             </div>
           )}
 
-          {/* Navigation Links */}
-          <nav className={`flex flex-col ${isSidebarCompact ? 'items-center gap-1.5 mt-5' : 'gap-1.5 mt-6'}`}>
+          {/* Navigation Links - Fits cleanly without scrolling */}
+          <nav className={`flex-1 min-h-0 overflow-y-auto pr-0.5 flex flex-col ${isSidebarCompact ? 'items-center gap-1 mt-3' : 'gap-1 mt-4'}`}>
             {sidebarNavOrder
               .map(id => SIDEBAR_ITEMS_CONFIG[id])
               .filter(item => Boolean(item) && (!item.flag || featureFlags[item.flag] !== false))
@@ -5589,13 +5609,13 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                     key={item.id}
                     type="button"
                     onClick={() => setActiveTab(item.id)}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all cursor-pointer flex items-center gap-3 ${
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs sm:text-[13px] transition-all cursor-pointer flex items-center gap-2.5 ${
                       isActive
                         ? 'bg-[#e8edf5] text-[#1e3a8a] font-semibold shadow-2xs'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 font-medium'
                     }`}
                   >
-                    <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
                     <span className="leading-none">{item.label}</span>
                   </button>
                 ) : (
@@ -5604,13 +5624,13 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                     type="button"
                     onClick={() => setActiveTab(item.id)}
                     aria-label={item.label}
-                    className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all cursor-pointer relative group ${
+                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer relative group ${
                       isActive
                         ? 'bg-[#e8edf5] text-[#1e3a8a] shadow-2xs'
                         : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
                     }`}
                   >
-                    <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
                     {/* Tooltip on hover */}
                     <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
                       {item.label}
@@ -5622,7 +5642,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         </div>
 
         {/* Left Sidebar Footer: Refresh App + User Profile */}
-        <div className="flex flex-col gap-2 pt-3 border-t border-slate-200/80">
+        <div className="shrink-0 flex flex-col gap-2 pt-3 border-t border-slate-200/80">
           {/* Refresh App Data Button */}
           {!isSidebarCompact ? (
             <button
@@ -5690,7 +5710,12 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       {/* ======================================================================= */}
       {/* 2A. MOBILE APP SHELL (< 768px) — Matches Mobile Reference Mockups 1:1 */}
       {/* ======================================================================= */}
-      <div className="md:hidden flex-1 min-w-0 flex flex-col min-h-screen bg-[#f8fafc] pb-16">
+      <div
+        style={{
+          zoom: contentZoomFactor !== 1 ? contentZoomFactor : undefined
+        }}
+        className="md:hidden flex-1 min-w-0 flex flex-col min-h-screen bg-[#f8fafc] pb-16"
+      >
         {/* Horizontal Card Filter Pills Helper for Mobile Activity, Budgets, Bills, Subscriptions */}
         {(() => {
           const renderMobileCardPills = () => (
@@ -6394,7 +6419,12 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           ];
           const gridColClass = mobileTabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4';
           return (
-            <nav className={`fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 grid ${gridColClass}`}>
+            <nav
+              style={{
+                zoom: contentZoomFactor !== 1 ? (1 / contentZoomFactor) : undefined
+              }}
+              className={`fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 grid ${gridColClass}`}
+            >
               {mobileTabs.map(tab => {
                 const isActive = tab.matchIds.includes(activeTab);
                 return (
@@ -6419,8 +6449,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
       {/* ======================================================================= */}
       {/* 2B. DESKTOP CENTER MAIN CONTENT (>= 768px) */}
+      {/* Content scales smoothly with readability preference (up to 200%)       */}
+      {/* User can scroll up & down to view large page content comfortably       */}
       {/* ======================================================================= */}
-      <main className="hidden md:flex flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex-col gap-5 overflow-y-auto overflow-x-hidden relative bg-[#f8fafc] text-slate-800">
+      <main
+        style={{
+          zoom: contentZoomFactor !== 1 ? contentZoomFactor : undefined
+        }}
+        className="hidden md:flex flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex-col gap-5 overflow-y-auto overflow-x-auto relative bg-[#f8fafc] text-slate-800"
+      >
 
         {/* Top-of-App Auto-Update Banner (Appears whenever an update is pushed out) */}
         {!updateBannerDismissed && (
@@ -8367,11 +8404,12 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
       {/* ======================================================================= */}
       {/* 3. RIGHT SIDEBAR: ADVISOR (Hidden when on AI Advisor full view) */}
+      {/* Stays at standard scale: header and bottom chat controls are always pinned and never forced to scroll */}
       {/* ======================================================================= */}
       {activeTab !== 'advisor' && !isAdvisorCollapsed && (
       <aside
         style={{ width: `${advisorWidth}px` }}
-        className={`shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-5 xl:p-6 flex flex-col h-screen sticky top-0 hidden lg:flex relative transition-[width] duration-75 ${
+        className={`shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-4 xl:p-5 flex flex-col h-screen sticky top-0 hidden lg:flex relative transition-[width] duration-75 select-none ${
           isResizingAdvisor ? 'select-none cursor-col-resize !transition-none' : ''
         }`}
       >
@@ -8388,7 +8426,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           }`}></div>
         </div>
         {/* Header: Collapse & Past Chats (Left), Centered Name (Middle), Weekly Summary, Mini Settings, Fullscreen (Right) */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-200/70 relative">
+        <div className="shrink-0 flex items-center justify-between pb-3 border-b border-slate-200/70 relative">
           {/* Left: Collapse Button + Past Chats */}
           <div className="flex items-center gap-1.5">
             <button
@@ -10978,7 +11016,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                             <div className="flex items-center gap-2">
                               <h3 className="font-bold text-slate-900 text-sm">Klarity Finance</h3>
                               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
-                                {formatVersionString(desktopAppInfo.version || '3.12.21')}
+                                {formatVersionString(desktopAppInfo.version || '3.12.22')}
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 mt-0.5">
@@ -11094,7 +11132,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                           <div className="flex items-center gap-2.5">
                             <h3 className="font-bold text-slate-900 text-sm">Release Notes</h3>
                             <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200">
-                              v3.12.21
+                              v3.12.22
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -11108,14 +11146,28 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         {isReleaseNotesOpen && (
                           <div className="px-5 pb-5 pt-1 border-t border-slate-100">
                             <div className="space-y-4 pt-3">
-                              {/* Release 3.12.21 (Latest) */}
+                              {/* Release 3.12.22 (Latest) */}
                               <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/60 flex flex-col gap-2.5">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-xs text-slate-900">Version 3.12.21</span>
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.22</span>
                                     <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">Current</span>
                                   </div>
                                   <span className="text-[10px] text-slate-400">Latest Release</span>
+                                </div>
+                                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                                  <li><strong className="text-slate-800">Readability Scale Isolation:</strong> Decoupled UI readability scale (up to 200%) from the Left Sidebar and Right AI Advisor sidebar so the main page content zooms smoothly for scrolling while all sidebar navigation options and AI advisor controls remain razor-sharp and never forced to scroll.</li>
+                                  <li><strong className="text-slate-800">Compact Navigation Geometry:</strong> Optimized sidebar item spacing and layout so all 10 navigation options, system logo, and account footer remain fully visible and accessible on screen.</li>
+                                </ul>
+                              </div>
+
+                              {/* Release 3.12.21 */}
+                              <div className="border border-slate-100 rounded-xl p-4 bg-white flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-xs text-slate-900">Version 3.12.21</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400">Previous</span>
                                 </div>
                                 <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
                                   <li><strong className="text-slate-800">Redesigned Provider Detail Pages:</strong> Completely overhauled each service provider page (Internet, Phone, Power, Water, Trash, Security, Warranty, and custom extra providers) into a clean, modern, spacious UI. Separated viewing and editing modes to eliminate on-screen clutter, added 1-click Account Number copying, compact statement upload dropzones with OCR feedback, and verified payment history cards.</li>
@@ -11613,7 +11665,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <div className="flex items-center gap-2">
                     <h3 className="font-serif-title text-lg font-bold text-slate-900">What's New in Klarity</h3>
                     <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#18457c] font-bold text-[10px] border border-blue-200">
-                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.21'))}
+                      {formatVersionString((whatsNewData.version && whatsNewData.version !== '1.8.10') ? whatsNewData.version : (desktopAppInfo.version || '3.12.22'))}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
