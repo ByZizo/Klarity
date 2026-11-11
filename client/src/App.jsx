@@ -2153,20 +2153,23 @@ function KlarityApp() {
     const uid = currentUser?.id || 'default';
     const item = (fact || newMemoryInput).trim();
     if (!item) return;
-    if (aiMemory.includes(item)) return;
-    const updated = [...aiMemory, item];
-    setAiMemory(updated);
-    try {
-      localStorage.setItem('klarity_ai_memory', JSON.stringify(updated));
-      localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(updated));
-    } catch {}
-    try {
-      fetch('/api/settings/ai-quick-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ memory: updated })
-      }).catch(() => {});
-    } catch {}
+    setAiMemory(prev => {
+      const exists = prev.some(m => m.toLowerCase().trim() === item.toLowerCase().trim());
+      if (exists) return prev;
+      const updated = [...prev, item];
+      try {
+        localStorage.setItem('klarity_ai_memory', JSON.stringify(updated));
+        localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(updated));
+      } catch {}
+      try {
+        fetch('/api/settings/ai-quick-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ memory: updated })
+        }).catch(() => {});
+      } catch {}
+      return updated;
+    });
     setNewMemoryInput('');
     setNotificationToast('Saved to AI Memory!');
     setTimeout(() => setNotificationToast(''), 3000);
@@ -2174,19 +2177,21 @@ function KlarityApp() {
 
   const handleRemoveMemory = (index) => {
     const uid = currentUser?.id || 'default';
-    const updated = aiMemory.filter((_, i) => i !== index);
-    setAiMemory(updated);
-    try {
-      localStorage.setItem('klarity_ai_memory', JSON.stringify(updated));
-      localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(updated));
-    } catch {}
-    try {
-      fetch('/api/settings/ai-quick-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ memory: updated })
-      }).catch(() => {});
-    } catch {}
+    setAiMemory(prev => {
+      const updated = prev.filter((_, i) => i !== index);
+      try {
+        localStorage.setItem('klarity_ai_memory', JSON.stringify(updated));
+        localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(updated));
+      } catch {}
+      try {
+        fetch('/api/settings/ai-quick-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ memory: updated })
+        }).catch(() => {});
+      } catch {}
+      return updated;
+    });
     setNotificationToast('Removed from AI Memory');
     setTimeout(() => setNotificationToast(''), 3000);
   };
@@ -2286,10 +2291,22 @@ function KlarityApp() {
             setSettingsAiPermissions(json.ai.dataPermissions);
           }
           if (Array.isArray(json.ai.memory)) {
-            setAiMemory(json.ai.memory);
+            const localRaw = localStorage.getItem(`klarity_${uid}_ai_memory`) || localStorage.getItem('klarity_ai_memory');
+            let localItems = [];
             try {
-              localStorage.setItem('klarity_ai_memory', JSON.stringify(json.ai.memory));
-              localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(json.ai.memory));
+              if (localRaw) localItems = JSON.parse(localRaw);
+            } catch {}
+            const combined = [...(Array.isArray(localItems) ? localItems : [])];
+            for (const item of json.ai.memory) {
+              if (!combined.some(c => c.toLowerCase().trim() === item.toLowerCase().trim())) {
+                combined.push(item);
+              }
+            }
+            const finalMem = combined.length > 0 ? combined : json.ai.memory;
+            setAiMemory(finalMem);
+            try {
+              localStorage.setItem('klarity_ai_memory', JSON.stringify(finalMem));
+              localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(finalMem));
             } catch {}
           }
         }
@@ -3763,6 +3780,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
       // Update local state and localStorage immediately if backend returned updatedData
       if (json.updatedData) {
+        if (Array.isArray(json.updatedData.memory)) {
+          const memArray = json.updatedData.memory;
+          setAiMemory(memArray);
+          const uid = currentUser?.id || 'default';
+          try {
+            localStorage.setItem('klarity_ai_memory', JSON.stringify(memArray));
+            localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(memArray));
+          } catch (e) {}
+        }
         setData(prev => {
           const nextBills = json.updatedData.bills || prev.bills || [];
           const nextSubs = json.updatedData.subscriptions || prev.subscriptions || [];
@@ -3899,13 +3925,22 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             handleAddMemory(act.item.fact);
           } else if (act.type === 'delete_memory' && act.item?.fact) {
             const targetFact = String(act.item.fact).toLowerCase().trim();
-            setAiMemory(prev => prev.filter(m => m.toLowerCase().trim() !== targetFact));
-            const uid = currentUser?.id || 'default';
-            try {
-              const nextMem = aiMemory.filter(m => m.toLowerCase().trim() !== targetFact);
-              localStorage.setItem('klarity_ai_memory', JSON.stringify(nextMem));
-              localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(nextMem));
-            } catch {}
+            setAiMemory(prev => {
+              const nextMem = prev.filter(m => !m.toLowerCase().includes(targetFact));
+              const uid = currentUser?.id || 'default';
+              try {
+                localStorage.setItem('klarity_ai_memory', JSON.stringify(nextMem));
+                localStorage.setItem(`klarity_${uid}_ai_memory`, JSON.stringify(nextMem));
+              } catch {}
+              try {
+                fetch('/api/settings/ai-quick-settings', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ memory: nextMem })
+                }).catch(() => {});
+              } catch {}
+              return nextMem;
+            });
           } else if (act.type === 'goal' && act.item?.name && act.item?.targetAmount) {
             setSavingsGoals(prev => [
               ...prev,
@@ -3920,7 +3955,11 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           }
         }
         const count = json.actionsExecuted.length;
-        setNotificationToast(`Auto-added ${count} item${count > 1 ? 's' : ''} to your records!`);
+        if (json.actionsExecuted.some(a => a.type === 'add_memory')) {
+          setNotificationToast('Saved to AI Advisor memory!');
+        } else {
+          setNotificationToast(`Auto-added ${count} item${count > 1 ? 's' : ''} to your records!`);
+        }
         setTimeout(() => setNotificationToast(''), 4500);
       } else if (json.actionExecuted) {
         const act = json.actionExecuted;

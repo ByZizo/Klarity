@@ -3006,6 +3006,72 @@ app.post(['/api/ai/local/query', '/api/ai/local/chat'], async (req, res) => {
 // In-memory cache for dynamically fetched Gemini models (15-min TTL per API key)
 const geminiModelsCache = new Map();
 
+// Helper functions for memory intent parsing and formatting
+function extractAddMemoryFact(msg) {
+  if (!msg || typeof msg !== 'string') return null;
+  const raw = msg.trim();
+  const lower = raw.toLowerCase();
+  if (/^(?:what|show|list|tell\s+me).*memory/i.test(lower)) return null;
+  if (/^what\s+do\s+you\s+remember/i.test(lower)) return null;
+
+  const memoryAddMatch =
+    /(?:add|save|commit|store|keep).*(?:to|in)\s+(?:your\s+)?(?:ai\s+)?memory/i.test(lower) ||
+    /^(?:please\s+)?(?:can\s+you\s+)?remember\s+(?:that\s+|my\s+|i['’]?m\s+|i\s+am\s+|i\s+have\s+|i\s+prefer\s+|i\s+want\s+|i\s+need\s+|i\s+work\s+|i\s+live\s+)/i.test(lower) ||
+    /^(?:please\s+)?(?:can\s+you\s+)?(?:add|save|commit|store)\s+(?:to|in)\s+(?:your\s+)?(?:ai\s+)?memory/i.test(lower);
+
+  if (!memoryAddMatch) return null;
+
+  let fact = raw;
+  fact = fact.replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:add\s+(?:that\s+)?|save\s+(?:that\s+)?|commit\s+(?:that\s+)?|store\s+(?:that\s+)?|keep\s+(?:that\s+)?)/i, '');
+  fact = fact.replace(/^(?:please\s+)?(?:can\s+you\s+)?remember\s+(?:that\s+)?/i, '');
+  fact = fact.replace(/^(?:to|in)\s+(?:your\s+)?(?:ai\s+)?memory[:\s-]*/i, '');
+  fact = fact.replace(/^(?:that\s+)/i, '');
+  fact = fact.replace(/(?:to|in)\s+(?:your\s+)?(?:ai\s+)?memory[\s.]*$/i, '');
+  fact = fact.replace(/(?:to|in)\s+(?:the\s+)?memory[\s.]*$/i, '');
+  fact = fact.replace(/^[:\s-]+/, '').trim();
+  fact = fact.replace(/^(?:that\s+)/i, '').trim();
+
+  if (!fact || fact.length < 2) return null;
+
+  fact = fact
+    .replace(/\bi['’]?m\s+/gi, 'User is ')
+    .replace(/\bi\s+am\s+/gi, 'User is ')
+    .replace(/\bi\s+prefer\s+/gi, 'User prefers ')
+    .replace(/\bi\s+have\s+/gi, 'User has ')
+    .replace(/\bi\s+want\s+/gi, 'User wants ')
+    .replace(/\bi\s+need\s+/gi, 'User needs ')
+    .replace(/\bi\s+work\s+/gi, 'User works ')
+    .replace(/\bi\s+live\s+/gi, 'User lives ')
+    .replace(/\bmy\s+/gi, "User's ")
+    .replace(/\bme\s+/gi, 'user ');
+
+  fact = fact.charAt(0).toUpperCase() + fact.slice(1);
+  if (!fact.endsWith('.')) fact += '.';
+  return fact;
+}
+
+function extractDeleteMemoryFact(msg) {
+  if (!msg || typeof msg !== 'string') return null;
+  const raw = msg.trim();
+  const lower = raw.toLowerCase();
+
+  const isDeleteMatch =
+    /(?:forget|delete|remove).*(?:from|in|out of)\s+(?:your\s+)?(?:ai\s+)?memory/i.test(lower) ||
+    /^(?:please\s+)?(?:can\s+you\s+)?forget\s+(?:that\s+|my\s+|i['’]?m\s+|i\s+am\s+)/i.test(lower) ||
+    /^(?:please\s+)?(?:can\s+you\s+)?(?:remove|delete)\s+from\s+(?:your\s+)?(?:ai\s+)?memory/i.test(lower);
+
+  if (!isDeleteMatch) return null;
+
+  let fact = raw;
+  fact = fact.replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:forget\s+(?:that\s+)?|remove\s+(?:that\s+)?|delete\s+(?:that\s+)?)/i, '');
+  fact = fact.replace(/^(?:from|in|out of)\s+(?:your\s+)?(?:ai\s+)?memory[:\s-]*/i, '');
+  fact = fact.replace(/(?:from|in|out of)\s+(?:your\s+)?(?:ai\s+)?memory[\s.]*$/i, '');
+  fact = fact.replace(/(?:from|in|out of)\s+(?:the\s+)?memory[\s.]*$/i, '');
+  fact = fact.replace(/^[:\s-]+/, '').trim();
+
+  return fact || null;
+}
+
 // 10. AI Advisor Chat with Navigation Capabilities, Embedded Local GGUF Engine & Optional Cloud Key
 app.post('/api/ai/chat', async (req, res) => {
   const userId = req.userId;
@@ -3043,6 +3109,105 @@ app.post('/api/ai/chat', async (req, res) => {
   const data = await readData(req.userId);
   const userSettings = getUserSettings(data, userId);
   const aiConfig = userSettings.ai || {};
+
+  // Intercept and immediately fulfill explicit memory commands (guarantees 100% reliable persistence)
+  const addedMemoryFact = extractAddMemoryFact(message);
+  if (addedMemoryFact) {
+    if (!userSettings.ai) userSettings.ai = {};
+    if (!Array.isArray(userSettings.ai.memory)) userSettings.ai.memory = [];
+    if (!data.settings) data.settings = {};
+    if (!data.settings.ai) data.settings.ai = {};
+    if (!Array.isArray(data.settings.ai.memory)) data.settings.ai.memory = [];
+
+    const existingIdx = userSettings.ai.memory.findIndex(m => m.toLowerCase().trim() === addedMemoryFact.toLowerCase().trim());
+    if (existingIdx === -1) {
+      userSettings.ai.memory.push(addedMemoryFact);
+    }
+    const settingsIdx = data.settings.ai.memory.findIndex(m => m.toLowerCase().trim() === addedMemoryFact.toLowerCase().trim());
+    if (settingsIdx === -1) {
+      data.settings.ai.memory.push(addedMemoryFact);
+    }
+    for (const otherUid of Object.keys(data.userSettings || {})) {
+      if (!data.userSettings[otherUid].ai) data.userSettings[otherUid].ai = {};
+      if (!Array.isArray(data.userSettings[otherUid].ai.memory)) data.userSettings[otherUid].ai.memory = [];
+      if (!data.userSettings[otherUid].ai.memory.some(m => m.toLowerCase().trim() === addedMemoryFact.toLowerCase().trim())) {
+        data.userSettings[otherUid].ai.memory.push(addedMemoryFact);
+      }
+    }
+    await writeData(data, req.userId);
+
+    const reply = `I've added that to my memory: **"${addedMemoryFact}"**\n\nI'll remember this across your financial sessions!`;
+    return res.json({
+      reply,
+      actionsExecuted: [{ type: 'add_memory', item: { fact: addedMemoryFact } }],
+      actionExecuted: { type: 'add_memory', item: { fact: addedMemoryFact } },
+      updatedData: {
+        bills: (data.bills || []).filter(b => b.status !== 'archived'),
+        subscriptions: data.subscriptions || [],
+        transactions: (data.transactions || []).slice(0, 50),
+        retirementPlans: data.retirementPlans || [],
+        memory: userSettings.ai.memory
+      }
+    });
+  }
+
+  const deletedMemoryFact = extractDeleteMemoryFact(message);
+  if (deletedMemoryFact) {
+    const targetFact = deletedMemoryFact.toLowerCase().trim();
+    if (!userSettings.ai) userSettings.ai = {};
+    if (!Array.isArray(userSettings.ai.memory)) userSettings.ai.memory = [];
+    userSettings.ai.memory = userSettings.ai.memory.filter(m => !m.toLowerCase().includes(targetFact));
+    if (data.settings?.ai?.memory) {
+      data.settings.ai.memory = data.settings.ai.memory.filter(m => !m.toLowerCase().includes(targetFact));
+    }
+    for (const otherUid of Object.keys(data.userSettings || {})) {
+      if (Array.isArray(data.userSettings[otherUid]?.ai?.memory)) {
+        data.userSettings[otherUid].ai.memory = data.userSettings[otherUid].ai.memory.filter(m => !m.toLowerCase().includes(targetFact));
+      }
+    }
+    await writeData(data, req.userId);
+
+    const reply = `I've removed that from my memory.`;
+    return res.json({
+      reply,
+      actionsExecuted: [{ type: 'delete_memory', item: { fact: deletedMemoryFact } }],
+      actionExecuted: { type: 'delete_memory', item: { fact: deletedMemoryFact } },
+      updatedData: {
+        bills: (data.bills || []).filter(b => b.status !== 'archived'),
+        subscriptions: data.subscriptions || [],
+        transactions: (data.transactions || []).slice(0, 50),
+        retirementPlans: data.retirementPlans || [],
+        memory: userSettings.ai.memory
+      }
+    });
+  }
+
+  const qLower = (message || '').toLowerCase().trim();
+  const isQueryMemory =
+    /^(?:what(?:\s+do\s+you|\s+is|\s+'s)?\s+(?:have\s+in\s+)?(?:your\s+)?(?:ai\s+)?memory|show\s+(?:me\s+)?(?:your\s+)?(?:ai\s+)?memory|what\s+do\s+you\s+remember(?:\s+about\s+me)?)/i.test(qLower);
+  if (isQueryMemory) {
+    const memList = userSettings.ai?.memory || [];
+    let reply;
+    if (memList.length > 0) {
+      reply = `Here is what I have saved in my **Advisor Memory**:\n\n` +
+        memList.map((m, idx) => `• ${m}`).join('\n') +
+        `\n\nI apply these preferences across all your questions. You can also view or edit them anytime by clicking **AI Settings** next to the title!`;
+    } else {
+      reply = `I don't have any custom facts saved in my Advisor memory yet.\n\nYou can ask me to remember anything (for example: *"remember that I'm 23 years old"* or *"remember that I prefer avalanche debt payoff"*), or add them directly in **AI Settings**!`;
+    }
+    return res.json({
+      reply,
+      actionsExecuted: [],
+      actionExecuted: null,
+      updatedData: {
+        bills: (data.bills || []).filter(b => b.status !== 'archived'),
+        subscriptions: data.subscriptions || [],
+        transactions: (data.transactions || []).slice(0, 50),
+        retirementPlans: data.retirementPlans || [],
+        memory: memList
+      }
+    });
+  }
   let rawApiKey = aiConfig.encryptedKey ? decrypt(aiConfig.encryptedKey) : '';
 
   // Normalize attachments list (supports multiple files of any format + legacy single imageBase64)
@@ -4038,7 +4203,26 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
       try {
         const memData = JSON.parse(amMatch[1]);
         if (memData && memData.fact) {
-          actionsExecuted.push({ type: 'add_memory', item: { fact: memData.fact } });
+          const f = memData.fact;
+          if (!userSettings.ai) userSettings.ai = {};
+          if (!Array.isArray(userSettings.ai.memory)) userSettings.ai.memory = [];
+          if (!data.settings) data.settings = {};
+          if (!data.settings.ai) data.settings.ai = {};
+          if (!Array.isArray(data.settings.ai.memory)) data.settings.ai.memory = [];
+          if (!userSettings.ai.memory.some(m => m.toLowerCase().trim() === f.toLowerCase().trim())) {
+            userSettings.ai.memory.push(f);
+          }
+          if (!data.settings.ai.memory.some(m => m.toLowerCase().trim() === f.toLowerCase().trim())) {
+            data.settings.ai.memory.push(f);
+          }
+          for (const otherUid of Object.keys(data.userSettings || {})) {
+            if (!data.userSettings[otherUid].ai) data.userSettings[otherUid].ai = {};
+            if (!Array.isArray(data.userSettings[otherUid].ai.memory)) data.userSettings[otherUid].ai.memory = [];
+            if (!data.userSettings[otherUid].ai.memory.some(m => m.toLowerCase().trim() === f.toLowerCase().trim())) {
+              data.userSettings[otherUid].ai.memory.push(f);
+            }
+          }
+          actionsExecuted.push({ type: 'add_memory', item: { fact: f } });
         }
       } catch (e) {}
     }
@@ -4049,6 +4233,18 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
       try {
         const memData = JSON.parse(dmMatch[1]);
         if (memData && memData.fact) {
+          const target = String(memData.fact).toLowerCase().trim();
+          if (userSettings.ai?.memory) {
+            userSettings.ai.memory = userSettings.ai.memory.filter(m => !m.toLowerCase().includes(target));
+          }
+          if (data.settings?.ai?.memory) {
+            data.settings.ai.memory = data.settings.ai.memory.filter(m => !m.toLowerCase().includes(target));
+          }
+          for (const otherUid of Object.keys(data.userSettings || {})) {
+            if (Array.isArray(data.userSettings[otherUid]?.ai?.memory)) {
+              data.userSettings[otherUid].ai.memory = data.userSettings[otherUid].ai.memory.filter(m => !m.toLowerCase().includes(target));
+            }
+          }
           actionsExecuted.push({ type: 'delete_memory', item: { fact: memData.fact } });
         }
       } catch (e) {}
@@ -4333,7 +4529,8 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
         bills: (data.bills || []).filter(b => b.status !== 'archived'),
         subscriptions: data.subscriptions || [],
         transactions: (data.transactions || []).slice(0, 50),
-        retirementPlans: data.retirementPlans || []
+        retirementPlans: data.retirementPlans || [],
+        memory: userSettings.ai?.memory || []
       }
     });
   } catch (err) {
