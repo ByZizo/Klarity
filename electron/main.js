@@ -271,15 +271,7 @@ async function checkForGitHubUpdate() {
           remoteSha = commits[0].sha;
           commitTitle = commits[0].commit?.message?.split('\n')[0] || '';
           commitDate = commits[0].commit?.author?.date || '';
-          const newCommits = [];
-          for (const c of commits) {
-            if (currentSha && (c.sha.startsWith(currentSha) || currentSha.startsWith(c.sha))) {
-              break;
-            }
-            const msg = c.commit?.message?.split('\n')[0];
-            if (msg) newCommits.push(msg);
-          }
-          recentCommits = newCommits.length > 0 ? newCommits : (commitTitle ? [commitTitle] : []);
+          recentCommits = commitTitle ? [commitTitle] : [];
         }
       }
     } catch (apiErr) {
@@ -781,26 +773,17 @@ ipcMain.handle('klarity:install-update-now', async () => {
 
     const newSha = await runShell('git rev-parse HEAD', repoDir).catch(() => 'latest');
 
-    // Gather the exact commits applied in this update
+    // Gather strictly the single latest update that was just applied (never previous version history)
     let recentChanges = [];
     try {
-      if (previousSha && newSha && previousSha !== newSha && previousSha !== 'latest' && newSha !== 'latest') {
-        const rangeLog = await runShell(`git log ${previousSha}..${newSha} --pretty=format:"%s"`, repoDir).catch(() => '');
-        if (rangeLog) {
-          recentChanges = rangeLog.split('\n').map(s => s.trim()).filter(Boolean);
-        }
-      }
-      // Only look at the single most recent commit if no range (never previous history)
-      if (recentChanges.length === 0) {
-        const headLog = await runShell('git log -1 --pretty=format:"%s" HEAD', repoDir);
-        if (headLog) {
-          recentChanges = [headLog.trim()];
-        }
+      const headLog = await runShell('git log -1 --pretty=format:"%s" HEAD', repoDir);
+      if (headLog) {
+        recentChanges = [headLog.trim()];
       }
     } catch {}
 
     if (recentChanges.length === 0 && updateStatusState.recentChanges?.length > 0) {
-      recentChanges = updateStatusState.recentChanges;
+      recentChanges = [updateStatusState.recentChanges[0]];
     }
 
     let updatedVersion = null;

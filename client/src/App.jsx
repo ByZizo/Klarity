@@ -7628,22 +7628,48 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           aria-labelledby="whats-new-modal-title"
         >
           <Card className="max-w-md w-full p-6 flex flex-col gap-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 id="whats-new-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
+            {/* Centered Title & Version Pill */}
+            <div className="flex items-center justify-center gap-2">
+              <h3 id="whats-new-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)] text-center">
                 What&apos;s new in Klarity
               </h3>
               <Pill variant="success">
                 {formatVersionString ? formatVersionString(whatsNewData.version || CURRENT_APP_VERSION) : CURRENT_APP_VERSION}
               </Pill>
             </div>
-            <ul className="list-disc list-inside space-y-1.5 text-[15px] font-medium text-[var(--ink)]">
+
+            {/* End-to-end divider line */}
+            <div className="-mx-6 border-b border-[var(--line)]" />
+
+            {/* Updated Items Bullet List */}
+            <ul className="list-disc list-inside space-y-2 text-[15px] font-medium text-[var(--ink)] py-1">
               {formatWhatsNewHighlights(whatsNewData.changes || whatsNewData)
                 .slice(0, 4)
                 .map((line, i) => (
                   <li key={i}>{line}</li>
                 ))}
             </ul>
-            <div className="flex justify-end pt-2 border-t border-[var(--line)]">
+
+            {/* End-to-end divider line */}
+            <div className="-mx-6 border-b border-[var(--line)]" />
+
+            {/* Faded Informational Sentence */}
+            <p className="text-xs text-[var(--muted)] text-center leading-relaxed">
+              You can view complete update details in the About page in Settings.
+            </p>
+
+            {/* Action Buttons: About (Bottom-Left), Got it (Bottom-Right) */}
+            <div className="flex items-center justify-between pt-1">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  handleDismissWhatsNew();
+                  setSettingsActiveTab('about');
+                  setIsSettingsOpen(true);
+                }}
+              >
+                About
+              </Button>
               <Button variant="primary" onClick={handleDismissWhatsNew}>
                 Got it
               </Button>

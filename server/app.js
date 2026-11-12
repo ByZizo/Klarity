@@ -4733,7 +4733,7 @@ function formatUserFacingReleaseNote(rawText) {
 app.get('/api/app/update-check', async (req, res) => {
   try {
     const repoDir = path.join(__dirname, '..');
-    let localVersion = '3.12.24';
+    let localVersion = '3.12.25';
     try {
       const pkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
       if (pkg && pkg.version) localVersion = pkg.version;
