@@ -8,5 +8,6 @@ export { RetirementPage } from './RetirementPage';
 export { HouseholdPage } from './HouseholdPage';
 export { VaultPage } from './VaultPage';
 export { AdvisorPage } from './AdvisorPage';
+export { BrowserPage } from './BrowserPage';
 export { SettingsPage } from './SettingsPage';
 export { AuthPage } from './AuthPage';

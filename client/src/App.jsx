@@ -176,6 +176,7 @@ import {
   HouseholdPage,
   VaultPage,
   AdvisorPage,
+  BrowserPage,
   SettingsPage
 } from './pages';
 
@@ -1547,6 +1548,7 @@ function KlarityApp() {
   });
 
   const [isPastChatsOpen, setIsPastChatsOpen] = useState(false);
+  const [activeBrowserContext, setActiveBrowserContext] = useState(null);
 
   // Left Sidebar Compact/Collapsed state
   const [isSidebarCompact, setIsSidebarCompact] = useState(() => {
@@ -1567,7 +1569,8 @@ function KlarityApp() {
     'household',
     'retirement',
     'vault',
-    'advisor'
+    'advisor',
+    'browser'
   ];
 
   const [sidebarNavOrder, setSidebarNavOrder] = useState(() => {
@@ -1640,7 +1643,8 @@ function KlarityApp() {
     household: { id: 'household', label: 'Household', icon: Home, flag: 'household' },
     retirement: { id: 'retirement', label: 'Retirement', icon: Landmark, flag: 'retirement' },
     vault: { id: 'vault', label: 'Vault', icon: KeyRound, flag: 'vault' },
-    advisor: { id: 'advisor', label: 'Advisor', icon: Sparkles, flag: null }
+    advisor: { id: 'advisor', label: 'Advisor', icon: Sparkles, flag: null },
+    browser: { id: 'browser', label: 'Browser', icon: Globe, flag: null }
   };
 
   const handleSendPayoffPlanToAi = (plan) => {
@@ -3775,7 +3779,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           retirementPlans: featureFlags.retirement ? retirementPlans : [],
           netWorth: totalNetWorth || 0,
           householdProfile: householdProfile,
-          householdMetrics: calculateHouseholdAndFleetMetrics(householdProfile)
+          householdMetrics: calculateHouseholdAndFleetMetrics(householdProfile),
+          browserContext: activeBrowserContext
         })
       });
 
@@ -5826,6 +5831,17 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   isFullUploadMenuOpen={isFullUploadMenuOpen}
                   setIsFullUploadMenuOpen={setIsFullUploadMenuOpen}
                   FormattedChatMessage={FormattedChatMessage}
+                />
+              )}
+
+              {normalizedActiveTab === 'browser' && (
+                <BrowserPage
+                  onAskAdvisor={(prompt) => {
+                    setIsAdvisorCollapsed(false);
+                    handleSendChatMessage(prompt);
+                  }}
+                  activeBrowserContext={activeBrowserContext}
+                  setActiveBrowserContext={setActiveBrowserContext}
                 />
               )}
 

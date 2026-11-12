@@ -3104,7 +3104,8 @@ app.post('/api/ai/chat', async (req, res) => {
     householdProfile,
     householdMetrics,
     responseLength,
-    webSearchEnabled
+    webSearchEnabled,
+    browserContext
   } = req.body;
   const data = await readData(req.userId);
   const userSettings = getUserSettings(data, userId);
@@ -3367,6 +3368,15 @@ app.post('/api/ai/chat', async (req, res) => {
     }
   }
 
+  // Active in-app browser context: provides real-time vision into the page the user is currently viewing
+  let liveBrowserContext = '';
+  if (browserContext && (browserContext.url || browserContext.text)) {
+    const cleanUrl = String(browserContext.url || '').trim();
+    const cleanTitle = String(browserContext.title || 'Untitled Webpage').trim();
+    const cleanText = String(browserContext.text || '').replace(/\s+/g, ' ').trim().slice(0, 16000);
+    liveBrowserContext = `\n\n=== LIVE IN-APP BROWSER CONTEXT (What the user is viewing right now) ===\nPage Title: ${cleanTitle}\nPage URL: ${cleanUrl}\nPage Content / Text:\n${cleanText || 'No text extracted from page'}\n=== END IN-APP BROWSER CONTEXT ===\nNOTE: The user is currently reading this live webpage in Klarity's In-App Browser. When they ask questions about what's on the screen, rates, prices, articles, comparisons, or bills, analyze and answer directly using this live webpage content!`;
+  }
+
   const nowCalendar = new Date();
   const currentDateStr = nowCalendar.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const currentTimeStr = nowCalendar.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
@@ -3397,7 +3407,7 @@ ${advisorSnapshot ? `\nPre-Computed Live Financial Advisor Analysis (Ground-Trut
 - Household Service Providers & Plans: ${providersSummary}
 - Connected Credit Cards for Cash Back & Rewards: ${userCards.length > 0 ? userCards.map(c => `[Card: ${c.institution} ${c.name} (APR ${c.apr}%, Bal $${Number(c.balance || 0).toFixed(2)})]`).join(' | ') : 'None connected'}
 - Calculated Real-Life Monthly Utilities: ${householdMetrics?.utilities ? `Combined PG&E (Electric + Gas): ${householdMetrics.utilities.totalPgeCombinedBill}/mo [Home Electric: ${householdMetrics.utilities.homeKwh} kWh (${householdMetrics.utilities.homeElectricCost}), EV Home Charging: ${householdMetrics.utilities.evHomeKwh} kWh (${householdMetrics.utilities.evHomeChargingCost}), Natural Gas: ${householdMetrics.utilities.monthlyTherms} Therms (${householdMetrics.utilities.naturalGasCost})] | Water, Sewer & Trash: ${householdMetrics.utilities.waterTrashTotalCost}/mo (${householdMetrics.utilities.monthlyWaterGallons} gal/mo) | Total Utilities: ${householdMetrics.utilities.totalUtilitiesMonthly}/mo` : 'Not calculated yet'}
-- Household Vehicle Fleet (${householdMetrics?.fleet?.vehicles?.length || 0} Cars): ${householdMetrics?.fleet?.vehicles?.length > 0 ? householdMetrics.fleet.vehicles.map(v => `${v.name} (${v.type.toUpperCase()}): ${v.monthlyMiles} mi/mo, Fuel/Charge: ${v.monthlyFuelOrChargeCost}/mo, Ins: ${v.insuranceMonthly}/mo, Maint: ${v.maintenance}/mo${v.potentialEvSwitchSavings ? ` [Saves ${v.potentialEvSwitchSavings}/mo if switched to EV]` : ''}`).join(' | ') : 'None listed'}${memoryContext}${liveWebSearchContext}
+- Household Vehicle Fleet (${householdMetrics?.fleet?.vehicles?.length || 0} Cars): ${householdMetrics?.fleet?.vehicles?.length > 0 ? householdMetrics.fleet.vehicles.map(v => `${v.name} (${v.type.toUpperCase()}): ${v.monthlyMiles} mi/mo, Fuel/Charge: ${v.monthlyFuelOrChargeCost}/mo, Ins: ${v.insuranceMonthly}/mo, Maint: ${v.maintenance}/mo${v.potentialEvSwitchSavings ? ` [Saves ${v.potentialEvSwitchSavings}/mo if switched to EV]` : ''}`).join(' | ') : 'None listed'}${memoryContext}${liveWebSearchContext}${liveBrowserContext}
 
 Rules:
 1. Provide concise, clear, and empathetic financial guidance based strictly on real numbers and current web knowledge.

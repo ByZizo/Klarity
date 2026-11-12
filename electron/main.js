@@ -36,6 +36,18 @@ let updateStatusState = {
   message: 'Up to date'
 };
 
+let browserAdsBlockedCount = 0;
+let adBlockerEnabled = true;
+
+function broadcastAdBlockStats() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('klarity:adblock-stats', {
+      adsBlockedCount: browserAdsBlockedCount,
+      enabled: adBlockerEnabled
+    });
+  }
+}
+
 let runningCommitSha = null;
 
 function getRunningCommitSha() {
@@ -461,6 +473,67 @@ async function createDesktopWindow() {
     });
   });
 
+  // Set up dedicated In-App Browser Partition with Built-in Ad Blocker
+  const browserSession = session.fromPartition('persist:klarity_browser');
+
+  const AD_BLOCK_DOMAINS = [
+    'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
+    'adnxs.com', 'pubmatic.com', 'taboola.com', 'outbrain.com',
+    'adroll.com', 'criteo.com', 'criteo.net', 'scorecardresearch.com',
+    'amazon-adsystem.com', 'rubiconproject.com', 'openx.net',
+    'casalemedia.com', 'moatads.com', 'advertising.com', 'quantserve.com',
+    'zedo.com', 'adtech.de', 'bidswitch.net', 'smartadserver.com',
+    'adform.net', 'adzerk.net', 'tribalfusion.com', 'yieldmo.com',
+    'media.net', 'adblade.com', 'sharethrough.com', 'popads.net',
+    'propellerads.com', 'revcontent.com', 'exoclick.com', 'mgid.com',
+    'infolinks.com', 'adcolony.com', 'vungle.com', 'unityads.unity3d.com',
+    'chartboost.com', 'appsflyer.com', 'branch.io', 'singular.net',
+    'adjust.com', 'hotjar.com', 'clarity.ms', 'fullstory.com'
+  ];
+
+  const AD_BLOCK_PATTERNS = [
+    /\/ads?\//i,
+    /\/ad_server\//i,
+    /\/pagead\//i,
+    /googleads/i,
+    /\/adsystem\//i,
+    /\/adzerk\//i,
+    /\/banner_ads?\//i,
+    /\/advert(?:s|ing)?\//i,
+    /\/popunder/i,
+    /\/tracking_pixel/i,
+    /\/telemetry\./i
+  ];
+
+  browserSession.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, callback) => {
+    if (!adBlockerEnabled) {
+      return callback({ cancel: false });
+    }
+    try {
+      const parsedUrl = new URL(details.url);
+      const host = parsedUrl.hostname.toLowerCase();
+
+      // Check known ad network domains
+      const isAdDomain = AD_BLOCK_DOMAINS.some(domain => host === domain || host.endsWith('.' + domain));
+      if (isAdDomain) {
+        browserAdsBlockedCount++;
+        broadcastAdBlockStats();
+        return callback({ cancel: true });
+      }
+
+      // Check ad URL patterns
+      const urlPath = parsedUrl.pathname + parsedUrl.search;
+      const isAdPattern = AD_BLOCK_PATTERNS.some(regex => regex.test(urlPath));
+      if (isAdPattern) {
+        browserAdsBlockedCount++;
+        broadcastAdBlockStats();
+        return callback({ cancel: true });
+      }
+    } catch {}
+
+    callback({ cancel: false });
+  });
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -476,7 +549,8 @@ async function createDesktopWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      spellcheck: true
+      spellcheck: true,
+      webviewTag: true
     }
   });
 
@@ -777,6 +851,32 @@ ipcMain.handle('klarity:dismiss-whats-new', () => {
     }
   } catch {}
   return false;
+});
+
+// In-App Browser Ad Blocker IPC Handlers
+ipcMain.handle('klarity:browser-get-adblock-stats', () => {
+  return {
+    adsBlockedCount: browserAdsBlockedCount,
+    enabled: adBlockerEnabled
+  };
+});
+
+ipcMain.handle('klarity:browser-toggle-adblock', (_e, enabled) => {
+  adBlockerEnabled = enabled !== undefined ? Boolean(enabled) : !adBlockerEnabled;
+  broadcastAdBlockStats();
+  return {
+    adsBlockedCount: browserAdsBlockedCount,
+    enabled: adBlockerEnabled
+  };
+});
+
+ipcMain.handle('klarity:browser-reset-adblock-count', () => {
+  browserAdsBlockedCount = 0;
+  broadcastAdBlockStats();
+  return {
+    adsBlockedCount: browserAdsBlockedCount,
+    enabled: adBlockerEnabled
+  };
 });
 
 const isDev = !app.isPackaged;

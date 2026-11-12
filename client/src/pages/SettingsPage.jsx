@@ -26,7 +26,8 @@ import {
   PieChart,
   Home,
   Landmark,
-  Sparkles
+  Sparkles,
+  Globe
 } from 'lucide-react';
 import { Button, Card, Pill, ConfirmDialog } from '../components/ui';
 import { formatCleanUpdateMessage, formatWhatsNewHighlights } from '../components/SharedAppComponents';
@@ -282,7 +283,8 @@ export function SettingsPage({
     household: { id: 'household', label: 'Household', icon: Home, flag: 'household' },
     retirement: { id: 'retirement', label: 'Retirement', icon: Landmark, flag: 'retirement' },
     vault: { id: 'vault', label: 'Vault', icon: KeyRound, flag: 'vault' },
-    advisor: { id: 'advisor', label: 'Advisor', icon: Sparkles, flag: null }
+    advisor: { id: 'advisor', label: 'Advisor', icon: Sparkles, flag: null },
+    browser: { id: 'browser', label: 'Browser', icon: Globe, flag: null }
   };
   const effectiveConfig = propsSidebarConfig || DEFAULT_CONFIG;
   const effectiveSidebarOrder =

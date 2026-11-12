@@ -24,5 +24,14 @@ contextBridge.exposeInMainWorld('klarityDesktop', {
     const handler = (_event, status) => callback(status);
     ipcRenderer.on('klarity:local-ai-status', handler);
     return () => ipcRenderer.removeListener('klarity:local-ai-status', handler);
+  },
+  getAdBlockStats: () => ipcRenderer.invoke('klarity:browser-get-adblock-stats'),
+  toggleAdBlock: (enabled) => ipcRenderer.invoke('klarity:browser-toggle-adblock', enabled),
+  resetAdBlockCount: () => ipcRenderer.invoke('klarity:browser-reset-adblock-count'),
+  onAdBlockStats: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const handler = (_event, stats) => callback(stats);
+    ipcRenderer.on('klarity:adblock-stats', handler);
+    return () => ipcRenderer.removeListener('klarity:adblock-stats', handler);
   }
 });
