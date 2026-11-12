@@ -284,7 +284,7 @@ export function BrowserPage({
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-[var(--background)] overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-[var(--background)] overflow-hidden flex-1 min-h-0">
       {/* 1. TOP BROWSER CONTROLS & SMART ADDRESS BAR */}
       <div className="shrink-0 bg-[var(--surface)] border-b border-[var(--line)] px-4 py-2.5 flex flex-col gap-2 shadow-2xs">
         <div className="flex items-center gap-2">
@@ -508,13 +508,23 @@ export function BrowserPage({
       </div>
 
       {/* 3. BROWSER CONTENT CANVAS */}
-      <div className="flex-1 w-full relative bg-[var(--surface)]">
+      <div className="flex-1 w-full relative bg-[var(--surface)] min-h-0 h-full overflow-hidden">
         {isDesktop ? (
           <webview
             ref={webviewRef}
             src={currentUrl}
             partition="persist:klarity_browser"
-            className="w-full h-full border-0"
+            className="w-full h-full border-0 absolute inset-0"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              border: 'none',
+              outline: 'none',
+            }}
             allowpopups="true"
             webpreferences="contextIsolation=true, sandbox=true"
           />

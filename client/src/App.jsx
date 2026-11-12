@@ -316,7 +316,7 @@ function KlarityApp() {
         type: feedbackType,
         text: feedbackText.trim(),
         user: currentUser?.email || 'Anonymous',
-        version: '3.12.23',
+        version: CURRENT_APP_VERSION,
         createdAt: new Date().toISOString()
       };
       try {
@@ -5255,7 +5255,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)] flex font-sans antialiased">
+    <div className={`min-h-screen bg-[var(--bg)] text-[var(--ink)] flex font-sans antialiased ${normalizedActiveTab === 'browser' ? 'h-screen max-h-screen overflow-hidden' : ''}`}>
       {linkToken && (
         <PlaidLauncher
           token={linkToken}
@@ -5496,7 +5496,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       {/* =================================================================== */}
       {/* MAIN CONTENT AREA + RIGHT ADVISOR SIDEBAR                           */}
       {/* =================================================================== */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+      <div className={`flex-1 flex flex-col min-w-0 ${normalizedActiveTab === 'browser' ? 'h-screen max-h-screen overflow-hidden' : 'min-h-screen'}`}>
         {/* Top Mobile Header (< 760px) */}
         <header className="flex min-[760px]:hidden items-center justify-between px-4 py-3 bg-[var(--surface)] border-b border-[var(--line)] sticky top-0 z-30">
           <button
@@ -5560,13 +5560,24 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           )}
 
         {/* Content + Right Advisor Split */}
-        <div className="flex-1 flex min-w-0">
-          {/* Main Page Container (Readability Scale applies here only) */}
-          <main
-            className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-6 pb-24 min-[760px]:pb-12 overflow-x-hidden"
-            style={{ zoom: contentZoomFactor !== 1 ? contentZoomFactor : undefined }}
-          >
-            <div className="max-w-[1140px] mx-auto flex flex-col gap-6">
+        <div className={`flex-1 flex min-w-0 ${normalizedActiveTab === 'browser' ? 'min-h-0 h-full overflow-hidden' : ''}`}>
+          {normalizedActiveTab === 'browser' ? (
+            <main className="flex-1 min-w-0 h-full flex flex-col overflow-hidden p-0 m-0 pb-14 min-[760px]:pb-0">
+              <BrowserPage
+                onAskAdvisor={(prompt) => {
+                  setIsAdvisorCollapsed(false);
+                  handleSendChatMessage(prompt);
+                }}
+                activeBrowserContext={activeBrowserContext}
+                setActiveBrowserContext={setActiveBrowserContext}
+              />
+            </main>
+          ) : (
+            <main
+              className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-6 pb-24 min-[760px]:pb-12 overflow-x-hidden"
+              style={{ zoom: contentZoomFactor !== 1 ? contentZoomFactor : undefined }}
+            >
+              <div className="max-w-[1140px] mx-auto flex flex-col gap-6">
               {normalizedActiveTab === 'dashboard' && (
                 <OverviewPage
                   firstName={firstName}
@@ -5814,17 +5825,6 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 />
               )}
 
-              {normalizedActiveTab === 'browser' && (
-                <BrowserPage
-                  onAskAdvisor={(prompt) => {
-                    setIsAdvisorCollapsed(false);
-                    handleSendChatMessage(prompt);
-                  }}
-                  activeBrowserContext={activeBrowserContext}
-                  setActiveBrowserContext={setActiveBrowserContext}
-                />
-              )}
-
               {normalizedActiveTab === 'more' && (
                 <div className="flex flex-col gap-5">
                   <div>
@@ -5888,6 +5888,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               )}
             </div>
           </main>
+        )}
 
           {/* ================================================================= */}
           {/* RIGHT PERSISTENT ADVISOR SIDEBAR (Old AI Advisor Chat UI)         */}
