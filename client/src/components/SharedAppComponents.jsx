@@ -111,6 +111,11 @@ export function formatCleanUpdateMessage(rawMsg, rawVer) {
   return `New update available (${verStr}): ${clean}`;
 }
 
+export function isMovementOrMinorTweak(str) {
+  const s = String(str || '').toLowerCase();
+  return /\b(move|moving|moved|reposition|repositioned|repositioning|reorder|reordered|reordering|swap|swapped|swapping|switch|switched|switching|places|left side|right side|layout|align|alignment|spacing|tweak|tweaks|minor|fix|fixes|fixed|glitch|bug|bugfix|polish|clean up|cleanup)\b/i.test(s);
+}
+
 export function formatWhatsNewHighlights(changes) {
   let list = [];
   if (Array.isArray(changes)) {
@@ -126,25 +131,32 @@ export function formatWhatsNewHighlights(changes) {
   }
 
   const items = [];
+  let hasMinorOrMovement = false;
+
   for (const raw of list) {
     if (typeof raw !== 'string') continue;
     const clean = raw.trim();
     if (!clean) continue;
 
-    const formatted = formatUserFacingReleaseNote(clean);
-    if (formatted && !items.some(existing => existing.toLowerCase() === formatted.toLowerCase())) {
-      items.push(formatted);
+    if (isMovementOrMinorTweak(clean)) {
+      hasMinorOrMovement = true;
+    } else {
+      const formatted = formatUserFacingReleaseNote(clean);
+      if (formatted && !items.some(existing => existing.toLowerCase() === formatted.toLowerCase())) {
+        items.push(formatted);
+      }
     }
+  }
+
+  if (hasMinorOrMovement && !items.some(i => i.toLowerCase() === 'bug fixes')) {
+    items.push('Bug fixes');
   }
 
   if (items.length > 0) {
     return items.slice(0, 4);
   }
 
-  return [
-    "Refined user experience and interface enhancements",
-    "Performance optimizations and security improvements"
-  ];
+  return ["Bug fixes"];
 }
 
 // Universal Subpage Header: Centered title, leveled Back to Overview, and 3-dot dropdown actions menu

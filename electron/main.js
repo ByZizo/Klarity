@@ -133,6 +133,11 @@ function formatUserFacingReleaseNote(rawText) {
   return text;
 }
 
+function isMovementOrMinorTweak(str) {
+  const s = String(str || '').toLowerCase();
+  return /\b(move|moving|moved|reposition|repositioned|repositioning|reorder|reordered|reordering|swap|swapped|swapping|switch|switched|switching|places|left side|right side|layout|align|alignment|spacing|tweak|tweaks|minor|fix|fixes|fixed|glitch|bug|bugfix|polish|clean up|cleanup)\b/i.test(s);
+}
+
 function formatWhatsNewHighlights(changes) {
   let list = [];
   if (Array.isArray(changes)) {
@@ -148,25 +153,32 @@ function formatWhatsNewHighlights(changes) {
   }
 
   const items = [];
+  let hasMinorOrMovement = false;
+
   for (const raw of list) {
     if (typeof raw !== 'string') continue;
     const clean = raw.trim();
     if (!clean) continue;
 
-    const formatted = formatUserFacingReleaseNote(clean);
-    if (formatted && !items.some(existing => existing.toLowerCase() === formatted.toLowerCase())) {
-      items.push(formatted);
+    if (isMovementOrMinorTweak(clean)) {
+      hasMinorOrMovement = true;
+    } else {
+      const formatted = formatUserFacingReleaseNote(clean);
+      if (formatted && !items.some(existing => existing.toLowerCase() === formatted.toLowerCase())) {
+        items.push(formatted);
+      }
     }
+  }
+
+  if (hasMinorOrMovement && !items.some(i => i.toLowerCase() === 'bug fixes')) {
+    items.push('Bug fixes');
   }
 
   if (items.length > 0) {
     return items.slice(0, 4);
   }
 
-  return [
-    "Refined user experience and interface enhancements",
-    "Performance optimizations and security improvements"
-  ];
+  return ["Bug fixes"];
 }
 
 function saveWhatsNewData(changes, versionOrSha, explicitVersion) {
@@ -259,7 +271,15 @@ async function checkForGitHubUpdate() {
           remoteSha = commits[0].sha;
           commitTitle = commits[0].commit?.message?.split('\n')[0] || '';
           commitDate = commits[0].commit?.author?.date || '';
-          recentCommits = commits.map(c => c.commit?.message?.split('\n')[0]).filter(Boolean);
+          const newCommits = [];
+          for (const c of commits) {
+            if (currentSha && (c.sha.startsWith(currentSha) || currentSha.startsWith(c.sha))) {
+              break;
+            }
+            const msg = c.commit?.message?.split('\n')[0];
+            if (msg) newCommits.push(msg);
+          }
+          recentCommits = newCommits.length > 0 ? newCommits : (commitTitle ? [commitTitle] : []);
         }
       }
     } catch (apiErr) {
@@ -770,9 +790,12 @@ ipcMain.handle('klarity:install-update-now', async () => {
           recentChanges = rangeLog.split('\n').map(s => s.trim()).filter(Boolean);
         }
       }
+      // Only look at the single most recent commit if no range (never previous history)
       if (recentChanges.length === 0) {
-        const headLog = await runShell('git log -5 --pretty=format:"%s" HEAD', repoDir);
-        recentChanges = headLog.split('\n').map(s => s.trim()).filter(Boolean);
+        const headLog = await runShell('git log -1 --pretty=format:"%s" HEAD', repoDir);
+        if (headLog) {
+          recentChanges = [headLog.trim()];
+        }
       }
     } catch {}
 
