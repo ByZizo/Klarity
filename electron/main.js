@@ -49,32 +49,14 @@ function broadcastAdBlockStats() {
 }
 
 let runningCommitSha = null;
+let runningAppVersion = null;
 
 function getRunningCommitSha() {
-  // 1. Return in-memory cache if already determined for this process lifetime
   if (runningCommitSha) return runningCommitSha;
 
-  const repoDir = path.join(__dirname, '..');
-  // 2. When running from repository, the local HEAD commit at startup is the ground truth
+  // 1. Check persisted installed_version.json (what was actually installed and launched)
   try {
-    const sha = require('child_process').execSync('git rev-parse HEAD', { cwd: repoDir, windowsHide: true }).toString().trim();
-    if (sha) {
-      runningCommitSha = sha;
-      const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
-      try {
-        fs.writeFileSync(versionFile, JSON.stringify({
-          version: app.getVersion(),
-          commitSha: sha,
-          installedAt: Date.now()
-        }, null, 2), 'utf8');
-      } catch {}
-      return runningCommitSha;
-    }
-  } catch {}
-
-  // 3. Fall back to persisted installed_version.json (for packaged production environments without .git)
-  const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
-  try {
+    const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
     if (fs.existsSync(versionFile)) {
       const data = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
       if (data && data.commitSha) {
@@ -84,8 +66,47 @@ function getRunningCommitSha() {
     }
   } catch {}
 
+  // 2. Fall back to local git HEAD at initial launch
+  const repoDir = path.join(__dirname, '..');
+  try {
+    const sha = require('child_process').execSync('git rev-parse HEAD', { cwd: repoDir, windowsHide: true }).toString().trim();
+    if (sha) {
+      runningCommitSha = sha;
+      return runningCommitSha;
+    }
+  } catch {}
+
   runningCommitSha = 'v' + app.getVersion();
   return runningCommitSha;
+}
+
+function getRunningAppVersion() {
+  if (runningAppVersion) return runningAppVersion;
+
+  // 1. Check persisted installed_version.json
+  try {
+    const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
+    if (fs.existsSync(versionFile)) {
+      const data = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
+      if (data && data.version) {
+        runningAppVersion = data.version;
+        return runningAppVersion;
+      }
+    }
+  } catch {}
+
+  // 2. Fall back to package.json
+  const repoDir = path.join(__dirname, '..');
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
+    if (pkg && pkg.version) {
+      runningAppVersion = pkg.version;
+      return runningAppVersion;
+    }
+  } catch {}
+
+  runningAppVersion = app.getVersion() || '3.12.24';
+  return runningAppVersion;
 }
 
 function formatUserFacingReleaseNote(rawText) {
@@ -232,24 +253,7 @@ async function checkForGitHubUpdate() {
     broadcastUpdateStatus({ state: 'checking', message: 'Checking GitHub for updates...' });
 
     const currentSha = getRunningCommitSha();
-    let currentVersion = app.getVersion();
-    let foundLocalPkg = false;
-    try {
-      const localPkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
-      if (localPkg && localPkg.version) {
-        currentVersion = localPkg.version;
-        foundLocalPkg = true;
-      }
-    } catch {}
-    if (!foundLocalPkg) {
-      try {
-        const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
-        if (fs.existsSync(versionFile)) {
-          const iv = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
-          if (iv && iv.version) currentVersion = iv.version;
-        }
-      } catch {}
-    }
+    const currentVersion = getRunningAppVersion();
 
     let remoteSha = null;
     let commitTitle = '';

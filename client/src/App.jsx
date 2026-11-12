@@ -416,29 +416,9 @@ function KlarityApp() {
         if (info) setDesktopAppInfo(info);
       }).catch(() => {});
       const unsub = window.klarityDesktop.onUpdateStatus?.((status) => {
-        if (status && (status.state === 'available' || status.state === 'ready')) {
-          const offeredVer = status.latestVersion || status.version;
-          const hasNewCommitSha = Boolean(
-            status.commitSha &&
-            status.currentSha &&
-            status.commitSha !== status.currentSha &&
-            !status.commitSha.startsWith('v')
-          );
-          // Only suppress if local version is strictly newer or both version and SHA are already up to date
-          if (offeredVer && !isSemverNewer(offeredVer, CURRENT_APP_VERSION) && !hasNewCommitSha && status.currentSha) {
-            setDesktopAppInfo(prev => ({
-              ...prev,
-              updateStatus: {
-                state: 'up-to-date',
-                version: CURRENT_APP_VERSION,
-                commitSha: status.currentSha || status.commitSha || 'latest',
-                message: `Up to date — v${CURRENT_APP_VERSION}`
-              }
-            }));
-            return;
-          }
+        if (status) {
+          setDesktopAppInfo(prev => ({ ...prev, updateStatus: status }));
         }
-        setDesktopAppInfo(prev => ({ ...prev, updateStatus: status }));
       });
       // Proactively check for updates immediately on launch and every 60s
       const t = setTimeout(() => {
