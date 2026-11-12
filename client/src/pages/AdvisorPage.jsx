@@ -40,19 +40,19 @@ export function AdvisorPage({
       <div className="pb-3 border-b border-[var(--line)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleGenerateWeeklySummary}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--brand-soft)] hover:bg-[var(--surface-hover)] text-[var(--brand)] border border-[var(--line)] text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+              title="Weekly Advisor Summary"
+              aria-label="Weekly Advisor Summary"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[var(--brand)]" />
+              <span>Weekly Summary</span>
+            </button>
             <h1 className="font-serif text-xl font-bold text-[var(--ink)] tracking-tight">
               AI Advisor
             </h1>
-            <button
-              type="button"
-              onClick={() => setIsMemoryModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)] text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
-              title="AI Advisor Quick Settings & Memory"
-              aria-label="AI Advisor Quick Settings & Memory"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--brand)]" />
-              <span>AI Settings</span>
-            </button>
           </div>
           <p className="text-xs text-[var(--muted)] mt-0.5">
             Reads your bills, cards and spending to answer questions.
@@ -61,11 +61,13 @@ export function AdvisorPage({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={handleGenerateWeeklySummary}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--brand-soft)] hover:bg-[var(--surface-hover)] text-[var(--brand)] border border-[var(--line)] text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+            onClick={() => setIsMemoryModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)] text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+            title="AI Advisor Quick Settings & Memory"
+            aria-label="AI Advisor Quick Settings & Memory"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Weekly Summary</span>
+            <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--brand)]" />
+            <span>AI Settings</span>
           </button>
           <button
             type="button"

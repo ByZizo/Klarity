@@ -5978,18 +5978,18 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       </button>
                     </div>
 
-                    {/* Middle: Title "AI Advisor" with Quick Settings Button right next to it & Online Checkmark */}
+                    {/* Middle: Weekly Summary button on the LEFT side of "AI Advisor" title & Online Checkmark */}
                     <div className="flex items-center gap-1.5">
-                      <h2 className="text-sm font-bold text-[var(--ink)] tracking-tight">AI Advisor</h2>
                       <button
                         type="button"
-                        onClick={() => setIsMemoryModalOpen((prev) => !prev)}
-                        className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer shadow-2xs border border-[var(--line)] bg-[var(--surface)]"
-                        title="AI Advisor Quick Settings & Memory"
-                        aria-label="AI Advisor Quick Settings & Memory"
+                        onClick={handleGenerateWeeklySummary}
+                        className="p-1 rounded-lg text-[var(--brand)] bg-[var(--brand-soft)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer shadow-2xs border border-[var(--line)]"
+                        title="Weekly Advisor Summary"
+                        aria-label="Weekly Advisor Summary"
                       >
-                        <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--brand)]" />
+                        <Sparkles className="w-3.5 h-3.5 text-[var(--brand)]" />
                       </button>
+                      <h2 className="text-sm font-bold text-[var(--ink)] tracking-tight">AI Advisor</h2>
                       <span
                         title={isAdvisorOnline ? 'Connected to the internet' : 'Connected locally only (Web search disabled)'}
                         className={`inline-flex items-center justify-center w-4 h-4 rounded-full border ${
@@ -6002,16 +6002,16 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                       </span>
                     </div>
 
-                    {/* Right: Weekly Summary + Full Screen AI */}
+                    {/* Right: AI Quick Settings (swapped places with Weekly Summary) + Full Screen AI */}
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={handleGenerateWeeklySummary}
-                        className="p-1.5 rounded-xl text-[var(--brand)] bg-[var(--brand-soft)] hover:bg-[var(--surface-hover)] border border-[var(--line)] transition-colors cursor-pointer shadow-2xs"
-                        title="Weekly Advisor Summary"
-                        aria-label="Weekly Advisor Summary"
+                        onClick={() => setIsMemoryModalOpen((prev) => !prev)}
+                        className="p-1.5 rounded-xl text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer shadow-2xs border border-[var(--line)] bg-[var(--surface)]"
+                        title="AI Advisor Quick Settings & Memory"
+                        aria-label="AI Advisor Quick Settings & Memory"
                       >
-                        <Sparkles className="w-4 h-4" />
+                        <SlidersHorizontal className="w-4 h-4 text-[var(--brand)]" />
                       </button>
                       <button
                         type="button"
