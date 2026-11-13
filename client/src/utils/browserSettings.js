@@ -66,9 +66,35 @@ export const DEFAULT_BROWSER_SETTINGS = {
   askWhereToSave: false
 };
 
+export const NEW_TAB_URL = 'klarity://newtab';
+
+export function isNewTabUrl(url) {
+  return String(url || '').trim().toLowerCase() === NEW_TAB_URL;
+}
+
+export const DEFAULT_QUICK_LINKS = [
+  { id: 'ql-google', name: 'Google', url: 'https://www.google.com' },
+  { id: 'ql-youtube', name: 'YouTube', url: 'https://www.youtube.com' },
+  { id: 'ql-github', name: 'GitHub', url: 'https://github.com' },
+  { id: 'ql-reddit', name: 'Reddit', url: 'https://www.reddit.com' },
+  { id: 'ql-wikipedia', name: 'Wikipedia', url: 'https://www.wikipedia.org' },
+  { id: 'ql-finance', name: 'Yahoo Finance', url: 'https://finance.yahoo.com' }
+];
+
+export const DEFAULT_NEWTAB_PREFS = {
+  showQuickLinks: true,
+  showClock: true,
+  showNotes: false,
+  backgroundStyle: 'slate', // 'slate' | 'gradient' | 'wallpaper'
+  wallpaperUrl: ''
+};
+
 const SETTINGS_STORAGE_KEY = 'klarity_browser_settings';
 const BOOKMARKS_STORAGE_KEY = 'klarity_browser_bookmarks';
 const SESSION_TABS_KEY = 'klarity_browser_session_tabs';
+const NEWTAB_QUICK_LINKS_KEY = 'klarity_newtab_quick_links';
+const NEWTAB_PREFS_KEY = 'klarity_newtab_prefs';
+const NEWTAB_NOTES_KEY = 'klarity_newtab_notes';
 
 export function loadBrowserSettings() {
   try {
@@ -138,6 +164,54 @@ export function getSearchEngineById(engineId) {
   return SEARCH_ENGINES.find((e) => e.id === engineId) || SEARCH_ENGINES[0];
 }
 
+export function loadNewTabQuickLinks() {
+  try {
+    const raw = localStorage.getItem(NEWTAB_QUICK_LINKS_KEY);
+    if (raw === null) return [...DEFAULT_QUICK_LINKS];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [...DEFAULT_QUICK_LINKS];
+  } catch {
+    return [...DEFAULT_QUICK_LINKS];
+  }
+}
+
+export function saveNewTabQuickLinks(links) {
+  try {
+    localStorage.setItem(NEWTAB_QUICK_LINKS_KEY, JSON.stringify(Array.isArray(links) ? links : []));
+  } catch {}
+}
+
+export function loadNewTabPrefs() {
+  try {
+    const raw = localStorage.getItem(NEWTAB_PREFS_KEY);
+    if (!raw) return { ...DEFAULT_NEWTAB_PREFS };
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_NEWTAB_PREFS, ...(parsed && typeof parsed === 'object' ? parsed : {}) };
+  } catch {
+    return { ...DEFAULT_NEWTAB_PREFS };
+  }
+}
+
+export function saveNewTabPrefs(prefs) {
+  try {
+    localStorage.setItem(NEWTAB_PREFS_KEY, JSON.stringify(prefs));
+  } catch {}
+}
+
+export function loadNewTabNotes() {
+  try {
+    return localStorage.getItem(NEWTAB_NOTES_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function saveNewTabNotes(notes) {
+  try {
+    localStorage.setItem(NEWTAB_NOTES_KEY, String(notes || ''));
+  } catch {}
+}
+
 export function getBrowserHomeUrl(settings = DEFAULT_BROWSER_SETTINGS) {
   if (settings?.homepageMode === 'custom' && settings?.customHomepage?.trim()) {
     const custom = settings.customHomepage.trim();
@@ -147,8 +221,7 @@ export function getBrowserHomeUrl(settings = DEFAULT_BROWSER_SETTINGS) {
     if (matchedEngine) return matchedEngine.homeUrl;
     return /^https?:\/\//i.test(custom) ? custom : `https://${custom}`;
   }
-  const engine = getSearchEngineById(settings?.searchEngine);
-  return engine.homeUrl;
+  return NEW_TAB_URL;
 }
 
 export function buildSearchUrl(query, engineId) {
@@ -159,6 +232,10 @@ export function buildSearchUrl(query, engineId) {
 export function resolveBrowserDestination(input, engineId) {
   const clean = String(input || '').trim();
   if (!clean) return '';
+
+  if (clean.toLowerCase() === NEW_TAB_URL) {
+    return NEW_TAB_URL;
+  }
 
   if (/^https?:\/\/\S+/i.test(clean)) {
     return clean;

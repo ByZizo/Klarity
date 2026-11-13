@@ -25,11 +25,14 @@ import {
   Copy
 } from 'lucide-react';
 import { Button, Card } from '../components/ui';
+import { NewTabPage } from '../components/NewTabPage';
 import {
   DEFAULT_BROWSER_SETTINGS,
+  NEW_TAB_URL,
   TAB_GROUP_COLORS,
   getSearchEngineById,
   getBrowserHomeUrl,
+  isNewTabUrl,
   resolveBrowserDestination,
   loadBrowserSessionState,
   saveBrowserSessionState
@@ -100,7 +103,7 @@ function getInitialBrowserTabs(browserSettings, pendingBrowserUrl) {
   }
 
   return {
-    tabs: [createTabObject(homeUrl, engineName)],
+    tabs: [createTabObject(homeUrl, isNewTabUrl(homeUrl) ? 'New Tab' : engineName)],
     groups: [],
     activeTabId: null
   };
@@ -133,7 +136,8 @@ export function BrowserPage({
   );
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
-  const [urlInput, setUrlInput] = useState(activeTab?.url || homeUrl);
+  const [urlInput, setUrlInput] = useState(isNewTabUrl(activeTab?.url) ? '' : (activeTab?.url || ''));
+  const urlInputRef = useRef(null);
 
   // Drag & Drop Tab Reordering State
   const [draggedTabId, setDraggedTabId] = useState(null);
@@ -177,7 +181,12 @@ export function BrowserPage({
   // Keep address bar synced when switching tabs
   useEffect(() => {
     if (activeTab) {
-      setUrlInput(activeTab.url || homeUrl);
+      if (isNewTabUrl(activeTab.url)) {
+        setUrlInput('');
+        setTimeout(() => urlInputRef.current?.focus(), 0);
+      } else {
+        setUrlInput(activeTab.url || '');
+      }
     }
   }, [activeTabId]);
 
@@ -384,23 +393,29 @@ export function BrowserPage({
       } catch {}
 
       setTabs((prev) =>
-        prev.map((t) =>
-          t.id === tabId
-            ? {
-                ...t,
-                isLoading: false,
-                canGoBack: back,
-                canGoForward: fwd,
-                url: rawUrl || t.url,
-                title: rawTitle || t.title
-              }
-            : t
-        )
+        prev.map((t) => {
+          if (t.id !== tabId) return t;
+          if (isNewTabUrl(t.url) && (!rawUrl || rawUrl === 'about:blank')) {
+            return { ...t, isLoading: false };
+          }
+          return {
+            ...t,
+            isLoading: false,
+            canGoBack: back,
+            canGoForward: fwd,
+            url: rawUrl && rawUrl !== 'about:blank' ? rawUrl : t.url,
+            title: rawTitle && rawTitle !== 'about:blank' ? rawTitle : t.title
+          };
+        })
       );
 
       if (tabId === activeTabId) {
-        if (rawUrl) setUrlInput(rawUrl);
-        extractPageContentForTab(tabId);
+        if (rawUrl && rawUrl !== 'about:blank' && !isNewTabUrl(rawUrl)) {
+          setUrlInput(rawUrl);
+        }
+        if (rawUrl && rawUrl !== 'about:blank') {
+          extractPageContentForTab(tabId);
+        }
       }
     };
 
@@ -412,26 +427,33 @@ export function BrowserPage({
         fwd = webview.canGoForward();
       } catch {}
 
+      const navUrl = e.url || '';
       setTabs((prev) =>
-        prev.map((t) =>
-          t.id === tabId
-            ? {
-                ...t,
-                url: e.url || t.url,
-                canGoBack: back,
-                canGoForward: fwd
-              }
-            : t
-        )
+        prev.map((t) => {
+          if (t.id !== tabId) return t;
+          if (isNewTabUrl(t.url) && (!navUrl || navUrl === 'about:blank')) {
+            return t;
+          }
+          return {
+            ...t,
+            url: navUrl && navUrl !== 'about:blank' ? navUrl : t.url,
+            canGoBack: back,
+            canGoForward: fwd
+          };
+        })
       );
-      if (tabId === activeTabId && e.url) {
-        setUrlInput(e.url);
+      if (tabId === activeTabId && navUrl && navUrl !== 'about:blank' && !isNewTabUrl(navUrl)) {
+        setUrlInput(navUrl);
       }
     };
 
     const handleTitleUpdate = (e) => {
-      if (e.title) {
-        setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, title: e.title } : t)));
+      if (e.title && e.title !== 'about:blank') {
+        setTabs((prev) =>
+          prev.map((t) =>
+            t.id === tabId && !isNewTabUrl(t.url) ? { ...t, title: e.title } : t
+          )
+        );
       }
     };
 
@@ -449,6 +471,19 @@ export function BrowserPage({
   const navigateTo = (destination, targetTabId = activeTabId) => {
     const target = resolveBrowserDestination(destination, browserSettings?.searchEngine);
     if (!target) return;
+
+    if (isNewTabUrl(target)) {
+      if (targetTabId === activeTabId) {
+        setUrlInput('');
+        setTimeout(() => urlInputRef.current?.focus(), 0);
+      }
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === targetTabId ? { ...t, url: NEW_TAB_URL, title: 'New Tab', isLoading: false } : t
+        )
+      );
+      return;
+    }
 
     if (targetTabId === activeTabId) {
       setUrlInput(target);
@@ -487,6 +522,7 @@ export function BrowserPage({
   const handleReload = (targetTabId = activeTabId) => {
     const wv = webviewRefs.current[targetTabId];
     const tabObj = tabs.find((t) => t.id === targetTabId);
+    if (isNewTabUrl(tabObj?.url)) return;
     if (wv) {
       if (tabObj?.isLoading) {
         wv.stop();
@@ -500,26 +536,13 @@ export function BrowserPage({
   const handleHome = () => {
     const targetHome = getBrowserHomeUrl(browserSettings);
     if (!targetHome) return;
-    setUrlInput(targetHome);
-    setTabs((prev) => prev.map((t) => (t.id === activeTabId ? { ...t, url: targetHome } : t)));
-    const wv = webviewRefs.current[activeTabId];
-    if (wv) {
-      try {
-        if (typeof wv.loadURL === 'function') {
-          wv.loadURL(targetHome);
-        } else {
-          wv.src = targetHome;
-        }
-      } catch {
-        wv.src = targetHome;
-      }
-    }
+    navigateTo(targetHome, activeTabId);
   };
 
   // Tab Management Operations
   const handleNewTab = (options = {}) => {
     const url = options.url || getBrowserHomeUrl(browserSettings);
-    const title = options.title || activeEngine.name;
+    const title = options.title || (isNewTabUrl(url) ? 'New Tab' : activeEngine.name);
     const newTab = createTabObject(url, title, {
       groupId: options.groupId || null
     });
@@ -536,7 +559,12 @@ export function BrowserPage({
       return [...prev, newTab];
     });
     setActiveTabId(newTab.id);
-    setUrlInput(url);
+    if (isNewTabUrl(url)) {
+      setUrlInput('');
+      setTimeout(() => urlInputRef.current?.focus(), 0);
+    } else {
+      setUrlInput(url);
+    }
   };
 
   const handleCloseTab = (tabId, e) => {
@@ -547,9 +575,9 @@ export function BrowserPage({
     setTabs((prev) => {
       if (prev.length === 1) {
         // Reset the last remaining tab to Home instead of leaving 0 tabs
-        const resetTab = createTabObject(homeUrl, activeEngine.name);
+        const resetTab = createTabObject(homeUrl, isNewTabUrl(homeUrl) ? 'New Tab' : activeEngine.name);
         setActiveTabId(resetTab.id);
-        setUrlInput(homeUrl);
+        setUrlInput(isNewTabUrl(homeUrl) ? '' : homeUrl);
         return [resetTab];
       }
       const idx = prev.findIndex((t) => t.id === tabId);
@@ -558,7 +586,7 @@ export function BrowserPage({
         const fallback = next[Math.min(idx, next.length - 1)] || next[0];
         if (fallback) {
           setActiveTabId(fallback.id);
-          setUrlInput(fallback.url);
+          setUrlInput(isNewTabUrl(fallback.url) ? '' : fallback.url);
         }
       }
       return next;
@@ -1225,7 +1253,7 @@ export function BrowserPage({
                 type="button"
                 onClick={handleHome}
                 aria-label="Browser Home"
-                title={`Home (${activeEngine.name})`}
+                title="Home"
                 className="p-1.5 rounded-lg border border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--ink)] transition-colors cursor-pointer"
               >
                 <Home className="w-4 h-4" />
@@ -1242,11 +1270,12 @@ export function BrowserPage({
                 <Globe className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
               )}
               <input
+                ref={urlInputRef}
                 type="text"
                 value={urlInput}
                 onChange={(e) => setUrlInput(e.target.value)}
                 onFocus={(e) => e.target.select()}
-                placeholder={`Search ${activeEngine.name} or enter URL...`}
+                placeholder="Search or enter web address"
                 className="flex-1 bg-transparent border-0 outline-none text-xs text-[var(--ink)] placeholder-[var(--muted)] min-w-0 font-medium"
               />
               {urlInput && (
@@ -1636,36 +1665,64 @@ export function BrowserPage({
         {isDesktop ? (
           tabs.map((tab) => {
             const isTabActive = tab.id === activeTabId;
+            const showNewTab = isNewTabUrl(tab.url);
             return (
-              <webview
-                key={tab.id}
-                ref={(el) => {
-                  if (el) {
-                    webviewRefs.current[tab.id] = el;
-                    attachWebviewListeners(tab.id, el);
-                  }
-                }}
-                src={tab.initialUrl}
-                partition="persist:klarity_browser"
-                className="w-full h-full border-0 absolute inset-0"
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  border: 'none',
-                  outline: 'none',
-                  zIndex: isTabActive ? 10 : 0,
-                  opacity: isTabActive ? 1 : 0,
-                  pointerEvents: isTabActive ? 'auto' : 'none'
-                }}
-                allowpopups="true"
-                webpreferences="contextIsolation=true, sandbox=true"
-              />
+              <React.Fragment key={tab.id}>
+                <webview
+                  ref={(el) => {
+                    if (el) {
+                      webviewRefs.current[tab.id] = el;
+                      attachWebviewListeners(tab.id, el);
+                    }
+                  }}
+                  src={isNewTabUrl(tab.initialUrl) ? 'about:blank' : tab.initialUrl}
+                  partition="persist:klarity_browser"
+                  className="w-full h-full border-0 absolute inset-0"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    border: 'none',
+                    outline: 'none',
+                    zIndex: isTabActive && !showNewTab ? 10 : 0,
+                    opacity: isTabActive && !showNewTab ? 1 : 0,
+                    pointerEvents: isTabActive && !showNewTab ? 'auto' : 'none'
+                  }}
+                  allowpopups="true"
+                  webpreferences="contextIsolation=true, sandbox=true"
+                />
+                {showNewTab && (
+                  <div
+                    className="absolute inset-0 w-full h-full"
+                    style={{
+                      zIndex: isTabActive ? 20 : 0,
+                      opacity: isTabActive ? 1 : 0,
+                      pointerEvents: isTabActive ? 'auto' : 'none'
+                    }}
+                  >
+                    <NewTabPage
+                      searchEngineId={browserSettings?.searchEngine}
+                      onNavigate={(dest) => navigateTo(dest, tab.id)}
+                      onOpenNewTab={(url, title) =>
+                        handleNewTab({ url, title, insertAfterTabId: tab.id })
+                      }
+                    />
+                  </div>
+                )}
+              </React.Fragment>
             );
           })
+        ) : isNewTabUrl(activeTab?.url) ? (
+          <NewTabPage
+            searchEngineId={browserSettings?.searchEngine}
+            onNavigate={(dest) => navigateTo(dest, activeTabId)}
+            onOpenNewTab={(url, title) =>
+              handleNewTab({ url, title, insertAfterTabId: activeTabId })
+            }
+          />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-[var(--surface-subtle)]">
             <Card className="max-w-md p-6 flex flex-col items-center gap-4 text-center shadow-lg">
