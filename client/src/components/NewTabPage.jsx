@@ -559,7 +559,7 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
       </div>
 
       {/* Main Centered Content */}
-      <div className="relative z-10 max-w-3xl mx-auto px-6 pt-8 pb-16 flex flex-col items-center">
+      <div className={`relative z-10 mx-auto px-6 pt-8 pb-16 flex flex-col items-center transition-all ${prefs.showNotes && prefs.showQuickLinks ? 'max-w-5xl' : 'max-w-3xl'}`}>
         {/* Minimal Clock / Greeting */}
         {prefs.showClock && (
           <div className="text-center mb-7">
@@ -581,8 +581,8 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={`Search ${activeEngine.name} or enter web address...`}
-              className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-[15px] text-slate-100 placeholder-slate-400 min-w-0 px-2.5 py-1 leading-normal"
-              style={{ outline: 'none', boxShadow: 'none', border: 'none' }}
+              className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-[15px] text-slate-100 placeholder-slate-400 min-w-0 px-2.5 py-1 leading-normal rounded-full"
+              style={{ outline: 'none', boxShadow: 'none', border: 'none', background: 'transparent' }}
             />
             {query && (
               <button
@@ -603,174 +603,196 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
           </div>
         </form>
 
-        {/* Speed Dial / Quick Links Grid */}
-        {prefs.showQuickLinks && (
-          <div className="w-full max-w-2xl mb-8">
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-              {quickLinks.map((item) => {
-                const isGroup = item.type === 'group';
-                const isDropTarget = dropTargetId === item.id && draggedTileId !== item.id;
-
-                if (isGroup) {
-                  const previewItems = (item.items || []).slice(0, 4);
-                  return (
-                    <div
-                      key={item.id}
-                      draggable={false}
-                      onDragOver={(e) => {
-                        if (draggedTileId && draggedTileId !== item.id) {
-                          e.preventDefault();
-                          setDropTargetId(item.id);
-                        }
-                      }}
-                      onDragLeave={() => {
-                        if (dropTargetId === item.id) setDropTargetId(null);
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        handleDropOnTile(item);
-                      }}
-                      onClick={() => {
-                        setOpenGroupId(item.id);
-                        setIsEditingOpenGroupName(false);
-                        setOpenGroupNameDraft(item.name || '');
-                      }}
-                      onContextMenu={(e) => openTileMenuAt(e, item)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setOpenGroupId(item.id);
-                          setIsEditingOpenGroupName(false);
-                          setOpenGroupNameDraft(item.name || '');
-                        }
-                      }}
-                      className={`group relative flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md backdrop-blur-sm ${
-                        isDropTarget
-                          ? 'bg-blue-600/20 border-blue-400 scale-[1.03]'
-                          : 'bg-[#1e293b]/85 hover:bg-[#1e293b] border-slate-700/70 hover:border-blue-500/50'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={(e) => openTileMenuAt(e, item)}
-                        aria-label={`Options for ${item.name}`}
-                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/80 transition-opacity cursor-pointer"
-                      >
-                        <MoreVertical className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* 2x2 Mini-Grid Group Icon */}
-                      <div className="w-10 h-10 rounded-xl bg-slate-900/80 border border-slate-700/80 p-1 grid grid-cols-2 gap-0.5 place-items-center">
-                        {previewItems.map((sub) => (
-                          <ShortcutIcon key={sub.id} name={sub.name} url={sub.url} size="sm" />
-                        ))}
-                      </div>
-
-                      <div className="w-full text-center">
-                        <div className="text-xs font-medium text-slate-100 truncate">
-                          {item.name}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          {(item.items || []).length} sites
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={item.id}
-                    draggable
-                    onDragStart={(e) => {
-                      setDraggedTileId(item.id);
-                      e.dataTransfer.effectAllowed = 'move';
-                    }}
-                    onDragOver={(e) => {
-                      if (draggedTileId && draggedTileId !== item.id) {
-                        e.preventDefault();
-                        setDropTargetId(item.id);
-                      }
-                    }}
-                    onDragLeave={() => {
-                      if (dropTargetId === item.id) setDropTargetId(null);
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      handleDropOnTile(item);
-                    }}
-                    onDragEnd={() => {
-                      setDraggedTileId(null);
-                      setDropTargetId(null);
-                    }}
-                    onClick={() => onNavigate(item.url)}
-                    onContextMenu={(e) => openTileMenuAt(e, item)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onNavigate(item.url);
-                      }
-                    }}
-                    className={`group relative flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md backdrop-blur-sm ${
-                      isDropTarget
-                        ? 'bg-blue-600/20 border-blue-400 scale-[1.03]'
-                        : 'bg-[#1e293b]/80 hover:bg-[#1e293b] border-slate-700/60 hover:border-blue-500/50'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={(e) => openTileMenuAt(e, item)}
-                      aria-label={`Options for ${item.name}`}
-                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/80 transition-opacity cursor-pointer"
-                    >
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </button>
-                    <ShortcutIcon name={item.name} url={item.url} />
-                    <span className="text-xs font-medium text-slate-200 truncate w-full text-center">
-                      {item.name}
-                    </span>
-                  </div>
-                );
-              })}
-
-              {/* Add Shortcut Tile */}
-              <button
-                type="button"
-                onClick={() => setShortcutModal({ mode: 'add', name: '', url: '' })}
-                className="flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl bg-[#1e293b]/45 hover:bg-[#1e293b]/85 border border-dashed border-slate-700/80 hover:border-blue-500/60 transition-all cursor-pointer group"
+        {/* Main Content Area: Notes on the Left, Speed Dial on the Right */}
+        {(prefs.showNotes || prefs.showQuickLinks) && (
+          <div
+            className={`w-full ${
+              prefs.showNotes && prefs.showQuickLinks
+                ? 'flex flex-col md:flex-row items-stretch gap-6'
+                : 'max-w-2xl'
+            }`}
+          >
+            {/* Quick Notes / Scratchpad Widget Card on the Left */}
+            {prefs.showNotes && (
+              <div
+                className={`rounded-2xl bg-[#1e293b]/85 border border-slate-700/70 p-4 shadow-lg backdrop-blur-md flex flex-col ${
+                  prefs.showQuickLinks
+                    ? 'w-full md:w-72 lg:w-80 shrink-0 self-stretch'
+                    : 'w-full'
+                }`}
               >
-                <div className="w-10 h-10 rounded-xl bg-slate-800/80 group-hover:bg-blue-600/20 border border-slate-700/70 group-hover:border-blue-500/50 flex items-center justify-center text-slate-400 group-hover:text-blue-400 transition-colors">
-                  <Plus className="w-5 h-5" />
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+                    <StickyNote className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Quick Notes</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">Auto-saved</span>
                 </div>
-                <span className="text-xs font-medium text-slate-400 group-hover:text-slate-200">
-                  Add Shortcut
-                </span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Quick Notes / Scratchpad Widget Card */}
-        {prefs.showNotes && (
-          <div className="w-full max-w-2xl rounded-2xl bg-[#1e293b]/85 border border-slate-700/70 p-4 shadow-lg backdrop-blur-md">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
-                <StickyNote className="w-3.5 h-3.5 text-blue-400" />
-                <span>Quick Notes</span>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Jot down quick notes, links, or reminders..."
+                  className="w-full flex-1 min-h-[160px] rounded-xl bg-slate-900/70 border border-slate-700/70 focus:border-blue-500 outline-none p-3 text-xs text-slate-100 placeholder-slate-500 resize-none leading-relaxed"
+                />
               </div>
-              <span className="text-[11px] text-slate-400">Saved automatically</span>
-            </div>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={4}
-              placeholder="Jot down quick notes, links, or reminders..."
-              className="w-full rounded-xl bg-slate-900/70 border border-slate-700/70 focus:border-blue-500 outline-none p-3 text-xs text-slate-100 placeholder-slate-500 resize-y leading-relaxed"
-            />
+            )}
+
+            {/* Speed Dial / Quick Links Grid on the Right */}
+            {prefs.showQuickLinks && (
+              <div className="flex-1 w-full min-w-0">
+                <div
+                  className={`grid gap-3 ${
+                    prefs.showNotes
+                      ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4'
+                      : 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5'
+                  }`}
+                >
+                  {quickLinks.map((item) => {
+                    const isGroup = item.type === 'group';
+                    const isDropTarget = dropTargetId === item.id && draggedTileId !== item.id;
+
+                    if (isGroup) {
+                      const previewItems = (item.items || []).slice(0, 4);
+                      return (
+                        <div
+                          key={item.id}
+                          draggable={false}
+                          onDragOver={(e) => {
+                            if (draggedTileId && draggedTileId !== item.id) {
+                              e.preventDefault();
+                              setDropTargetId(item.id);
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (dropTargetId === item.id) setDropTargetId(null);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            handleDropOnTile(item);
+                          }}
+                          onClick={() => {
+                            setOpenGroupId(item.id);
+                            setIsEditingOpenGroupName(false);
+                            setOpenGroupNameDraft(item.name || '');
+                          }}
+                          onContextMenu={(e) => openTileMenuAt(e, item)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setOpenGroupId(item.id);
+                              setIsEditingOpenGroupName(false);
+                              setOpenGroupNameDraft(item.name || '');
+                            }
+                          }}
+                          className={`group relative flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md backdrop-blur-sm ${
+                            isDropTarget
+                              ? 'bg-blue-600/20 border-blue-400 scale-[1.03]'
+                              : 'bg-[#1e293b]/85 hover:bg-[#1e293b] border-slate-700/70 hover:border-blue-500/50'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => openTileMenuAt(e, item)}
+                            aria-label={`Options for ${item.name}`}
+                            className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/80 transition-opacity cursor-pointer"
+                          >
+                            <MoreVertical className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 2x2 Mini-Grid Group Icon */}
+                          <div className="w-10 h-10 rounded-xl bg-slate-900/80 border border-slate-700/80 p-1 grid grid-cols-2 gap-0.5 place-items-center">
+                            {previewItems.map((sub) => (
+                              <ShortcutIcon key={sub.id} name={sub.name} url={sub.url} size="sm" />
+                            ))}
+                          </div>
+
+                          <div className="w-full text-center">
+                            <div className="text-xs font-medium text-slate-100 truncate">
+                              {item.name}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {(item.items || []).length} sites
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={item.id}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedTileId(item.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragOver={(e) => {
+                          if (draggedTileId && draggedTileId !== item.id) {
+                            e.preventDefault();
+                            setDropTargetId(item.id);
+                          }
+                        }}
+                        onDragLeave={() => {
+                          if (dropTargetId === item.id) setDropTargetId(null);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          handleDropOnTile(item);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedTileId(null);
+                          setDropTargetId(null);
+                        }}
+                        onClick={() => onNavigate(item.url)}
+                        onContextMenu={(e) => openTileMenuAt(e, item)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onNavigate(item.url);
+                          }
+                        }}
+                        className={`group relative flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md backdrop-blur-sm ${
+                          isDropTarget
+                            ? 'bg-blue-600/20 border-blue-400 scale-[1.03]'
+                            : 'bg-[#1e293b]/80 hover:bg-[#1e293b] border-slate-700/60 hover:border-blue-500/50'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => openTileMenuAt(e, item)}
+                          aria-label={`Options for ${item.name}`}
+                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/80 transition-opacity cursor-pointer"
+                        >
+                          <MoreVertical className="w-3.5 h-3.5" />
+                        </button>
+                        <ShortcutIcon name={item.name} url={item.url} />
+                        <span className="text-xs font-medium text-slate-200 truncate w-full text-center">
+                          {item.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {/* Add Shortcut Tile */}
+                  <button
+                    type="button"
+                    onClick={() => setShortcutModal({ mode: 'add', name: '', url: '' })}
+                    className="flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl bg-[#1e293b]/45 hover:bg-[#1e293b]/85 border border-dashed border-slate-700/80 hover:border-blue-500/60 transition-all cursor-pointer group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-slate-800/80 group-hover:bg-blue-600/20 border border-slate-700/70 group-hover:border-blue-500/50 flex items-center justify-center text-slate-400 group-hover:text-blue-400 transition-colors">
+                      <Plus className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-medium text-slate-400 group-hover:text-slate-200">
+                      Add Shortcut
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

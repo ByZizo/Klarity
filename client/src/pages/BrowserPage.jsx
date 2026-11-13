@@ -1332,8 +1332,8 @@ export function BrowserPage({
                 onChange={(e) => setUrlInput(e.target.value)}
                 onFocus={(e) => e.target.select()}
                 placeholder="Search or enter web address"
-                className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-sm text-[var(--ink)] placeholder-[var(--muted)] min-w-0 font-medium px-2 py-0.5 leading-normal"
-                style={{ outline: 'none', boxShadow: 'none', border: 'none' }}
+                className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-sm text-[var(--ink)] placeholder-[var(--muted)] min-w-0 font-medium px-2 py-0.5 leading-normal rounded-full"
+                style={{ outline: 'none', boxShadow: 'none', border: 'none', background: 'transparent' }}
               />
               {urlInput && (
                 <button
