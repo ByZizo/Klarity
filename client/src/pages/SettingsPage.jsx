@@ -1401,7 +1401,11 @@ export function SettingsPage({
                           type="button"
                           onClick={() => {
                             if (onUpdateBrowserSettings) {
-                              onUpdateBrowserSettings({ ...browserSettings, searchEngine: engine.id });
+                              onUpdateBrowserSettings({
+                                ...browserSettings,
+                                searchEngine: engine.id,
+                                homepageMode: 'search_engine'
+                              });
                             }
                             if (onShowToast) onShowToast(`Default search engine set to ${engine.name}`, 'success');
                           }}

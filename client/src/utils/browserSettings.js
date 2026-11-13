@@ -97,6 +97,10 @@ export function getSearchEngineById(engineId) {
 export function getBrowserHomeUrl(settings = DEFAULT_BROWSER_SETTINGS) {
   if (settings?.homepageMode === 'custom' && settings?.customHomepage?.trim()) {
     const custom = settings.customHomepage.trim();
+    const matchedEngine = SEARCH_ENGINES.find(
+      (e) => e.id === custom.toLowerCase() || e.name.toLowerCase() === custom.toLowerCase()
+    );
+    if (matchedEngine) return matchedEngine.homeUrl;
     return /^https?:\/\//i.test(custom) ? custom : `https://${custom}`;
   }
   const engine = getSearchEngineById(settings?.searchEngine);

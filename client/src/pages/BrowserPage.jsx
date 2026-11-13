@@ -292,7 +292,21 @@ export function BrowserPage({
   };
 
   const handleHome = () => {
-    navigateTo(getBrowserHomeUrl(browserSettings));
+    const targetHome = getBrowserHomeUrl(browserSettings);
+    if (!targetHome) return;
+    setUrlInput(targetHome);
+    setCurrentUrl(targetHome);
+    if (webviewRef.current) {
+      try {
+        if (typeof webviewRef.current.loadURL === 'function') {
+          webviewRef.current.loadURL(targetHome);
+        } else {
+          webviewRef.current.src = targetHome;
+        }
+      } catch {
+        webviewRef.current.src = targetHome;
+      }
+    }
   };
 
   const handleToggleAdBlock = async () => {
