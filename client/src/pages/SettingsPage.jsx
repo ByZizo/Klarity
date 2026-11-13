@@ -132,15 +132,17 @@ export function SettingsPage({
   browserSettings = DEFAULT_BROWSER_SETTINGS,
   onUpdateBrowserSettings,
   browserBookmarks = [],
-  onUpdateBrowserBookmarks
+  onUpdateBrowserBookmarks,
+  browserOnly = false
 }) {
   // Map legacy tab names ('ui', 'plaid') into modern tabs
-  const normalizedTab =
-    settingsActiveTab === 'ui'
-      ? 'preferences'
-      : settingsActiveTab === 'plaid'
-      ? 'bank'
-      : settingsActiveTab || 'profile';
+  const normalizedTab = browserOnly
+    ? 'browser'
+    : settingsActiveTab === 'ui'
+    ? 'preferences'
+    : settingsActiveTab === 'plaid'
+    ? 'bank'
+    : settingsActiveTab || 'profile';
 
   const [themeMode, setThemeMode] = useState(() => {
     try {
@@ -333,10 +335,11 @@ export function SettingsPage({
     >
       <Card
         onClick={(e) => e.stopPropagation()}
-        className="max-w-[900px] w-full max-h-[90vh] h-[680px] flex flex-col overflow-hidden shadow-xl"
+        className={`${browserOnly ? 'max-w-[700px]' : 'max-w-[900px]'} w-full max-h-[90vh] h-[680px] flex flex-col overflow-hidden shadow-xl`}
       >
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-          {/* Left Navigation Tabs */}
+          {/* Left Navigation Tabs (Hidden when opened directly as Browser Settings) */}
+          {!browserOnly && (
           <div className="w-full md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-[var(--line)] p-4 sm:p-5 flex flex-col justify-between bg-[var(--surface-subtle)]">
             <div>
               <div className="flex items-center justify-between mb-4">
@@ -383,6 +386,7 @@ export function SettingsPage({
               </Button>
             </div>
           </div>
+          )}
 
           {/* Right Content Panel */}
           <div className="flex-1 p-5 sm:p-7 overflow-y-auto bg-[var(--surface)] text-[var(--ink)]">
@@ -1355,11 +1359,23 @@ export function SettingsPage({
             {/* BROWSER SETTINGS TAB */}
             {normalizedTab === 'browser' && (
               <div className="flex flex-col gap-6">
-                <div>
-                  <h3 className="font-serif text-[22px] font-semibold text-[var(--ink)]">Browser</h3>
-                  <p className="text-[14px] font-medium text-[var(--muted)] mt-1">
-                    Customize your search engine, startup page, bookmarks, ad blocker, and browsing privacy.
-                  </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-serif text-[22px] font-semibold text-[var(--ink)]">Browser</h3>
+                    <p className="text-[14px] font-medium text-[var(--muted)] mt-1">
+                      Customize your search engine, startup page, bookmarks, ad blocker, and browsing privacy.
+                    </p>
+                  </div>
+                  {browserOnly && (
+                    <button
+                      type="button"
+                      aria-label="Close browser settings"
+                      onClick={onClose}
+                      className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
 
                 {/* 1. Search Engine */}

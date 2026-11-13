@@ -1539,6 +1539,7 @@ function KlarityApp() {
   const [browserSettings, setBrowserSettings] = useState(() => loadBrowserSettings());
   const [browserBookmarks, setBrowserBookmarks] = useState(() => loadBrowserBookmarks());
   const [pendingBrowserUrl, setPendingBrowserUrl] = useState('');
+  const [isBrowserSettingsOnly, setIsBrowserSettingsOnly] = useState(false);
 
   const handleUpdateBrowserSettings = (next) => {
     setBrowserSettings(next);
@@ -5635,6 +5636,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 pendingBrowserUrl={pendingBrowserUrl}
                 onClearPendingBrowserUrl={() => setPendingBrowserUrl('')}
                 onOpenBrowserSettings={() => {
+                  setIsBrowserSettingsOnly(true);
                   setSettingsActiveTab('browser');
                   setIsSettingsOpen(true);
                 }}
@@ -6376,7 +6378,11 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       {/* 1. Settings Modal (6 Merged Tabs: Profile, Preferences, AI advisor, Bank, Security, About) */}
       <SettingsPage
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={() => {
+          setIsSettingsOpen(false);
+          setIsBrowserSettingsOnly(false);
+        }}
+        browserOnly={isBrowserSettingsOnly}
         settingsActiveTab={settingsActiveTab}
         setSettingsActiveTab={setSettingsActiveTab}
         browserSettings={browserSettings}

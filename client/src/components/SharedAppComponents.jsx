@@ -16,7 +16,7 @@ marked.setOptions({
   gfm: true
 });
 
-export const CURRENT_APP_VERSION = '3.12.27';
+export const CURRENT_APP_VERSION = '3.12.28';
 
 export function isSemverNewer(remoteVer, currentVer = CURRENT_APP_VERSION) {
   if (!remoteVer || !currentVer) return false;

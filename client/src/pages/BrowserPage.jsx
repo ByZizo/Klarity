@@ -544,16 +544,16 @@ export function BrowserPage({
             )}
           </div>
 
-          {/* Compact "AI" Button & Interactive Page Q&A Popover */}
+          {/* Compact AI Icon Button & Interactive Page Q&A Popover */}
           <div className="relative shrink-0" ref={aiPopoverRef}>
             <button
               type="button"
               onClick={() => setIsAiPopoverOpen((prev) => !prev)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0"
+              className="flex items-center justify-center p-1.5 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white transition-all cursor-pointer shadow-2xs shrink-0"
               title="Ask AI about the current page"
+              aria-label="Ask AI about the current page"
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>AI</span>
+              <Sparkles className="w-4 h-4" />
             </button>
 
             {isAiPopoverOpen && (
