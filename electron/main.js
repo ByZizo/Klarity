@@ -575,6 +575,8 @@ async function createDesktopWindow() {
 
   const AD_BLOCK_DOMAINS = [
     'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
+    'ad.youtube.com', 'adservice.google.com', 'pagead2.googlesyndication.com',
+    'stats.g.doubleclick.net', 'adclick.g.doubleclick.net', 'video-stats.l.google.com',
     'adnxs.com', 'pubmatic.com', 'taboola.com', 'outbrain.com',
     'adroll.com', 'criteo.com', 'criteo.net', 'scorecardresearch.com',
     'amazon-adsystem.com', 'rubiconproject.com', 'openx.net',
@@ -599,7 +601,12 @@ async function createDesktopWindow() {
     /\/advert(?:s|ing)?\//i,
     /\/popunder/i,
     /\/tracking_pixel/i,
-    /\/telemetry\./i
+    /\/telemetry\./i,
+    /\/api\/stats\/ads/i,
+    /\/youtubei\/v1\/player\/ad_break/i,
+    /\/youtubei\/v1\/ad_break/i,
+    /\/ptracking/i,
+    /\/get_midroll_info/i
   ];
 
   browserSession.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, callback) => {
@@ -990,6 +997,50 @@ ipcMain.handle('klarity:browser-get-prefs', () => {
 
 ipcMain.handle('klarity:browser-update-prefs', (_e, nextPrefs) => {
   return saveBrowserRuntimePrefs(nextPrefs || {});
+});
+
+ipcMain.handle('klarity:browser-get-sponsor-segments', async (_e, videoId) => {
+  if (!videoId || typeof videoId !== 'string') return [];
+  try {
+    const hash = crypto.createHash('sha256').update(videoId).digest('hex').slice(0, 4);
+    const res = await fetch(`https://sponsor.ajay.app/api/skipSegments/${hash}?service=YouTube&categories=["sponsor","selfpromo","interaction","intro","outro"]&actionTypes=["skip"]`, {
+      headers: { 'User-Agent': 'KlarityBrowser/1.0' }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const match = data.find(item => item.videoID === videoId);
+        if (match && Array.isArray(match.segments)) {
+          return match.segments;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('SponsorBlock error:', err.message);
+  }
+  return [];
+});
+
+ipcMain.handle('klarity:browser-get-dearrow-branding', async (_e, videoId) => {
+  if (!videoId || typeof videoId !== 'string') return null;
+  try {
+    const res = await fetch(`https://sponsor.ajay.app/api/branding?videoID=${encodeURIComponent(videoId)}`, {
+      headers: { 'User-Agent': 'KlarityBrowser/1.0' }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.titles) && data.titles.length > 0) {
+        const cleanTitle = data.titles.find(t => !t.original) || data.titles[0];
+        return {
+          title: cleanTitle?.title || null,
+          thumbnailTimestamp: data.thumbnails?.[0]?.timestamp || null
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('DeArrow error:', err.message);
+  }
+  return null;
 });
 
 ipcMain.handle('klarity:browser-select-download-dir', async () => {

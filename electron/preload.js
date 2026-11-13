@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('klarityDesktop', {
   getBrowserPrefs: () => ipcRenderer.invoke('klarity:browser-get-prefs'),
   updateBrowserPrefs: (prefs) => ipcRenderer.invoke('klarity:browser-update-prefs', prefs),
   selectBrowserDownloadDir: () => ipcRenderer.invoke('klarity:browser-select-download-dir'),
+  getSponsorSegments: (videoId) => ipcRenderer.invoke('klarity:browser-get-sponsor-segments', videoId),
+  getDeArrowBranding: (videoId) => ipcRenderer.invoke('klarity:browser-get-dearrow-branding', videoId),
   onAdBlockStats: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const handler = (_event, stats) => callback(stats);

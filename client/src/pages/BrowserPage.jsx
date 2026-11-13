@@ -27,6 +27,11 @@ import {
 import { Button, Card } from '../components/ui';
 import { NewTabPage } from '../components/NewTabPage';
 import {
+  buildYouTubeAdShieldScript,
+  buildSponsorBlockScript,
+  buildDeArrowScript
+} from '../utils/browserShield';
+import {
   DEFAULT_BROWSER_SETTINGS,
   NEW_TAB_URL,
   TAB_GROUP_COLORS,
@@ -352,6 +357,49 @@ export function BrowserPage({
     }
   }, [activeTabId, browserSettings?.aiPageReaderEnabled]);
 
+  // Apply YouTube video ad fast-forward, banner cleaning, SponsorBlock and DeArrow
+  const applyYouTubeEnhancements = (tabId, targetUrl) => {
+    const webview = webviewRefs.current[tabId];
+    if (!webview || !targetUrl) return;
+
+    try {
+      const parsed = new URL(targetUrl);
+      const isYouTube = parsed.hostname.includes('youtube.com') || parsed.hostname.includes('youtu.be');
+      if (!isYouTube) return;
+
+      // 1. YouTube video ad fast-forward & banner cleaner
+      if (browserSettings?.youtubeAdShield !== false) {
+        webview.executeJavaScript(buildYouTubeAdShieldScript(true)).catch(() => {});
+      }
+
+      // Extract video ID for watch or shorts pages
+      let videoId = '';
+      if (parsed.pathname === '/watch') {
+        videoId = parsed.searchParams.get('v') || '';
+      } else if (parsed.pathname.startsWith('/shorts/')) {
+        videoId = parsed.pathname.split('/shorts/')[1]?.split(/[?#&]/)[0] || '';
+      }
+
+      if (videoId) {
+        // 2. SponsorBlock skipping
+        if (browserSettings?.sponsorBlockEnabled !== false && window.klarityDesktop?.getSponsorSegments) {
+          window.klarityDesktop.getSponsorSegments(videoId).then((segments) => {
+            if (Array.isArray(segments) && segments.length > 0) {
+              webview.executeJavaScript(buildSponsorBlockScript(segments, true)).catch(() => {});
+            }
+          }).catch(() => {});
+        }
+
+        // 3. DeArrow clickbait title cleaner
+        if (browserSettings?.dearrowEnabled !== false && window.klarityDesktop?.getDeArrowBranding) {
+          window.klarityDesktop.getDeArrowBranding(videoId).then((branding) => {
+            webview.executeJavaScript(buildDeArrowScript(branding, true)).catch(() => {});
+          }).catch(() => {});
+        }
+      }
+    } catch {}
+  };
+
   // Attach Electron <webview> event listeners for each tab
   const attachWebviewListeners = (tabId, webview) => {
     if (!webview || attachedListenersRef.current[tabId] === webview) return;
@@ -365,6 +413,7 @@ export function BrowserPage({
         if (currentTab && typeof webview.setAudioMuted === 'function') {
           webview.setAudioMuted(Boolean(currentTab.isMuted));
         }
+        applyYouTubeEnhancements(tabId, webview.getURL());
       } catch {}
     };
 
@@ -409,6 +458,10 @@ export function BrowserPage({
         })
       );
 
+      if (rawUrl) {
+        applyYouTubeEnhancements(tabId, rawUrl);
+      }
+
       if (tabId === activeTabId) {
         if (rawUrl && rawUrl !== 'about:blank' && !isNewTabUrl(rawUrl)) {
           setUrlInput(rawUrl);
@@ -442,6 +495,9 @@ export function BrowserPage({
           };
         })
       );
+      if (navUrl) {
+        applyYouTubeEnhancements(tabId, navUrl);
+      }
       if (tabId === activeTabId && navUrl && navUrl !== 'about:blank' && !isNewTabUrl(navUrl)) {
         setUrlInput(navUrl);
       }

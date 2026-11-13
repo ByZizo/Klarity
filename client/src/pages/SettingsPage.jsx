@@ -1674,6 +1674,63 @@ export function SettingsPage({
                       </Button>
                     </div>
                   </div>
+
+                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
+                    <span className="text-[14px] font-medium text-[var(--ink)]">
+                      YouTube video ad shield
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={browserSettings?.youtubeAdShield !== false}
+                      onChange={(e) => {
+                        if (onUpdateBrowserSettings) {
+                          onUpdateBrowserSettings({
+                            ...browserSettings,
+                            youtubeAdShield: e.target.checked
+                          });
+                        }
+                      }}
+                      className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
+                    <span className="text-[14px] font-medium text-[var(--ink)]">
+                      Skip sponsor segments (SponsorBlock)
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={browserSettings?.sponsorBlockEnabled !== false}
+                      onChange={(e) => {
+                        if (onUpdateBrowserSettings) {
+                          onUpdateBrowserSettings({
+                            ...browserSettings,
+                            sponsorBlockEnabled: e.target.checked
+                          });
+                        }
+                      }}
+                      className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
+                    <span className="text-[14px] font-medium text-[var(--ink)]">
+                      Clean video titles (DeArrow)
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={browserSettings?.dearrowEnabled !== false}
+                      onChange={(e) => {
+                        if (onUpdateBrowserSettings) {
+                          onUpdateBrowserSettings({
+                            ...browserSettings,
+                            dearrowEnabled: e.target.checked
+                          });
+                        }
+                      }}
+                      className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
+                    />
+                  </div>
                 </Card>
 
                 {/* 5. Downloads */}

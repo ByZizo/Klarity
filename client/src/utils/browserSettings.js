@@ -63,7 +63,11 @@ export const DEFAULT_BROWSER_SETTINGS = {
   cookiePolicy: 'allow', // 'allow' | 'block_third_party' | 'block_all'
   aiPageReaderEnabled: true,
   downloadPath: '',
-  askWhereToSave: false
+  askWhereToSave: false,
+  adBlockerEnabled: true,
+  youtubeAdShield: true,
+  sponsorBlockEnabled: true,
+  dearrowEnabled: true
 };
 
 export const NEW_TAB_URL = 'klarity://newtab';
