@@ -573,30 +573,30 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
         )}
 
         {/* Centered Pill Search Bar */}
-        <form onSubmit={handleSearchSubmit} className="w-full max-w-xl mb-10">
-          <div className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-[#1e293b]/90 border border-slate-700/80 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/25 shadow-xl backdrop-blur-md transition-all">
-            <Search className="w-4 h-4 text-slate-400 shrink-0" />
+        <form onSubmit={handleSearchSubmit} className="w-full max-w-2xl mb-10">
+          <div className="flex items-center gap-3 pl-5 pr-2.5 py-2.5 rounded-full bg-[#1e293b]/90 border border-slate-700/80 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/25 shadow-xl backdrop-blur-md transition-all min-h-[52px]">
+            <Search className="w-5 h-5 text-slate-400 shrink-0" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={`Search ${activeEngine.name} or enter web address...`}
-              className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-sm text-slate-100 placeholder-slate-400 min-w-0 rounded-full"
-              style={{ outline: 'none', boxShadow: 'none' }}
+              className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-[15px] text-slate-100 placeholder-slate-400 min-w-0 px-2.5 py-1 leading-normal"
+              style={{ outline: 'none', boxShadow: 'none', border: 'none' }}
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery('')}
-                className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+                className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-700/60 cursor-pointer"
                 aria-label="Clear search"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             )}
             <button
               type="submit"
-              className="px-4 py-1.5 rounded-full bg-[#2563eb] hover:bg-[#3b82f6] text-white text-xs font-semibold transition-colors cursor-pointer shrink-0 shadow-sm"
+              className="px-5 py-2 rounded-full bg-[#2563eb] hover:bg-[#3b82f6] text-white text-xs font-semibold transition-colors cursor-pointer shrink-0 shadow-sm"
             >
               Search
             </button>

@@ -1263,11 +1263,11 @@ export function BrowserPage({
 
           {/* Smart Address & Search Input */}
           <form onSubmit={handleUrlSubmit} className="flex-1 flex items-center min-w-0">
-            <div className="flex-1 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--surface-subtle)] border border-[var(--line)] focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/20 transition-all">
+            <div className="flex-1 flex items-center gap-2.5 px-4 py-2 rounded-full bg-[var(--surface-subtle)] border border-[var(--line)] focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/20 transition-all min-h-[38px]">
               {(activeTab?.url || '').startsWith('https://') ? (
-                <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" title="Secure connection (HTTPS)" />
+                <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" title="Secure connection (HTTPS)" />
               ) : (
-                <Globe className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
+                <Globe className="w-4 h-4 text-[var(--muted)] shrink-0" />
               )}
               <input
                 ref={urlInputRef}
@@ -1276,17 +1276,17 @@ export function BrowserPage({
                 onChange={(e) => setUrlInput(e.target.value)}
                 onFocus={(e) => e.target.select()}
                 placeholder="Search or enter web address"
-                className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-xs text-[var(--ink)] placeholder-[var(--muted)] min-w-0 font-medium rounded-full"
-                style={{ outline: 'none', boxShadow: 'none' }}
+                className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-sm text-[var(--ink)] placeholder-[var(--muted)] min-w-0 font-medium px-2 py-0.5 leading-normal"
+                style={{ outline: 'none', boxShadow: 'none', border: 'none' }}
               />
               {urlInput && (
                 <button
                   type="button"
                   onClick={() => setUrlInput('')}
                   aria-label="Clear URL"
-                  className="p-0.5 rounded-full hover:bg-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
+                  className="p-1 rounded-full hover:bg-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
