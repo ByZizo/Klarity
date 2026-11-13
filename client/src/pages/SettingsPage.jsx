@@ -27,10 +27,14 @@ import {
   Home,
   Landmark,
   Sparkles,
-  Globe
+  Globe,
+  Search,
+  Folder,
+  Bookmark
 } from 'lucide-react';
 import { Button, Card, Pill, ConfirmDialog } from '../components/ui';
 import { formatCleanUpdateMessage, formatWhatsNewHighlights } from '../components/SharedAppComponents';
+import { SEARCH_ENGINES, DEFAULT_BROWSER_SETTINGS } from '../utils/browserSettings';
 import {
   hasMasterPinSet,
   verifyMasterPin,
@@ -124,7 +128,11 @@ export function SettingsPage({
   sidebarNavOrder = [],
   handleMoveSidebarItem,
   handleResetSidebarOrder,
-  SIDEBAR_ITEMS_CONFIG: propsSidebarConfig
+  SIDEBAR_ITEMS_CONFIG: propsSidebarConfig,
+  browserSettings = DEFAULT_BROWSER_SETTINGS,
+  onUpdateBrowserSettings,
+  browserBookmarks = [],
+  onUpdateBrowserBookmarks
 }) {
   // Map legacy tab names ('ui', 'plaid') into modern tabs
   const normalizedTab =
@@ -154,6 +162,22 @@ export function SettingsPage({
   const [confirmDisconnectBank, setConfirmDisconnectBank] = useState(null);
   const [confirmClearMemory, setConfirmClearMemory] = useState(false);
   const [showFullReleaseNotes, setShowFullReleaseNotes] = useState(false);
+
+  // Browser Settings local states
+  const [browserAdBlockStats, setBrowserAdBlockStats] = useState({ enabled: true, adsBlockedCount: 0 });
+  const [newSettingsBmTitle, setNewSettingsBmTitle] = useState('');
+  const [newSettingsBmUrl, setNewSettingsBmUrl] = useState('');
+  const [newSettingsBmFolder, setNewSettingsBmFolder] = useState('');
+  const [newSettingsFolderName, setNewSettingsFolderName] = useState('');
+  const [isClearingBrowserData, setIsClearingBrowserData] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && normalizedTab === 'browser' && window.klarityDesktop?.getAdBlockStats) {
+      window.klarityDesktop.getAdBlockStats().then((stats) => {
+        if (stats) setBrowserAdBlockStats(stats);
+      }).catch(() => {});
+    }
+  }, [isOpen, normalizedTab]);
 
   useEffect(() => {
     if (isOpen) {
@@ -267,6 +291,7 @@ export function SettingsPage({
     { id: 'profile', label: 'Profile' },
     { id: 'preferences', label: 'Preferences' },
     { id: 'sidebar', label: 'Sidebar' },
+    { id: 'browser', label: 'Browser' },
     { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' && settingsAiProvider !== 'local' },
     { id: 'bank', label: 'Bank', dot: settingsPlaidStatus !== 'connected' },
     { id: 'security', label: 'Security' },
@@ -1323,6 +1348,410 @@ export function SettingsPage({
                   >
                     Sign out
                   </Button>
+                </Card>
+              </div>
+            )}
+
+            {/* BROWSER SETTINGS TAB */}
+            {normalizedTab === 'browser' && (
+              <div className="flex flex-col gap-6">
+                <div>
+                  <h3 className="font-serif text-[22px] font-semibold text-[var(--ink)]">Browser</h3>
+                  <p className="text-[14px] font-medium text-[var(--muted)] mt-1">
+                    Customize your search engine, startup page, bookmarks, ad blocker, and browsing privacy.
+                  </p>
+                </div>
+
+                {/* 1. Search Engine */}
+                <Card className="p-5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-[16px] font-semibold text-[var(--ink)] flex items-center gap-2">
+                        <Search className="w-4 h-4 text-[#1B4B91]" />
+                        Search engine
+                      </h4>
+                      <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
+                        Search engine used when typing queries into the address bar.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {SEARCH_ENGINES.map((engine) => {
+                      const isSelected = (browserSettings?.searchEngine || 'duckduckgo') === engine.id;
+                      return (
+                        <button
+                          key={engine.id}
+                          type="button"
+                          onClick={() => {
+                            if (onUpdateBrowserSettings) {
+                              onUpdateBrowserSettings({ ...browserSettings, searchEngine: engine.id });
+                            }
+                            if (onShowToast) onShowToast(`Default search engine set to ${engine.name}`, 'success');
+                          }}
+                          className={`p-3 rounded-[10px] border text-left transition-all cursor-pointer flex items-start justify-between gap-2 ${
+                            isSelected
+                              ? 'border-[#1B4B91] bg-[#1B4B91]/10'
+                              : 'border-[var(--line)] bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)]'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="text-[14px] font-semibold text-[var(--ink)]">{engine.name}</div>
+                            <div className="text-[12px] text-[var(--muted)] mt-0.5">{engine.description}</div>
+                          </div>
+                          {isSelected && <CheckCircle2 className="w-4 h-4 text-[#1B4B91] shrink-0 mt-0.5" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Card>
+
+                {/* 2. On Startup & Appearance */}
+                <Card className="p-5 flex flex-col gap-4">
+                  <div>
+                    <h4 className="text-[16px] font-semibold text-[var(--ink)]">On startup &amp; appearance</h4>
+                    <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
+                      Choose your home page and control toolbar visibility.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5">
+                    <label className="flex items-center gap-3 p-3 rounded-[10px] border border-[var(--line)] bg-[var(--surface-subtle)] cursor-pointer">
+                      <input
+                        type="radio"
+                        name="browserHomepageMode"
+                        checked={(browserSettings?.homepageMode || 'search_engine') === 'search_engine'}
+                        onChange={() =>
+                          onUpdateBrowserSettings &&
+                          onUpdateBrowserSettings({ ...browserSettings, homepageMode: 'search_engine' })
+                        }
+                        className="accent-[#1B4B91]"
+                      />
+                      <div>
+                        <div className="text-[14px] font-semibold text-[var(--ink)]">Open default search engine</div>
+                        <div className="text-[12px] text-[var(--muted)]">
+                          Home button and startup open {SEARCH_ENGINES.find((e) => e.id === (browserSettings?.searchEngine || 'duckduckgo'))?.homeUrl}
+                        </div>
+                      </div>
+                    </label>
+
+                    <div className="p-3 rounded-[10px] border border-[var(--line)] bg-[var(--surface-subtle)] flex flex-col gap-2">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="browserHomepageMode"
+                          checked={browserSettings?.homepageMode === 'custom'}
+                          onChange={() =>
+                            onUpdateBrowserSettings &&
+                            onUpdateBrowserSettings({ ...browserSettings, homepageMode: 'custom' })
+                          }
+                          className="accent-[#1B4B91]"
+                        />
+                        <div className="text-[14px] font-semibold text-[var(--ink)]">Open a specific page</div>
+                      </label>
+                      {browserSettings?.homepageMode === 'custom' && (
+                        <input
+                          type="text"
+                          value={browserSettings?.customHomepage || ''}
+                          onChange={(e) =>
+                            onUpdateBrowserSettings &&
+                            onUpdateBrowserSettings({ ...browserSettings, customHomepage: e.target.value })
+                          }
+                          placeholder="https://www.google.com"
+                          className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[13px] font-medium text-[var(--ink)]"
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-[var(--line)] flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-[14px] font-semibold text-[var(--ink)]">Show bookmarks bar</div>
+                        <div className="text-[12px] text-[var(--muted)]">
+                          Display your bookmarks, folders, and the + button below the address bar.
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={browserSettings?.showBookmarksBar !== false}
+                        onChange={(e) =>
+                          onUpdateBrowserSettings &&
+                          onUpdateBrowserSettings({ ...browserSettings, showBookmarksBar: e.target.checked })
+                        }
+                        className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-[14px] font-semibold text-[var(--ink)]">AI page context reading</div>
+                        <div className="text-[12px] text-[var(--muted)]">
+                          Allow Klarity AI to read the active webpage when you click AI or ask questions.
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={browserSettings?.aiPageReaderEnabled !== false}
+                        onChange={(e) =>
+                          onUpdateBrowserSettings &&
+                          onUpdateBrowserSettings({ ...browserSettings, aiPageReaderEnabled: e.target.checked })
+                        }
+                        className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </Card>
+
+                {/* 3. Bookmarks & Folders Manager */}
+                <Card className="p-5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-[16px] font-semibold text-[var(--ink)]">Bookmarks &amp; folders</h4>
+                      <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
+                        Organize your saved websites and bookmark folders.
+                      </p>
+                    </div>
+                    {browserBookmarks.length > 0 && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          if (onUpdateBrowserBookmarks) onUpdateBrowserBookmarks([]);
+                          if (onShowToast) onShowToast('All bookmarks cleared', 'success');
+                        }}
+                      >
+                        Clear all
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Quick Add Folder & Bookmark inline */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-[10px] bg-[var(--surface-subtle)] border border-[var(--line)]">
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const title = newSettingsFolderName.trim();
+                        if (!title || !onUpdateBrowserBookmarks) return;
+                        onUpdateBrowserBookmarks([
+                          ...browserBookmarks,
+                          { id: `fld-${Date.now()}`, type: 'folder', title }
+                        ]);
+                        setNewSettingsFolderName('');
+                        if (onShowToast) onShowToast(`Folder "${title}" created`, 'success');
+                      }}
+                      className="flex flex-col gap-2"
+                    >
+                      <label className="text-[12px] font-semibold text-[var(--ink)]">Create folder</label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={newSettingsFolderName}
+                          onChange={(e) => setNewSettingsFolderName(e.target.value)}
+                          placeholder="Folder name (e.g. Bills)"
+                          className="flex-1 min-w-0 bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-2.5 py-1.5 text-[12px] text-[var(--ink)]"
+                        />
+                        <Button type="submit" size="sm" variant="secondary">
+                          Add
+                        </Button>
+                      </div>
+                    </form>
+
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const rawUrl = newSettingsBmUrl.trim();
+                        if (!rawUrl || !onUpdateBrowserBookmarks) return;
+                        const cleanUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+                        let fallbackTitle = cleanUrl;
+                        try {
+                          fallbackTitle = new URL(cleanUrl).hostname.replace(/^www\./, '');
+                        } catch {}
+                        onUpdateBrowserBookmarks([
+                          ...browserBookmarks,
+                          {
+                            id: `bm-${Date.now()}`,
+                            type: 'bookmark',
+                            title: newSettingsBmTitle.trim() || fallbackTitle,
+                            url: cleanUrl,
+                            folderId: newSettingsBmFolder || null
+                          }
+                        ]);
+                        setNewSettingsBmTitle('');
+                        setNewSettingsBmUrl('');
+                        if (onShowToast) onShowToast('Bookmark added', 'success');
+                      }}
+                      className="flex flex-col gap-2"
+                    >
+                      <label className="text-[12px] font-semibold text-[var(--ink)]">Add bookmark</label>
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            value={newSettingsBmTitle}
+                            onChange={(e) => setNewSettingsBmTitle(e.target.value)}
+                            placeholder="Title"
+                            className="w-1/3 min-w-0 bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-2.5 py-1.5 text-[12px] text-[var(--ink)]"
+                          />
+                          <input
+                            type="text"
+                            value={newSettingsBmUrl}
+                            onChange={(e) => setNewSettingsBmUrl(e.target.value)}
+                            placeholder="https://example.com"
+                            className="flex-1 min-w-0 bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-2.5 py-1.5 text-[12px] text-[var(--ink)]"
+                          />
+                        </div>
+                        <div className="flex gap-1.5">
+                          <select
+                            value={newSettingsBmFolder}
+                            onChange={(e) => setNewSettingsBmFolder(e.target.value)}
+                            className="flex-1 min-w-0 bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-2.5 py-1.5 text-[12px] text-[var(--ink)]"
+                          >
+                            <option value="">Bookmarks Bar (Root)</option>
+                            {browserBookmarks
+                              .filter((b) => b.type === 'folder')
+                              .map((f) => (
+                                <option key={f.id} value={f.id}>
+                                  {f.title}
+                                </option>
+                              ))}
+                          </select>
+                          <Button type="submit" size="sm" variant="primary">
+                            Save
+                          </Button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+
+                  {browserBookmarks.length === 0 ? (
+                    <div className="text-[13px] text-[var(--muted)] py-3 text-center">
+                      No bookmarks or folders yet. Use the + button in the browser or the form above to add your own.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-1">
+                      {browserBookmarks.map((item) => {
+                        const parentFolder = item.folderId
+                          ? browserBookmarks.find((f) => f.id === item.folderId)
+                          : null;
+                        return (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between gap-2 px-3 py-2 rounded-[8px] border border-[var(--line)] bg-[var(--surface-subtle)]"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {item.type === 'folder' ? (
+                                <Folder className="w-4 h-4 text-amber-500 shrink-0" />
+                              ) : (
+                                <Bookmark className="w-4 h-4 text-[#1B4B91] shrink-0" />
+                              )}
+                              <div className="min-w-0">
+                                <div className="text-[13px] font-semibold text-[var(--ink)] truncate">
+                                  {item.title}
+                                  {parentFolder && (
+                                    <span className="ml-2 text-[11px] font-medium text-[var(--muted)]">
+                                      in {parentFolder.title}
+                                    </span>
+                                  )}
+                                </div>
+                                {item.url && (
+                                  <div className="text-[11px] text-[var(--muted)] truncate">{item.url}</div>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onUpdateBrowserBookmarks) {
+                                  onUpdateBrowserBookmarks(
+                                    browserBookmarks.filter((b) => b.id !== item.id && b.folderId !== item.id)
+                                  );
+                                }
+                              }}
+                              className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+                              aria-label={`Delete ${item.title}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
+
+                {/* 4. Privacy, Ad Blocker & Browsing Data */}
+                <Card className="p-5 flex flex-col gap-4">
+                  <div>
+                    <h4 className="text-[16px] font-semibold text-[var(--ink)]">Privacy &amp; ad blocker</h4>
+                    <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
+                      Manage built-in ad &amp; tracker protection and clear stored site data.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 p-3 rounded-[10px] bg-[var(--surface-subtle)] border border-[var(--line)]">
+                    <div>
+                      <div className="text-[14px] font-semibold text-[var(--ink)]">Built-in Ad &amp; Tracker Blocker</div>
+                      <div className="text-[12px] text-[var(--muted)]">
+                        {browserAdBlockStats.adsBlockedCount || 0} ads &amp; trackers blocked in this session
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={browserAdBlockStats.enabled ? 'primary' : 'secondary'}
+                        onClick={async () => {
+                          if (window.klarityDesktop?.toggleAdBlock) {
+                            const next = await window.klarityDesktop.toggleAdBlock(!browserAdBlockStats.enabled);
+                            if (next) setBrowserAdBlockStats(next);
+                          }
+                        }}
+                      >
+                        {browserAdBlockStats.enabled ? 'Enabled' : 'Paused'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={async () => {
+                          if (window.klarityDesktop?.resetAdBlockCount) {
+                            const next = await window.klarityDesktop.resetAdBlockCount();
+                            if (next) setBrowserAdBlockStats(next);
+                          }
+                        }}
+                      >
+                        Reset count
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 pt-1">
+                    <div>
+                      <div className="text-[14px] font-semibold text-[var(--ink)]">Clear browsing data</div>
+                      <div className="text-[12px] text-[var(--muted)]">
+                        Clear cookies, cache, and site storage for the in-app browser partition.
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      disabled={isClearingBrowserData}
+                      onClick={async () => {
+                        setIsClearingBrowserData(true);
+                        try {
+                          if (window.klarityDesktop?.clearBrowserData) {
+                            await window.klarityDesktop.clearBrowserData();
+                          }
+                          if (onShowToast) onShowToast('Browser cache and cookies cleared', 'success');
+                        } catch {
+                          if (onShowToast) onShowToast('Could not clear browser data', 'error');
+                        } finally {
+                          setIsClearingBrowserData(false);
+                        }
+                      }}
+                    >
+                      {isClearingBrowserData ? 'Clearing...' : 'Clear data'}
+                    </Button>
+                  </div>
                 </Card>
               </div>
             )}

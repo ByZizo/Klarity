@@ -4,7 +4,6 @@ import {
   ArrowRight,
   RotateCw,
   Home,
-  Search,
   Globe,
   Lock,
   ShieldCheck,
@@ -13,42 +12,68 @@ import {
   ExternalLink,
   ChevronDown,
   X,
-  FileText,
-  DollarSign,
-  HelpCircle,
-  CheckCircle2,
-  Bookmark
+  Plus,
+  Folder,
+  FolderPlus,
+  Bookmark,
+  Trash2,
+  Send,
+  Settings as SettingsIcon
 } from 'lucide-react';
-import { Button, Card, Pill } from '../components/ui';
-
-const DEFAULT_HOME_URL = 'https://duckduckgo.com';
-
-const QUICK_BOOKMARKS = [
-  { label: 'DuckDuckGo', url: 'https://duckduckgo.com', icon: Search },
-  { label: 'IRS.gov', url: 'https://www.irs.gov', icon: FileText },
-  { label: 'CFPB', url: 'https://www.consumerfinance.gov', icon: ShieldCheck },
-  { label: 'Bankrate Rates', url: 'https://www.bankrate.com', icon: DollarSign },
-  { label: 'TreasuryDirect', url: 'https://www.treasurydirect.gov', icon: Lock },
-  { label: 'FRED Economic Data', url: 'https://fred.stlouisfed.org', icon: Globe }
-];
+import { Button, Card } from '../components/ui';
+import {
+  DEFAULT_BROWSER_SETTINGS,
+  getSearchEngineById,
+  getBrowserHomeUrl,
+  resolveBrowserDestination
+} from '../utils/browserSettings';
 
 export function BrowserPage({
   onAskAdvisor,
   activeBrowserContext,
-  setActiveBrowserContext
+  setActiveBrowserContext,
+  browserSettings = DEFAULT_BROWSER_SETTINGS,
+  browserBookmarks = [],
+  onUpdateBookmarks,
+  pendingBrowserUrl = '',
+  onClearPendingBrowserUrl,
+  onOpenBrowserSettings
 }) {
-  const [urlInput, setUrlInput] = useState(DEFAULT_HOME_URL);
-  const [currentUrl, setCurrentUrl] = useState(DEFAULT_HOME_URL);
+  const activeEngine = getSearchEngineById(browserSettings?.searchEngine);
+  const homeUrl = getBrowserHomeUrl(browserSettings);
+
+  // Use a stable initial src ref so React re-renders from did-navigate NEVER reload <webview>
+  const initialSrcRef = useRef(pendingBrowserUrl || homeUrl);
+
+  const [urlInput, setUrlInput] = useState(initialSrcRef.current);
+  const [currentUrl, setCurrentUrl] = useState(initialSrcRef.current);
   const [pageTitle, setPageTitle] = useState('Klarity Browser');
   const [isLoading, setIsLoading] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
-  
+
   // Ad Blocker State
   const [adBlockEnabled, setAdBlockEnabled] = useState(true);
   const [adsBlockedCount, setAdsBlockedCount] = useState(0);
   const [isAdBlockPopoverOpen, setIsAdBlockPopoverOpen] = useState(false);
   const adBlockPopoverRef = useRef(null);
+
+  // AI Quick-Ask Popover State
+  const [isAiPopoverOpen, setIsAiPopoverOpen] = useState(false);
+  const [aiQuestion, setAiQuestion] = useState('');
+  const aiPopoverRef = useRef(null);
+  const aiInputRef = useRef(null);
+
+  // Add Bookmark / Folder Popover State
+  const [isAddBookmarkOpen, setIsAddBookmarkOpen] = useState(false);
+  const [addMode, setAddMode] = useState('bookmark'); // 'bookmark' | 'folder'
+  const [bmTitleInput, setBmTitleInput] = useState('');
+  const [bmUrlInput, setBmUrlInput] = useState('');
+  const [bmFolderId, setBmFolderId] = useState('');
+  const [folderNameInput, setFolderNameInput] = useState('');
+  const [openFolderId, setOpenFolderId] = useState(null);
+  const addBookmarkRef = useRef(null);
+  const bookmarksBarRef = useRef(null);
 
   const webviewRef = useRef(null);
   const isDesktop = typeof window !== 'undefined' && Boolean(window.klarityDesktop?.isDesktopApp);
@@ -57,15 +82,18 @@ export function BrowserPage({
   useEffect(() => {
     let unsubscribe = null;
     if (isDesktop && window.klarityDesktop?.getAdBlockStats) {
-      window.klarityDesktop.getAdBlockStats().then(stats => {
-        if (stats) {
-          if (stats.adsBlockedCount != null) setAdsBlockedCount(stats.adsBlockedCount);
-          if (stats.enabled != null) setAdBlockEnabled(stats.enabled);
-        }
-      }).catch(() => {});
+      window.klarityDesktop
+        .getAdBlockStats()
+        .then((stats) => {
+          if (stats) {
+            if (stats.adsBlockedCount != null) setAdsBlockedCount(stats.adsBlockedCount);
+            if (stats.enabled != null) setAdBlockEnabled(stats.enabled);
+          }
+        })
+        .catch(() => {});
 
       if (window.klarityDesktop?.onAdBlockStats) {
-        unsubscribe = window.klarityDesktop.onAdBlockStats(stats => {
+        unsubscribe = window.klarityDesktop.onAdBlockStats((stats) => {
           if (stats) {
             if (stats.adsBlockedCount != null) setAdsBlockedCount(stats.adsBlockedCount);
             if (stats.enabled != null) setAdBlockEnabled(stats.enabled);
@@ -78,19 +106,49 @@ export function BrowserPage({
     };
   }, [isDesktop]);
 
-  // Close ad block popover on outside click
+  // Close popovers on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (adBlockPopoverRef.current && !adBlockPopoverRef.current.contains(e.target)) {
         setIsAdBlockPopoverOpen(false);
+      }
+      if (aiPopoverRef.current && !aiPopoverRef.current.contains(e.target)) {
+        setIsAiPopoverOpen(false);
+      }
+      if (addBookmarkRef.current && !addBookmarkRef.current.contains(e.target)) {
+        setIsAddBookmarkOpen(false);
+      }
+      if (bookmarksBarRef.current && !bookmarksBarRef.current.contains(e.target)) {
+        setOpenFolderId(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Focus AI question input when popover opens
+  useEffect(() => {
+    if (isAiPopoverOpen) {
+      setTimeout(() => aiInputRef.current?.focus(), 40);
+    }
+  }, [isAiPopoverOpen]);
+
+  // Navigate when AI Advisor triggers an "Open in Browser" link
+  useEffect(() => {
+    if (pendingBrowserUrl) {
+      navigateTo(pendingBrowserUrl);
+      if (typeof onClearPendingBrowserUrl === 'function') {
+        onClearPendingBrowserUrl();
+      }
+    }
+  }, [pendingBrowserUrl]);
+
   // Safe page content extractor that runs inside the webview to feed AI
   const extractPageContent = async () => {
+    if (browserSettings?.aiPageReaderEnabled === false) {
+      setActiveBrowserContext(null);
+      return;
+    }
     const webview = webviewRef.current;
     if (!webview || typeof webview.executeJavaScript !== 'function') return;
 
@@ -101,17 +159,12 @@ export function BrowserPage({
             const title = document.title || '';
             const href = window.location.href || '';
             const metaDesc = document.querySelector('meta[name="description"]')?.content || '';
-            
-            // Clone body to strip non-content tags safely
             const clone = document.body ? document.body.cloneNode(true) : null;
             if (!clone) return { title, url: href, text: metaDesc };
-            
             const badElements = clone.querySelectorAll('script, style, noscript, nav, footer, iframe, svg, [aria-hidden="true"]');
             badElements.forEach(el => el.remove());
-            
             let text = clone.innerText || clone.textContent || '';
             text = text.replace(/\\s+/g, ' ').trim();
-            
             return {
               title,
               url: href,
@@ -189,29 +242,21 @@ export function BrowserPage({
         webview.removeEventListener('page-title-updated', handleTitleUpdate);
       } catch {}
     };
-  }, [webviewRef.current]);
+  }, [browserSettings?.aiPageReaderEnabled]);
 
   const navigateTo = (destination) => {
-    let clean = (destination || '').trim();
-    if (!clean) return;
-
-    // Check if user entered a search query or a domain/URL
-    const isUrl = /^(https?:\/\/|[a-z0-9-]+\.[a-z]{2,})/i.test(clean) && !clean.includes(' ');
-    let target = clean;
-    if (isUrl) {
-      if (!/^https?:\/\//i.test(target)) {
-        target = `https://${target}`;
-      }
-    } else {
-      // Search via DuckDuckGo
-      target = `https://duckduckgo.com/?q=${encodeURIComponent(clean)}`;
-    }
+    const target = resolveBrowserDestination(destination, browserSettings?.searchEngine);
+    if (!target) return;
 
     setUrlInput(target);
     setCurrentUrl(target);
     if (webviewRef.current) {
       try {
-        webviewRef.current.loadURL(target);
+        if (typeof webviewRef.current.loadURL === 'function') {
+          webviewRef.current.loadURL(target);
+        } else {
+          webviewRef.current.src = target;
+        }
       } catch {
         webviewRef.current.src = target;
       }
@@ -247,7 +292,7 @@ export function BrowserPage({
   };
 
   const handleHome = () => {
-    navigateTo(DEFAULT_HOME_URL);
+    navigateTo(getBrowserHomeUrl(browserSettings));
   };
 
   const handleToggleAdBlock = async () => {
@@ -262,7 +307,7 @@ export function BrowserPage({
         }
       } catch {}
     } else {
-      setAdBlockEnabled(prev => !prev);
+      setAdBlockEnabled((prev) => !prev);
     }
   };
 
@@ -277,16 +322,77 @@ export function BrowserPage({
     }
   };
 
-  const handleAskAiAboutPage = (customPrompt) => {
+  const handleSendAiQuestion = (customPrompt) => {
     if (typeof onAskAdvisor !== 'function') return;
-    const prompt = customPrompt || `I am currently looking at "${pageTitle}" (${currentUrl}). Can you review what's on this page and summarize the key points or details I should know?`;
+    const raw = (typeof customPrompt === 'string' ? customPrompt : aiQuestion).trim();
+    const prompt =
+      raw ||
+      `I am currently looking at "${pageTitle}" (${currentUrl}). Can you review what's on this page and summarize the key points?`;
     onAskAdvisor(prompt);
+    setAiQuestion('');
+    setIsAiPopoverOpen(false);
+  };
+
+  // Bookmark & Folder CRUD
+  const folders = browserBookmarks.filter((item) => item.type === 'folder');
+  const rootItems = browserBookmarks.filter((item) => !item.folderId);
+
+  const openAddPopover = (presetFolderId = '') => {
+    setAddMode('bookmark');
+    setBmTitleInput(pageTitle && pageTitle !== 'Klarity Browser' ? pageTitle : '');
+    setBmUrlInput(currentUrl || '');
+    setBmFolderId(presetFolderId || '');
+    setFolderNameInput('');
+    setIsAddBookmarkOpen(true);
+    setOpenFolderId(null);
+  };
+
+  const handleSaveBookmarkOrFolder = (e) => {
+    e.preventDefault();
+    if (typeof onUpdateBookmarks !== 'function') return;
+
+    if (addMode === 'folder') {
+      const cleanName = folderNameInput.trim();
+      if (!cleanName) return;
+      const nextFolder = {
+        id: `fld-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        type: 'folder',
+        title: cleanName
+      };
+      onUpdateBookmarks([...browserBookmarks, nextFolder]);
+      setFolderNameInput('');
+      setIsAddBookmarkOpen(false);
+      return;
+    }
+
+    const cleanUrl = resolveBrowserDestination(bmUrlInput, browserSettings?.searchEngine);
+    if (!cleanUrl) return;
+    let fallbackTitle = cleanUrl;
+    try {
+      fallbackTitle = new URL(cleanUrl).hostname.replace(/^www\./, '');
+    } catch {}
+    const nextBm = {
+      id: `bm-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      type: 'bookmark',
+      title: bmTitleInput.trim() || fallbackTitle,
+      url: cleanUrl,
+      folderId: bmFolderId || null
+    };
+    onUpdateBookmarks([...browserBookmarks, nextBm]);
+    setIsAddBookmarkOpen(false);
+  };
+
+  const handleDeleteBookmarkItem = (id, e) => {
+    if (e) e.stopPropagation();
+    if (typeof onUpdateBookmarks !== 'function') return;
+    onUpdateBookmarks(browserBookmarks.filter((item) => item.id !== id && item.folderId !== id));
+    if (openFolderId === id) setOpenFolderId(null);
   };
 
   return (
     <div className="flex flex-col h-full w-full bg-[var(--background)] overflow-hidden flex-1 min-h-0">
       {/* 1. TOP BROWSER CONTROLS & SMART ADDRESS BAR */}
-      <div className="shrink-0 bg-[var(--surface)] border-b border-[var(--line)] px-4 py-2.5 flex flex-col gap-2 shadow-2xs">
+      <div className="shrink-0 bg-[var(--surface)] border-b border-[var(--line)] px-4 py-2.5 flex flex-col gap-2 shadow-2xs relative z-30">
         <div className="flex items-center gap-2">
           {/* Navigation Buttons: Back, Forward, Reload, Home */}
           <div className="flex items-center gap-1">
@@ -331,7 +437,7 @@ export function BrowserPage({
               type="button"
               onClick={handleHome}
               aria-label="Browser Home"
-              title="Browser Home (DuckDuckGo)"
+              title={`Home (${activeEngine.name})`}
               className="p-1.5 rounded-lg border border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--ink)] transition-colors cursor-pointer"
             >
               <Home className="w-4 h-4" />
@@ -350,7 +456,8 @@ export function BrowserPage({
                 type="text"
                 value={urlInput}
                 onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="Search DuckDuckGo or enter URL (e.g. pge.com, irs.gov)..."
+                onFocus={(e) => e.target.select()}
+                placeholder={`Search ${activeEngine.name} or enter URL...`}
                 className="flex-1 bg-transparent border-0 outline-none text-xs text-[var(--ink)] placeholder-[var(--muted)] min-w-0 font-medium"
               />
               {urlInput && (
@@ -370,7 +477,7 @@ export function BrowserPage({
           <div className="relative shrink-0" ref={adBlockPopoverRef}>
             <button
               type="button"
-              onClick={() => setIsAdBlockPopoverOpen(prev => !prev)}
+              onClick={() => setIsAdBlockPopoverOpen((prev) => !prev)}
               title="Built-in Ad & Tracker Blocker"
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-2xs ${
                 adBlockEnabled
@@ -389,7 +496,6 @@ export function BrowserPage({
               <ChevronDown className="w-3 h-3 opacity-70" />
             </button>
 
-            {/* Ad Blocker Popover */}
             {isAdBlockPopoverOpen && (
               <div className="absolute right-0 top-full mt-2 w-72 p-3.5 bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-xl z-50 flex flex-col gap-3">
                 <div className="flex items-center justify-between pb-2 border-b border-[var(--line)]">
@@ -397,114 +503,376 @@ export function BrowserPage({
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
                     <span className="text-xs font-bold text-[var(--ink)]">Klarity Ad Blocker</span>
                   </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                    adBlockEnabled ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                  }`}>
-                    {adBlockEnabled ? 'Active' : 'Disabled'}
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                      adBlockEnabled
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                    }`}
+                  >
+                    {adBlockEnabled ? 'ACTIVE' : 'PAUSED'}
                   </span>
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold text-[var(--ink)]">Block Ads & Trackers</p>
-                    <p className="text-[11px] text-[var(--muted)]">Stops intrusive ads, pop-ups, and trackers</p>
-                  </div>
+                <p className="text-[11px] text-[var(--muted)] leading-relaxed">
+                  Blocks display ads, pop-unders, and third-party tracking scripts at the network level before they load.
+                </p>
+                <div className="flex items-center justify-between bg-[var(--surface-subtle)] p-2.5 rounded-xl border border-[var(--line)]">
+                  <span className="text-xs font-medium text-[var(--ink)]">Trackers &amp; Ads Blocked</span>
+                  <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{adsBlockedCount}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 pt-1">
                   <button
                     type="button"
                     onClick={handleToggleAdBlock}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                      adBlockEnabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                      adBlockEnabled
+                        ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950/30 dark:border-rose-800 dark:text-rose-300'
+                        : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                     }`}
-                    role="switch"
-                    aria-checked={adBlockEnabled}
                   >
-                    <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                        adBlockEnabled ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
+                    {adBlockEnabled ? 'Pause Blocker' : 'Enable Blocker'}
                   </button>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] flex items-center justify-between">
-                  <div>
-                    <span className="text-[11px] text-[var(--muted)] block">Total Ads Blocked</span>
-                    <span className="text-sm font-bold text-[var(--ink)]">{adsBlockedCount.toLocaleString()}</span>
-                  </div>
                   <button
                     type="button"
                     onClick={handleResetAdBlockCount}
-                    className="text-[11px] text-[var(--brand)] hover:underline font-semibold cursor-pointer"
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)] cursor-pointer"
                   >
-                    Reset Count
+                    Reset
                   </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Ask AI About Page Button */}
-          <button
-            type="button"
-            onClick={() => handleAskAiAboutPage()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0"
-            title="Ask AI Advisor about the current page"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Ask AI About Page</span>
-          </button>
+          {/* Compact "AI" Button & Interactive Page Q&A Popover */}
+          <div className="relative shrink-0" ref={aiPopoverRef}>
+            <button
+              type="button"
+              onClick={() => setIsAiPopoverOpen((prev) => !prev)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0"
+              title="Ask AI about the current page"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI</span>
+            </button>
+
+            {isAiPopoverOpen && (
+              <div className="absolute right-0 top-full mt-2 w-80 p-3.5 bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-xl z-50 flex flex-col gap-3">
+                <div className="flex items-center justify-between pb-2 border-b border-[var(--line)]">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Sparkles className="w-4 h-4 text-[var(--brand)] shrink-0" />
+                    <span className="text-xs font-bold text-[var(--ink)] truncate">Ask AI about this page</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAiPopoverOpen(false)}
+                    className="p-0.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+                    aria-label="Close AI popover"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="text-[11px] text-[var(--muted)] bg-[var(--surface-subtle)] px-2.5 py-1.5 rounded-lg border border-[var(--line)] truncate">
+                  {pageTitle || currentUrl}
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSendAiQuestion();
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <input
+                    ref={aiInputRef}
+                    type="text"
+                    value={aiQuestion}
+                    onChange={(e) => setAiQuestion(e.target.value)}
+                    placeholder="Ask a question about this page..."
+                    className="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] focus:border-[var(--brand)] outline-none text-xs text-[var(--ink)] placeholder-[var(--muted)]"
+                  />
+                  <button
+                    type="submit"
+                    className="p-2 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white cursor-pointer shrink-0 transition-colors"
+                    title="Send to AI Advisor"
+                    aria-label="Send question"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </form>
+
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleSendAiQuestion('Can you summarize the main points, rates, or figures on this page?')}
+                    className="px-2 py-1 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--brand-soft)] text-[11px] font-medium text-[var(--ink)] hover:text-[var(--brand)] border border-[var(--line)] transition-colors cursor-pointer"
+                  >
+                    Summarize
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSendAiQuestion('Please extract all pricing, fees, bill amounts, or interest rates mentioned on this page.')}
+                    className="px-2 py-1 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--brand-soft)] text-[11px] font-medium text-[var(--ink)] hover:text-[var(--brand)] border border-[var(--line)] transition-colors cursor-pointer"
+                  >
+                    Extract Rates
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSendAiQuestion('Based on my financial accounts and budget, is what is offered on this page a good deal for me?')}
+                    className="px-2 py-1 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--brand-soft)] text-[11px] font-medium text-[var(--ink)] hover:text-[var(--brand)] border border-[var(--line)] transition-colors cursor-pointer"
+                  >
+                    Is This a Good Deal?
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Browser Settings Shortcut */}
+          {typeof onOpenBrowserSettings === 'function' && (
+            <button
+              type="button"
+              onClick={onOpenBrowserSettings}
+              aria-label="Browser settings"
+              title="Browser settings"
+              className="p-1.5 rounded-lg border border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer shrink-0"
+            >
+              <SettingsIcon className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
-        {/* 2. SECONDARY BAR: QUICK BOOKMARKS & AI QUICK CHIPS */}
-        <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar pt-1">
-          {/* Quick Bookmarks */}
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[10px] uppercase font-bold text-[var(--muted)] tracking-wider mr-1">Quick:</span>
-            {QUICK_BOOKMARKS.map((bm) => {
-              const Icon = bm.icon;
+        {/* 2. SECONDARY BAR: USER BOOKMARKS, FOLDERS & "+" BUTTON */}
+        {browserSettings?.showBookmarksBar !== false && (
+          <div className="flex items-center gap-1.5 pt-0.5 flex-wrap" ref={bookmarksBarRef}>
+            {rootItems.map((item) => {
+              if (item.type === 'folder') {
+                const folderChildren = browserBookmarks.filter((b) => b.folderId === item.id);
+                const isFolderOpen = openFolderId === item.id;
+                return (
+                  <div key={item.id} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setOpenFolderId(isFolderOpen ? null : item.id)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-[11px] text-[var(--ink)] font-medium transition-colors cursor-pointer"
+                    >
+                      <Folder className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span className="max-w-[140px] truncate">{item.title}</span>
+                      <ChevronDown className="w-3 h-3 text-[var(--muted)]" />
+                    </button>
+
+                    {isFolderOpen && (
+                      <div className="absolute left-0 top-full mt-1.5 w-60 p-1.5 bg-[var(--surface)] border border-[var(--line)] rounded-xl shadow-xl z-50 flex flex-col gap-0.5">
+                        {folderChildren.length === 0 ? (
+                          <div className="px-2.5 py-2 text-[11px] text-[var(--muted)] text-center">
+                            Empty folder
+                          </div>
+                        ) : (
+                          folderChildren.map((child) => (
+                            <div
+                              key={child.id}
+                              className="group flex items-center justify-between gap-1 px-2 py-1.5 rounded-lg hover:bg-[var(--surface-subtle)] transition-colors"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigateTo(child.url);
+                                  setOpenFolderId(null);
+                                }}
+                                className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer"
+                                title={child.url}
+                              >
+                                <Bookmark className="w-3 h-3 text-[var(--brand)] shrink-0" />
+                                <span className="text-xs font-medium text-[var(--ink)] truncate">{child.title}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteBookmarkItem(child.id, e)}
+                                className="opacity-0 group-hover:opacity-100 p-1 rounded text-[var(--muted)] hover:text-rose-600 cursor-pointer transition-opacity"
+                                title="Remove bookmark"
+                                aria-label={`Remove ${child.title}`}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                        <div className="border-t border-[var(--line)] mt-1 pt-1 flex items-center justify-between gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openAddPopover(item.id)}
+                            className="flex-1 flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-[var(--surface-subtle)] text-[11px] font-medium text-[var(--brand)] cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Add page here</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteBookmarkItem(item.id, e)}
+                            className="p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 text-[var(--muted)] hover:text-rose-600 cursor-pointer"
+                            title="Delete folder"
+                            aria-label={`Delete folder ${item.title}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               return (
-                <button
-                  key={bm.url}
-                  type="button"
-                  onClick={() => navigateTo(bm.url)}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-[11px] text-[var(--ink)] font-medium transition-colors cursor-pointer"
+                <div
+                  key={item.id}
+                  className="group flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-[11px] text-[var(--ink)] font-medium transition-colors"
                 >
-                  <Icon className="w-3 h-3 text-[var(--brand)]" />
-                  <span>{bm.label}</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => navigateTo(item.url)}
+                    className="flex items-center gap-1.5 cursor-pointer max-w-[160px]"
+                    title={item.url}
+                  >
+                    <Bookmark className="w-3 h-3 text-[var(--brand)] shrink-0" />
+                    <span className="truncate">{item.title}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteBookmarkItem(item.id, e)}
+                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-[var(--muted)] hover:text-rose-600 cursor-pointer transition-opacity"
+                    title="Remove bookmark"
+                    aria-label={`Remove ${item.title}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
               );
             })}
-          </div>
 
-          {/* AI Page Sync Badge & Quick Prompts */}
-          <div className="flex items-center gap-1.5 shrink-0 pl-2 border-l border-[var(--line)]">
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-              <span>AI Page Reader Active</span>
+            {/* "+" Button to Add Bookmark or Folder */}
+            <div className="relative" ref={addBookmarkRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isAddBookmarkOpen) {
+                    setIsAddBookmarkOpen(false);
+                  } else {
+                    openAddPopover('');
+                  }
+                }}
+                aria-label="Add bookmark or folder"
+                title="Add bookmark or folder"
+                className="flex items-center justify-center w-6 h-6 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--ink)] transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+
+              {isAddBookmarkOpen && (
+                <div className="absolute left-0 top-full mt-2 w-72 p-3.5 bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-xl z-50 flex flex-col gap-3">
+                  <div className="flex items-center gap-1 p-1 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)]">
+                    <button
+                      type="button"
+                      onClick={() => setAddMode('bookmark')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                        addMode === 'bookmark'
+                          ? 'bg-[var(--surface)] text-[var(--ink)] shadow-2xs'
+                          : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                      }`}
+                    >
+                      <Bookmark className="w-3.5 h-3.5" />
+                      <span>Bookmark</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAddMode('folder')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                        addMode === 'folder'
+                          ? 'bg-[var(--surface)] text-[var(--ink)] shadow-2xs'
+                          : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                      }`}
+                    >
+                      <FolderPlus className="w-3.5 h-3.5" />
+                      <span>New Folder</span>
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveBookmarkOrFolder} className="flex flex-col gap-2.5">
+                    {addMode === 'bookmark' ? (
+                      <>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1">Name</label>
+                          <input
+                            type="text"
+                            value={bmTitleInput}
+                            onChange={(e) => setBmTitleInput(e.target.value)}
+                            placeholder="Bookmark name"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-subtle)] border border-[var(--line)] text-xs text-[var(--ink)] outline-none focus:border-[var(--brand)]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1">URL</label>
+                          <input
+                            type="text"
+                            required
+                            value={bmUrlInput}
+                            onChange={(e) => setBmUrlInput(e.target.value)}
+                            placeholder="https://example.com"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-subtle)] border border-[var(--line)] text-xs text-[var(--ink)] outline-none focus:border-[var(--brand)]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1">Folder</label>
+                          <select
+                            value={bmFolderId}
+                            onChange={(e) => setBmFolderId(e.target.value)}
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-subtle)] border border-[var(--line)] text-xs text-[var(--ink)] outline-none focus:border-[var(--brand)]"
+                          >
+                            <option value="">Bookmarks Bar (No Folder)</option>
+                            {folders.map((f) => (
+                              <option key={f.id} value={f.id}>
+                                {f.title}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1">Folder Name</label>
+                        <input
+                          type="text"
+                          required
+                          autoFocus
+                          value={folderNameInput}
+                          onChange={(e) => setFolderNameInput(e.target.value)}
+                          placeholder="e.g. Bills, Investing, Shopping"
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-subtle)] border border-[var(--line)] text-xs text-[var(--ink)] outline-none focus:border-[var(--brand)]"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddBookmarkOpen(false)}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-3 py-1.5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold cursor-pointer"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => handleAskAiAboutPage("Can you summarize the main points, rates, or figures on this page?")}
-              className="px-2 py-1 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--brand-soft)] text-[11px] font-semibold text-[var(--ink)] hover:text-[var(--brand)] border border-[var(--line)] transition-colors cursor-pointer"
-            >
-              Summarize
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAskAiAboutPage("Please extract all pricing, fees, bill amounts, or interest rates mentioned on this page.")}
-              className="px-2 py-1 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--brand-soft)] text-[11px] font-semibold text-[var(--ink)] hover:text-[var(--brand)] border border-[var(--line)] transition-colors cursor-pointer"
-            >
-              Extract Rates / Bills
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAskAiAboutPage("Based on my financial accounts and budget, is what's offered on this page a good deal or practical decision for me?")}
-              className="px-2 py-1 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--brand-soft)] text-[11px] font-semibold text-[var(--ink)] hover:text-[var(--brand)] border border-[var(--line)] transition-colors cursor-pointer"
-            >
-              Is This a Good Deal?
-            </button>
           </div>
-        </div>
+        )}
       </div>
 
       {/* 3. BROWSER CONTENT CANVAS */}
@@ -512,7 +880,7 @@ export function BrowserPage({
         {isDesktop ? (
           <webview
             ref={webviewRef}
-            src={currentUrl}
+            src={initialSrcRef.current}
             partition="persist:klarity_browser"
             className="w-full h-full border-0 absolute inset-0"
             style={{
@@ -523,7 +891,7 @@ export function BrowserPage({
               height: '100%',
               display: 'flex',
               border: 'none',
-              outline: 'none',
+              outline: 'none'
             }}
             allowpopups="true"
             webpreferences="contextIsolation=true, sandbox=true"
@@ -543,7 +911,13 @@ export function BrowserPage({
               <div className="flex items-center gap-2">
                 <Button variant="primary" onClick={() => window.open(currentUrl, '_blank')}>
                   <ExternalLink className="w-4 h-4 mr-1.5" />
-                  Open {new URL(currentUrl).hostname}
+                  Open {(() => {
+                    try {
+                      return new URL(currentUrl).hostname;
+                    } catch {
+                      return 'Page';
+                    }
+                  })()}
                 </Button>
               </div>
             </Card>

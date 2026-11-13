@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('klarityDesktop', {
   getAdBlockStats: () => ipcRenderer.invoke('klarity:browser-get-adblock-stats'),
   toggleAdBlock: (enabled) => ipcRenderer.invoke('klarity:browser-toggle-adblock', enabled),
   resetAdBlockCount: () => ipcRenderer.invoke('klarity:browser-reset-adblock-count'),
+  clearBrowserData: () => ipcRenderer.invoke('klarity:browser-clear-data'),
   onAdBlockStats: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const handler = (_event, stats) => callback(stats);

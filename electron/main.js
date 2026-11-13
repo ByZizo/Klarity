@@ -491,6 +491,12 @@ async function createDesktopWindow() {
 
   // Set up dedicated In-App Browser Partition with Built-in Ad Blocker
   const browserSession = session.fromPartition('persist:klarity_browser');
+  const rawUa = session.defaultSession.getUserAgent() || '';
+  const cleanChromeUa = rawUa
+    .replace(/\s*Electron\/[^\s]+/gi, '')
+    .replace(/\s*klarity\/[^\s]+/gi, '')
+    .trim() || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+  browserSession.setUserAgent(cleanChromeUa);
 
   const AD_BLOCK_DOMAINS = [
     'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
@@ -522,7 +528,7 @@ async function createDesktopWindow() {
   ];
 
   browserSession.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, callback) => {
-    if (!adBlockerEnabled) {
+    if (!adBlockerEnabled || details.resourceType === 'mainFrame') {
       return callback({ cancel: false });
     }
     try {
@@ -887,6 +893,35 @@ ipcMain.handle('klarity:browser-reset-adblock-count', () => {
     adsBlockedCount: browserAdsBlockedCount,
     enabled: adBlockerEnabled
   };
+});
+
+ipcMain.handle('klarity:browser-clear-data', async () => {
+  try {
+    const browserSession = session.fromPartition('persist:klarity_browser');
+    await browserSession.clearCache();
+    await browserSession.clearStorageData();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// Ensure embedded <webview> instances use a clean Chrome UA and open target=_blank links inside the webview
+app.on('web-contents-created', (_event, contents) => {
+  if (contents.getType() === 'webview') {
+    const rawUa = session.defaultSession.getUserAgent() || '';
+    const cleanChromeUa = rawUa
+      .replace(/\s*Electron\/[^\s]+/gi, '')
+      .replace(/\s*klarity\/[^\s]+/gi, '')
+      .trim() || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+    contents.setUserAgent(cleanChromeUa);
+    contents.setWindowOpenHandler(({ url }) => {
+      if (url && /^https?:\/\//i.test(url)) {
+        contents.loadURL(url);
+      }
+      return { action: 'deny' };
+    });
+  }
 });
 
 const isDev = !app.isPackaged;

@@ -179,6 +179,13 @@ import {
   BrowserPage,
   SettingsPage
 } from './pages';
+import {
+  loadBrowserSettings,
+  saveBrowserSettings,
+  loadBrowserBookmarks,
+  saveBrowserBookmarks,
+  buildSearchUrl
+} from './utils/browserSettings';
 
 export default function App() {
   return <KlarityApp />;
@@ -1529,6 +1536,19 @@ function KlarityApp() {
 
   const [isPastChatsOpen, setIsPastChatsOpen] = useState(false);
   const [activeBrowserContext, setActiveBrowserContext] = useState(null);
+  const [browserSettings, setBrowserSettings] = useState(() => loadBrowserSettings());
+  const [browserBookmarks, setBrowserBookmarks] = useState(() => loadBrowserBookmarks());
+  const [pendingBrowserUrl, setPendingBrowserUrl] = useState('');
+
+  const handleUpdateBrowserSettings = (next) => {
+    setBrowserSettings(next);
+    saveBrowserSettings(next);
+  };
+
+  const handleUpdateBrowserBookmarks = (next) => {
+    setBrowserBookmarks(next);
+    saveBrowserBookmarks(next);
+  };
 
   // Left Sidebar Compact/Collapsed state
   const [isSidebarCompact, setIsSidebarCompact] = useState(() => {
@@ -3989,15 +4009,38 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         setSettingsAiStatus('not_connected');
       }
 
+      // Detect URLs in reply or web-search intent so user can open in the in-app browser or copy the link
+      const urlMatch = replyText.match(/https?:\/\/[^\s)\]"'<>]+/i);
+      const extractedUrl = urlMatch ? urlMatch[0].replace(/[.,;:!?]+$/, '') : '';
+      const isWebSearchIntent = /\b(search|find|look\s*up|are there|under\s*\$?\d|0\s*%?\s*apr|deals?|cheapest|best\s+|price|compare|website|link|ev\b|electric vehicle)/i.test(
+        userMsg || ''
+      );
+      const browserTargetUrl =
+        extractedUrl || (isWebSearchIntent && userMsg ? buildSearchUrl(userMsg, browserSettings?.searchEngine) : '');
+
+      if (
+        browserTargetUrl &&
+        !/in-app browser|copy the link|open.*browser/i.test(replyText)
+      ) {
+        replyText = `${replyText}\n\nWould you like to open this in Klarity's in-app browser or copy the link?`;
+      }
+
       // Build context-aware interactive Action Buttons for the assistant bubble
       const autoSuggestedActions = generateContextualSuggestions(userMsg, replyText);
+      const finalSuggestedActions = browserTargetUrl
+        ? [
+            { label: 'Open in Browser', type: 'open_in_browser', url: browserTargetUrl },
+            { label: 'Copy Link', type: 'copy_link', url: browserTargetUrl },
+            ...autoSuggestedActions
+          ].slice(0, 4)
+        : autoSuggestedActions.slice(0, 3);
 
       const updated = [
         ...userUpdatedMessages,
         {
           role: 'assistant',
           text: replyText,
-          suggestedActions: autoSuggestedActions.slice(0, 3)
+          suggestedActions: finalSuggestedActions
         }
       ];
       updateActiveSession(updated);
@@ -5168,6 +5211,22 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       act.action();
       return;
     }
+    if (act.type === 'open_in_browser' && act.url) {
+      setPendingBrowserUrl(act.url);
+      setActiveTab('browser');
+      return;
+    }
+    if (act.type === 'copy_link' && act.url) {
+      try {
+        navigator.clipboard?.writeText(act.url);
+        setNotificationToast('Link copied to clipboard!');
+        setTimeout(() => setNotificationToast(''), 3000);
+      } catch {
+        setNotificationToast('Could not copy link');
+        setTimeout(() => setNotificationToast(''), 3000);
+      }
+      return;
+    }
     if (act.type === 'prompt' || act.prompt) {
       const q = act.prompt || act.label;
       handleSendChatMessage(q);
@@ -5570,6 +5629,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 }}
                 activeBrowserContext={activeBrowserContext}
                 setActiveBrowserContext={setActiveBrowserContext}
+                browserSettings={browserSettings}
+                browserBookmarks={browserBookmarks}
+                onUpdateBookmarks={handleUpdateBrowserBookmarks}
+                pendingBrowserUrl={pendingBrowserUrl}
+                onClearPendingBrowserUrl={() => setPendingBrowserUrl('')}
+                onOpenBrowserSettings={() => {
+                  setSettingsActiveTab('browser');
+                  setIsSettingsOpen(true);
+                }}
               />
             </main>
           ) : (
@@ -6311,6 +6379,10 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         onClose={() => setIsSettingsOpen(false)}
         settingsActiveTab={settingsActiveTab}
         setSettingsActiveTab={setSettingsActiveTab}
+        browserSettings={browserSettings}
+        onUpdateBrowserSettings={handleUpdateBrowserSettings}
+        browserBookmarks={browserBookmarks}
+        onUpdateBrowserBookmarks={handleUpdateBrowserBookmarks}
         currentUser={currentUser}
         userInitials={userInitials}
         settingsDisplayName={settingsDisplayName}
