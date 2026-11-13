@@ -1263,7 +1263,7 @@ export function BrowserPage({
 
           {/* Smart Address & Search Input */}
           <form onSubmit={handleUrlSubmit} className="flex-1 flex items-center min-w-0">
-            <div className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/20 transition-all">
+            <div className="flex-1 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--surface-subtle)] border border-[var(--line)] focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/20 transition-all">
               {(activeTab?.url || '').startsWith('https://') ? (
                 <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" title="Secure connection (HTTPS)" />
               ) : (
@@ -1276,7 +1276,7 @@ export function BrowserPage({
                 onChange={(e) => setUrlInput(e.target.value)}
                 onFocus={(e) => e.target.select()}
                 placeholder="Search or enter web address"
-                className="flex-1 bg-transparent border-0 outline-none text-xs text-[var(--ink)] placeholder-[var(--muted)] min-w-0 font-medium"
+                className="flex-1 bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-xs text-[var(--ink)] placeholder-[var(--muted)] min-w-0 font-medium"
               />
               {urlInput && (
                 <button

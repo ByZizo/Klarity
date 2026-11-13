@@ -1,13 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Check,
   Edit2,
   ExternalLink,
+  FolderOpen,
+  FolderPlus,
   MoreVertical,
   Plus,
   Search,
   SlidersHorizontal,
   StickyNote,
   Trash2,
+  Ungroup,
   X
 } from 'lucide-react';
 import {
@@ -53,7 +57,7 @@ function getBadgeColor(label) {
   return palette[Math.abs(hash) % palette.length];
 }
 
-function ShortcutIcon({ name, url }) {
+function ShortcutIcon({ name, url, size = 'md' }) {
   const [failed, setFailed] = useState(false);
   const host = useMemo(() => getHostname(url), [url]);
   const faviconUrl = host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64` : '';
@@ -63,10 +67,16 @@ function ShortcutIcon({ name, url }) {
     setFailed(false);
   }, [faviconUrl]);
 
+  const boxClass =
+    size === 'sm'
+      ? 'w-5 h-5 rounded-md text-[10px]'
+      : 'w-10 h-10 rounded-xl text-base';
+  const imgClass = size === 'sm' ? 'w-3.5 h-3.5' : 'w-6 h-6';
+
   if (!faviconUrl || failed) {
     return (
       <div
-        className={`w-10 h-10 rounded-xl ${getBadgeColor(name || host)} text-white font-bold text-base flex items-center justify-center shadow-sm`}
+        className={`${boxClass} ${getBadgeColor(name || host)} text-white font-bold flex items-center justify-center shadow-sm shrink-0`}
       >
         {initial}
       </div>
@@ -74,11 +84,13 @@ function ShortcutIcon({ name, url }) {
   }
 
   return (
-    <div className="w-10 h-10 rounded-xl bg-slate-800/90 border border-slate-700/70 flex items-center justify-center overflow-hidden shadow-sm">
+    <div
+      className={`${boxClass} bg-slate-800/90 border border-slate-700/70 flex items-center justify-center overflow-hidden shadow-sm shrink-0`}
+    >
       <img
         src={faviconUrl}
         alt={name}
-        className="w-6 h-6 object-contain"
+        className={`${imgClass} object-contain`}
         onError={() => setFailed(true)}
       />
     </div>
@@ -104,12 +116,24 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   const customizeRef = useRef(null);
 
-  // Add / Edit shortcut modal
-  const [shortcutModal, setShortcutModal] = useState(null); // { mode: 'add' | 'edit', id?, name, url }
+  // Add / Edit shortcut modal ({ mode: 'add' | 'edit', id?, groupId?, name, url })
+  const [shortcutModal, setShortcutModal] = useState(null);
+
+  // Create / Rename Group modal ({ mode: 'create' | 'edit', groupId?, sourceLinkId?, targetLinkId?, name })
+  const [groupModal, setGroupModal] = useState(null);
+
+  // Open Group view modal (groupId)
+  const [openGroupId, setOpenGroupId] = useState(null);
+  const [isEditingOpenGroupName, setIsEditingOpenGroupName] = useState(false);
+  const [openGroupNameDraft, setOpenGroupNameDraft] = useState('');
 
   // Tile action menu (three-dot or right-click)
-  const [tileMenu, setTileMenu] = useState(null); // { link, x, y }
+  const [tileMenu, setTileMenu] = useState(null); // { item, groupId?, x, y }
   const tileMenuRef = useRef(null);
+
+  // Drag & Drop to combine shortcuts into groups
+  const [draggedTileId, setDraggedTileId] = useState(null);
+  const [dropTargetId, setDropTargetId] = useState(null);
 
   useEffect(() => {
     saveNewTabQuickLinks(quickLinks);
@@ -143,6 +167,9 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
         setIsCustomizeOpen(false);
         setTileMenu(null);
         setShortcutModal(null);
+        setGroupModal(null);
+        setOpenGroupId(null);
+        setIsEditingOpenGroupName(false);
       }
     };
     document.addEventListener('mousedown', handleOutside);
@@ -152,6 +179,16 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
       document.removeEventListener('keydown', handleEscape);
     };
   }, []);
+
+  const existingGroups = useMemo(
+    () => quickLinks.filter((item) => item.type === 'group'),
+    [quickLinks]
+  );
+
+  const openGroup = useMemo(
+    () => quickLinks.find((item) => item.type === 'group' && item.id === openGroupId) || null,
+    [quickLinks, openGroupId]
+  );
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -168,6 +205,36 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
     const fallbackName = getHostname(normalizedUrl) || 'Shortcut';
     const finalName = (shortcutModal.name || '').trim() || fallbackName;
 
+    if (shortcutModal.groupId) {
+      setQuickLinks((prev) =>
+        prev.map((item) => {
+          if (item.id !== shortcutModal.groupId || item.type !== 'group') return item;
+          const items = Array.isArray(item.items) ? item.items : [];
+          if (shortcutModal.mode === 'edit' && shortcutModal.id) {
+            return {
+              ...item,
+              items: items.map((sub) =>
+                sub.id === shortcutModal.id ? { ...sub, name: finalName, url: normalizedUrl } : sub
+              )
+            };
+          }
+          return {
+            ...item,
+            items: [
+              ...items,
+              {
+                id: `ql-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                name: finalName,
+                url: normalizedUrl
+              }
+            ]
+          };
+        })
+      );
+      setShortcutModal(null);
+      return;
+    }
+
     if (shortcutModal.mode === 'edit' && shortcutModal.id) {
       setQuickLinks((prev) =>
         prev.map((item) =>
@@ -181,6 +248,7 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
         ...prev,
         {
           id: `ql-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          type: 'link',
           name: finalName,
           url: normalizedUrl
         }
@@ -189,21 +257,178 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
     setShortcutModal(null);
   };
 
-  const handleRemoveShortcut = (id) => {
-    setQuickLinks((prev) => prev.filter((item) => item.id !== id));
+  const handleRemoveItem = (id, groupId = null) => {
+    if (groupId) {
+      setQuickLinks((prev) =>
+        prev
+          .map((item) => {
+            if (item.id !== groupId || item.type !== 'group') return item;
+            const remaining = (item.items || []).filter((sub) => sub.id !== id);
+            return { ...item, items: remaining };
+          })
+          .filter((item) => item.type !== 'group' || (item.items && item.items.length > 0))
+      );
+    } else {
+      setQuickLinks((prev) => prev.filter((item) => item.id !== id));
+      if (openGroupId === id) setOpenGroupId(null);
+    }
     setTileMenu(null);
   };
 
-  const openTileMenuAt = (e, link) => {
+  const handleCombineIntoNewGroup = (sourceId, targetId, groupName = 'New Group') => {
+    const trimmedName = (groupName || '').trim() || 'New Group';
+    setQuickLinks((prev) => {
+      const source = prev.find((i) => i.id === sourceId && i.type !== 'group');
+      const target = prev.find((i) => i.id === targetId && i.type !== 'group');
+      if (!source || !target || source.id === target.id) return prev;
+      const newGroup = {
+        id: `qlg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'group',
+        name: trimmedName,
+        items: [
+          { id: target.id, name: target.name, url: target.url },
+          { id: source.id, name: source.name, url: source.url }
+        ]
+      };
+      return prev
+        .filter((i) => i.id !== sourceId)
+        .map((i) => (i.id === targetId ? newGroup : i));
+    });
+  };
+
+  const handleMoveLinkToGroup = (linkId, groupId) => {
+    setQuickLinks((prev) => {
+      const link = prev.find((i) => i.id === linkId && i.type !== 'group');
+      if (!link) return prev;
+      return prev
+        .filter((i) => i.id !== linkId)
+        .map((i) =>
+          i.id === groupId && i.type === 'group'
+            ? {
+                ...i,
+                items: [...(i.items || []), { id: link.id, name: link.name, url: link.url }]
+              }
+            : i
+        );
+    });
+    setTileMenu(null);
+  };
+
+  const handleRemoveFromGroup = (subId, groupId) => {
+    setQuickLinks((prev) => {
+      const grp = prev.find((i) => i.id === groupId && i.type === 'group');
+      const sub = grp?.items?.find((s) => s.id === subId);
+      if (!grp || !sub) return prev;
+      const remaining = (grp.items || []).filter((s) => s.id !== subId);
+      const next = prev
+        .map((i) => (i.id === groupId ? { ...i, items: remaining } : i))
+        .filter((i) => i.type !== 'group' || (i.items && i.items.length > 0));
+      next.push({ id: sub.id, type: 'link', name: sub.name, url: sub.url });
+      if (remaining.length === 0 && openGroupId === groupId) {
+        setOpenGroupId(null);
+      }
+      return next;
+    });
+    setTileMenu(null);
+  };
+
+  const handleUngroup = (groupId) => {
+    setQuickLinks((prev) => {
+      const idx = prev.findIndex((i) => i.id === groupId && i.type === 'group');
+      if (idx < 0) return prev;
+      const grp = prev[idx];
+      const extracted = (grp.items || []).map((sub) => ({
+        id: sub.id,
+        type: 'link',
+        name: sub.name,
+        url: sub.url
+      }));
+      const next = [...prev];
+      next.splice(idx, 1, ...extracted);
+      return next;
+    });
+    if (openGroupId === groupId) setOpenGroupId(null);
+    setTileMenu(null);
+  };
+
+  const handleSaveGroupModal = (e) => {
+    e.preventDefault();
+    if (!groupModal) return;
+    const finalName = (groupModal.name || '').trim() || 'New Group';
+
+    if (groupModal.mode === 'create' && groupModal.sourceLinkId && groupModal.targetLinkId) {
+      handleCombineIntoNewGroup(groupModal.sourceLinkId, groupModal.targetLinkId, finalName);
+    } else if (groupModal.mode === 'create' && groupModal.sourceLinkId) {
+      setQuickLinks((prev) => {
+        const link = prev.find((i) => i.id === groupModal.sourceLinkId && i.type !== 'group');
+        if (!link) return prev;
+        const newGroup = {
+          id: `qlg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          type: 'group',
+          name: finalName,
+          items: [{ id: link.id, name: link.name, url: link.url }]
+        };
+        return prev.map((i) => (i.id === link.id ? newGroup : i));
+      });
+    } else if (groupModal.mode === 'edit' && groupModal.groupId) {
+      setQuickLinks((prev) =>
+        prev.map((i) => (i.id === groupModal.groupId ? { ...i, name: finalName } : i))
+      );
+    }
+    setGroupModal(null);
+  };
+
+  const handleSaveOpenGroupName = () => {
+    if (!openGroup) return;
+    const trimmed = openGroupNameDraft.trim();
+    if (trimmed) {
+      setQuickLinks((prev) =>
+        prev.map((i) => (i.id === openGroup.id ? { ...i, name: trimmed } : i))
+      );
+    }
+    setIsEditingOpenGroupName(false);
+  };
+
+  const handleDropOnTile = (targetItem) => {
+    if (!draggedTileId || draggedTileId === targetItem.id) {
+      setDraggedTileId(null);
+      setDropTargetId(null);
+      return;
+    }
+
+    const draggedItem = quickLinks.find((i) => i.id === draggedTileId);
+    if (!draggedItem || draggedItem.type === 'group') {
+      setDraggedTileId(null);
+      setDropTargetId(null);
+      return;
+    }
+
+    if (targetItem.type === 'group') {
+      handleMoveLinkToGroup(draggedTileId, targetItem.id);
+    } else {
+      setGroupModal({
+        mode: 'create',
+        sourceLinkId: draggedTileId,
+        targetLinkId: targetItem.id,
+        name: ''
+      });
+    }
+
+    setDraggedTileId(null);
+    setDropTargetId(null);
+  };
+
+  const openTileMenuAt = (e, item, groupId = null) => {
     e.preventDefault();
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.type === 'contextmenu' ? e.clientX : Math.min(rect.right - 140, window.innerWidth - 180);
+    const x = e.type === 'contextmenu' ? e.clientX : Math.min(rect.right - 140, window.innerWidth - 200);
     const y = e.type === 'contextmenu' ? e.clientY : rect.bottom + 6;
     setTileMenu({
-      link,
-      x: Math.max(12, Math.min(x, window.innerWidth - 190)),
-      y: Math.max(12, Math.min(y, window.innerHeight - 150))
+      item,
+      groupId,
+      x: Math.max(12, Math.min(x, window.innerWidth - 210)),
+      y: Math.max(12, Math.min(y, window.innerHeight - 210))
     });
   };
 
@@ -356,7 +581,7 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={`Search ${activeEngine.name} or enter web address...`}
-              className="flex-1 bg-transparent border-0 outline-none text-sm text-slate-100 placeholder-slate-400 min-w-0"
+              className="flex-1 bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-sm text-slate-100 placeholder-slate-400 min-w-0"
             />
             {query && (
               <button
@@ -381,35 +606,135 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
         {prefs.showQuickLinks && (
           <div className="w-full max-w-2xl mb-8">
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-              {quickLinks.map((link) => (
-                <div
-                  key={link.id}
-                  onClick={() => onNavigate(link.url)}
-                  onContextMenu={(e) => openTileMenuAt(e, link)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
+              {quickLinks.map((item) => {
+                const isGroup = item.type === 'group';
+                const isDropTarget = dropTargetId === item.id && draggedTileId !== item.id;
+
+                if (isGroup) {
+                  const previewItems = (item.items || []).slice(0, 4);
+                  return (
+                    <div
+                      key={item.id}
+                      draggable={false}
+                      onDragOver={(e) => {
+                        if (draggedTileId && draggedTileId !== item.id) {
+                          e.preventDefault();
+                          setDropTargetId(item.id);
+                        }
+                      }}
+                      onDragLeave={() => {
+                        if (dropTargetId === item.id) setDropTargetId(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleDropOnTile(item);
+                      }}
+                      onClick={() => {
+                        setOpenGroupId(item.id);
+                        setIsEditingOpenGroupName(false);
+                        setOpenGroupNameDraft(item.name || '');
+                      }}
+                      onContextMenu={(e) => openTileMenuAt(e, item)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setOpenGroupId(item.id);
+                          setIsEditingOpenGroupName(false);
+                          setOpenGroupNameDraft(item.name || '');
+                        }
+                      }}
+                      className={`group relative flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md backdrop-blur-sm ${
+                        isDropTarget
+                          ? 'bg-blue-600/20 border-blue-400 scale-[1.03]'
+                          : 'bg-[#1e293b]/85 hover:bg-[#1e293b] border-slate-700/70 hover:border-blue-500/50'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => openTileMenuAt(e, item)}
+                        aria-label={`Options for ${item.name}`}
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/80 transition-opacity cursor-pointer"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* 2x2 Mini-Grid Group Icon */}
+                      <div className="w-10 h-10 rounded-xl bg-slate-900/80 border border-slate-700/80 p-1 grid grid-cols-2 gap-0.5 place-items-center">
+                        {previewItems.map((sub) => (
+                          <ShortcutIcon key={sub.id} name={sub.name} url={sub.url} size="sm" />
+                        ))}
+                      </div>
+
+                      <div className="w-full text-center">
+                        <div className="text-xs font-medium text-slate-100 truncate">
+                          {item.name}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {(item.items || []).length} sites
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={item.id}
+                    draggable
+                    onDragStart={(e) => {
+                      setDraggedTileId(item.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragOver={(e) => {
+                      if (draggedTileId && draggedTileId !== item.id) {
+                        e.preventDefault();
+                        setDropTargetId(item.id);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (dropTargetId === item.id) setDropTargetId(null);
+                    }}
+                    onDrop={(e) => {
                       e.preventDefault();
-                      onNavigate(link.url);
-                    }
-                  }}
-                  className="group relative flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl bg-[#1e293b]/80 hover:bg-[#1e293b] border border-slate-700/60 hover:border-blue-500/50 transition-all cursor-pointer shadow-sm hover:shadow-md backdrop-blur-sm"
-                >
-                  <button
-                    type="button"
-                    onClick={(e) => openTileMenuAt(e, link)}
-                    aria-label={`Options for ${link.name}`}
-                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/80 transition-opacity cursor-pointer"
+                      handleDropOnTile(item);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedTileId(null);
+                      setDropTargetId(null);
+                    }}
+                    onClick={() => onNavigate(item.url)}
+                    onContextMenu={(e) => openTileMenuAt(e, item)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onNavigate(item.url);
+                      }
+                    }}
+                    className={`group relative flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md backdrop-blur-sm ${
+                      isDropTarget
+                        ? 'bg-blue-600/20 border-blue-400 scale-[1.03]'
+                        : 'bg-[#1e293b]/80 hover:bg-[#1e293b] border-slate-700/60 hover:border-blue-500/50'
+                    }`}
                   >
-                    <MoreVertical className="w-3.5 h-3.5" />
-                  </button>
-                  <ShortcutIcon name={link.name} url={link.url} />
-                  <span className="text-xs font-medium text-slate-200 truncate w-full text-center">
-                    {link.name}
-                  </span>
-                </div>
-              ))}
+                    <button
+                      type="button"
+                      onClick={(e) => openTileMenuAt(e, item)}
+                      aria-label={`Options for ${item.name}`}
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/80 transition-opacity cursor-pointer"
+                    >
+                      <MoreVertical className="w-3.5 h-3.5" />
+                    </button>
+                    <ShortcutIcon name={item.name} url={item.url} />
+                    <span className="text-xs font-medium text-slate-200 truncate w-full text-center">
+                      {item.name}
+                    </span>
+                  </div>
+                );
+              })}
 
               {/* Add Shortcut Tile */}
               <button
@@ -449,48 +774,271 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
         )}
       </div>
 
+      {/* Group Contents & Editor Modal */}
+      {openGroup && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => {
+            setOpenGroupId(null);
+            setIsEditingOpenGroupName(false);
+          }}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl bg-[#1e293b] border border-slate-700 shadow-2xl p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-700/70">
+              {isEditingOpenGroupName ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSaveOpenGroupName();
+                  }}
+                  className="flex items-center gap-2 flex-1"
+                >
+                  <input
+                    type="text"
+                    value={openGroupNameDraft}
+                    onChange={(e) => setOpenGroupNameDraft(e.target.value)}
+                    autoFocus
+                    className="flex-1 px-2.5 py-1 rounded-lg bg-slate-900/80 border border-blue-500 outline-none text-sm font-semibold text-slate-100"
+                  />
+                  <button
+                    type="submit"
+                    className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white cursor-pointer"
+                    title="Save group name"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                </form>
+              ) : (
+                <div className="flex items-center gap-2 min-w-0">
+                  <FolderOpen className="w-4 h-4 text-blue-400 shrink-0" />
+                  <h3 className="text-sm font-semibold text-slate-100 truncate">{openGroup.name}</h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenGroupNameDraft(openGroup.name || '');
+                      setIsEditingOpenGroupName(true);
+                    }}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+                    title="Rename group"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleUngroup(openGroup.id)}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-300 hover:text-white hover:bg-slate-700/70 flex items-center gap-1 cursor-pointer"
+                  title="Ungroup all shortcuts"
+                >
+                  <Ungroup className="w-3.5 h-3.5" />
+                  <span>Ungroup</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenGroupId(null);
+                    setIsEditingOpenGroupName(false);
+                  }}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+              {(openGroup.items || []).map((sub) => (
+                <div
+                  key={sub.id}
+                  onClick={() => {
+                    setOpenGroupId(null);
+                    onNavigate(sub.url);
+                  }}
+                  onContextMenu={(e) => openTileMenuAt(e, sub, openGroup.id)}
+                  role="button"
+                  tabIndex={0}
+                  className="group relative flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-900/60 hover:bg-slate-800 border border-slate-700/60 hover:border-blue-500/50 transition-all cursor-pointer"
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => openTileMenuAt(e, sub, openGroup.id)}
+                    aria-label={`Options for ${sub.name}`}
+                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-1.5 right-1.5 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/80 transition-opacity cursor-pointer"
+                  >
+                    <MoreVertical className="w-3 h-3" />
+                  </button>
+                  <ShortcutIcon name={sub.name} url={sub.url} />
+                  <span className="text-xs font-medium text-slate-200 truncate w-full text-center">
+                    {sub.name}
+                  </span>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShortcutModal({ mode: 'add', groupId: openGroup.id, name: '', url: '' })
+                }
+                className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-900/35 hover:bg-slate-800/70 border border-dashed border-slate-700 hover:border-blue-500/60 transition-all cursor-pointer group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-slate-800/80 group-hover:bg-blue-600/20 border border-slate-700/70 flex items-center justify-center text-slate-400 group-hover:text-blue-400">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <span className="text-xs font-medium text-slate-400 group-hover:text-slate-200">
+                  Add
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tile 3-Dot / Right-Click Action Menu */}
       {tileMenu && (
         <div
           ref={tileMenuRef}
           style={{ top: `${tileMenu.y}px`, left: `${tileMenu.x}px` }}
-          className="fixed z-40 w-44 rounded-xl bg-[#1e293b] border border-slate-700 shadow-2xl py-1 text-xs text-slate-200"
+          className="fixed z-50 w-52 rounded-xl bg-[#1e293b] border border-slate-700 shadow-2xl py-1 text-xs text-slate-200"
         >
-          <button
-            type="button"
-            onClick={() => {
-              onOpenNewTab(tileMenu.link.url, tileMenu.link.name);
-              setTileMenu(null);
-            }}
-            className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
-            <span>Open in New Tab</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setShortcutModal({
-                mode: 'edit',
-                id: tileMenu.link.id,
-                name: tileMenu.link.name,
-                url: tileMenu.link.url
-              });
-              setTileMenu(null);
-            }}
-            className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
-          >
-            <Edit2 className="w-3.5 h-3.5 text-slate-400" />
-            <span>Edit</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleRemoveShortcut(tileMenu.link.id)}
-            className="w-full px-3 py-2 text-left hover:bg-rose-950/50 text-rose-400 flex items-center gap-2 cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Remove</span>
-          </button>
+          {tileMenu.item.type === 'group' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  (tileMenu.item.items || []).forEach((sub) =>
+                    onOpenNewTab(sub.url, sub.name)
+                  );
+                  setTileMenu(null);
+                }}
+                className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                <span>Open all in new tabs</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGroupModal({
+                    mode: 'edit',
+                    groupId: tileMenu.item.id,
+                    name: tileMenu.item.name
+                  });
+                  setTileMenu(null);
+                }}
+                className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-slate-400" />
+                <span>Rename group</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleUngroup(tileMenu.item.id)}
+                className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+              >
+                <Ungroup className="w-3.5 h-3.5 text-slate-400" />
+                <span>Ungroup</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRemoveItem(tileMenu.item.id)}
+                className="w-full px-3 py-2 text-left hover:bg-rose-950/50 text-rose-400 flex items-center gap-2 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove group</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenNewTab(tileMenu.item.url, tileMenu.item.name);
+                  setTileMenu(null);
+                }}
+                className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                <span>Open in New Tab</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShortcutModal({
+                    mode: 'edit',
+                    id: tileMenu.item.id,
+                    groupId: tileMenu.groupId || null,
+                    name: tileMenu.item.name,
+                    url: tileMenu.item.url
+                  });
+                  setTileMenu(null);
+                }}
+                className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-slate-400" />
+                <span>Edit</span>
+              </button>
+
+              {tileMenu.groupId ? (
+                <button
+                  type="button"
+                  onClick={() => handleRemoveFromGroup(tileMenu.item.id, tileMenu.groupId)}
+                  className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+                >
+                  <Ungroup className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Move out of group</span>
+                </button>
+              ) : (
+                <>
+                  <div className="my-1 border-t border-slate-700/70" />
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    Add to group
+                  </div>
+                  {existingGroups.map((grp) => (
+                    <button
+                      key={grp.id}
+                      type="button"
+                      onClick={() => handleMoveLinkToGroup(tileMenu.item.id, grp.id)}
+                      className="w-full px-3 py-1.5 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                      <span className="truncate">{grp.name}</span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGroupModal({
+                        mode: 'create',
+                        sourceLinkId: tileMenu.item.id,
+                        name: ''
+                      });
+                      setTileMenu(null);
+                    }}
+                    className="w-full px-3 py-1.5 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer text-blue-400"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5 shrink-0" />
+                    <span>New group...</span>
+                  </button>
+                  <div className="my-1 border-t border-slate-700/70" />
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={() => handleRemoveItem(tileMenu.item.id, tileMenu.groupId)}
+                className="w-full px-3 py-2 text-left hover:bg-rose-950/50 text-rose-400 flex items-center gap-2 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove</span>
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -553,6 +1101,58 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
                   className="px-4 py-1.5 rounded-xl bg-[#2563eb] hover:bg-[#3b82f6] text-white text-xs font-semibold cursor-pointer shadow-sm"
                 >
                   {shortcutModal.mode === 'edit' ? 'Save' : 'Add'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create / Rename Group Modal */}
+      {groupModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-[#1e293b] border border-slate-700 shadow-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-slate-100">
+                {groupModal.mode === 'edit' ? 'Rename Group' : 'Create Quick Tile Group'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setGroupModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveGroupModal} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                  Group Name
+                </label>
+                <input
+                  type="text"
+                  value={groupModal.name}
+                  onChange={(e) => setGroupModal((m) => ({ ...m, name: e.target.value }))}
+                  placeholder="e.g. Finance, Social, Work"
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-700 focus:border-blue-500 outline-none text-xs text-slate-100 placeholder-slate-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setGroupModal(null)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-xl bg-[#2563eb] hover:bg-[#3b82f6] text-white text-xs font-semibold cursor-pointer shadow-sm"
+                >
+                  {groupModal.mode === 'edit' ? 'Save' : 'Create'}
                 </button>
               </div>
             </form>
