@@ -83,7 +83,17 @@ function getRunningCommitSha() {
 function getRunningAppVersion() {
   if (runningAppVersion) return runningAppVersion;
 
-  // 1. Check persisted installed_version.json
+  // 1. Prefer repo package.json so newly pulled updates reflect immediately on relaunch
+  const repoDir = path.join(__dirname, '..');
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
+    if (pkg && pkg.version) {
+      runningAppVersion = pkg.version;
+      return runningAppVersion;
+    }
+  } catch {}
+
+  // 2. Fall back to persisted installed_version.json
   try {
     const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
     if (fs.existsSync(versionFile)) {
@@ -92,16 +102,6 @@ function getRunningAppVersion() {
         runningAppVersion = data.version;
         return runningAppVersion;
       }
-    }
-  } catch {}
-
-  // 2. Fall back to package.json
-  const repoDir = path.join(__dirname, '..');
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
-    if (pkg && pkg.version) {
-      runningAppVersion = pkg.version;
-      return runningAppVersion;
     }
   } catch {}
 
@@ -344,22 +344,27 @@ async function checkForGitHubUpdate() {
     const localSemverIsNewer = Boolean(remoteVersion && currentVersion && isSemverNewer(currentVersion, remoteVersion));
     let alreadyUpToDate = false;
 
-    if (semverIsNewer) {
+    const sameCommitSha = Boolean(
+      remoteSha &&
+      currentSha &&
+      !currentSha.startsWith('v') &&
+      (remoteSha.startsWith(currentSha) || currentSha.startsWith(remoteSha))
+    );
+
+    if (sameCommitSha) {
+      alreadyUpToDate = true;
+    } else if (semverIsNewer) {
       alreadyUpToDate = false;
     } else if (localSemverIsNewer) {
       alreadyUpToDate = true;
     } else if (remoteSha && currentSha && !currentSha.startsWith('v')) {
       // Compare commit SHAs when both are real git hashes
-      if (remoteSha.startsWith(currentSha) || currentSha.startsWith(remoteSha)) {
-        alreadyUpToDate = true;
-      } else {
-        try {
-          const isAncestor = await runShell(`git merge-base --is-ancestor ${remoteSha} ${currentSha} && echo yes`, repoDir).catch(() => '');
-          if (isAncestor && isAncestor.includes('yes')) {
-            alreadyUpToDate = true;
-          }
-        } catch {}
-      }
+      try {
+        const isAncestor = await runShell(`git merge-base --is-ancestor ${remoteSha} ${currentSha} && echo yes`, repoDir).catch(() => '');
+        if (isAncestor && isAncestor.includes('yes')) {
+          alreadyUpToDate = true;
+        }
+      } catch {}
     } else {
       // Packaged build without git SHA: rely on semantic version comparison
       alreadyUpToDate = !semverIsNewer;
@@ -875,11 +880,11 @@ ipcMain.handle('klarity:install-update-now', async () => {
     // Save What's New data to userDataDir so the pop-up appears on restart
     saveWhatsNewData(recentChanges, newSha ? newSha.slice(0, 7) : app.getVersion(), updatedVersion);
 
-    // Update installed_version.json to the new SHA
+    // Update installed_version.json to the new version and SHA
     const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
     try {
       fs.writeFileSync(versionFile, JSON.stringify({
-        version: app.getVersion(),
+        version: updatedVersion || app.getVersion(),
         commitSha: newSha,
         installedAt: Date.now()
       }, null, 2), 'utf8');
@@ -919,6 +924,9 @@ ipcMain.handle('klarity:get-whats-new', () => {
     if (fs.existsSync(whatsNewFile)) {
       const data = JSON.parse(fs.readFileSync(whatsNewFile, 'utf8'));
       if (data && data.shown === false) {
+        try {
+          fs.writeFileSync(whatsNewFile, JSON.stringify({ ...data, shown: true }, null, 2), 'utf8');
+        } catch {}
         return data;
       }
     }
