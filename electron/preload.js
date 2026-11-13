@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld('klarityDesktop', {
   toggleAdBlock: (enabled) => ipcRenderer.invoke('klarity:browser-toggle-adblock', enabled),
   resetAdBlockCount: () => ipcRenderer.invoke('klarity:browser-reset-adblock-count'),
   clearBrowserData: () => ipcRenderer.invoke('klarity:browser-clear-data'),
+  getBrowserPrefs: () => ipcRenderer.invoke('klarity:browser-get-prefs'),
+  updateBrowserPrefs: (prefs) => ipcRenderer.invoke('klarity:browser-update-prefs', prefs),
+  selectBrowserDownloadDir: () => ipcRenderer.invoke('klarity:browser-select-download-dir'),
   onAdBlockStats: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const handler = (_event, stats) => callback(stats);

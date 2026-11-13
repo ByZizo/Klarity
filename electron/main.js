@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, session, nativeTheme, Menu, MenuItem } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, session, nativeTheme, Menu, MenuItem, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -476,6 +476,28 @@ async function startEmbeddedBackend() {
   throw new Error('Could not bind local Klarity engine port');
 }
 
+let browserRuntimePrefs = {
+  doNotTrack: false,
+  cookiePolicy: 'allow',
+  downloadPath: app.getPath('downloads'),
+  askWhereToSave: false
+};
+const browserPrefsFile = path.join(app.getPath('userData'), 'browser_prefs.json');
+try {
+  if (fs.existsSync(browserPrefsFile)) {
+    const savedPrefs = JSON.parse(fs.readFileSync(browserPrefsFile, 'utf8'));
+    browserRuntimePrefs = { ...browserRuntimePrefs, ...(savedPrefs || {}) };
+  }
+} catch {}
+
+function saveBrowserRuntimePrefs(nextPrefs) {
+  browserRuntimePrefs = { ...browserRuntimePrefs, ...nextPrefs };
+  try {
+    fs.writeFileSync(browserPrefsFile, JSON.stringify(browserRuntimePrefs, null, 2), 'utf8');
+  } catch {}
+  return browserRuntimePrefs;
+}
+
 async function createDesktopWindow() {
   const port = await startEmbeddedBackend();
 
@@ -497,6 +519,54 @@ async function createDesktopWindow() {
     .replace(/\s*klarity\/[^\s]+/gi, '')
     .trim() || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
   browserSession.setUserAgent(cleanChromeUa);
+
+  browserSession.webRequest.onBeforeSendHeaders({ urls: ['*://*/*'] }, (details, callback) => {
+    const requestHeaders = { ...(details.requestHeaders || {}) };
+    if (browserRuntimePrefs.doNotTrack) {
+      requestHeaders['DNT'] = '1';
+      requestHeaders['Sec-GPC'] = '1';
+    }
+    if (browserRuntimePrefs.cookiePolicy === 'block_all') {
+      delete requestHeaders['Cookie'];
+      delete requestHeaders['cookie'];
+    }
+    callback({ requestHeaders });
+  });
+
+  browserSession.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, callback) => {
+    const responseHeaders = { ...(details.responseHeaders || {}) };
+    if (browserRuntimePrefs.cookiePolicy === 'block_all') {
+      delete responseHeaders['set-cookie'];
+      delete responseHeaders['Set-Cookie'];
+    } else if (browserRuntimePrefs.cookiePolicy === 'block_third_party' && details.resourceType !== 'mainFrame') {
+      try {
+        const reqHost = new URL(details.url).hostname;
+        const refHost = details.referrer ? new URL(details.referrer).hostname : reqHost;
+        if (reqHost && refHost && !reqHost.endsWith(refHost) && !refHost.endsWith(reqHost)) {
+          delete responseHeaders['set-cookie'];
+          delete responseHeaders['Set-Cookie'];
+        }
+      } catch {}
+    }
+    callback({ responseHeaders });
+  });
+
+  browserSession.on('will-download', (_event, item) => {
+    const fileName = item.getFilename();
+    const targetDir = browserRuntimePrefs.downloadPath || app.getPath('downloads');
+    if (browserRuntimePrefs.askWhereToSave && mainWindow && !mainWindow.isDestroyed()) {
+      const chosen = dialog.showSaveDialogSync(mainWindow, {
+        defaultPath: path.join(targetDir, fileName)
+      });
+      if (chosen) {
+        item.setSavePath(chosen);
+      } else {
+        item.cancel();
+      }
+    } else {
+      item.setSavePath(path.join(targetDir, fileName));
+    }
+  });
 
   const AD_BLOCK_DOMAINS = [
     'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
@@ -904,6 +974,28 @@ ipcMain.handle('klarity:browser-clear-data', async () => {
   } catch (err) {
     return { ok: false, error: err.message };
   }
+});
+
+ipcMain.handle('klarity:browser-get-prefs', () => {
+  return browserRuntimePrefs;
+});
+
+ipcMain.handle('klarity:browser-update-prefs', (_e, nextPrefs) => {
+  return saveBrowserRuntimePrefs(nextPrefs || {});
+});
+
+ipcMain.handle('klarity:browser-select-download-dir', async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return { canceled: true };
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Default Download Folder',
+    defaultPath: browserRuntimePrefs.downloadPath || app.getPath('downloads'),
+    properties: ['openDirectory', 'createDirectory']
+  });
+  if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+    return { canceled: true };
+  }
+  const updated = saveBrowserRuntimePrefs({ downloadPath: result.filePaths[0] });
+  return { canceled: false, downloadPath: updated.downloadPath };
 });
 
 // Ensure embedded <webview> instances use a clean Chrome UA and open target=_blank links inside the webview
