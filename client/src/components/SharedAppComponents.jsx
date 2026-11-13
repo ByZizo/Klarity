@@ -16,7 +16,7 @@ marked.setOptions({
   gfm: true
 });
 
-export const CURRENT_APP_VERSION = '3.12.29';
+export const CURRENT_APP_VERSION = '3.12.30';
 
 export function isSemverNewer(remoteVer, currentVer = CURRENT_APP_VERSION) {
   if (!remoteVer || !currentVer) return false;
@@ -92,23 +92,9 @@ export function formatUserFacingReleaseNote(rawText) {
   return text;
 }
 
-export function formatCleanUpdateMessage(rawMsg, rawVer) {
+export function formatCleanUpdateMessage(_rawMsg, rawVer) {
   const verStr = formatVersionString(rawVer || CURRENT_APP_VERSION);
-  if (!rawMsg) return `New update available (${verStr}).`;
-  
-  // Remove any git sha strings like " • 571cf22" or "• 2ff833e"
-  let clean = String(rawMsg)
-    .replace(/\s*•\s*[0-9a-f]{6,40}/gi, '')
-    .trim();
-
-  // Strip prefix like "New update available (v3.12.24):" or "New update available:"
-  clean = clean.replace(/^New update available(?:\s*\([^)]*\))?:\s*/i, '').trim();
-
-  // Clean trailing punctuation or raw prompt phrases
-  clean = formatUserFacingReleaseNote(clean);
-  clean = clean.replace(/\s*•\s*[0-9a-f]{6,40}/gi, '').trim();
-
-  return `New update available (${verStr}): ${clean}`;
+  return `New update available (${verStr})`;
 }
 
 export function isMovementOrMinorTweak(str) {
