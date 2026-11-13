@@ -46,6 +46,7 @@ function createTabObject(url, title = 'New Tab', extra = {}) {
     canGoForward: false,
     isPinned: false,
     isMuted: false,
+    isPlayingMedia: false,
     groupId: null,
     ...extra
   };
@@ -359,7 +360,15 @@ export function BrowserPage({
     };
 
     const handleStartLoading = () => {
-      setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, isLoading: true } : t)));
+      setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, isLoading: true, isPlayingMedia: false } : t)));
+    };
+
+    const handleMediaStarted = () => {
+      setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, isPlayingMedia: true } : t)));
+    };
+
+    const handleMediaPaused = () => {
+      setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, isPlayingMedia: false } : t)));
     };
 
     const handleStopLoading = () => {
@@ -432,6 +441,8 @@ export function BrowserPage({
     webview.addEventListener('did-navigate', handleDidNavigate);
     webview.addEventListener('did-navigate-in-page', handleDidNavigate);
     webview.addEventListener('page-title-updated', handleTitleUpdate);
+    webview.addEventListener('media-started-playing', handleMediaStarted);
+    webview.addEventListener('media-paused', handleMediaPaused);
   };
 
   // Navigate active tab (or specific tabId)
@@ -1109,26 +1120,28 @@ export function BrowserPage({
             <Pin className="w-3.5 h-3.5 text-[var(--muted)]" />
             <span>{contextTab.isPinned ? 'Unpin' : 'Pin'}</span>
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              handleToggleMuteTab(contextTab.id);
-              setTabContextMenu(null);
-            }}
-            className="px-3 py-1.5 text-left hover:bg-[var(--surface-subtle)] cursor-pointer flex items-center gap-2"
-          >
-            {contextTab.isMuted ? (
-              <>
-                <Volume2 className="w-3.5 h-3.5 text-[var(--muted)]" />
-                <span>Unmute site</span>
-              </>
-            ) : (
-              <>
-                <VolumeX className="w-3.5 h-3.5 text-[var(--muted)]" />
-                <span>Mute site</span>
-              </>
-            )}
-          </button>
+          {(contextTab.isPlayingMedia || contextTab.isMuted) && (
+            <button
+              type="button"
+              onClick={() => {
+                handleToggleMuteTab(contextTab.id);
+                setTabContextMenu(null);
+              }}
+              className="px-3 py-1.5 text-left hover:bg-[var(--surface-subtle)] cursor-pointer flex items-center gap-2"
+            >
+              {contextTab.isMuted ? (
+                <>
+                  <Volume2 className="w-3.5 h-3.5 text-[var(--muted)]" />
+                  <span>Unmute tab</span>
+                </>
+              ) : (
+                <>
+                  <VolumeX className="w-3.5 h-3.5 text-[var(--muted)]" />
+                  <span>Mute tab</span>
+                </>
+              )}
+            </button>
+          )}
 
           <div className="my-1 border-t border-[var(--line)]" />
 
