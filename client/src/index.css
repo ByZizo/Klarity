@@ -31,17 +31,25 @@
 /* VISIBLE FOCUS RING (Accessibility Rule #7)                                 */
 /* Every interactive element and outline-none replacement has focus-visible   */
 /* ========================================================================== */
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-[role="button"]:focus-visible,
-[tabindex]:focus-visible,
-.outline-none:focus-visible,
-.focus\:outline-none:focus-visible {
+button:focus-visible:not(.no-focus-outline),
+a:focus-visible:not(.no-focus-outline),
+input:focus-visible:not(.no-focus-outline),
+select:focus-visible:not(.no-focus-outline),
+textarea:focus-visible:not(.no-focus-outline),
+[role="button"]:focus-visible:not(.no-focus-outline),
+[tabindex]:focus-visible:not(.no-focus-outline),
+.outline-none:focus-visible:not(.no-focus-outline),
+.focus\:outline-none:focus-visible:not(.no-focus-outline) {
   outline: 2px solid var(--brand) !important;
   outline-offset: 2px !important;
+}
+
+.no-focus-outline,
+.no-focus-outline:focus,
+.no-focus-outline:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
 }
 
 /* ========================================================================== */
@@ -273,7 +281,7 @@ html.reduce-motion *::after {
   scroll-behavior: auto !important;
 }
 
-html.high-focus *:focus-visible {
+html.high-focus *:focus-visible:not(.no-focus-outline) {
   outline: 3px solid var(--brand) !important;
   outline-offset: 2px !important;
 }

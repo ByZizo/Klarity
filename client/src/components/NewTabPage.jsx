@@ -581,7 +581,8 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={`Search ${activeEngine.name} or enter web address...`}
-              className="flex-1 bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-sm text-slate-100 placeholder-slate-400 min-w-0"
+              className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-sm text-slate-100 placeholder-slate-400 min-w-0 rounded-full"
+              style={{ outline: 'none', boxShadow: 'none' }}
             />
             {query && (
               <button
