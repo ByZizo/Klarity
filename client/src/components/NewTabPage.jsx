@@ -558,30 +558,8 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
         </div>
       </div>
 
-      {/* Quick Notes / Scratchpad Widget (Anchored on the left side of the page, away from the speed dials) */}
-      {prefs.showNotes && (
-        <aside
-          aria-label="Quick Notes"
-          className="relative mx-auto mt-2 mb-6 w-full max-w-md px-6 md:px-0 md:m-0 md:fixed md:left-6 lg:left-8 md:top-24 md:bottom-12 md:w-72 lg:w-80 z-20 flex flex-col rounded-2xl bg-[#1e293b]/90 border border-slate-700/80 p-4 shadow-xl backdrop-blur-md"
-        >
-          <div className="flex items-center justify-between mb-2.5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
-              <StickyNote className="w-3.5 h-3.5 text-blue-400" />
-              <span>Quick Notes</span>
-            </div>
-            <span className="text-[10px] text-slate-400 font-medium">Auto-saved</span>
-          </div>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Jot down quick notes, links, or reminders..."
-            className="w-full flex-1 min-h-[180px] md:min-h-0 rounded-xl bg-slate-900/80 border border-slate-700/70 focus:border-blue-500 outline-none p-3 text-xs text-slate-100 placeholder-slate-500 resize-none leading-relaxed"
-          />
-        </aside>
-      )}
-
-      {/* Main Centered Content */}
-      <div className="relative z-10 mx-auto px-6 pt-8 pb-16 flex flex-col items-center max-w-3xl">
+      {/* Main Centered Content Canvas */}
+      <div className={`relative z-10 mx-auto px-6 pt-8 pb-16 flex flex-col items-center transition-all ${prefs.showNotes && prefs.showQuickLinks ? 'max-w-5xl' : 'max-w-3xl'}`}>
         {/* Minimal Clock / Greeting */}
         {prefs.showClock && (
           <div className="text-center mb-7">
@@ -625,10 +603,50 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
           </div>
         </form>
 
-        {/* Speed Dial / Quick Links Grid (Centered under search bar) */}
-        {prefs.showQuickLinks && (
-          <div className="w-full max-w-2xl">
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+        {/* Centered Content Area: Floating Quick Notes Widget & Speed Dial Grid Side-by-Side */}
+        {(prefs.showNotes || prefs.showQuickLinks) && (
+          <div
+            className={`w-full ${
+              prefs.showNotes && prefs.showQuickLinks
+                ? 'flex flex-col md:flex-row items-start justify-center gap-6'
+                : 'max-w-2xl'
+            }`}
+          >
+            {/* Quick Notes: Floating, Rounded Card (Width ~300px, Height ~220px, Not Docked to Edge) */}
+            {prefs.showNotes && (
+              <div
+                className={`rounded-2xl bg-[#1e293b]/85 border border-slate-700/70 p-4 shadow-xl backdrop-blur-md flex flex-col transition-all ${
+                  prefs.showQuickLinks
+                    ? 'w-full md:w-[300px] shrink-0 h-[220px]'
+                    : 'w-full max-w-md mx-auto h-[220px]'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+                    <StickyNote className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Quick Notes</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-medium">Auto-saved</span>
+                </div>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Jot down quick notes, links, or reminders..."
+                  className="w-full flex-1 min-h-0 rounded-xl bg-slate-900/70 border border-slate-700/70 focus:border-blue-500 outline-none p-3 text-xs text-slate-100 placeholder-slate-500 resize-none leading-relaxed"
+                />
+              </div>
+            )}
+
+            {/* Speed Dial / Quick Links Grid (Cleanly positioned beside Quick Notes with gap) */}
+            {prefs.showQuickLinks && (
+              <div className="flex-1 w-full min-w-0">
+                <div
+                  className={`grid gap-3 ${
+                    prefs.showNotes
+                      ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4'
+                      : 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5'
+                  }`}
+                >
                   {quickLinks.map((item) => {
                     const isGroup = item.type === 'group';
                     const isDropTarget = dropTargetId === item.id && draggedTileId !== item.id;
@@ -775,6 +793,8 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
                 </div>
               </div>
             )}
+          </div>
+        )}
       </div>
 
       {/* Group Contents & Editor Modal */}

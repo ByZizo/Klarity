@@ -5609,6 +5609,11 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 }}
                 activeBrowserContext={activeBrowserContext}
                 setActiveBrowserContext={setActiveBrowserContext}
+                aiMemory={aiMemory}
+                onUpdateAiMemory={setAiMemory}
+                currentUser={currentUser}
+                settingsAiProvider={settingsAiProvider}
+                settingsAiModel={settingsAiModel}
                 browserSettings={browserSettings}
                 browserBookmarks={browserBookmarks}
                 onUpdateBookmarks={handleUpdateBrowserBookmarks}

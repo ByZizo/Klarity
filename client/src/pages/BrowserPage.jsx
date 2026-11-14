@@ -121,6 +121,11 @@ export function BrowserPage({
   onAskAdvisor,
   activeBrowserContext,
   setActiveBrowserContext,
+  aiMemory = [],
+  onUpdateAiMemory,
+  currentUser,
+  settingsAiProvider,
+  settingsAiModel,
   browserSettings = DEFAULT_BROWSER_SETTINGS,
   browserBookmarks = [],
   onUpdateBookmarks,
@@ -919,17 +924,27 @@ export function BrowserPage({
     setIsBrowserAiLoading(true);
 
     try {
+      const uid = currentUser?.id || 'default';
+      const cachedProvider = settingsAiProvider || localStorage.getItem(`klarity_${uid}_ai_provider`) || 'gemini';
+      const cachedModel = settingsAiModel || localStorage.getItem(`klarity_${uid}_ai_model`) || 'gemini-2.0-flash';
+
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: enrichedPrompt,
           browserContext: ctx,
+          userMemory: aiMemory,
+          clientProvider: cachedProvider,
+          clientModel: cachedModel,
           responseLength: 'concise',
           webSearchEnabled: true
         })
       });
       const data = await res.json();
+      if (data.updatedData?.memory && typeof onUpdateAiMemory === 'function') {
+        onUpdateAiMemory(data.updatedData.memory);
+      }
       let reply = (data.reply || '').replace(/\[NAVIGATE:[\s\S]*?\]/gi, '').replace(/\[ACTION:[\s\S]*?\]/gi, '').trim();
       if (!reply) {
         reply = "I've reviewed the current page. Feel free to ask any specific questions about its content, video topics, or products!";
@@ -1923,6 +1938,23 @@ export function BrowserPage({
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                {typeof onAskAdvisor === 'function' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const latestUserPrompt = browserAiMessages.filter((m) => m.role === 'user').slice(-1)[0]?.text || '';
+                      onAskAdvisor(
+                        latestUserPrompt || `I am currently viewing "${activeTab?.title || activeTab?.url}" (${activeTab?.url})`,
+                        activeBrowserContext
+                      );
+                      setIsBrowserAiSidebarOpen(false);
+                    }}
+                    title="Open in Main Financial Advisor"
+                    className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--brand)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 {browserAiMessages.length > 0 && (
                   <button
                     type="button"
