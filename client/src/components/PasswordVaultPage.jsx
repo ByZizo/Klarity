@@ -18,7 +18,8 @@ import {
   LayoutGrid,
   List,
   MoreVertical,
-  Star
+  Star,
+  FileText
 } from 'lucide-react';
 import {
   copySensitiveWithAutoClear,
@@ -29,6 +30,8 @@ import {
   removeMasterPin
 } from '../utils/securityCrypto';
 import { Button, Card, EmptyState, ConfirmDialog, Pill } from './ui';
+import DocumentVaultPage from './DocumentVaultPage';
+import { getDocumentCountSync } from '../utils/documentVaultStorage';
 
 export const DEFAULT_VAULT_ITEMS = [];
 
@@ -37,6 +40,22 @@ export default function PasswordVaultPage({
   onUpdateVaultItems,
   onShowToast
 }) {
+  const [activeVaultSection, setActiveVaultSection] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_vault_active_section') || 'passwords';
+    } catch {
+      return 'passwords';
+    }
+  });
+
+  const [documentCount, setDocumentCount] = useState(() => getDocumentCountSync());
+
+  const handleSelectVaultSection = (sec) => {
+    setActiveVaultSection(sec);
+    try {
+      localStorage.setItem('klarity_vault_active_section', sec);
+    } catch {}
+  };
   const [vaultLockType, setVaultLockType] = useState(() => {
     try {
       return localStorage.getItem('klarity_vault_lock_type') || 'pin';
@@ -780,112 +799,162 @@ export default function PasswordVaultPage({
   return (
     <div className="flex flex-col gap-5">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-[26px] font-semibold text-[var(--ink)] tracking-tight">
-            Vault
-          </h1>
-          <p className="text-[15px] font-medium text-[var(--muted)]">
-            Saved logins, passwords, and account numbers
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-serif text-[26px] font-semibold text-[var(--ink)] tracking-tight">
+              Vault
+            </h1>
+
+            {/* Top Vault Section Selector: Passwords & Documents */}
+            <div className="flex items-center bg-[var(--surface-subtle)] p-1 rounded-[10px] border border-[var(--line)]">
+              <button
+                type="button"
+                onClick={() => handleSelectVaultSection('passwords')}
+                className={`flex items-center gap-2 py-1.5 px-3 rounded-[8px] font-medium text-[13px] transition-all cursor-pointer ${
+                  activeVaultSection === 'passwords'
+                    ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                }`}
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>Passwords</span>
+                <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-medium ${
+                  activeVaultSection === 'passwords'
+                    ? 'bg-[#1B4B91]/15 text-[#1B4B91]'
+                    : 'bg-[var(--line)] text-[var(--ink)]'
+                }`}>
+                  {(vaultItems || []).length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectVaultSection('documents')}
+                className={`flex items-center gap-2 py-1.5 px-3 rounded-[8px] font-medium text-[13px] transition-all cursor-pointer ${
+                  activeVaultSection === 'documents'
+                    ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                <span>Documents</span>
+                <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-medium ${
+                  activeVaultSection === 'documents'
+                    ? 'bg-[#1B4B91]/15 text-[#1B4B91]'
+                    : 'bg-[var(--line)] text-[var(--ink)]'
+                }`}>
+                  {documentCount}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <p className="text-[14px] font-medium text-[var(--muted)]">
+            {activeVaultSection === 'passwords'
+              ? 'Saved logins, passwords, and account numbers'
+              : 'Secure document holder, policies, tax files, and records'}
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
-              aria-label="Change view layout and card size"
-            >
-              {viewMode === 'list' ? <List className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
-              <span className="capitalize">{viewMode}</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isViewMenuOpen ? 'rotate-180' : ''}`} />
-            </Button>
+          {activeVaultSection === 'passwords' && (
+            <div className="relative">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
+                aria-label="Change view layout and card size"
+              >
+                {viewMode === 'list' ? <List className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
+                <span className="capitalize">{viewMode}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isViewMenuOpen ? 'rotate-180' : ''}`} />
+              </Button>
 
-            {isViewMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => setIsViewMenuOpen(false)} />
-                <Card className="absolute right-0 top-full mt-2 w-56 p-3 z-30 flex flex-col gap-3 shadow-lg">
-                  <div>
-                    <span className="text-[13px] font-medium text-[var(--muted)] block mb-1.5 px-1">
-                      View layout
-                    </span>
-                    <div className="grid grid-cols-2 gap-1.5 bg-[var(--surface-subtle)] p-1 rounded-[8px]">
-                      <button
-                        type="button"
-                        onClick={() => handleSetViewMode('grid')}
-                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-[8px] font-medium text-[13px] cursor-pointer transition-all ${
-                          viewMode === 'grid'
-                            ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
-                            : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                        }`}
-                      >
-                        <LayoutGrid className="w-3.5 h-3.5" />
-                        <span>Grid</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSetViewMode('list')}
-                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-[8px] font-medium text-[13px] cursor-pointer transition-all ${
-                          viewMode === 'list'
-                            ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
-                            : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                        }`}
-                      >
-                        <List className="w-3.5 h-3.5" />
-                        <span>List</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-[var(--line)] pt-2.5">
-                    <span className="text-[13px] font-medium text-[var(--muted)] block mb-1.5 px-1">
-                      Card size
-                    </span>
-                    <div className="grid grid-cols-3 gap-1 bg-[var(--surface-subtle)] p-1 rounded-[8px]">
-                      {['small', 'medium', 'large'].map(sz => (
+              {isViewMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setIsViewMenuOpen(false)} />
+                  <Card className="absolute right-0 top-full mt-2 w-56 p-3 z-30 flex flex-col gap-3 shadow-lg">
+                    <div>
+                      <span className="text-[13px] font-medium text-[var(--muted)] block mb-1.5 px-1">
+                        View layout
+                      </span>
+                      <div className="grid grid-cols-2 gap-1.5 bg-[var(--surface-subtle)] p-1 rounded-[8px]">
                         <button
-                          key={sz}
                           type="button"
-                          onClick={() => handleSetCardSize(sz)}
-                          className={`py-1.5 px-1 rounded-[8px] font-medium text-[13px] capitalize text-center cursor-pointer transition-all ${
-                            cardSize === sz
+                          onClick={() => handleSetViewMode('grid')}
+                          className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-[8px] font-medium text-[13px] cursor-pointer transition-all ${
+                            viewMode === 'grid'
                               ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
                               : 'text-[var(--muted)] hover:text-[var(--ink)]'
                           }`}
                         >
-                          {sz}
+                          <LayoutGrid className="w-3.5 h-3.5" />
+                          <span>Grid</span>
                         </button>
-                      ))}
+                        <button
+                          type="button"
+                          onClick={() => handleSetViewMode('list')}
+                          className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-[8px] font-medium text-[13px] cursor-pointer transition-all ${
+                            viewMode === 'list'
+                              ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                              : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                          }`}
+                        >
+                          <List className="w-3.5 h-3.5" />
+                          <span>List</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="border-t border-[var(--line)] pt-2 flex items-center justify-between text-[13px] text-[var(--muted)] px-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const allExp = {};
-                        (vaultItems || []).forEach(i => { allExp[i.id] = true; });
-                        setExpandedCardIds(allExp);
-                      }}
-                      className="hover:text-[#1B4B91] font-medium cursor-pointer underline"
-                    >
-                      Expand all
-                    </button>
-                    <span>•</span>
-                    <button
-                      type="button"
-                      onClick={() => setExpandedCardIds({})}
-                      className="hover:text-[var(--ink)] font-medium cursor-pointer underline"
-                    >
-                      Collapse all
-                    </button>
-                  </div>
-                </Card>
-              </>
-            )}
-          </div>
+                    <div className="border-t border-[var(--line)] pt-2.5">
+                      <span className="text-[13px] font-medium text-[var(--muted)] block mb-1.5 px-1">
+                        Card size
+                      </span>
+                      <div className="grid grid-cols-3 gap-1 bg-[var(--surface-subtle)] p-1 rounded-[8px]">
+                        {['small', 'medium', 'large'].map(sz => (
+                          <button
+                            key={sz}
+                            type="button"
+                            onClick={() => handleSetCardSize(sz)}
+                            className={`py-1.5 px-1 rounded-[8px] font-medium text-[13px] capitalize text-center cursor-pointer transition-all ${
+                              cardSize === sz
+                                ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                                : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                            }`}
+                          >
+                            {sz}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="border-t border-[var(--line)] pt-2 flex items-center justify-between text-[13px] text-[var(--muted)] px-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allExp = {};
+                          (vaultItems || []).forEach(i => { allExp[i.id] = true; });
+                          setExpandedCardIds(allExp);
+                        }}
+                        className="hover:text-[#1B4B91] font-medium cursor-pointer underline"
+                      >
+                        Expand all
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedCardIds({})}
+                        className="hover:text-[var(--ink)] font-medium cursor-pointer underline"
+                      >
+                        Collapse all
+                      </button>
+                    </div>
+                  </Card>
+                </>
+              )}
+            </div>
+          )}
 
           {vaultLockType === 'none' ? (
             <Button
@@ -918,30 +987,41 @@ export default function PasswordVaultPage({
             </Button>
           )}
 
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              setEditingId(null);
-              setIsCreatingNewSection(false);
-              setNewSectionInput('');
-              setFormState({
-                service: '',
-                category: selectedCategory === 'All' ? (allSections[0] || 'General') : selectedCategory,
-                username: '',
-                password: '',
-                accountNumber: '',
-                website: '',
-                notes: ''
-              });
-              setShowAddForm(!showAddForm);
-            }}
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add account</span>
-          </Button>
+          {activeVaultSection === 'passwords' && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setEditingId(null);
+                setIsCreatingNewSection(false);
+                setNewSectionInput('');
+                setFormState({
+                  service: '',
+                  category: selectedCategory === 'All' ? (allSections[0] || 'General') : selectedCategory,
+                  username: '',
+                  password: '',
+                  accountNumber: '',
+                  website: '',
+                  notes: ''
+                });
+                setShowAddForm(!showAddForm);
+              }}
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add account</span>
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Vault Section Body */}
+      {activeVaultSection === 'documents' ? (
+        <DocumentVaultPage
+          onShowToast={onShowToast}
+          onDocumentsCountChange={setDocumentCount}
+        />
+      ) : (
+        <>
 
       {/* Status Notice */}
       {(importStatus || clipboardNotice) && (
@@ -1533,6 +1613,8 @@ export default function PasswordVaultPage({
             );
           })}
         </div>
+      )}
+      </>
       )}
 
       {/* Delete Confirmation Dialog */}
