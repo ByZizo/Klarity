@@ -616,6 +616,26 @@ async function createDesktopWindow() {
     try {
       const parsedUrl = new URL(details.url);
       const host = parsedUrl.hostname.toLowerCase();
+      const urlPath = parsedUrl.pathname + parsedUrl.search;
+
+      // EXPLICIT WHITELIST: Always allow YouTube timedtext / subtitles / captions, video playback, and player core scripts
+      if (
+        host.includes('youtube.com') ||
+        host.includes('googlevideo.com') ||
+        host.includes('ytimg.com')
+      ) {
+        if (
+          urlPath.includes('timedtext') ||
+          urlPath.includes('caption') ||
+          urlPath.includes('subtitle') ||
+          urlPath.includes('/videoplayback') ||
+          urlPath.includes('/player') ||
+          urlPath.includes('/watch') ||
+          urlPath.includes('/initplayback')
+        ) {
+          return callback({ cancel: false });
+        }
+      }
 
       // Check known ad network domains
       const isAdDomain = AD_BLOCK_DOMAINS.some(domain => host === domain || host.endsWith('.' + domain));
@@ -626,7 +646,6 @@ async function createDesktopWindow() {
       }
 
       // Check ad URL patterns
-      const urlPath = parsedUrl.pathname + parsedUrl.search;
       const isAdPattern = AD_BLOCK_PATTERNS.some(regex => regex.test(urlPath));
       if (isAdPattern) {
         browserAdsBlockedCount++;

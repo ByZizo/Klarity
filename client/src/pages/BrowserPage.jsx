@@ -22,7 +22,10 @@ import {
   Pin,
   Volume2,
   VolumeX,
-  Copy
+  Copy,
+  RotateCcw,
+  MessageSquare,
+  Bot
 } from 'lucide-react';
 import { Button, Card } from '../components/ui';
 import { NewTabPage } from '../components/NewTabPage';
@@ -161,11 +164,13 @@ export function BrowserPage({
   const [isAdBlockPopoverOpen, setIsAdBlockPopoverOpen] = useState(false);
   const adBlockPopoverRef = useRef(null);
 
-  // AI Quick-Ask Popover State (clean, no pre-made prompt chips)
-  const [isAiPopoverOpen, setIsAiPopoverOpen] = useState(false);
-  const [aiQuestion, setAiQuestion] = useState('');
-  const aiPopoverRef = useRef(null);
-  const aiInputRef = useRef(null);
+  // Dedicated In-Browser AI Sidebar State (Self-contained, doesn't open global app advisor)
+  const [isBrowserAiSidebarOpen, setIsBrowserAiSidebarOpen] = useState(false);
+  const [browserAiMessages, setBrowserAiMessages] = useState([]);
+  const [browserAiInput, setBrowserAiInput] = useState('');
+  const [isBrowserAiLoading, setIsBrowserAiLoading] = useState(false);
+  const browserAiMessagesEndRef = useRef(null);
+  const browserAiInputRef = useRef(null);
 
   // Add Bookmark / Folder Popover State
   const [isAddBookmarkOpen, setIsAddBookmarkOpen] = useState(false);
@@ -276,12 +281,15 @@ export function BrowserPage({
     };
   }, []);
 
-  // Focus AI input when popover opens
+  // Focus and scroll Browser AI input when sidebar opens or new message arrives
   useEffect(() => {
-    if (isAiPopoverOpen) {
-      setTimeout(() => aiInputRef.current?.focus(), 40);
+    if (isBrowserAiSidebarOpen) {
+      setTimeout(() => {
+        browserAiInputRef.current?.focus();
+        browserAiMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
     }
-  }, [isAiPopoverOpen]);
+  }, [isBrowserAiSidebarOpen, browserAiMessages.length]);
 
   // Apply page zoom setting to all mounted webviews
   useEffect(() => {
@@ -876,22 +884,27 @@ export function BrowserPage({
     }
   };
 
-  // AI Question Submit
-  const handleSendAiQuestion = async (e) => {
-    if (e) e.preventDefault();
-    if (typeof onAskAdvisor !== 'function') return;
-    const raw = aiQuestion.trim();
-    if (!raw) return;
+  // In-Browser AI Copilot Actions (Self-contained within browser sidebar)
+  const handleClearBrowserAiChat = () => {
+    setBrowserAiMessages([]);
+  };
 
-    // Immediately extract fresh page content from the active tab's webview
+  const handleSendBrowserAiMessage = async (overrideText) => {
+    const raw = (typeof overrideText === 'string' ? overrideText : browserAiInput).trim();
+    if (!raw || isBrowserAiLoading) return;
+
+    if (typeof overrideText !== 'string') {
+      setBrowserAiInput('');
+    }
+
+    // Refresh context immediately from the active tab's webview
     let freshContext = null;
     try {
       freshContext = await extractPageContentForTab(activeTabId);
     } catch {}
-
     const ctx = freshContext || activeBrowserContext;
-    let enrichedPrompt = raw;
 
+    let enrichedPrompt = raw;
     if (ctx && (ctx.title || ctx.url)) {
       if (ctx.isYouTube || /youtube\.com\/watch|youtu\.be/i.test(ctx.url || '')) {
         enrichedPrompt = `[Currently watching YouTube video: "${ctx.title}"${ctx.channel ? ` by ${ctx.channel}` : ''} (${ctx.url})]\n\n${raw}`;
@@ -900,9 +913,36 @@ export function BrowserPage({
       }
     }
 
-    onAskAdvisor(enrichedPrompt, ctx);
-    setAiQuestion('');
-    setIsAiPopoverOpen(false);
+    const nextUserMsg = { role: 'user', text: raw };
+    const updatedHistory = [...browserAiMessages, nextUserMsg];
+    setBrowserAiMessages(updatedHistory);
+    setIsBrowserAiLoading(true);
+
+    try {
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: enrichedPrompt,
+          browserContext: ctx,
+          responseLength: 'concise',
+          webSearchEnabled: true
+        })
+      });
+      const data = await res.json();
+      let reply = (data.reply || '').replace(/\[NAVIGATE:[\s\S]*?\]/gi, '').replace(/\[ACTION:[\s\S]*?\]/gi, '').trim();
+      if (!reply) {
+        reply = "I've reviewed the current page. Feel free to ask any specific questions about its content, video topics, or products!";
+      }
+      setBrowserAiMessages([...updatedHistory, { role: 'assistant', text: reply }]);
+    } catch (err) {
+      setBrowserAiMessages([
+        ...updatedHistory,
+        { role: 'assistant', text: "Could not connect to the AI copilot. Please check your network connection." }
+      ]);
+    } finally {
+      setIsBrowserAiLoading(false);
+    }
   };
 
   // Bookmarks & Folders CRUD
@@ -1498,59 +1538,28 @@ export function BrowserPage({
             )}
           </div>
 
-          {/* Clean Icon-Only AI Button & Minimal Q&A Input Popover (No Pre-made Prompt Chips) */}
-          <div className="relative shrink-0" ref={aiPopoverRef}>
+          {/* In-Browser AI Copilot Sidebar Toggle Button */}
+          <div className="relative shrink-0">
             <button
               type="button"
-              onClick={() => setIsAiPopoverOpen((prev) => !prev)}
-              className="flex items-center justify-center p-1.5 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white transition-all cursor-pointer shadow-2xs shrink-0"
-              title="Ask AI about this page"
-              aria-label="Ask AI about this page"
+              onClick={() => {
+                const nextState = !isBrowserAiSidebarOpen;
+                setIsBrowserAiSidebarOpen(nextState);
+                if (nextState && activeTabId) {
+                  extractPageContentForTab(activeTabId);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
+                isBrowserAiSidebarOpen
+                  ? 'bg-[var(--brand)] text-white border-[var(--brand)] shadow-sm'
+                  : 'bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)]'
+              }`}
+              title={isBrowserAiSidebarOpen ? 'Close AI Sidebar' : 'Open Browser AI Copilot'}
+              aria-label="Browser AI"
             >
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className={`w-3.5 h-3.5 ${isBrowserAiSidebarOpen ? 'text-white' : 'text-[var(--brand)]'}`} />
+              <span className="hidden sm:inline">AI Copilot</span>
             </button>
-
-            {isAiPopoverOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 p-3.5 bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-xl z-50 flex flex-col gap-3">
-                <div className="flex items-center justify-between pb-2 border-b border-[var(--line)]">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Sparkles className="w-4 h-4 text-[var(--brand)] shrink-0" />
-                    <span className="text-xs font-bold text-[var(--ink)] truncate">Ask AI</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsAiPopoverOpen(false)}
-                    className="p-0.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
-                    aria-label="Close AI popover"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <div className="text-[11px] text-[var(--muted)] bg-[var(--surface-subtle)] px-2.5 py-1.5 rounded-lg border border-[var(--line)] truncate">
-                  {activeTab?.title || activeTab?.url}
-                </div>
-
-                <form onSubmit={handleSendAiQuestion} className="flex items-center gap-1.5">
-                  <input
-                    ref={aiInputRef}
-                    type="text"
-                    value={aiQuestion}
-                    onChange={(e) => setAiQuestion(e.target.value)}
-                    placeholder="Ask a question about this page..."
-                    className="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] focus:border-[var(--brand)] outline-none text-xs text-[var(--ink)] placeholder-[var(--muted)]"
-                  />
-                  <button
-                    type="submit"
-                    className="p-2 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white cursor-pointer shrink-0 transition-colors"
-                    title="Send"
-                    aria-label="Send question"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                </form>
-              </div>
-            )}
           </div>
 
           {/* Browser Settings Shortcut */}
@@ -1799,89 +1808,234 @@ export function BrowserPage({
         )}
       </div>
 
-      {/* 3. MULTI-TAB BROWSER CONTENT CANVAS */}
-      <div className="flex-1 w-full relative bg-[var(--surface)] min-h-0 h-full overflow-hidden">
-        {isDesktop ? (
-          tabs.map((tab) => {
-            const isTabActive = tab.id === activeTabId;
-            const showNewTab = isNewTabUrl(tab.url);
-            return (
-              <React.Fragment key={tab.id}>
-                <webview
-                  ref={(el) => {
-                    if (el) {
-                      webviewRefs.current[tab.id] = el;
-                      attachWebviewListeners(tab.id, el);
-                    }
-                  }}
-                  src={isNewTabUrl(tab.initialUrl) ? 'about:blank' : tab.initialUrl}
-                  partition="persist:klarity_browser"
-                  className="w-full h-full border-0 absolute inset-0"
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    display: 'flex',
-                    border: 'none',
-                    outline: 'none',
-                    zIndex: isTabActive && !showNewTab ? 10 : 0,
-                    opacity: isTabActive && !showNewTab ? 1 : 0,
-                    pointerEvents: isTabActive && !showNewTab ? 'auto' : 'none'
-                  }}
-                  allowpopups="true"
-                  webpreferences="contextIsolation=true, sandbox=true"
-                />
-                {showNewTab && (
-                  <div
-                    className="absolute inset-0 w-full h-full"
-                    style={{
-                      zIndex: isTabActive ? 20 : 0,
-                      opacity: isTabActive ? 1 : 0,
-                      pointerEvents: isTabActive ? 'auto' : 'none'
-                    }}
-                  >
-                    <NewTabPage
-                      searchEngineId={browserSettings?.searchEngine}
-                      onNavigate={(dest) => navigateTo(dest, tab.id)}
-                      onOpenNewTab={(url, title) =>
-                        handleNewTab({ url, title, insertAfterTabId: tab.id })
+      {/* 3. MULTI-TAB BROWSER CONTENT CANVAS + INTEGRATED BROWSER AI SIDEBAR */}
+      <div className="flex-1 w-full relative bg-[var(--surface)] min-h-0 h-full overflow-hidden flex flex-row">
+        {/* Webviews and New Tab Pages */}
+        <div className="flex-1 min-w-0 h-full relative overflow-hidden">
+          {isDesktop ? (
+            tabs.map((tab) => {
+              const isTabActive = tab.id === activeTabId;
+              const showNewTab = isNewTabUrl(tab.url);
+              return (
+                <React.Fragment key={tab.id}>
+                  <webview
+                    ref={(el) => {
+                      if (el) {
+                        webviewRefs.current[tab.id] = el;
+                        attachWebviewListeners(tab.id, el);
                       }
-                    />
+                    }}
+                    src={isNewTabUrl(tab.initialUrl) ? 'about:blank' : tab.initialUrl}
+                    partition="persist:klarity_browser"
+                    className="w-full h-full border-0 absolute inset-0"
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      border: 'none',
+                      outline: 'none',
+                      zIndex: isTabActive && !showNewTab ? 10 : 0,
+                      opacity: isTabActive && !showNewTab ? 1 : 0,
+                      pointerEvents: isTabActive && !showNewTab ? 'auto' : 'none'
+                    }}
+                    allowpopups="true"
+                    webpreferences="contextIsolation=true, sandbox=true"
+                  />
+                  {showNewTab && (
+                    <div
+                      className="absolute inset-0 w-full h-full"
+                      style={{
+                        zIndex: isTabActive ? 20 : 0,
+                        opacity: isTabActive ? 1 : 0,
+                        pointerEvents: isTabActive ? 'auto' : 'none'
+                      }}
+                    >
+                      <NewTabPage
+                        searchEngineId={browserSettings?.searchEngine}
+                        onNavigate={(dest) => navigateTo(dest, tab.id)}
+                        onOpenNewTab={(url, title) =>
+                          handleNewTab({ url, title, insertAfterTabId: tab.id })
+                        }
+                      />
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            })
+          ) : isNewTabUrl(activeTab?.url) ? (
+            <NewTabPage
+              searchEngineId={browserSettings?.searchEngine}
+              onNavigate={(dest) => navigateTo(dest, activeTabId)}
+              onOpenNewTab={(url, title) =>
+                handleNewTab({ url, title, insertAfterTabId: activeTabId })
+              }
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-[var(--surface-subtle)]">
+              <Card className="max-w-md p-6 flex flex-col items-center gap-4 text-center shadow-lg">
+                <div className="w-12 h-12 rounded-2xl bg-[var(--brand-soft)] flex items-center justify-center text-[var(--brand)]">
+                  <Globe className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-[var(--ink)]">In-App Browser</h3>
+                  <p className="text-xs text-[var(--muted)] mt-1.5 leading-relaxed">
+                    Embedded browsing runs natively in the Klarity Desktop application.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="primary" onClick={() => window.open(activeTab?.url || homeUrl, '_blank')}>
+                    <ExternalLink className="w-4 h-4 mr-1.5" />
+                    Open Page
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          )}
+        </div>
+
+        {/* Dedicated In-Browser AI Sidebar (Edge Copilot / Aria Style, fully contained in browser) */}
+        {isBrowserAiSidebarOpen && (
+          <aside
+            aria-label="Browser AI Copilot"
+            className="w-80 sm:w-88 md:w-96 shrink-0 h-full bg-[var(--surface)] border-l border-[var(--line)] flex flex-col z-30 shadow-2xl transition-all"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--line)] bg-[var(--surface-subtle)]/40">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-[var(--brand-soft)] text-[var(--brand)] flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-[var(--ink)]">AI Copilot</span>
+                    {activeBrowserContext?.isYouTube && (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-red-500/10 text-red-500 font-semibold border border-red-500/20">
+                        YouTube
+                      </span>
+                    )}
                   </div>
+                  <p className="text-[11px] text-[var(--muted)] truncate max-w-[200px]" title={activeTab?.title || activeTab?.url}>
+                    {activeTab?.title || activeTab?.url || 'Current page'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                {browserAiMessages.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearBrowserAiChat}
+                    title="Clear chat"
+                    className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
                 )}
-              </React.Fragment>
-            );
-          })
-        ) : isNewTabUrl(activeTab?.url) ? (
-          <NewTabPage
-            searchEngineId={browserSettings?.searchEngine}
-            onNavigate={(dest) => navigateTo(dest, activeTabId)}
-            onOpenNewTab={(url, title) =>
-              handleNewTab({ url, title, insertAfterTabId: activeTabId })
-            }
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-[var(--surface-subtle)]">
-            <Card className="max-w-md p-6 flex flex-col items-center gap-4 text-center shadow-lg">
-              <div className="w-12 h-12 rounded-2xl bg-[var(--brand-soft)] flex items-center justify-center text-[var(--brand)]">
-                <Globe className="w-6 h-6" />
+                <button
+                  type="button"
+                  onClick={() => setIsBrowserAiSidebarOpen(false)}
+                  title="Close AI Copilot"
+                  className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <div>
-                <h3 className="font-serif text-lg font-bold text-[var(--ink)]">In-App Browser</h3>
-                <p className="text-xs text-[var(--muted)] mt-1.5 leading-relaxed">
-                  Embedded browsing runs natively in the Klarity Desktop application.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="primary" onClick={() => window.open(activeTab?.url || homeUrl, '_blank')}>
-                  <ExternalLink className="w-4 h-4 mr-1.5" />
-                  Open Page
-                </Button>
-              </div>
-            </Card>
-          </div>
+            </div>
+
+            {/* Quick Action Chips */}
+            <div className="px-3.5 py-2 border-b border-[var(--line)] flex items-center gap-1.5 overflow-x-auto no-scrollbar bg-[var(--surface)]">
+              <button
+                type="button"
+                onClick={() => handleSendBrowserAiMessage(activeBrowserContext?.isYouTube ? 'Summarize this video' : 'Summarize this page')}
+                className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[var(--surface-subtle)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)] text-[var(--ink)] border border-[var(--line)] shrink-0 transition-colors cursor-pointer"
+              >
+                ✨ {activeBrowserContext?.isYouTube ? 'Summarize Video' : 'Summarize Page'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSendBrowserAiMessage(activeBrowserContext?.isYouTube ? 'What are the main key points in this video?' : 'What are the key points of this page?')}
+                className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[var(--surface-subtle)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)] text-[var(--ink)] border border-[var(--line)] shrink-0 transition-colors cursor-pointer"
+              >
+                📌 Key Points
+              </button>
+            </div>
+
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {browserAiMessages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--muted)]">
+                  <div className="w-12 h-12 rounded-2xl bg-[var(--surface-subtle)] border border-[var(--line)] flex items-center justify-center mb-3 text-[var(--brand)]">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-xs font-bold text-[var(--ink)] mb-1">
+                    Ask about this {activeBrowserContext?.isYouTube ? 'video' : 'page'}
+                  </h4>
+                  <p className="text-[11px] leading-relaxed max-w-[220px]">
+                    Ask questions, get summaries, or extract details directly without leaving your browser tab.
+                  </p>
+                </div>
+              ) : (
+                browserAiMessages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+                  >
+                    <div
+                      className={`max-w-[90%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${
+                        msg.role === 'user'
+                          ? 'bg-[var(--brand)] text-white rounded-br-xs font-normal'
+                          : 'bg-[var(--surface-subtle)] text-[var(--ink)] border border-[var(--line)] rounded-bl-xs'
+                      }`}
+                    >
+                      <div className="whitespace-pre-wrap">{msg.text}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+              {isBrowserAiLoading && (
+                <div className="flex items-center gap-2 text-xs text-[var(--muted)] p-2">
+                  <Sparkles className="w-3.5 h-3.5 animate-spin text-[var(--brand)]" />
+                  <span>Analyzing page...</span>
+                </div>
+              )}
+              <div ref={browserAiMessagesEndRef} />
+            </div>
+
+            {/* Bottom Input */}
+            <div className="p-3 border-t border-[var(--line)] bg-[var(--surface)]">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendBrowserAiMessage();
+                }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  ref={browserAiInputRef}
+                  type="text"
+                  value={browserAiInput}
+                  onChange={(e) => setBrowserAiInput(e.target.value)}
+                  placeholder={`Ask about this ${activeBrowserContext?.isYouTube ? 'video' : 'webpage'}...`}
+                  className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] focus:border-[var(--brand)] text-xs text-[var(--ink)] placeholder-[var(--muted)] outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={!browserAiInput.trim() || isBrowserAiLoading}
+                  className={`p-2 rounded-xl transition-all ${
+                    browserAiInput.trim() && !isBrowserAiLoading
+                      ? 'bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white cursor-pointer'
+                      : 'bg-[var(--surface-subtle)] text-[var(--muted)] cursor-not-allowed opacity-50'
+                  }`}
+                  title="Send"
+                  aria-label="Send"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              </form>
+            </div>
+          </aside>
         )}
       </div>
     </div>

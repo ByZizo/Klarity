@@ -27,6 +27,16 @@ export function buildYouTubeAdShieldScript(enabled = true) {
     ytd-enforcement-message-view-model {
       display: none !important;
     }
+
+    /* Protect YouTube captions, subtitle tracks, and CC toggle */
+    .ytp-caption-window-container,
+    .caption-window,
+    .ytp-caption-segment,
+    .ytp-subtitles-button {
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
   \`;
   (document.head || document.documentElement).appendChild(style);
 
@@ -50,10 +60,9 @@ export function buildYouTubeAdShieldScript(enabled = true) {
 
       if (!player || !video) return;
 
+      // Only fast-forward when YouTube explicitly flags player as ad-showing or ad-interrupting
       const isAdShowing = player.classList.contains('ad-showing') ||
-                          player.classList.contains('ad-interrupting') ||
-                          Boolean(document.querySelector('.ytp-ad-player-overlay')) ||
-                          Boolean(document.querySelector('.ytp-ad-text'));
+                          player.classList.contains('ad-interrupting');
 
       if (isAdShowing) {
         // Mute and fast-forward ad to end instantly
@@ -69,8 +78,7 @@ export function buildYouTubeAdShieldScript(enabled = true) {
           '.ytp-ad-skip-button',
           '.ytp-ad-skip-button-modern',
           '.ytp-skip-ad-button',
-          '.ytp-ad-skip-button-slot',
-          '.ytp-ad-overlay-close-button'
+          '.ytp-ad-skip-button-slot'
         ];
         for (const selector of skipButtons) {
           const btn = document.querySelector(selector);
