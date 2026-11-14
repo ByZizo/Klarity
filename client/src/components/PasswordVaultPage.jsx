@@ -811,105 +811,7 @@ export default function PasswordVaultPage({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {activeVaultSection === 'passwords' && (
-            <div className="relative">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
-                aria-label="Change view layout and card size"
-              >
-                {viewMode === 'list' ? <List className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
-                <span className="capitalize">{viewMode}</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isViewMenuOpen ? 'rotate-180' : ''}`} />
-              </Button>
-
-              {isViewMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setIsViewMenuOpen(false)} />
-                  <Card className="absolute right-0 top-full mt-2 w-56 p-3 z-30 flex flex-col gap-3 shadow-lg">
-                    <div>
-                      <span className="text-[13px] font-medium text-[var(--muted)] block mb-1.5 px-1">
-                        View layout
-                      </span>
-                      <div className="grid grid-cols-2 gap-1.5 bg-[var(--surface-subtle)] p-1 rounded-[8px]">
-                        <button
-                          type="button"
-                          onClick={() => handleSetViewMode('grid')}
-                          className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-[8px] font-medium text-[13px] cursor-pointer transition-all ${
-                            viewMode === 'grid'
-                              ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
-                              : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                          }`}
-                        >
-                          <LayoutGrid className="w-3.5 h-3.5" />
-                          <span>Grid</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSetViewMode('list')}
-                          className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-[8px] font-medium text-[13px] cursor-pointer transition-all ${
-                            viewMode === 'list'
-                              ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
-                              : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                          }`}
-                        >
-                          <List className="w-3.5 h-3.5" />
-                          <span>List</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-[var(--line)] pt-2.5">
-                      <span className="text-[13px] font-medium text-[var(--muted)] block mb-1.5 px-1">
-                        Card size
-                      </span>
-                      <div className="grid grid-cols-3 gap-1 bg-[var(--surface-subtle)] p-1 rounded-[8px]">
-                        {['small', 'medium', 'large'].map(sz => (
-                          <button
-                            key={sz}
-                            type="button"
-                            onClick={() => handleSetCardSize(sz)}
-                            className={`py-1.5 px-1 rounded-[8px] font-medium text-[13px] capitalize text-center cursor-pointer transition-all ${
-                              cardSize === sz
-                                ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
-                                : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                            }`}
-                          >
-                            {sz}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="border-t border-[var(--line)] pt-2 flex items-center justify-between text-[13px] text-[var(--muted)] px-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const allExp = {};
-                          (vaultItems || []).forEach(i => { allExp[i.id] = true; });
-                          setExpandedCardIds(allExp);
-                        }}
-                        className="hover:text-[#1B4B91] font-medium cursor-pointer underline"
-                      >
-                        Expand all
-                      </button>
-                      <span>•</span>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedCardIds({})}
-                        className="hover:text-[var(--ink)] font-medium cursor-pointer underline"
-                      >
-                        Collapse all
-                      </button>
-                    </div>
-                  </Card>
-                </>
-              )}
-            </div>
-          )}
-
+        <div className="flex items-center gap-2">
           {vaultLockType === 'none' ? (
             <Button
               variant="secondary"
@@ -938,31 +840,6 @@ export default function PasswordVaultPage({
             >
               <Lock className="w-4 h-4" />
               <span>Lock vault</span>
-            </Button>
-          )}
-
-          {activeVaultSection === 'passwords' && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                setEditingId(null);
-                setIsCreatingNewSection(false);
-                setNewSectionInput('');
-                setFormState({
-                  service: '',
-                  category: selectedCategory === 'All' ? (allSections[0] || 'General') : selectedCategory,
-                  username: '',
-                  password: '',
-                  accountNumber: '',
-                  website: '',
-                  notes: ''
-                });
-                setShowAddForm(!showAddForm);
-              }}
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add account</span>
             </Button>
           )}
         </div>
@@ -1000,166 +877,8 @@ export default function PasswordVaultPage({
 
       {/* Filter & Search Bar */}
       <Card className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="relative">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
-          >
-            <span>
-              {selectedCategory === 'All'
-                ? `All sections (${(vaultItems || []).length})`
-                : `${selectedCategory} (${getSectionItemCount(selectedCategory)})`}
-            </span>
-            <ChevronDown className={`w-4 h-4 transition-transform ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
-          </Button>
-
-          {isCategoryDropdownOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-30"
-                onClick={() => {
-                  setIsCategoryDropdownOpen(false);
-                  setIsAddingSection(false);
-                }}
-              />
-              <Card className="absolute left-0 top-full mt-2 w-64 py-2 z-40 flex flex-col shadow-lg">
-                <div className="px-2.5 pb-2 border-b border-[var(--line)]">
-                  {isAddingSection ? (
-                    <div className="flex items-center gap-1 bg-[var(--surface)] border border-[#1B4B91] rounded-[8px] px-2 py-1.5">
-                      <label htmlFor="new-vault-section-input" className="sr-only">New section name</label>
-                      <input
-                        id="new-vault-section-input"
-                        type="text"
-                        placeholder="Section name..."
-                        value={newSectionInput}
-                        onChange={e => setNewSectionInput(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            handleCreateSection();
-                            setIsCategoryDropdownOpen(false);
-                          }
-                          if (e.key === 'Escape') setIsAddingSection(false);
-                        }}
-                        className="text-[13px] font-medium text-[var(--ink)] outline-none w-full bg-transparent"
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        aria-label="Save section"
-                        onClick={() => {
-                          handleCreateSection();
-                          setIsCategoryDropdownOpen(false);
-                        }}
-                        className="p-1 bg-[#1B4B91] text-white rounded-[8px] cursor-pointer"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Cancel new section"
-                        onClick={() => setIsAddingSection(false)}
-                        className="p-1 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => {
-                        setIsAddingSection(true);
-                        setNewSectionInput('');
-                      }}
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>New section</span>
-                    </Button>
-                  )}
-                </div>
-
-                <div className="max-h-64 overflow-y-auto pt-1 flex flex-col gap-0.5 px-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedCategory('All');
-                      setIsCategoryDropdownOpen(false);
-                      setIsAddingSection(false);
-                    }}
-                    className={`w-full px-3 py-2 rounded-[8px] text-[13px] font-medium flex items-center justify-between text-left cursor-pointer transition-colors ${
-                      selectedCategory === 'All'
-                        ? 'bg-[#1B4B91]/10 text-[#1B4B91]'
-                        : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      {selectedCategory === 'All' ? <Check className="w-3.5 h-3.5 text-[#1B4B91]" /> : <span className="w-3.5" />}
-                      <span>All</span>
-                    </div>
-                    <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
-                      {(vaultItems || []).length}
-                    </span>
-                  </button>
-
-                  {allSections.map(sec => {
-                    const count = getSectionItemCount(sec);
-                    const isSelected = selectedCategory.toLowerCase() === sec.toLowerCase();
-                    const isBuiltInFavorites = sec.toLowerCase() === 'favorites';
-                    return (
-                      <div
-                        key={sec}
-                        className={`w-full px-3 py-2 rounded-[8px] text-[13px] font-medium flex items-center justify-between text-left cursor-pointer transition-colors ${
-                          isSelected
-                            ? 'bg-[#1B4B91]/10 text-[#1B4B91]'
-                            : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
-                        }`}
-                        onClick={() => {
-                          setSelectedCategory(sec);
-                          setIsCategoryDropdownOpen(false);
-                          setIsAddingSection(false);
-                        }}
-                      >
-                        <div className="flex items-center gap-2 truncate pr-2">
-                          {isSelected ? (
-                            <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" />
-                          ) : isBuiltInFavorites ? (
-                            <Star className="w-3.5 h-3.5 text-[#B45309] fill-[#B45309] shrink-0" />
-                          ) : (
-                            <span className="w-3.5 shrink-0" />
-                          )}
-                          <span className="truncate">{sec}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
-                            {count}
-                          </span>
-                          {count === 0 && !isBuiltInFavorites && (
-                            <button
-                              type="button"
-                              aria-label={`Delete empty section ${sec}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteSection(sec);
-                              }}
-                              className="p-1 text-[var(--muted)] hover:text-[#B91C1C] rounded-[8px] transition-colors"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            </>
-          )}
-        </div>
-
-        {/* Search Bar Area: Passwords / Documents Switcher right before the search box */}
-        <div className="flex items-center gap-2.5 flex-1 max-w-xl justify-end">
+        {/* Section Selector & Search Bar */}
+        <div className="flex items-center gap-2.5 flex-1 max-w-xl">
           <div className="flex items-center bg-[var(--surface-subtle)] p-1 rounded-[10px] border border-[var(--line)] shrink-0">
             <button
               type="button"
@@ -1202,19 +921,255 @@ export default function PasswordVaultPage({
             </button>
           </div>
 
-          {/* Search Input */}
+          {/* Search Bar Right After Selector */}
           <div className="relative flex-1 min-w-[180px]">
             <label htmlFor="vault-search-input" className="sr-only">Search accounts</label>
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none" />
+            <Search className="w-4 h-4 text-[var(--muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               id="vault-search-input"
               type="text"
               placeholder="Search accounts, logins, notes..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-[14px] bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] text-[var(--ink)] placeholder-[var(--muted)] outline-none focus:border-[#1B4B91]"
+              className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] pl-9 pr-8 py-1.5 text-[14px] text-[var(--ink)] placeholder-[var(--muted)] outline-none focus:border-[#1B4B91]"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer p-0.5"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
+        </div>
+
+        {/* Controls: Sections Dropdown, View Mode Toggle, New Section Button, Add Account Button */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Section / Category Dropdown */}
+          <div className="relative">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+            >
+              <span>
+                {selectedCategory === 'All'
+                  ? `All sections (${(vaultItems || []).length})`
+                  : `${selectedCategory} (${getSectionItemCount(selectedCategory)})`}
+              </span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+            </Button>
+
+            {isCategoryDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => {
+                    setIsCategoryDropdownOpen(false);
+                    setIsAddingSection(false);
+                  }}
+                />
+                <Card className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-64 py-2 z-40 flex flex-col shadow-lg">
+                  <div className="px-2.5 pb-2 border-b border-[var(--line)]">
+                    {isAddingSection ? (
+                      <div className="flex items-center gap-1 bg-[var(--surface)] border border-[#1B4B91] rounded-[8px] px-2 py-1.5">
+                        <label htmlFor="new-vault-section-input" className="sr-only">New section name</label>
+                        <input
+                          id="new-vault-section-input"
+                          type="text"
+                          placeholder="Section name..."
+                          value={newSectionInput}
+                          onChange={e => setNewSectionInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              handleCreateSection();
+                              setIsCategoryDropdownOpen(false);
+                            }
+                            if (e.key === 'Escape') setIsAddingSection(false);
+                          }}
+                          className="text-[13px] font-medium text-[var(--ink)] outline-none w-full bg-transparent"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          aria-label="Save section"
+                          onClick={() => {
+                            handleCreateSection();
+                            setIsCategoryDropdownOpen(false);
+                          }}
+                          className="p-1 bg-[#1B4B91] text-white rounded-[8px] cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Cancel new section"
+                          onClick={() => setIsAddingSection(false)}
+                          className="p-1 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          setIsAddingSection(true);
+                          setNewSectionInput('');
+                        }}
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>New section</span>
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto pt-1 flex flex-col gap-0.5 px-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory('All');
+                        setIsCategoryDropdownOpen(false);
+                        setIsAddingSection(false);
+                      }}
+                      className={`w-full px-3 py-2 rounded-[8px] text-[13px] font-medium flex items-center justify-between text-left cursor-pointer transition-colors ${
+                        selectedCategory === 'All'
+                          ? 'bg-[#1B4B91]/10 text-[#1B4B91]'
+                          : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {selectedCategory === 'All' ? <Check className="w-3.5 h-3.5 text-[#1B4B91]" /> : <span className="w-3.5" />}
+                        <span>All</span>
+                      </div>
+                      <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
+                        {(vaultItems || []).length}
+                      </span>
+                    </button>
+
+                    {allSections.map(sec => {
+                      const count = getSectionItemCount(sec);
+                      const isSelected = selectedCategory.toLowerCase() === sec.toLowerCase();
+                      const isBuiltInFavorites = sec.toLowerCase() === 'favorites';
+                      return (
+                        <div
+                          key={sec}
+                          className={`w-full px-3 py-2 rounded-[8px] text-[13px] font-medium flex items-center justify-between text-left cursor-pointer transition-colors ${
+                            isSelected
+                              ? 'bg-[#1B4B91]/10 text-[#1B4B91]'
+                              : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                          }`}
+                          onClick={() => {
+                            setSelectedCategory(sec);
+                            setIsCategoryDropdownOpen(false);
+                            setIsAddingSection(false);
+                          }}
+                        >
+                          <div className="flex items-center gap-2 truncate pr-2">
+                            {isSelected ? (
+                              <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" />
+                            ) : isBuiltInFavorites ? (
+                              <Star className="w-3.5 h-3.5 text-[#B45309] fill-[#B45309] shrink-0" />
+                            ) : (
+                              <span className="w-3.5 shrink-0" />
+                            )}
+                            <span className="truncate">{sec}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
+                              {count}
+                            </span>
+                            {count === 0 && !isBuiltInFavorites && (
+                              <button
+                                type="button"
+                                aria-label={`Delete empty section ${sec}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteSection(sec);
+                                }}
+                                className="p-1 text-[var(--muted)] hover:text-[#B91C1C] rounded-[8px] transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              </>
+            )}
+          </div>
+
+          {/* View Mode Toggle: Grid / List */}
+          <div className="flex items-center bg-[var(--surface-subtle)] p-0.5 rounded-[8px] border border-[var(--line)]">
+            <button
+              type="button"
+              onClick={() => handleSetViewMode('grid')}
+              title="Grid view"
+              className={`p-1.5 rounded-[6px] transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                  : 'text-[var(--muted)] hover:text-[var(--ink)]'
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSetViewMode('list')}
+              title="List view"
+              className={`p-1.5 rounded-[6px] transition-all cursor-pointer ${
+                viewMode === 'list'
+                  ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                  : 'text-[var(--muted)] hover:text-[var(--ink)]'
+              }`}
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* New Section Button */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setIsAddingSection(true);
+              setIsCategoryDropdownOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4" />
+            <span>New section</span>
+          </Button>
+
+          {/* Add Account Primary Button */}
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setEditingId(null);
+              setIsCreatingNewSection(false);
+              setNewSectionInput('');
+              setFormState({
+                service: '',
+                category: selectedCategory === 'All' ? (allSections[0] || 'General') : selectedCategory,
+                username: '',
+                password: '',
+                accountNumber: '',
+                website: '',
+                notes: ''
+              });
+              setShowAddForm(true);
+            }}
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add account</span>
+          </Button>
         </div>
       </Card>
 
