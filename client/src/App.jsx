@@ -5590,35 +5590,6 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           </div>
         </header>
 
-        {/* Software Update Banner */}
-        {(desktopAppInfo.updateStatus?.state === 'available' || desktopAppInfo.updateStatus?.state === 'ready') &&
-          !updateBannerDismissed && (
-            <div className="bg-[#1B4B91] text-white px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-[13px] font-medium">
-              <div className="flex items-center gap-2">
-                <ArrowUpCircle className="w-4 h-4 shrink-0" />
-                <span>
-                  {formatCleanUpdateMessage(
-                    desktopAppInfo.updateStatus?.message || desktopAppInfo.updateStatus?.commitTitle,
-                    desktopAppInfo.updateStatus?.latestVersion
-                  )}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm" onClick={() => setIsUpdateModalOpen(true)}>
-                  View update
-                </Button>
-                <button
-                  type="button"
-                  aria-label="Dismiss update banner"
-                  onClick={() => setUpdateBannerDismissed(true)}
-                  className="p-1 text-white/80 hover:text-white cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
         {/* Content + Right Advisor Split */}
         <div className={`flex-1 flex min-w-0 ${normalizedActiveTab === 'browser' ? 'min-h-0 h-full overflow-hidden' : ''}`}>
           {normalizedActiveTab === 'browser' ? (
@@ -5648,6 +5619,36 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               style={{ zoom: contentZoomFactor !== 1 ? contentZoomFactor : undefined }}
             >
               <div className="max-w-[1140px] mx-auto flex flex-col gap-6">
+                {/* Software Update Banner (Overview Page Only) */}
+                {normalizedActiveTab === 'dashboard' &&
+                  (desktopAppInfo.updateStatus?.state === 'available' || desktopAppInfo.updateStatus?.state === 'ready') &&
+                  !updateBannerDismissed && (
+                    <div className="bg-[#1B4B91] text-white px-4 py-3 rounded-xl flex flex-wrap items-center justify-between gap-3 text-[13px] font-medium shadow-md">
+                      <div className="flex items-center gap-2.5">
+                        <ArrowUpCircle className="w-5 h-5 shrink-0 text-blue-200" />
+                        <span>
+                          {formatCleanUpdateMessage(
+                            desktopAppInfo.updateStatus?.message || desktopAppInfo.updateStatus?.commitTitle,
+                            desktopAppInfo.updateStatus?.latestVersion
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="secondary" size="sm" onClick={() => setIsUpdateModalOpen(true)}>
+                          View update
+                        </Button>
+                        <button
+                          type="button"
+                          aria-label="Dismiss update banner"
+                          onClick={() => setUpdateBannerDismissed(true)}
+                          className="p-1 text-white/80 hover:text-white cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
               {normalizedActiveTab === 'dashboard' && (
                 <OverviewPage
                   firstName={firstName}
