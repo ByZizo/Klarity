@@ -85,12 +85,119 @@ export const DEFAULT_QUICK_LINKS = [
   { id: 'ql-finance', name: 'Yahoo Finance', url: 'https://finance.yahoo.com' }
 ];
 
+export const NOTE_THEMES = [
+  {
+    id: 'slate',
+    label: 'Slate',
+    cardBg: '#1e293b',
+    cardBorder: 'rgba(51, 65, 85, 0.8)',
+    textBg: 'rgba(15, 23, 42, 0.85)',
+    textColor: '#f1f5f9',
+    accentColor: '#38bdf8',
+    previewColor: '#334155'
+  },
+  {
+    id: 'amber',
+    label: 'Amber',
+    cardBg: '#2a1f14',
+    cardBorder: 'rgba(217, 119, 6, 0.45)',
+    textBg: 'rgba(28, 20, 10, 0.9)',
+    textColor: '#fef3c7',
+    accentColor: '#fbbf24',
+    previewColor: '#d97706'
+  },
+  {
+    id: 'blue',
+    label: 'Navy',
+    cardBg: '#0f1d3a',
+    cardBorder: 'rgba(37, 99, 235, 0.45)',
+    textBg: 'rgba(8, 16, 38, 0.9)',
+    textColor: '#e0e7ff',
+    accentColor: '#60a5fa',
+    previewColor: '#2563eb'
+  },
+  {
+    id: 'emerald',
+    label: 'Forest',
+    cardBg: '#062c22',
+    cardBorder: 'rgba(5, 150, 105, 0.45)',
+    textBg: 'rgba(3, 26, 20, 0.9)',
+    textColor: '#d1fae5',
+    accentColor: '#34d399',
+    previewColor: '#059669'
+  },
+  {
+    id: 'purple',
+    label: 'Violet',
+    cardBg: '#230f38',
+    cardBorder: 'rgba(147, 51, 234, 0.45)',
+    textBg: 'rgba(21, 7, 36, 0.9)',
+    textColor: '#f3e8ff',
+    accentColor: '#c084fc',
+    previewColor: '#9333ea'
+  },
+  {
+    id: 'rose',
+    label: 'Rose',
+    cardBg: '#33101c',
+    cardBorder: 'rgba(225, 29, 72, 0.45)',
+    textBg: 'rgba(30, 6, 15, 0.9)',
+    textColor: '#ffe4e6',
+    accentColor: '#fb7185',
+    previewColor: '#e11d48'
+  },
+  {
+    id: 'oled',
+    label: 'OLED',
+    cardBg: '#09090b',
+    cardBorder: 'rgba(63, 63, 70, 0.8)',
+    textBg: 'rgba(0, 0, 0, 0.95)',
+    textColor: '#fafafa',
+    accentColor: '#a1a1aa',
+    previewColor: '#000000'
+  }
+];
+
+export const NOTE_SIZE_PRESETS = [
+  { id: 'small', label: 'Compact', width: 240, height: 320 },
+  { id: 'medium', label: 'Medium', width: 270, height: 420 },
+  { id: 'large', label: 'Large', width: 340, height: 500 },
+  { id: 'wide', label: 'Wide', width: 420, height: 360 }
+];
+
+export const NOTE_FONTS = [
+  { id: 'sans', label: 'Sans', fontCss: `'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif` },
+  { id: 'mono', label: 'Mono', fontCss: `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace` },
+  { id: 'serif', label: 'Serif', fontCss: `Georgia, Cambria, 'Times New Roman', Times, serif` },
+  { id: 'handwriting', label: 'Cursive', fontCss: `'Caveat', 'Segoe Print', 'Comic Sans MS', cursive` }
+];
+
+export const NOTE_FONT_SIZES = [
+  { id: 11, label: '11px' },
+  { id: 13, label: '13px' },
+  { id: 15, label: '15px' },
+  { id: 17, label: '17px' }
+];
+
+export const DEFAULT_NOTE_STYLES = {
+  preset: 'medium', // 'small' | 'medium' | 'large' | 'wide' | 'custom'
+  width: 270,
+  height: 420,
+  fontSize: 13,
+  fontFamily: 'sans', // 'sans' | 'mono' | 'serif' | 'handwriting'
+  theme: 'slate', // 'slate' | 'amber' | 'blue' | 'emerald' | 'purple' | 'rose' | 'oled' | 'custom'
+  customBg: '',
+  customText: ''
+};
+
 export const DEFAULT_NEWTAB_PREFS = {
   showQuickLinks: true,
   showClock: true,
   showNotes: false,
   backgroundStyle: 'slate', // 'slate' | 'gradient' | 'wallpaper'
-  wallpaperUrl: ''
+  wallpaperUrl: '',
+  notesPosition: null,
+  noteStyles: { ...DEFAULT_NOTE_STYLES }
 };
 
 const SETTINGS_STORAGE_KEY = 'klarity_browser_settings';
@@ -188,11 +295,18 @@ export function saveNewTabQuickLinks(links) {
 export function loadNewTabPrefs() {
   try {
     const raw = localStorage.getItem(NEWTAB_PREFS_KEY);
-    if (!raw) return { ...DEFAULT_NEWTAB_PREFS };
+    if (!raw) return { ...DEFAULT_NEWTAB_PREFS, noteStyles: { ...DEFAULT_NOTE_STYLES } };
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_NEWTAB_PREFS, ...(parsed && typeof parsed === 'object' ? parsed : {}) };
+    return {
+      ...DEFAULT_NEWTAB_PREFS,
+      ...(parsed && typeof parsed === 'object' ? parsed : {}),
+      noteStyles: {
+        ...DEFAULT_NOTE_STYLES,
+        ...(parsed?.noteStyles && typeof parsed.noteStyles === 'object' ? parsed.noteStyles : {})
+      }
+    };
   } catch {
-    return { ...DEFAULT_NEWTAB_PREFS };
+    return { ...DEFAULT_NEWTAB_PREFS, noteStyles: { ...DEFAULT_NOTE_STYLES } };
   }
 }
 

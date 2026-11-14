@@ -6,21 +6,29 @@ import {
   FolderOpen,
   FolderPlus,
   GripHorizontal,
+  Maximize2,
   MoreVertical,
+  Palette,
   Plus,
   RotateCcw,
   Search,
   SlidersHorizontal,
   StickyNote,
   Trash2,
+  Type,
   Ungroup,
   X
 } from 'lucide-react';
 import {
+  DEFAULT_NOTE_STYLES,
   getSearchEngineById,
   loadNewTabNotes,
   loadNewTabPrefs,
   loadNewTabQuickLinks,
+  NOTE_FONTS,
+  NOTE_FONT_SIZES,
+  NOTE_SIZE_PRESETS,
+  NOTE_THEMES,
   saveNewTabNotes,
   saveNewTabPrefs,
   saveNewTabQuickLinks
@@ -201,6 +209,55 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
     setPrefs((prev) => ({ ...prev, notesPosition: defaultNotesPos }));
   };
 
+  // Quick Notes inline styling popup state
+  const [isNoteStyleOpen, setIsNoteStyleOpen] = useState(false);
+
+  const noteStyles = prefs?.noteStyles || DEFAULT_NOTE_STYLES;
+  const currentTheme = NOTE_THEMES.find((t) => t.id === noteStyles.theme) || NOTE_THEMES[0];
+  const currentFont = NOTE_FONTS.find((f) => f.id === noteStyles.fontFamily) || NOTE_FONTS[0];
+
+  const noteCardWidth = typeof noteStyles.width === 'number' ? noteStyles.width : 270;
+  const noteCardHeight = typeof noteStyles.height === 'number' ? noteStyles.height : 420;
+  const noteFontSize = typeof noteStyles.fontSize === 'number' ? noteStyles.fontSize : 13;
+  const noteFontFamily = currentFont.fontCss;
+
+  const isCustomTheme = noteStyles.theme === 'custom';
+  const cardBg = isCustomTheme && noteStyles.customBg ? noteStyles.customBg : currentTheme.cardBg;
+  const cardBorder = isCustomTheme ? 'rgba(100, 116, 139, 0.45)' : currentTheme.cardBorder;
+  const textBg = isCustomTheme ? 'rgba(0, 0, 0, 0.35)' : currentTheme.textBg;
+  const textColor = isCustomTheme && noteStyles.customText ? noteStyles.customText : currentTheme.textColor;
+  const accentColor = currentTheme.accentColor;
+
+  const handleUpdateNoteStyle = (updates) => {
+    setPrefs((prev) => ({
+      ...prev,
+      noteStyles: {
+        ...(prev?.noteStyles || DEFAULT_NOTE_STYLES),
+        ...updates
+      }
+    }));
+  };
+
+  const handleSelectNoteSizePreset = (presetId) => {
+    const preset = NOTE_SIZE_PRESETS.find((p) => p.id === presetId);
+    if (preset) {
+      handleUpdateNoteStyle({
+        preset: presetId,
+        width: preset.width,
+        height: preset.height
+      });
+    } else if (presetId === 'custom') {
+      handleUpdateNoteStyle({ preset: 'custom' });
+    }
+  };
+
+  const handleResetNoteStyles = () => {
+    setPrefs((prev) => ({
+      ...prev,
+      noteStyles: { ...DEFAULT_NOTE_STYLES }
+    }));
+  };
+
   useEffect(() => {
     saveNewTabQuickLinks(quickLinks);
   }, [quickLinks]);
@@ -231,6 +288,7 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
         setIsCustomizeOpen(false);
+        setIsNoteStyleOpen(false);
         setTileMenu(null);
         setShortcutModal(null);
         setGroupModal(null);
@@ -538,7 +596,7 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
           </button>
 
           {isCustomizeOpen && (
-            <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-[#1e293b] border border-slate-700/80 shadow-2xl p-4 text-xs z-30">
+            <div className="absolute right-0 mt-2 w-80 max-h-[82vh] overflow-y-auto rounded-2xl bg-[#1e293b] border border-slate-700/80 shadow-2xl p-4 text-xs z-30 scrollbar-thin">
               <div className="flex items-center justify-between mb-3">
                 <span className="font-semibold text-slate-100 text-sm">Customize Page</span>
                 <button
@@ -581,15 +639,220 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
                   />
                 </label>
 
-                {prefs.showNotes && (notesPos.x !== defaultNotesPos.x || notesPos.y !== defaultNotesPos.y) && (
-                  <button
-                    type="button"
-                    onClick={handleResetNotesPos}
-                    className="mt-1 text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1.5 cursor-pointer py-0.5"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Reset notes position</span>
-                  </button>
+                {/* Quick Notes Appearance Section */}
+                {prefs.showNotes && (
+                  <div className="mt-2.5 pt-2.5 border-t border-slate-800 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <StickyNote className="w-3.5 h-3.5 text-blue-400" />
+                        Notes Appearance
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleResetNoteStyles}
+                        title="Reset notes styling to default"
+                        className="text-[10px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCcw className="w-2.5 h-2.5" />
+                        <span>Default</span>
+                      </button>
+                    </div>
+
+                    {/* Size Presets & Custom Sliders */}
+                    <div>
+                      <div className="text-[10px] font-medium text-slate-400 mb-1.5">Size & Dimensions</div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {NOTE_SIZE_PRESETS.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => handleSelectNoteSizePreset(p.id)}
+                            className={`py-1 px-1.5 rounded-lg border text-[10px] font-semibold text-center transition-colors cursor-pointer ${
+                              noteStyles.preset === p.id
+                                ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                                : 'bg-slate-800/70 border-slate-700 text-slate-300 hover:border-slate-500'
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Width & Height Sliders */}
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-slate-400 bg-slate-900/60 p-2 rounded-xl border border-slate-800">
+                        <div>
+                          <div className="flex justify-between mb-0.5">
+                            <span>Width</span>
+                            <span className="text-slate-200 font-mono">{noteCardWidth}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="200"
+                            max="500"
+                            step="10"
+                            value={noteCardWidth}
+                            onChange={(e) =>
+                              handleUpdateNoteStyle({
+                                preset: 'custom',
+                                width: parseInt(e.target.value, 10)
+                              })
+                            }
+                            className="w-full accent-blue-500 cursor-pointer h-1 bg-slate-700 rounded-lg appearance-none"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between mb-0.5">
+                            <span>Height</span>
+                            <span className="text-slate-200 font-mono">{noteCardHeight}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="220"
+                            max="650"
+                            step="10"
+                            value={noteCardHeight}
+                            onChange={(e) =>
+                              handleUpdateNoteStyle({
+                                preset: 'custom',
+                                height: parseInt(e.target.value, 10)
+                              })
+                            }
+                            className="w-full accent-blue-500 cursor-pointer h-1 bg-slate-700 rounded-lg appearance-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Font Family & Font Size */}
+                    <div>
+                      <div className="text-[10px] font-medium text-slate-400 mb-1.5">Font Style & Size</div>
+                      <div className="grid grid-cols-4 gap-1 mb-1.5">
+                        {NOTE_FONTS.map((f) => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => handleUpdateNoteStyle({ fontFamily: f.id })}
+                            className={`py-1 px-1 rounded-lg border text-[10px] font-medium text-center transition-colors cursor-pointer ${
+                              noteStyles.fontFamily === f.id
+                                ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                                : 'bg-slate-800/70 border-slate-700 text-slate-300 hover:border-slate-500'
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {NOTE_FONT_SIZES.map((sz) => (
+                          <button
+                            key={sz.id}
+                            type="button"
+                            onClick={() => handleUpdateNoteStyle({ fontSize: sz.id })}
+                            className={`py-0.5 px-1 rounded-lg border text-[10px] font-mono text-center transition-colors cursor-pointer ${
+                              noteStyles.fontSize === sz.id
+                                ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                                : 'bg-slate-800/70 border-slate-700 text-slate-400 hover:border-slate-500'
+                            }`}
+                          >
+                            {sz.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Color Theme Swatches & Custom Pickers */}
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] font-medium text-slate-400 mb-1.5">
+                        <span>Color Theme</span>
+                        <span className="text-slate-300 font-semibold capitalize">
+                          {isCustomTheme ? 'Custom' : currentTheme.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {NOTE_THEMES.map((thm) => (
+                          <button
+                            key={thm.id}
+                            type="button"
+                            onClick={() => handleUpdateNoteStyle({ theme: thm.id })}
+                            title={thm.label}
+                            style={{ backgroundColor: thm.previewColor }}
+                            className={`w-6 h-6 rounded-lg border transition-transform cursor-pointer flex items-center justify-center ${
+                              noteStyles.theme === thm.id
+                                ? 'ring-2 ring-blue-400 scale-105 border-white'
+                                : 'border-slate-600 hover:scale-105'
+                            }`}
+                          >
+                            {noteStyles.theme === thm.id && <Check className="w-3.5 h-3.5 text-white" />}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleUpdateNoteStyle({
+                              theme: 'custom',
+                              customBg: noteStyles.customBg || '#1e1e24',
+                              customText: noteStyles.customText || '#f8fafc'
+                            })
+                          }
+                          title="Custom Color"
+                          className={`px-2 h-6 rounded-lg border text-[10px] font-semibold transition-transform cursor-pointer flex items-center gap-1 ${
+                            isCustomTheme
+                              ? 'bg-blue-600/20 border-blue-500 text-blue-300 ring-2 ring-blue-400'
+                              : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
+                          }`}
+                        >
+                          <Palette className="w-3 h-3" />
+                          <span>Custom</span>
+                        </button>
+                      </div>
+
+                      {/* Custom Color Pickers */}
+                      {isCustomTheme && (
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] bg-slate-900/80 p-2 rounded-xl border border-slate-800">
+                          <label className="flex items-center justify-between cursor-pointer">
+                            <span className="text-slate-400">Card Color</span>
+                            <input
+                              type="color"
+                              value={noteStyles.customBg || '#1e1e24'}
+                              onChange={(e) =>
+                                handleUpdateNoteStyle({
+                                  theme: 'custom',
+                                  customBg: e.target.value
+                                })
+                              }
+                              className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+                            />
+                          </label>
+                          <label className="flex items-center justify-between cursor-pointer">
+                            <span className="text-slate-400">Text Color</span>
+                            <input
+                              type="color"
+                              value={noteStyles.customText || '#f8fafc'}
+                              onChange={(e) =>
+                                handleUpdateNoteStyle({
+                                  theme: 'custom',
+                                  customText: e.target.value
+                                })
+                              }
+                              className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Position reset button if moved */}
+                    {(notesPos.x !== defaultNotesPos.x || notesPos.y !== defaultNotesPos.y) && (
+                      <button
+                        type="button"
+                        onClick={handleResetNotesPos}
+                        className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1.5 cursor-pointer py-0.5"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Reset notes position</span>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -642,10 +905,14 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
           aria-label="Quick Notes"
           style={{
             left: `${notesPos.x}px`,
-            top: `${notesPos.y}px`
+            top: `${notesPos.y}px`,
+            width: `${noteCardWidth}px`,
+            height: `${noteCardHeight}px`,
+            backgroundColor: cardBg,
+            borderColor: cardBorder
           }}
-          className={`hidden md:flex flex-col absolute w-[260px] h-[420px] rounded-2xl bg-[#1e293b]/90 border border-slate-700/70 p-4 shadow-xl backdrop-blur-md z-20 select-none transition-shadow ${
-            isDraggingNotes ? 'shadow-2xl ring-2 ring-blue-500/50 scale-[1.01]' : 'hover:border-slate-600'
+          className={`hidden md:flex flex-col absolute rounded-2xl border p-4 shadow-xl backdrop-blur-md z-20 select-none transition-shadow ${
+            isDraggingNotes ? 'shadow-2xl ring-2 ring-blue-500/50 scale-[1.01]' : 'hover:border-slate-500/80'
           }`}
         >
           {/* Draggable Header Bar */}
@@ -656,11 +923,21 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
           >
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
               <GripHorizontal className="w-4 h-4 text-slate-500 group-hover/header:text-blue-400 transition-colors" />
-              <StickyNote className="w-3.5 h-3.5 text-blue-400" />
+              <StickyNote className="w-3.5 h-3.5" style={{ color: accentColor }} />
               <span>Quick Notes</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] text-slate-400 font-medium select-none">Auto-saved</span>
+              <button
+                type="button"
+                onClick={() => setIsNoteStyleOpen((prev) => !prev)}
+                title="Customize note appearance (size, font, colors)"
+                className={`p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-colors cursor-pointer ${
+                  isNoteStyleOpen ? 'text-blue-400 bg-slate-800' : ''
+                }`}
+              >
+                <Palette className="w-3 h-3" />
+              </button>
               {(notesPos.x !== defaultNotesPos.x || notesPos.y !== defaultNotesPos.y) && (
                 <button
                   type="button"
@@ -673,11 +950,86 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
               )}
             </div>
           </div>
+
+          {/* Quick inline styling drawer if toggled on card */}
+          {isNoteStyleOpen && (
+            <div className="mb-2 p-2 rounded-xl bg-slate-900/90 border border-slate-700/80 text-xs flex flex-col gap-2 shrink-0 select-none shadow-md">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Note Style</span>
+                <button
+                  type="button"
+                  onClick={() => setIsNoteStyleOpen(false)}
+                  className="text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+
+              {/* Theme color swatches */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                {NOTE_THEMES.map((thm) => (
+                  <button
+                    key={thm.id}
+                    type="button"
+                    title={thm.label}
+                    onClick={() => handleUpdateNoteStyle({ theme: thm.id })}
+                    style={{ backgroundColor: thm.previewColor }}
+                    className={`w-4 h-4 rounded-full shrink-0 border transition-transform cursor-pointer ${
+                      noteStyles.theme === thm.id ? 'ring-2 ring-white scale-110 border-white' : 'border-slate-600 hover:scale-105'
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {/* Font Family and Size quick bar */}
+              <div className="flex items-center justify-between gap-1">
+                <div className="flex items-center gap-1">
+                  {NOTE_FONTS.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => handleUpdateNoteStyle({ fontFamily: f.id })}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium border cursor-pointer ${
+                        noteStyles.fontFamily === f.id
+                          ? 'bg-blue-600/30 border-blue-500 text-blue-300'
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1">
+                  {NOTE_FONT_SIZES.map((sz) => (
+                    <button
+                      key={sz.id}
+                      type="button"
+                      onClick={() => handleUpdateNoteStyle({ fontSize: sz.id })}
+                      className={`px-1 py-0.5 rounded text-[10px] font-mono border cursor-pointer ${
+                        noteStyles.fontSize === sz.id
+                          ? 'bg-blue-600/30 border-blue-500 text-blue-300'
+                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'
+                      }`}
+                    >
+                      {sz.id}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Jot down quick notes, links, or reminders..."
-            className="w-full flex-1 min-h-0 rounded-xl bg-slate-900/75 border border-slate-700/70 focus:border-blue-500 outline-none p-3 text-xs text-slate-100 placeholder-slate-500 resize-none leading-relaxed select-text"
+            style={{
+              backgroundColor: textBg,
+              color: textColor,
+              fontFamily: noteFontFamily,
+              fontSize: `${noteFontSize}px`
+            }}
+            className="w-full flex-1 min-h-0 rounded-xl border border-slate-700/70 focus:border-blue-500 outline-none p-3 placeholder-slate-500 resize-none leading-relaxed select-text"
           />
         </aside>
       )}
@@ -880,10 +1232,16 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
 
         {/* Mobile Quick Notes Card fallback (below speed dial on narrow viewports) */}
         {prefs.showNotes && (
-          <div className="md:hidden w-full max-w-md mt-6 rounded-2xl bg-[#1e293b]/90 border border-slate-700/70 p-4 shadow-xl backdrop-blur-md flex flex-col h-[220px]">
+          <div
+            style={{
+              backgroundColor: cardBg,
+              borderColor: cardBorder
+            }}
+            className="md:hidden w-full max-w-md mt-6 rounded-2xl border p-4 shadow-xl backdrop-blur-md flex flex-col h-[220px]"
+          >
             <div className="flex items-center justify-between mb-2.5">
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
-                <StickyNote className="w-3.5 h-3.5 text-blue-400" />
+                <StickyNote className="w-3.5 h-3.5" style={{ color: accentColor }} />
                 <span>Quick Notes</span>
               </div>
               <span className="text-[10px] text-slate-400 font-medium">Auto-saved</span>
@@ -892,7 +1250,13 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Jot down quick notes, links, or reminders..."
-              className="w-full flex-1 min-h-0 rounded-xl bg-slate-900/75 border border-slate-700/70 focus:border-blue-500 outline-none p-3 text-xs text-slate-100 placeholder-slate-500 resize-none leading-relaxed"
+              style={{
+                backgroundColor: textBg,
+                color: textColor,
+                fontFamily: noteFontFamily,
+                fontSize: `${noteFontSize}px`
+              }}
+              className="w-full flex-1 min-h-0 rounded-xl border border-slate-700/70 focus:border-blue-500 outline-none p-3 placeholder-slate-500 resize-none leading-relaxed"
             />
           </div>
         )}
