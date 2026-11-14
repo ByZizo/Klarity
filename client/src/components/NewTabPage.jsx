@@ -5,8 +5,10 @@ import {
   ExternalLink,
   FolderOpen,
   FolderPlus,
+  GripHorizontal,
   MoreVertical,
   Plus,
+  RotateCcw,
   Search,
   SlidersHorizontal,
   StickyNote,
@@ -134,6 +136,70 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
   // Drag & Drop to combine shortcuts into groups
   const [draggedTileId, setDraggedTileId] = useState(null);
   const [dropTargetId, setDropTargetId] = useState(null);
+
+  // Draggable Notes Box Position State
+  const defaultNotesPos = { x: 48, y: 240 };
+  const [notesPos, setNotesPos] = useState(() => {
+    if (prefs?.notesPosition && typeof prefs.notesPosition.x === 'number' && typeof prefs.notesPosition.y === 'number') {
+      return prefs.notesPosition;
+    }
+    return defaultNotesPos;
+  });
+  const [isDraggingNotes, setIsDraggingNotes] = useState(false);
+  const notesCardRef = useRef(null);
+  const dragStartRef = useRef({ pointerX: 0, pointerY: 0, cardX: 0, cardY: 0 });
+
+  const handleNotesDragStart = (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) return;
+
+    e.preventDefault();
+    setIsDraggingNotes(true);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const currentPos = notesPos || defaultNotesPos;
+    dragStartRef.current = {
+      pointerX: startX,
+      pointerY: startY,
+      cardX: currentPos.x,
+      cardY: currentPos.y
+    };
+
+    let latestPos = currentPos;
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - dragStartRef.current.pointerX;
+      const deltaY = moveEvent.clientY - dragStartRef.current.pointerY;
+
+      const cardWidth = notesCardRef.current?.offsetWidth || 260;
+      const minX = 16;
+      const maxX = Math.max(minX, (window.innerWidth || 1200) - cardWidth - 16);
+      const minY = 60;
+      const maxY = Math.max(minY, (window.innerHeight || 800) + window.scrollY - 100);
+
+      const boundedX = Math.round(Math.min(maxX, Math.max(minX, dragStartRef.current.cardX + deltaX)));
+      const boundedY = Math.round(Math.min(maxY, Math.max(minY, dragStartRef.current.cardY + deltaY)));
+
+      latestPos = { x: boundedX, y: boundedY };
+      setNotesPos(latestPos);
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      setIsDraggingNotes(false);
+      setPrefs((prev) => ({ ...prev, notesPosition: latestPos }));
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleResetNotesPos = () => {
+    setNotesPos(defaultNotesPos);
+    setPrefs((prev) => ({ ...prev, notesPosition: defaultNotesPos }));
+  };
 
   useEffect(() => {
     saveNewTabQuickLinks(quickLinks);
@@ -514,6 +580,17 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
                     className="accent-blue-500 w-4 h-4 cursor-pointer"
                   />
                 </label>
+
+                {prefs.showNotes && (notesPos.x !== defaultNotesPos.x || notesPos.y !== defaultNotesPos.y) && (
+                  <button
+                    type="button"
+                    onClick={handleResetNotesPos}
+                    className="mt-1 text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1.5 cursor-pointer py-0.5"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Reset notes position</span>
+                  </button>
+                )}
               </div>
 
               <div className="my-3 border-t border-slate-700/70" />
@@ -558,24 +635,49 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
         </div>
       </div>
 
-      {/* Standalone Floating Quick Notes Card in the Left Open Space (width ~260px, height ~420px, left ~48px, top 240px) */}
+      {/* Draggable Floating Quick Notes Card in the Left Open Space (User can drag anywhere on the canvas) */}
       {prefs.showNotes && (
         <aside
+          ref={notesCardRef}
           aria-label="Quick Notes"
-          className="hidden md:flex flex-col absolute left-8 lg:left-12 top-[240px] w-[260px] h-[420px] rounded-2xl bg-[#1e293b]/90 border border-slate-700/70 p-4 shadow-xl backdrop-blur-md z-20 transition-all"
+          style={{
+            left: `${notesPos.x}px`,
+            top: `${notesPos.y}px`
+          }}
+          className={`hidden md:flex flex-col absolute w-[260px] h-[420px] rounded-2xl bg-[#1e293b]/90 border border-slate-700/70 p-4 shadow-xl backdrop-blur-md z-20 select-none transition-shadow ${
+            isDraggingNotes ? 'shadow-2xl ring-2 ring-blue-500/50 scale-[1.01]' : 'hover:border-slate-600'
+          }`}
         >
-          <div className="flex items-center justify-between mb-2.5">
+          {/* Draggable Header Bar */}
+          <div
+            onMouseDown={handleNotesDragStart}
+            title="Click and drag to move notes anywhere"
+            className="flex items-center justify-between pb-2 mb-2 border-b border-slate-700/60 cursor-grab active:cursor-grabbing group/header"
+          >
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+              <GripHorizontal className="w-4 h-4 text-slate-500 group-hover/header:text-blue-400 transition-colors" />
               <StickyNote className="w-3.5 h-3.5 text-blue-400" />
               <span>Quick Notes</span>
             </div>
-            <span className="text-[10px] text-slate-400 font-medium">Auto-saved</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-slate-400 font-medium select-none">Auto-saved</span>
+              {(notesPos.x !== defaultNotesPos.x || notesPos.y !== defaultNotesPos.y) && (
+                <button
+                  type="button"
+                  onClick={handleResetNotesPos}
+                  title="Reset notes position"
+                  className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           </div>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Jot down quick notes, links, or reminders..."
-            className="w-full flex-1 min-h-0 rounded-xl bg-slate-900/75 border border-slate-700/70 focus:border-blue-500 outline-none p-3 text-xs text-slate-100 placeholder-slate-500 resize-none leading-relaxed"
+            className="w-full flex-1 min-h-0 rounded-xl bg-slate-900/75 border border-slate-700/70 focus:border-blue-500 outline-none p-3 text-xs text-slate-100 placeholder-slate-500 resize-none leading-relaxed select-text"
           />
         </aside>
       )}
