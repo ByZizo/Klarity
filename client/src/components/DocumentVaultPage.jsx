@@ -69,12 +69,16 @@ export default function DocumentVaultPage({
   const [uploadDataUrl, setUploadDataUrl] = useState('');
   const [docName, setDocName] = useState('');
   const [docFolder, setDocFolder] = useState('');
-  const [isTypingCustomFolder, setIsTypingCustomFolder] = useState(false);
+  const [newDocFolderInput, setNewDocFolderInput] = useState('');
   const [docNotes, setDocNotes] = useState('');
   const [docDate, setDocDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Edit modal custom folder state
+  const [editingIsNewFolder, setEditingIsNewFolder] = useState(false);
+  const [editingNewFolderInput, setEditingNewFolderInput] = useState('');
 
   const fileInputRef = useRef(null);
 
@@ -157,6 +161,19 @@ export default function DocumentVaultPage({
     if (file) handleProcessFile(file);
   };
 
+  const handleOpenUploadModal = () => {
+    if (selectedFolder !== 'All' && folders.includes(selectedFolder)) {
+      setDocFolder(selectedFolder);
+    } else if (folders.length > 0) {
+      setDocFolder(folders[0]);
+    } else {
+      setDocFolder('__CREATE_NEW__');
+    }
+    setNewDocFolderInput('');
+    setUploadError('');
+    setIsUploadModalOpen(true);
+  };
+
   const handleSaveUpload = async (e) => {
     e.preventDefault();
     if (!uploadDataUrl || !uploadFile) {
@@ -164,8 +181,13 @@ export default function DocumentVaultPage({
       return;
     }
 
+    if (docFolder === '__CREATE_NEW__' && !newDocFolderInput.trim()) {
+      setUploadError('Please enter a name for the new folder.');
+      return;
+    }
+
     const title = docName.trim() || uploadFile.name;
-    const targetFolder = docFolder.trim() || 'Other';
+    const targetFolder = (docFolder === '__CREATE_NEW__' ? newDocFolderInput.trim() : docFolder.trim()) || 'General';
 
     setIsSaving(true);
     setUploadError('');
@@ -210,7 +232,11 @@ export default function DocumentVaultPage({
     setUploadFile(null);
     setUploadDataUrl('');
     setDocName('');
-    setDocFolder(selectedFolder !== 'All' ? selectedFolder : (folders[0] || 'Taxes'));
+    const defaultFolder = (selectedFolder !== 'All' && folders.includes(selectedFolder))
+      ? selectedFolder
+      : (folders[0] || '__CREATE_NEW__');
+    setDocFolder(defaultFolder);
+    setNewDocFolderInput('');
     setDocNotes('');
     setUploadError('');
     setIsSaving(false);
@@ -221,17 +247,32 @@ export default function DocumentVaultPage({
     e.preventDefault();
     if (!editingDoc) return;
 
+    if (editingIsNewFolder && !editingNewFolderInput.trim()) {
+      notify('Please enter a name for the folder', 'warning');
+      return;
+    }
+
     try {
+      const finalFolder = (editingIsNewFolder ? editingNewFolderInput.trim() : (editingDoc.folder || '')).trim() || 'General';
       const updated = {
         ...editingDoc,
+        folder: finalFolder,
         updatedAt: new Date().toISOString()
       };
       await saveDocument(updated);
+
+      if (!folders.includes(finalFolder)) {
+        const nextFolders = Array.from(new Set([...folders, finalFolder]));
+        setFolders(nextFolders);
+        saveDocumentFolders(nextFolders);
+      }
 
       const nextDocs = documents.map(d => d.id === updated.id ? updated : d);
       setDocuments(nextDocs);
       notify('Document updated');
       setEditingDoc(null);
+      setEditingIsNewFolder(false);
+      setEditingNewFolderInput('');
     } catch {
       notify('Failed to update document', 'error');
     }
@@ -511,11 +552,7 @@ export default function DocumentVaultPage({
           <Button
             variant="primary"
             size="sm"
-            onClick={() => {
-              setDocFolder(selectedFolder !== 'All' ? selectedFolder : (folders[0] || ''));
-              setIsTypingCustomFolder(folders.length === 0);
-              setIsUploadModalOpen(true);
-            }}
+            onClick={handleOpenUploadModal}
           >
             <Plus className="w-4 h-4" />
             <span>Add document</span>
@@ -604,10 +641,7 @@ export default function DocumentVaultPage({
               : 'Add receipts, tax filings, insurance policies, or legal deeds to keep them safe and organized.'
           }
           actionLabel="Upload document"
-          onAction={() => {
-            setDocFolder(selectedFolder !== 'All' ? selectedFolder : (folders[0] || 'Taxes'));
-            setIsUploadModalOpen(true);
-          }}
+          onAction={handleOpenUploadModal}
         />
       ) : viewMode === 'grid' ? (
         /* Grid View Layout */
@@ -646,7 +680,11 @@ export default function DocumentVaultPage({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setEditingDoc(doc)}
+                        onClick={() => {
+                          setEditingDoc(doc);
+                          setEditingIsNewFolder(false);
+                          setEditingNewFolderInput('');
+                        }}
                         title="Edit details"
                         className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[#1B4B91] hover:bg-[var(--surface-subtle)] cursor-pointer"
                       >
@@ -766,7 +804,11 @@ export default function DocumentVaultPage({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setEditingDoc(doc)}
+                    onClick={() => {
+                      setEditingDoc(doc);
+                      setEditingIsNewFolder(false);
+                      setEditingNewFolderInput('');
+                    }}
                     title="Edit details"
                   >
                     <Edit3 className="w-4 h-4" />
@@ -893,51 +935,39 @@ export default function DocumentVaultPage({
               {/* Folder Selector */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[13px] font-medium text-[var(--ink)]">
-                      Folder / Category
-                    </label>
-                    {folders.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsTypingCustomFolder(prev => !prev);
-                          if (!isTypingCustomFolder) setDocFolder('');
-                          else setDocFolder(folders[0] || '');
-                        }}
-                        className="text-[11px] text-[#1B4B91] hover:underline cursor-pointer"
-                      >
-                        {isTypingCustomFolder ? 'Pick from folders' : '+ Type new folder'}
-                      </button>
-                    )}
-                  </div>
+                  <label className="text-[13px] font-medium text-[var(--ink)] block mb-1">
+                    Folder / Category
+                  </label>
+                  <select
+                    value={docFolder}
+                    onChange={(e) => {
+                      setDocFolder(e.target.value);
+                      if (e.target.value === '__CREATE_NEW__') {
+                        setNewDocFolderInput('');
+                      }
+                    }}
+                    className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91] cursor-pointer"
+                  >
+                    {folders.map(f => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                    {folders.length > 0 && <option disabled>──────────</option>}
+                    <option value="__CREATE_NEW__">+ Create new folder...</option>
+                  </select>
 
-                  {folders.length === 0 || isTypingCustomFolder ? (
-                    <input
-                      type="text"
-                      placeholder="Folder name (e.g. Taxes, Leases)..."
-                      value={docFolder}
-                      onChange={(e) => setDocFolder(e.target.value)}
-                      className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
-                    />
-                  ) : (
-                    <select
-                      value={docFolder}
-                      onChange={(e) => {
-                        if (e.target.value === '__NEW__') {
-                          setIsTypingCustomFolder(true);
-                          setDocFolder('');
-                        } else {
-                          setDocFolder(e.target.value);
-                        }
-                      }}
-                      className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91] cursor-pointer"
-                    >
-                      {folders.map(f => (
-                        <option key={f} value={f}>{f}</option>
-                      ))}
-                      <option value="__NEW__">+ Create new folder...</option>
-                    </select>
+                  {docFolder === '__CREATE_NEW__' && (
+                    <div className="mt-2 relative">
+                      <FolderPlus className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#1B4B91]" />
+                      <input
+                        type="text"
+                        autoFocus
+                        required
+                        placeholder="Enter new folder name (e.g. Taxes, Leases)..."
+                        value={newDocFolderInput}
+                        onChange={(e) => setNewDocFolderInput(e.target.value)}
+                        className="w-full bg-[var(--surface-subtle)] border border-[#1B4B91]/50 rounded-[8px] pl-9 pr-3.5 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -1096,30 +1126,42 @@ export default function DocumentVaultPage({
                 <label className="text-[13px] font-medium text-[var(--ink)] block mb-1">
                   Folder / Category
                 </label>
-                {folders.length > 0 ? (
-                  <div className="flex items-center gap-2">
+                <select
+                  value={editingIsNewFolder ? '__CREATE_NEW__' : (editingDoc.folder || (folders[0] || '__CREATE_NEW__'))}
+                  onChange={(e) => {
+                    if (e.target.value === '__CREATE_NEW__') {
+                      setEditingIsNewFolder(true);
+                      setEditingNewFolderInput('');
+                    } else {
+                      setEditingIsNewFolder(false);
+                      setEditingDoc({ ...editingDoc, folder: e.target.value });
+                    }
+                  }}
+                  className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91] cursor-pointer"
+                >
+                  {Array.from(new Set([...folders, editingDoc.folder].filter(Boolean))).map(f => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                  {folders.length > 0 && <option disabled>──────────</option>}
+                  <option value="__CREATE_NEW__">+ Create new folder...</option>
+                </select>
+
+                {editingIsNewFolder && (
+                  <div className="mt-2 relative">
+                    <FolderPlus className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#1B4B91]" />
                     <input
                       type="text"
-                      list="edit-folder-options"
-                      value={editingDoc.folder || ''}
-                      onChange={(e) => setEditingDoc({ ...editingDoc, folder: e.target.value })}
-                      placeholder="Folder name..."
-                      className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
+                      autoFocus
+                      required
+                      placeholder="Enter new folder name..."
+                      value={editingNewFolderInput}
+                      onChange={(e) => {
+                        setEditingNewFolderInput(e.target.value);
+                        setEditingDoc({ ...editingDoc, folder: e.target.value });
+                      }}
+                      className="w-full bg-[var(--surface-subtle)] border border-[#1B4B91]/50 rounded-[8px] pl-9 pr-3.5 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
                     />
-                    <datalist id="edit-folder-options">
-                      {folders.map(f => (
-                        <option key={f} value={f} />
-                      ))}
-                    </datalist>
                   </div>
-                ) : (
-                  <input
-                    type="text"
-                    value={editingDoc.folder || ''}
-                    onChange={(e) => setEditingDoc({ ...editingDoc, folder: e.target.value })}
-                    placeholder="Folder name (e.g. Taxes, Insurance)..."
-                    className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
-                  />
                 )}
               </div>
 
