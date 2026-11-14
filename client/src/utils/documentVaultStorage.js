@@ -9,15 +9,7 @@ const STORE_NAME = 'documents';
 const FOLDERS_KEY = 'klarity_vault_doc_folders';
 const META_KEY = 'klarity_vault_doc_metadata';
 
-export const DEFAULT_DOCUMENT_FOLDERS = [
-  'Taxes',
-  'Insurance',
-  'Identity & Legal',
-  'Banking & Receipts',
-  'Medical',
-  'Property & Auto',
-  'Other'
-];
+export const DEFAULT_DOCUMENT_FOLDERS = [];
 
 /**
  * Open or initialize the IndexedDB instance
@@ -55,20 +47,22 @@ export function formatFileSize(bytes) {
 }
 
 /**
- * Load list of custom & default folders
+ * Load list of user-created folders
  */
 export function loadDocumentFolders() {
   try {
-    const raw = localStorage.getItem(FOLDERS_KEY);
-    if (!raw) return [...DEFAULT_DOCUMENT_FOLDERS];
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      // Merge with default folders while preserving unique values
-      return Array.from(new Set([...DEFAULT_DOCUMENT_FOLDERS, ...parsed]));
+    const version = localStorage.getItem('klarity_vault_doc_folders_v');
+    if (version !== '2') {
+      localStorage.setItem('klarity_vault_doc_folders_v', '2');
+      localStorage.removeItem(FOLDERS_KEY);
+      return [];
     }
-    return [...DEFAULT_DOCUMENT_FOLDERS];
+    const raw = localStorage.getItem(FOLDERS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? Array.from(new Set(parsed.filter(Boolean))) : [];
   } catch {
-    return [...DEFAULT_DOCUMENT_FOLDERS];
+    return [];
   }
 }
 

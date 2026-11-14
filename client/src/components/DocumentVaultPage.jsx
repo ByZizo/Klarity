@@ -21,7 +21,8 @@ import {
   AlertCircle,
   Tag,
   ArrowUpDown,
-  Check
+  Check,
+  KeyRound
 } from 'lucide-react';
 import { Button, Card, EmptyState, ConfirmDialog, Pill } from './ui';
 import {
@@ -30,11 +31,16 @@ import {
   deleteDocument,
   loadDocumentFolders,
   saveDocumentFolders,
-  formatFileSize,
-  DEFAULT_DOCUMENT_FOLDERS
+  formatFileSize
 } from '../utils/documentVaultStorage';
 
-export default function DocumentVaultPage({ onShowToast, onDocumentsCountChange }) {
+export default function DocumentVaultPage({
+  onShowToast,
+  onDocumentsCountChange,
+  activeVaultSection = 'documents',
+  onSelectVaultSection,
+  passwordsCount = 0
+}) {
   const [documents, setDocuments] = useState([]);
   const [folders, setFolders] = useState(() => loadDocumentFolders());
   const [selectedFolder, setSelectedFolder] = useState('All');
@@ -62,7 +68,8 @@ export default function DocumentVaultPage({ onShowToast, onDocumentsCountChange 
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadDataUrl, setUploadDataUrl] = useState('');
   const [docName, setDocName] = useState('');
-  const [docFolder, setDocFolder] = useState('Taxes');
+  const [docFolder, setDocFolder] = useState('');
+  const [isTypingCustomFolder, setIsTypingCustomFolder] = useState(false);
   const [docNotes, setDocNotes] = useState('');
   const [docDate, setDocDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [isDraggingFile, setIsDraggingFile] = useState(false);
@@ -280,10 +287,6 @@ export default function DocumentVaultPage({ onShowToast, onDocumentsCountChange 
   };
 
   const handleDeleteFolder = (folderName) => {
-    if (DEFAULT_DOCUMENT_FOLDERS.includes(folderName)) {
-      notify('Default folders cannot be deleted', 'warning');
-      return;
-    }
     const count = documents.filter(d => d.folder === folderName).length;
     if (count > 0) {
       notify(`Cannot delete folder containing ${count} document${count === 1 ? '' : 's'}. Move or delete documents first.`, 'warning');
@@ -387,27 +390,66 @@ export default function DocumentVaultPage({ onShowToast, onDocumentsCountChange 
     <div className="flex flex-col gap-5">
       {/* Action and Filter Toolbar */}
       <Card className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Search Bar */}
-        <div className="relative flex-1 max-w-md">
-          <label htmlFor="doc-vault-search" className="sr-only">Search documents</label>
-          <Search className="w-4 h-4 text-[var(--muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            id="doc-vault-search"
-            type="text"
-            placeholder="Search by name, folder, notes, or filename..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] pl-9 pr-8 py-1.5 text-[14px] text-[var(--ink)] placeholder-[var(--muted)] outline-none focus:border-[#1B4B91]"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer p-0.5"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+        {/* Section Selector & Search Bar */}
+        <div className="flex items-center gap-2.5 flex-1 max-w-xl">
+          {onSelectVaultSection && (
+            <div className="flex items-center bg-[var(--surface-subtle)] p-1 rounded-[10px] border border-[var(--line)] shrink-0">
+              <button
+                type="button"
+                onClick={() => onSelectVaultSection('passwords')}
+                className={`flex items-center gap-1.5 py-1 px-2.5 rounded-[8px] font-medium text-[13px] transition-all cursor-pointer ${
+                  activeVaultSection === 'passwords'
+                    ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                }`}
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Passwords</span>
+                <span className="text-[11px] px-1.5 py-0.2 rounded-full font-medium bg-[var(--line)] text-[var(--ink)]">
+                  {passwordsCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSelectVaultSection('documents')}
+                className={`flex items-center gap-1.5 py-1 px-2.5 rounded-[8px] font-medium text-[13px] transition-all cursor-pointer ${
+                  activeVaultSection === 'documents'
+                    ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Documents</span>
+                <span className="text-[11px] px-1.5 py-0.2 rounded-full font-medium bg-[#1B4B91]/15 text-[#1B4B91]">
+                  {documents.length}
+                </span>
+              </button>
+            </div>
           )}
+
+          {/* Search Bar Right After Selector */}
+          <div className="relative flex-1 min-w-[180px]">
+            <label htmlFor="doc-vault-search" className="sr-only">Search documents</label>
+            <Search className="w-4 h-4 text-[var(--muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="doc-vault-search"
+              type="text"
+              placeholder="Search documents by name, folder, or notes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] pl-9 pr-8 py-1.5 text-[14px] text-[var(--ink)] placeholder-[var(--muted)] outline-none focus:border-[#1B4B91]"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer p-0.5"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Controls: Sort, View Layout, Add New Folder & Add Document */}
@@ -470,7 +512,8 @@ export default function DocumentVaultPage({ onShowToast, onDocumentsCountChange 
             variant="primary"
             size="sm"
             onClick={() => {
-              setDocFolder(selectedFolder !== 'All' ? selectedFolder : (folders[0] || 'Taxes'));
+              setDocFolder(selectedFolder !== 'All' ? selectedFolder : (folders[0] || ''));
+              setIsTypingCustomFolder(folders.length === 0);
               setIsUploadModalOpen(true);
             }}
           >
@@ -502,7 +545,6 @@ export default function DocumentVaultPage({ onShowToast, onDocumentsCountChange 
 
         {folders.map(f => {
           const isSelected = selectedFolder === f;
-          const isCustom = !DEFAULT_DOCUMENT_FOLDERS.includes(f);
           const count = folderCounts[f] || 0;
 
           return (
@@ -525,8 +567,8 @@ export default function DocumentVaultPage({ onShowToast, onDocumentsCountChange 
                 </span>
               </button>
 
-              {/* Delete empty custom folder button */}
-              {isCustom && count === 0 && (
+              {/* Delete empty folder button */}
+              {count === 0 && (
                 <button
                   type="button"
                   title={`Delete empty folder "${f}"`}
@@ -539,6 +581,16 @@ export default function DocumentVaultPage({ onShowToast, onDocumentsCountChange 
             </div>
           );
         })}
+
+        {/* Create folder button in folder bar */}
+        <button
+          type="button"
+          onClick={() => setIsNewFolderModalOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium transition-all shrink-0 cursor-pointer border border-dashed border-[var(--line)] text-[#1B4B91] hover:bg-[#1B4B91]/10 hover:border-[#1B4B91]"
+        >
+          <FolderPlus className="w-3.5 h-3.5" />
+          <span>+ New folder</span>
+        </button>
       </div>
 
       {/* Main Documents Content Canvas */}
@@ -841,18 +893,52 @@ export default function DocumentVaultPage({ onShowToast, onDocumentsCountChange 
               {/* Folder Selector */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[13px] font-medium text-[var(--ink)] block mb-1">
-                    Folder / Category
-                  </label>
-                  <select
-                    value={docFolder}
-                    onChange={(e) => setDocFolder(e.target.value)}
-                    className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91] cursor-pointer"
-                  >
-                    {folders.map(f => (
-                      <option key={f} value={f}>{f}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[13px] font-medium text-[var(--ink)]">
+                      Folder / Category
+                    </label>
+                    {folders.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsTypingCustomFolder(prev => !prev);
+                          if (!isTypingCustomFolder) setDocFolder('');
+                          else setDocFolder(folders[0] || '');
+                        }}
+                        className="text-[11px] text-[#1B4B91] hover:underline cursor-pointer"
+                      >
+                        {isTypingCustomFolder ? 'Pick from folders' : '+ Type new folder'}
+                      </button>
+                    )}
+                  </div>
+
+                  {folders.length === 0 || isTypingCustomFolder ? (
+                    <input
+                      type="text"
+                      placeholder="Folder name (e.g. Taxes, Leases)..."
+                      value={docFolder}
+                      onChange={(e) => setDocFolder(e.target.value)}
+                      className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
+                    />
+                  ) : (
+                    <select
+                      value={docFolder}
+                      onChange={(e) => {
+                        if (e.target.value === '__NEW__') {
+                          setIsTypingCustomFolder(true);
+                          setDocFolder('');
+                        } else {
+                          setDocFolder(e.target.value);
+                        }
+                      }}
+                      className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91] cursor-pointer"
+                    >
+                      {folders.map(f => (
+                        <option key={f} value={f}>{f}</option>
+                      ))}
+                      <option value="__NEW__">+ Create new folder...</option>
+                    </select>
+                  )}
                 </div>
 
                 <div>
@@ -1010,15 +1096,31 @@ export default function DocumentVaultPage({ onShowToast, onDocumentsCountChange 
                 <label className="text-[13px] font-medium text-[var(--ink)] block mb-1">
                   Folder / Category
                 </label>
-                <select
-                  value={editingDoc.folder}
-                  onChange={(e) => setEditingDoc({ ...editingDoc, folder: e.target.value })}
-                  className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91] cursor-pointer"
-                >
-                  {folders.map(f => (
-                    <option key={f} value={f}>{f}</option>
-                  ))}
-                </select>
+                {folders.length > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      list="edit-folder-options"
+                      value={editingDoc.folder || ''}
+                      onChange={(e) => setEditingDoc({ ...editingDoc, folder: e.target.value })}
+                      placeholder="Folder name..."
+                      className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
+                    />
+                    <datalist id="edit-folder-options">
+                      {folders.map(f => (
+                        <option key={f} value={f} />
+                      ))}
+                    </datalist>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={editingDoc.folder || ''}
+                    onChange={(e) => setEditingDoc({ ...editingDoc, folder: e.target.value })}
+                    placeholder="Folder name (e.g. Taxes, Insurance)..."
+                    className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
+                  />
+                )}
               </div>
 
               <div>

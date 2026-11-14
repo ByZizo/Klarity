@@ -800,60 +800,14 @@ export default function PasswordVaultPage({
     <div className="flex flex-col gap-5">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-serif text-[26px] font-semibold text-[var(--ink)] tracking-tight">
-              Vault
-            </h1>
-
-            {/* Top Vault Section Selector: Passwords & Documents */}
-            <div className="flex items-center bg-[var(--surface-subtle)] p-1 rounded-[10px] border border-[var(--line)]">
-              <button
-                type="button"
-                onClick={() => handleSelectVaultSection('passwords')}
-                className={`flex items-center gap-2 py-1.5 px-3 rounded-[8px] font-medium text-[13px] transition-all cursor-pointer ${
-                  activeVaultSection === 'passwords'
-                    ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
-                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
-              >
-                <KeyRound className="w-4 h-4" />
-                <span>Passwords</span>
-                <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-medium ${
-                  activeVaultSection === 'passwords'
-                    ? 'bg-[#1B4B91]/15 text-[#1B4B91]'
-                    : 'bg-[var(--line)] text-[var(--ink)]'
-                }`}>
-                  {(vaultItems || []).length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSelectVaultSection('documents')}
-                className={`flex items-center gap-2 py-1.5 px-3 rounded-[8px] font-medium text-[13px] transition-all cursor-pointer ${
-                  activeVaultSection === 'documents'
-                    ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
-                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
-              >
-                <FileText className="w-4 h-4" />
-                <span>Documents</span>
-                <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-medium ${
-                  activeVaultSection === 'documents'
-                    ? 'bg-[#1B4B91]/15 text-[#1B4B91]'
-                    : 'bg-[var(--line)] text-[var(--ink)]'
-                }`}>
-                  {documentCount}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          <p className="text-[14px] font-medium text-[var(--muted)]">
+        <div>
+          <h1 className="font-serif text-[26px] font-semibold text-[var(--ink)] tracking-tight">
+            Vault
+          </h1>
+          <p className="text-[15px] font-medium text-[var(--muted)]">
             {activeVaultSection === 'passwords'
               ? 'Saved logins, passwords, and account numbers'
-              : 'Secure document holder, policies, tax files, and records'}
+              : 'Secure document holder, policies, and records'}
           </p>
         </div>
 
@@ -1019,6 +973,9 @@ export default function PasswordVaultPage({
         <DocumentVaultPage
           onShowToast={onShowToast}
           onDocumentsCountChange={setDocumentCount}
+          activeVaultSection={activeVaultSection}
+          onSelectVaultSection={handleSelectVaultSection}
+          passwordsCount={(vaultItems || []).length}
         />
       ) : (
         <>
@@ -1201,18 +1158,63 @@ export default function PasswordVaultPage({
           )}
         </div>
 
-        {/* Search Input */}
-        <div className="relative sm:w-72 shrink-0">
-          <label htmlFor="vault-search-input" className="sr-only">Search accounts</label>
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-          <input
-            id="vault-search-input"
-            type="text"
-            placeholder="Search accounts, logins, notes..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-[15px] bg-[var(--surface)] border border-[var(--line)] rounded-[8px] text-[var(--ink)]"
-          />
+        {/* Search Bar Area: Passwords / Documents Switcher right before the search box */}
+        <div className="flex items-center gap-2.5 flex-1 max-w-xl justify-end">
+          <div className="flex items-center bg-[var(--surface-subtle)] p-1 rounded-[10px] border border-[var(--line)] shrink-0">
+            <button
+              type="button"
+              onClick={() => handleSelectVaultSection('passwords')}
+              className={`flex items-center gap-1.5 py-1 px-2.5 rounded-[8px] font-medium text-[13px] transition-all cursor-pointer ${
+                activeVaultSection === 'passwords'
+                  ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                  : 'text-[var(--muted)] hover:text-[var(--ink)]'
+              }`}
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>Passwords</span>
+              <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-medium ${
+                activeVaultSection === 'passwords'
+                  ? 'bg-[#1B4B91]/15 text-[#1B4B91]'
+                  : 'bg-[var(--line)] text-[var(--ink)]'
+              }`}>
+                {(vaultItems || []).length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSelectVaultSection('documents')}
+              className={`flex items-center gap-1.5 py-1 px-2.5 rounded-[8px] font-medium text-[13px] transition-all cursor-pointer ${
+                activeVaultSection === 'documents'
+                  ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                  : 'text-[var(--muted)] hover:text-[var(--ink)]'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Documents</span>
+              <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-medium ${
+                activeVaultSection === 'documents'
+                  ? 'bg-[#1B4B91]/15 text-[#1B4B91]'
+                  : 'bg-[var(--line)] text-[var(--ink)]'
+              }`}>
+                {documentCount}
+              </span>
+            </button>
+          </div>
+
+          {/* Search Input */}
+          <div className="relative flex-1 min-w-[180px]">
+            <label htmlFor="vault-search-input" className="sr-only">Search accounts</label>
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none" />
+            <input
+              id="vault-search-input"
+              type="text"
+              placeholder="Search accounts, logins, notes..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 text-[14px] bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] text-[var(--ink)] placeholder-[var(--muted)] outline-none focus:border-[#1B4B91]"
+            />
+          </div>
         </div>
       </Card>
 
