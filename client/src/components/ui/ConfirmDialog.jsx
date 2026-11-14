@@ -8,6 +8,7 @@ import { Button } from './Button';
  */
 export function ConfirmDialog({
   open,
+  isOpen,
   title = 'Confirm action',
   message,
   confirmLabel = 'Confirm',
@@ -16,8 +17,10 @@ export function ConfirmDialog({
   onConfirm,
   onCancel
 }) {
+  const isDialogVisible = open !== undefined ? open : isOpen;
+
   useEffect(() => {
-    if (!open) return;
+    if (!isDialogVisible) return;
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && onCancel) {
         onCancel();
@@ -25,9 +28,9 @@ export function ConfirmDialog({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onCancel]);
+  }, [isDialogVisible, onCancel]);
 
-  if (!open) return null;
+  if (!isDialogVisible) return null;
 
   return (
     <div

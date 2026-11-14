@@ -79,6 +79,7 @@ export default function DocumentVaultPage({
   // Edit modal custom folder state
   const [editingIsNewFolder, setEditingIsNewFolder] = useState(false);
   const [editingNewFolderInput, setEditingNewFolderInput] = useState('');
+  const [editingNewFile, setEditingNewFile] = useState(null);
 
   const fileInputRef = useRef(null);
 
@@ -561,19 +562,19 @@ export default function DocumentVaultPage({
       </Card>
 
       {/* Folders Navigation Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
         <button
           type="button"
           onClick={() => setSelectedFolder('All')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-all shrink-0 cursor-pointer border ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px] font-medium transition-all shrink-0 cursor-pointer border ${
             selectedFolder === 'All'
               ? 'bg-[#1B4B91] text-white border-[#1B4B91] shadow-xs'
-              : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)] border-[var(--line)]'
+              : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)] hover:border-[var(--line-strong)] border-[var(--line)] shadow-xs'
           }`}
         >
-          <Folder className="w-3.5 h-3.5" />
+          <Folder className={`w-4 h-4 shrink-0 ${selectedFolder === 'All' ? 'text-white fill-white/30' : 'text-blue-500 fill-blue-500/30'}`} />
           <span>All Documents</span>
-          <span className={`text-[11px] px-1.5 py-0.2 rounded-full ${
+          <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-medium ${
             selectedFolder === 'All' ? 'bg-white/20 text-white' : 'bg-[var(--line)] text-[var(--ink)]'
           }`}>
             {folderCounts.All || 0}
@@ -589,16 +590,16 @@ export default function DocumentVaultPage({
               <button
                 type="button"
                 onClick={() => setSelectedFolder(f)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-all cursor-pointer border ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px] font-medium transition-all cursor-pointer border ${
                   isSelected
                     ? 'bg-[#1B4B91] text-white border-[#1B4B91] shadow-xs'
-                    : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)] border-[var(--line)]'
+                    : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)] hover:border-amber-500/40 border-[var(--line)] shadow-xs'
                 }`}
               >
-                <Folder className="w-3.5 h-3.5" />
-                <span>{f}</span>
-                <span className={`text-[11px] px-1.5 py-0.2 rounded-full ${
-                  isSelected ? 'bg-white/20 text-white' : 'bg-[var(--line)] text-[var(--ink)]'
+                <Folder className={`w-4 h-4 shrink-0 ${isSelected ? 'text-amber-300 fill-amber-300' : 'text-amber-500 fill-amber-400'}`} />
+                <span className="font-medium">{f}</span>
+                <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-medium ${
+                  isSelected ? 'bg-white/20 text-white' : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                 }`}>
                   {count}
                 </span>
@@ -612,7 +613,7 @@ export default function DocumentVaultPage({
                   onClick={() => handleDeleteFolder(f)}
                   className="ml-1 p-1 text-[var(--muted)] hover:text-rose-500 rounded-full hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -623,24 +624,73 @@ export default function DocumentVaultPage({
         <button
           type="button"
           onClick={() => setIsNewFolderModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium transition-all shrink-0 cursor-pointer border border-dashed border-[var(--line)] text-[#1B4B91] hover:bg-[#1B4B91]/10 hover:border-[#1B4B91]"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px] font-medium transition-all shrink-0 cursor-pointer border border-dashed border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:border-amber-500 bg-[var(--surface)] shadow-xs"
         >
-          <FolderPlus className="w-3.5 h-3.5" />
+          <FolderPlus className="w-4 h-4 text-amber-500 fill-amber-500/20" />
           <span>+ New folder</span>
         </button>
       </div>
 
+      {/* Active Folder Header Banner */}
+      {selectedFolder !== 'All' && (
+        <Card className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--surface-subtle)] border-l-4 border-l-amber-500 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-[10px] bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 shadow-xs">
+              <Folder className="w-6 h-6 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-[17px] text-[var(--ink)]">{selectedFolder}</h2>
+                <span className="text-[12px] px-2 py-0.5 rounded-full font-medium bg-[var(--surface)] text-[var(--muted)] border border-[var(--line)]">
+                  {folderCounts[selectedFolder] || 0} document{(folderCounts[selectedFolder] || 0) === 1 ? '' : 's'}
+                </span>
+              </div>
+              <p className="text-[12px] text-[var(--muted)]">Folder • Document Vault</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setDocFolder(selectedFolder);
+                setNewDocFolderInput('');
+                setUploadError('');
+                setIsUploadModalOpen(true);
+              }}
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add document to {selectedFolder}</span>
+            </Button>
+            {folderCounts[selectedFolder] === 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleDeleteFolder(selectedFolder)}
+                className="text-rose-500 hover:text-rose-600"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete folder</span>
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* Main Documents Content Canvas */}
       {filteredDocuments.length === 0 ? (
         <EmptyState
-          icon={FileText}
+          icon={Folder}
           title={searchQuery ? 'No matching documents found' : selectedFolder !== 'All' ? `No documents in "${selectedFolder}"` : 'No documents in your vault'}
           description={
             searchQuery
               ? `We couldn't find any documents matching "${searchQuery}". Try a different keyword.`
+              : selectedFolder !== 'All'
+              ? `This folder is currently empty. Click below to add documents into "${selectedFolder}".`
               : 'Add receipts, tax filings, insurance policies, or legal deeds to keep them safe and organized.'
           }
-          actionLabel="Upload document"
+          actionLabel={selectedFolder !== 'All' ? `Add document to ${selectedFolder}` : 'Upload document'}
           onAction={handleOpenUploadModal}
         />
       ) : viewMode === 'grid' ? (
@@ -723,8 +773,15 @@ export default function DocumentVaultPage({
 
                 {/* Card Footer: Folder Tag & File Meta */}
                 <div className="pt-3 mt-3 border-t border-[var(--line)] flex items-center justify-between text-[11px] text-[var(--muted)]">
-                  <span className="inline-flex items-center gap-1 font-medium px-2 py-0.5 rounded-full bg-[var(--surface-subtle)] text-[var(--ink)]">
-                    <Folder className="w-3 h-3 text-[#1B4B91]" />
+                  <span
+                    className="inline-flex items-center gap-1.5 font-medium px-2 py-0.5 rounded-[6px] bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400 text-[11px] cursor-pointer hover:bg-amber-500/20 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedFolder(doc.folder);
+                    }}
+                    title={`View folder "${doc.folder}"`}
+                  >
+                    <Folder className="w-3.5 h-3.5 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-400" />
                     <span>{doc.folder}</span>
                   </span>
                   <div className="flex items-center gap-1.5">
@@ -761,8 +818,15 @@ export default function DocumentVaultPage({
                       >
                         {doc.name}
                       </span>
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--surface-subtle)] text-[var(--ink)] shrink-0 border border-[var(--line)]">
-                        <Folder className="w-3 h-3 text-[#1B4B91]" />
+                      <span
+                        className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-[6px] bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400 shrink-0 cursor-pointer hover:bg-amber-500/20 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedFolder(doc.folder);
+                        }}
+                        title={`View folder "${doc.folder}"`}
+                      >
+                        <Folder className="w-3.5 h-3.5 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-400" />
                         <span>{doc.folder}</span>
                       </span>
                     </div>
@@ -949,15 +1013,15 @@ export default function DocumentVaultPage({
                     className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91] cursor-pointer"
                   >
                     {folders.map(f => (
-                      <option key={f} value={f}>{f}</option>
+                      <option key={f} value={f}>📁 {f}</option>
                     ))}
                     {folders.length > 0 && <option disabled>──────────</option>}
-                    <option value="__CREATE_NEW__">+ Create new folder...</option>
+                    <option value="__CREATE_NEW__">📁+ Create new folder...</option>
                   </select>
 
                   {docFolder === '__CREATE_NEW__' && (
                     <div className="mt-2 relative">
-                      <FolderPlus className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#1B4B91]" />
+                      <Folder className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 fill-amber-400" />
                       <input
                         type="text"
                         autoFocus
@@ -965,7 +1029,7 @@ export default function DocumentVaultPage({
                         placeholder="Enter new folder name (e.g. Taxes, Leases)..."
                         value={newDocFolderInput}
                         onChange={(e) => setNewDocFolderInput(e.target.value)}
-                        className="w-full bg-[var(--surface-subtle)] border border-[#1B4B91]/50 rounded-[8px] pl-9 pr-3.5 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
+                        className="w-full bg-[var(--surface-subtle)] border border-amber-500/50 rounded-[8px] pl-9 pr-3.5 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-amber-500"
                       />
                     </div>
                   )}
@@ -1047,6 +1111,36 @@ export default function DocumentVaultPage({
                 >
                   <Download className="w-4 h-4" />
                   <span>Download</span>
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const doc = previewDoc;
+                    setPreviewDoc(null);
+                    setEditingDoc(doc);
+                    setEditingIsNewFolder(false);
+                    setEditingNewFolderInput('');
+                    setEditingNewFile(null);
+                  }}
+                  title="Edit details"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Edit</span>
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const doc = previewDoc;
+                    setPreviewDoc(null);
+                    setDeleteConfirmDoc(doc);
+                  }}
+                  title="Delete document"
+                  className="hover:text-rose-500 hover:border-rose-300"
+                >
+                  <Trash2 className="w-4 h-4 text-rose-500" />
+                  <span className="hidden sm:inline text-rose-500">Delete</span>
                 </Button>
                 <button
                   type="button"
@@ -1140,15 +1234,15 @@ export default function DocumentVaultPage({
                   className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91] cursor-pointer"
                 >
                   {Array.from(new Set([...folders, editingDoc.folder].filter(Boolean))).map(f => (
-                    <option key={f} value={f}>{f}</option>
+                    <option key={f} value={f}>📁 {f}</option>
                   ))}
                   {folders.length > 0 && <option disabled>──────────</option>}
-                  <option value="__CREATE_NEW__">+ Create new folder...</option>
+                  <option value="__CREATE_NEW__">📁+ Create new folder...</option>
                 </select>
 
                 {editingIsNewFolder && (
                   <div className="mt-2 relative">
-                    <FolderPlus className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#1B4B91]" />
+                    <Folder className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 fill-amber-400" />
                     <input
                       type="text"
                       autoFocus
@@ -1159,10 +1253,66 @@ export default function DocumentVaultPage({
                         setEditingNewFolderInput(e.target.value);
                         setEditingDoc({ ...editingDoc, folder: e.target.value });
                       }}
-                      className="w-full bg-[var(--surface-subtle)] border border-[#1B4B91]/50 rounded-[8px] pl-9 pr-3.5 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
+                      className="w-full bg-[var(--surface-subtle)] border border-amber-500/50 rounded-[8px] pl-9 pr-3.5 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-amber-500"
                     />
                   </div>
                 )}
+
+                <div className="p-2.5 rounded-[8px] bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 mt-2">
+                  <div className="flex items-center gap-1.5 text-[12px] text-amber-800 dark:text-amber-300 font-medium truncate">
+                    <Folder className="w-3.5 h-3.5 fill-amber-400 text-amber-600 shrink-0" />
+                    <span className="truncate">In folder: <strong>{editingIsNewFolder ? (editingNewFolderInput || 'New folder') : (editingDoc.folder || 'General')}</strong></span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const f = editingIsNewFolder ? editingNewFolderInput.trim() : (editingDoc.folder || '');
+                      setEditingDoc(null);
+                      setDocFolder(f || folders[0] || '__CREATE_NEW__');
+                      setNewDocFolderInput('');
+                      setUploadError('');
+                      setIsUploadModalOpen(true);
+                    }}
+                    className="text-[12px] text-[#1B4B91] hover:underline font-semibold cursor-pointer shrink-0"
+                  >
+                    + Add document to this folder
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[13px] font-medium text-[var(--ink)] block mb-1">
+                  Attached File
+                </label>
+                <label className="flex items-center justify-between p-2.5 bg-[var(--surface-subtle)] border border-[var(--line)] hover:border-[#1B4B91] rounded-[8px] cursor-pointer transition-colors text-[13px]">
+                  <div className="flex items-center gap-2 text-[var(--muted)] truncate">
+                    <UploadCloud className="w-4 h-4 text-[#1B4B91] shrink-0" />
+                    <span className="truncate">{editingNewFile ? editingNewFile.name : `${editingDoc.fileName || 'Attached file'} (${formatFileSize(editingDoc.fileSize)})`}</span>
+                  </div>
+                  <span className="text-[12px] font-medium text-[#1B4B91] shrink-0">Replace</span>
+                  <input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.svg,.txt,.csv,.xlsx,.doc,.docx"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          setEditingNewFile(f);
+                          setEditingDoc(prev => ({
+                            ...prev,
+                            fileName: f.name,
+                            fileType: f.type || 'application/octet-stream',
+                            fileSize: f.size,
+                            dataUrl: ev.target.result
+                          }));
+                        };
+                        reader.readAsDataURL(f);
+                      }
+                    }}
+                  />
+                </label>
               </div>
 
               <div>
@@ -1212,6 +1362,19 @@ export default function DocumentVaultPage({
             </div>
 
             <form onSubmit={handleCreateNewFolder} className="flex flex-col gap-3">
+              {/* Visual Folder Logo Preview */}
+              <div className="flex items-center gap-3 p-3.5 bg-amber-500/10 border border-amber-500/25 rounded-[12px]">
+                <div className="w-12 h-12 rounded-[10px] bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 shadow-xs">
+                  <Folder className="w-7 h-7 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-300" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-[15px] text-[var(--ink)] truncate">
+                    {newFolderNameInput.trim() || 'New Folder'}
+                  </p>
+                  <p className="text-[12px] text-[var(--muted)]">Folder • Document Vault</p>
+                </div>
+              </div>
+
               <div>
                 <label className="text-[13px] font-medium text-[var(--ink)] block mb-1">
                   Folder Name
@@ -1242,6 +1405,7 @@ export default function DocumentVaultPage({
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
+        open={Boolean(deleteConfirmDoc)}
         isOpen={Boolean(deleteConfirmDoc)}
         title="Delete Document"
         message={`Are you sure you want to permanently delete "${deleteConfirmDoc?.name}" from your vault? This cannot be undone.`}
