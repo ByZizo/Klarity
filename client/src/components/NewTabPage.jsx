@@ -558,8 +558,30 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
         </div>
       </div>
 
+      {/* Standalone Floating Quick Notes Card in the Left Open Space (width ~260px, height ~420px, left ~48px, top 240px) */}
+      {prefs.showNotes && (
+        <aside
+          aria-label="Quick Notes"
+          className="hidden md:flex flex-col absolute left-8 lg:left-12 top-[240px] w-[260px] h-[420px] rounded-2xl bg-[#1e293b]/90 border border-slate-700/70 p-4 shadow-xl backdrop-blur-md z-20 transition-all"
+        >
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+              <StickyNote className="w-3.5 h-3.5 text-blue-400" />
+              <span>Quick Notes</span>
+            </div>
+            <span className="text-[10px] text-slate-400 font-medium">Auto-saved</span>
+          </div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Jot down quick notes, links, or reminders..."
+            className="w-full flex-1 min-h-0 rounded-xl bg-slate-900/75 border border-slate-700/70 focus:border-blue-500 outline-none p-3 text-xs text-slate-100 placeholder-slate-500 resize-none leading-relaxed"
+          />
+        </aside>
+      )}
+
       {/* Main Centered Content Canvas */}
-      <div className={`relative z-10 mx-auto px-6 pt-8 pb-16 flex flex-col items-center transition-all ${prefs.showNotes && prefs.showQuickLinks ? 'max-w-5xl' : 'max-w-3xl'}`}>
+      <div className="relative z-10 mx-auto px-6 pt-8 pb-16 flex flex-col items-center max-w-3xl w-full">
         {/* Minimal Clock / Greeting */}
         {prefs.showClock && (
           <div className="text-center mb-7">
@@ -603,50 +625,10 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
           </div>
         </form>
 
-        {/* Centered Content Area: Floating Quick Notes Widget & Speed Dial Grid Side-by-Side */}
-        {(prefs.showNotes || prefs.showQuickLinks) && (
-          <div
-            className={`w-full ${
-              prefs.showNotes && prefs.showQuickLinks
-                ? 'flex flex-col md:flex-row items-start justify-center gap-6'
-                : 'max-w-2xl'
-            }`}
-          >
-            {/* Quick Notes: Floating, Rounded Card (Width ~300px, Height ~220px, Not Docked to Edge) */}
-            {prefs.showNotes && (
-              <div
-                className={`rounded-2xl bg-[#1e293b]/85 border border-slate-700/70 p-4 shadow-xl backdrop-blur-md flex flex-col transition-all ${
-                  prefs.showQuickLinks
-                    ? 'w-full md:w-[300px] shrink-0 h-[220px]'
-                    : 'w-full max-w-md mx-auto h-[220px]'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2.5">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
-                    <StickyNote className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Quick Notes</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-medium">Auto-saved</span>
-                </div>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Jot down quick notes, links, or reminders..."
-                  className="w-full flex-1 min-h-0 rounded-xl bg-slate-900/70 border border-slate-700/70 focus:border-blue-500 outline-none p-3 text-xs text-slate-100 placeholder-slate-500 resize-none leading-relaxed"
-                />
-              </div>
-            )}
-
-            {/* Speed Dial / Quick Links Grid (Cleanly positioned beside Quick Notes with gap) */}
-            {prefs.showQuickLinks && (
-              <div className="flex-1 w-full min-w-0">
-                <div
-                  className={`grid gap-3 ${
-                    prefs.showNotes
-                      ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4'
-                      : 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5'
-                  }`}
-                >
+        {/* Strictly Centered Speed Dial / Quick Links Grid */}
+        {prefs.showQuickLinks && (
+          <div className="w-full max-w-2xl">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
                   {quickLinks.map((item) => {
                     const isGroup = item.type === 'group';
                     const isDropTarget = dropTargetId === item.id && draggedTileId !== item.id;
@@ -793,6 +775,23 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
                 </div>
               </div>
             )}
+
+        {/* Mobile Quick Notes Card fallback (below speed dial on narrow viewports) */}
+        {prefs.showNotes && (
+          <div className="md:hidden w-full max-w-md mt-6 rounded-2xl bg-[#1e293b]/90 border border-slate-700/70 p-4 shadow-xl backdrop-blur-md flex flex-col h-[220px]">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+                <StickyNote className="w-3.5 h-3.5 text-blue-400" />
+                <span>Quick Notes</span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-medium">Auto-saved</span>
+            </div>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Jot down quick notes, links, or reminders..."
+              className="w-full flex-1 min-h-0 rounded-xl bg-slate-900/75 border border-slate-700/70 focus:border-blue-500 outline-none p-3 text-xs text-slate-100 placeholder-slate-500 resize-none leading-relaxed"
+            />
           </div>
         )}
       </div>
