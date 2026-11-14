@@ -3370,11 +3370,18 @@ app.post('/api/ai/chat', async (req, res) => {
 
   // Active in-app browser context: provides real-time vision into the page the user is currently viewing
   let liveBrowserContext = '';
-  if (browserContext && (browserContext.url || browserContext.text)) {
+  if (browserContext && (browserContext.url || browserContext.text || browserContext.title)) {
     const cleanUrl = String(browserContext.url || '').trim();
     const cleanTitle = String(browserContext.title || 'Untitled Webpage').trim();
+    const cleanChannel = String(browserContext.channel || '').trim();
     const cleanText = String(browserContext.text || '').replace(/\s+/g, ' ').trim().slice(0, 16000);
-    liveBrowserContext = `\n\n=== LIVE IN-APP BROWSER CONTEXT (What the user is viewing right now) ===\nPage Title: ${cleanTitle}\nPage URL: ${cleanUrl}\nPage Content / Text:\n${cleanText || 'No text extracted from page'}\n=== END IN-APP BROWSER CONTEXT ===\nNOTE: The user is currently reading this live webpage in Klarity's In-App Browser. When they ask questions about what's on the screen, rates, prices, articles, comparisons, or bills, analyze and answer directly using this live webpage content!`;
+    const isYouTube = Boolean(browserContext.isYouTube || /youtube\.com\/watch|youtu\.be/i.test(cleanUrl));
+
+    if (isYouTube) {
+      liveBrowserContext = `\n\n=== LIVE IN-APP BROWSER CONTEXT: YOUTUBE VIDEO ===\nPlatform: YouTube Video\nVideo Title: ${cleanTitle}\nChannel / Creator: ${cleanChannel || 'YouTube Creator'}\nVideo URL: ${cleanUrl}\nVideo Details / Description / Stats:\n${cleanText || 'No extra description extracted'}\n=== END IN-APP BROWSER CONTEXT ===\nCRITICAL DIRECTIVE: The user is currently watching this exact YouTube video right now in Klarity's In-App Browser. When they ask questions like "what is this about?", "summarize this video", "who made this?", or ask questions about the topic, products, or points shown, ANSWER DIRECTLY AND SPECIFICALLY about this video ("${cleanTitle}"${cleanChannel ? ` by ${cleanChannel}` : ''})! Do NOT give abstract grammar definitions or tell them to check watch history. You are their proactive browsing companion.`;
+    } else {
+      liveBrowserContext = `\n\n=== LIVE IN-APP BROWSER CONTEXT (What the user is viewing right now) ===\nPage Title: ${cleanTitle}\nPage URL: ${cleanUrl}\nPage Content / Text:\n${cleanText || 'No text extracted from page'}\n=== END IN-APP BROWSER CONTEXT ===\nNOTE: The user is currently reading this live webpage in Klarity's In-App Browser. When they ask questions about what's on the screen, rates, prices, articles, comparisons, or bills, analyze and answer directly using this live webpage content!`;
+    }
   }
 
   const nowCalendar = new Date();

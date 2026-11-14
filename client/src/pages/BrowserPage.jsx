@@ -309,45 +309,99 @@ export function BrowserPage({
   const extractPageContentForTab = async (tabId) => {
     if (browserSettings?.aiPageReaderEnabled === false) {
       setActiveBrowserContext(null);
-      return;
+      return null;
     }
+    const tab = tabs.find((t) => t.id === tabId);
+    if (tab && isNewTabUrl(tab.url)) {
+      setActiveBrowserContext(null);
+      return null;
+    }
+
     const webview = webviewRefs.current[tabId];
-    if (!webview || typeof webview.executeJavaScript !== 'function') return;
+    if (!webview || typeof webview.executeJavaScript !== 'function') {
+      return activeBrowserContext;
+    }
 
     try {
       const script = `
         (() => {
           try {
-            const title = document.title || '';
             const href = window.location.href || '';
-            const metaDesc = document.querySelector('meta[name="description"]')?.content || '';
-            const clone = document.body ? document.body.cloneNode(true) : null;
-            if (!clone) return { title, url: href, text: metaDesc };
-            const badElements = clone.querySelectorAll('script, style, noscript, nav, footer, iframe, svg, [aria-hidden="true"]');
-            badElements.forEach(el => el.remove());
-            let text = clone.innerText || clone.textContent || '';
-            text = text.replace(/\\s+/g, ' ').trim();
+            const rawTitle = document.title || '';
+            const isYouTube = /youtube\\.com|youtu\\.be/i.test(href);
+
+            if (isYouTube) {
+              const ytTitleEl = document.querySelector('h1.ytd-watch-metadata yt-formatted-string, #title h1 yt-formatted-string, h1.title, ytd-watch-metadata h1');
+              const ytTitle = ytTitleEl ? (ytTitleEl.innerText || ytTitleEl.textContent || '').trim() : rawTitle.replace(/ - YouTube$/, '').trim();
+              const channelEl = document.querySelector('#channel-name #text, #upload-info #channel-name a, ytd-channel-name a, #owner #channel-name');
+              const channel = channelEl ? (channelEl.innerText || channelEl.textContent || '').trim() : '';
+              const descEl = document.querySelector('#description-inline-expander, #description, ytd-text-inline-expander, #description-inner');
+              const description = descEl ? (descEl.innerText || descEl.textContent || '').trim() : '';
+              const metaDesc = document.querySelector('meta[name="description"]')?.content || document.querySelector('meta[property="og:description"]')?.content || '';
+              const infoEl = document.querySelector('#info-container yt-formatted-string, ytd-watch-info-text, #info-strings yt-formatted-string');
+              const infoText = infoEl ? (infoEl.innerText || infoEl.textContent || '').trim() : '';
+
+              const parts = [];
+              if (channel) parts.push('Channel/Creator: ' + channel);
+              if (infoText) parts.push('Video Info: ' + infoText);
+              if (description) parts.push('Description:\\n' + description);
+              else if (metaDesc) parts.push('Summary: ' + metaDesc);
+
+              return {
+                title: ytTitle || rawTitle || 'YouTube Video',
+                url: href,
+                channel: channel,
+                isYouTube: true,
+                metaDescription: metaDesc,
+                text: parts.join('\\n\\n').slice(0, 16000)
+              };
+            }
+
+            // General web page extraction (safe extraction from live DOM elements)
+            const metaDesc = document.querySelector('meta[name="description"]')?.content || document.querySelector('meta[property="og:description"]')?.content || '';
+            const mainEl = document.querySelector('main, article, [role="main"]') || document.body;
+            let text = '';
+            if (mainEl) {
+              const nodes = Array.from(mainEl.querySelectorAll('h1, h2, h3, h4, p, li, blockquote, table'));
+              if (nodes.length > 0) {
+                text = nodes
+                  .filter(el => !el.closest('nav, footer, header, script, style, noscript, [aria-hidden="true"]'))
+                  .map(el => (el.innerText || el.textContent || '').trim())
+                  .filter(Boolean)
+                  .join('\\n');
+              } else {
+                text = (mainEl.innerText || mainEl.textContent || '').replace(/\\s+/g, ' ').trim();
+              }
+            }
+
             return {
-              title,
+              title: rawTitle,
               url: href,
+              channel: '',
+              isYouTube: false,
               metaDescription: metaDesc,
-              text: text.slice(0, 16000)
+              text: (text || metaDesc).slice(0, 16000)
             };
           } catch (e) {
-            return { title: document.title, url: window.location.href, text: '' };
+            return { title: document.title, url: window.location.href, text: '', isYouTube: false, channel: '' };
           }
         })()
       `;
       const res = await webview.executeJavaScript(script);
       if (res && (res.title || res.text || res.url)) {
-        setActiveBrowserContext({
+        const ctxObj = {
           title: res.title || 'Page',
           url: res.url || '',
           text: res.text || '',
+          channel: res.channel || '',
+          isYouTube: Boolean(res.isYouTube),
           timestamp: Date.now()
-        });
+        };
+        setActiveBrowserContext(ctxObj);
+        return ctxObj;
       }
     } catch {}
+    return null;
   };
 
   // Refresh AI page context when switching tabs
@@ -468,6 +522,9 @@ export function BrowserPage({
         }
         if (rawUrl && rawUrl !== 'about:blank') {
           extractPageContentForTab(tabId);
+          setTimeout(() => {
+            extractPageContentForTab(tabId);
+          }, 800);
         }
       }
     };
@@ -500,6 +557,10 @@ export function BrowserPage({
       }
       if (tabId === activeTabId && navUrl && navUrl !== 'about:blank' && !isNewTabUrl(navUrl)) {
         setUrlInput(navUrl);
+        extractPageContentForTab(tabId);
+        setTimeout(() => {
+          extractPageContentForTab(tabId);
+        }, 800);
       }
     };
 
@@ -510,6 +571,9 @@ export function BrowserPage({
             t.id === tabId && !isNewTabUrl(t.url) ? { ...t, title: e.title } : t
           )
         );
+        if (tabId === activeTabId) {
+          extractPageContentForTab(tabId);
+        }
       }
     };
 
@@ -813,12 +877,30 @@ export function BrowserPage({
   };
 
   // AI Question Submit
-  const handleSendAiQuestion = (e) => {
+  const handleSendAiQuestion = async (e) => {
     if (e) e.preventDefault();
     if (typeof onAskAdvisor !== 'function') return;
     const raw = aiQuestion.trim();
     if (!raw) return;
-    onAskAdvisor(raw);
+
+    // Immediately extract fresh page content from the active tab's webview
+    let freshContext = null;
+    try {
+      freshContext = await extractPageContentForTab(activeTabId);
+    } catch {}
+
+    const ctx = freshContext || activeBrowserContext;
+    let enrichedPrompt = raw;
+
+    if (ctx && (ctx.title || ctx.url)) {
+      if (ctx.isYouTube || /youtube\.com\/watch|youtu\.be/i.test(ctx.url || '')) {
+        enrichedPrompt = `[Currently watching YouTube video: "${ctx.title}"${ctx.channel ? ` by ${ctx.channel}` : ''} (${ctx.url})]\n\n${raw}`;
+      } else if (!isNewTabUrl(ctx.url)) {
+        enrichedPrompt = `[Currently viewing webpage: "${ctx.title}" (${ctx.url})]\n\n${raw}`;
+      }
+    }
+
+    onAskAdvisor(enrichedPrompt, ctx);
     setAiQuestion('');
     setIsAiPopoverOpen(false);
   };

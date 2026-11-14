@@ -3669,13 +3669,17 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
   ];
 }
 
-  const handleSendChatMessage = async (eOrText) => {
+  const handleSendChatMessage = async (eOrText, filesOverride, browserContextOverride) => {
     if (eOrText && typeof eOrText === 'object' && eOrText.preventDefault) {
       eOrText.preventDefault();
     }
     const userMsg = (typeof eOrText === 'string' ? eOrText : chatInput).trim();
-    const currentFiles = typeof eOrText === 'string' ? [] : chatFiles;
+    const currentFiles = Array.isArray(filesOverride) ? filesOverride : (typeof eOrText === 'string' ? [] : chatFiles);
     if ((!userMsg && currentFiles.length === 0) || isAiTyping) return;
+
+    if (browserContextOverride) {
+      setActiveBrowserContext(browserContextOverride);
+    }
 
     if (typeof eOrText !== 'string') {
       setChatInput('');
@@ -3781,7 +3785,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           netWorth: totalNetWorth || 0,
           householdProfile: householdProfile,
           householdMetrics: calculateHouseholdAndFleetMetrics(householdProfile),
-          browserContext: activeBrowserContext
+          browserContext: browserContextOverride || activeBrowserContext
         })
       });
 
@@ -4048,6 +4052,10 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       scrollChatToBottom();
     } catch (err) {
       if (err.name === 'AbortError' || err.message?.toLowerCase().includes('abort')) {
+        // If this controller was superseded by a newer message request, ignore silently
+        if (chatAbortControllerRef.current && chatAbortControllerRef.current !== controller) {
+          return;
+        }
         const updated = [
           ...userUpdatedMessages,
           {
@@ -5595,9 +5603,9 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           {normalizedActiveTab === 'browser' ? (
             <main className="flex-1 min-w-0 h-full flex flex-col overflow-hidden p-0 m-0 pb-14 min-[760px]:pb-0">
               <BrowserPage
-                onAskAdvisor={(prompt) => {
+                onAskAdvisor={(prompt, contextOverride) => {
                   setIsAdvisorCollapsed(false);
-                  handleSendChatMessage(prompt);
+                  handleSendChatMessage(prompt, null, contextOverride);
                 }}
                 activeBrowserContext={activeBrowserContext}
                 setActiveBrowserContext={setActiveBrowserContext}
