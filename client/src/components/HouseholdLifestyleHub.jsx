@@ -3773,11 +3773,6 @@ export default function HouseholdLifestyleHub({
           {/* ============================================================= */}
           {householdView === 'saved' && (
             <div className="flex flex-col gap-4">
-              {/* Header Bar */}
-              <div className="px-1">
-                <h2 className="font-semibold text-xl text-[var(--ink)] tracking-tight">Household</h2>
-              </div>
-
               {/* Restyled Household Card with Spacious Layout */}
               <section className="bg-[var(--surface)] border border-[var(--line)] rounded-[12px] shadow-2xs overflow-hidden transition-all">
                 {/* 5. Card Header: Address, One Summary Line, Monthly Bills Total & Collapse Arrow */}
@@ -5613,11 +5608,8 @@ export default function HouseholdLifestyleHub({
           {/* STATE 3: SAVED (Collapsible Multi-Vehicle Insurance List) */}
           {autoView === 'saved' && (
             <div className="flex flex-col gap-4">
-              {/* Header Bar with Add Card button */}
-              <div className="flex items-center justify-between flex-wrap gap-3 px-1">
-                <div>
-                  <h2 className="font-semibold text-lg text-slate-900 dark:text-white">Vehicles & Auto insurance</h2>
-                </div>
+              {/* Action Buttons Header Bar */}
+              <div className="flex items-center justify-end flex-wrap gap-3 px-1">
                 {isOverview ? (
                   <button
                     type="button"
@@ -6410,11 +6402,8 @@ export default function HouseholdLifestyleHub({
           {/* STATE 3: SAVED (Collapsible Multi-Card Insurance List) */}
           {healthView === 'saved' && (
             <div className="flex flex-col gap-4">
-              {/* Header Bar with Add Card button */}
-              <div className="flex items-center justify-between flex-wrap gap-3 px-1">
-                <div>
-                  <h2 className="font-semibold text-lg text-slate-900 dark:text-white">Health insurance</h2>
-                </div>
+              {/* Action Buttons Header Bar */}
+              <div className="flex items-center justify-end flex-wrap gap-3 px-1">
                 {isOverview ? (
                   <button
                     type="button"
