@@ -813,23 +813,28 @@ export default function DocumentVaultPage({
   return (
     <div className="flex flex-col gap-5">
       {/* Action and Filter Toolbar */}
-      <Card className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Section Selector & Search Bar */}
-        <div className="flex items-center gap-2.5 flex-1 max-w-xl">
+      <Card className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* Left: Compact Icon Switcher (Passwords / Documents) & Flexible Search Bar */}
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
           {onSelectVaultSection && (
             <div className="flex items-center bg-[var(--surface-subtle)] p-1 rounded-[10px] border border-[var(--line)] shrink-0">
               <button
                 type="button"
                 onClick={() => onSelectVaultSection('passwords')}
+                title={`Passwords (${passwordsCount})`}
+                aria-label={`Passwords (${passwordsCount})`}
                 className={`flex items-center gap-1.5 py-1 px-2.5 rounded-[8px] font-medium text-[13px] transition-all cursor-pointer ${
                   activeVaultSection === 'passwords'
                     ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                 }`}
               >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>Passwords</span>
-                <span className="text-[11px] px-1.5 py-0.2 rounded-full font-medium bg-[var(--line)] text-[var(--ink)]">
+                <KeyRound className="w-4 h-4" />
+                <span className={`text-[11px] min-w-[18px] text-center px-1.5 py-0.5 rounded-full font-semibold leading-none ${
+                  activeVaultSection === 'passwords'
+                    ? 'bg-[#1B4B91]/15 text-[#1B4B91]'
+                    : 'bg-[var(--line)] text-[var(--muted)]'
+                }`}>
                   {passwordsCount}
                 </span>
               </button>
@@ -837,23 +842,28 @@ export default function DocumentVaultPage({
               <button
                 type="button"
                 onClick={() => onSelectVaultSection('documents')}
+                title={`Documents (${documents.length})`}
+                aria-label={`Documents (${documents.length})`}
                 className={`flex items-center gap-1.5 py-1 px-2.5 rounded-[8px] font-medium text-[13px] transition-all cursor-pointer ${
                   activeVaultSection === 'documents'
                     ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                 }`}
               >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Documents</span>
-                <span className="text-[11px] px-1.5 py-0.2 rounded-full font-medium bg-[#1B4B91]/15 text-[#1B4B91]">
+                <FileText className="w-4 h-4" />
+                <span className={`text-[11px] min-w-[18px] text-center px-1.5 py-0.5 rounded-full font-semibold leading-none ${
+                  activeVaultSection === 'documents'
+                    ? 'bg-[#1B4B91]/15 text-[#1B4B91]'
+                    : 'bg-[var(--line)] text-[var(--muted)]'
+                }`}>
                   {documents.length}
                 </span>
               </button>
             </div>
           )}
 
-          {/* Search Bar Right After Selector */}
-          <div className="relative flex-1 min-w-[180px]">
+          {/* Search Bar (Flexible Width) */}
+          <div className="relative flex-1 min-w-[160px]">
             <label htmlFor="doc-vault-search" className="sr-only">Search documents</label>
             <Search className="w-4 h-4 text-[var(--muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
@@ -876,8 +886,8 @@ export default function DocumentVaultPage({
           </div>
         </div>
 
-        {/* Controls: Sort, View Layout, Add New Folder & Add Document */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Right: Sort Dropdown, View Toggles & Primary Action Button */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
           {/* Sort Selector */}
           <div className="flex items-center gap-1.5 bg-[var(--surface-subtle)] px-2.5 py-1 rounded-[8px] border border-[var(--line)] text-[13px]">
             <ArrowUpDown className="w-3.5 h-3.5 text-[var(--muted)]" />
@@ -921,17 +931,7 @@ export default function DocumentVaultPage({
             </button>
           </div>
 
-          {/* Create New Folder */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setIsNewFolderModalOpen(true)}
-          >
-            <FolderPlus className="w-4 h-4" />
-            <span>New folder</span>
-          </Button>
-
-          {/* Upload Document Primary Button */}
+          {/* Upload Document Primary Button (Anchored Prominently on the Far Right) */}
           <Button
             variant="primary"
             size="sm"
