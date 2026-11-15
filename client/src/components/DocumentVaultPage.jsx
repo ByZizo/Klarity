@@ -63,6 +63,7 @@ export default function DocumentVaultPage({
   const [deleteConfirmDoc, setDeleteConfirmDoc] = useState(null);
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
   const [newFolderNameInput, setNewFolderNameInput] = useState('');
+  const [isFolderDropdownOpen, setIsFolderDropdownOpen] = useState(false);
 
   // Upload modal form state
   const [uploadFile, setUploadFile] = useState(null);
@@ -415,18 +416,399 @@ export default function DocumentVaultPage({
     return result;
   }, [documents, selectedFolder, searchQuery, sortBy]);
 
-  // Compute folder counts
+  // Compute folder counts & detailed stats
   const folderCounts = useMemo(() => {
     const counts = { All: documents.length };
     folders.forEach(f => {
-      counts[f] = documents.filter(d => d.folder === f).length;
+      counts[f] = documents.filter(d => (d.folder || '').toLowerCase() === f.toLowerCase()).length;
     });
     return counts;
   }, [documents, folders]);
 
+  const folderStats = useMemo(() => {
+    const stats = {};
+    folders.forEach(f => {
+      const docsInFolder = documents.filter(d => (d.folder || '').toLowerCase() === f.toLowerCase());
+      const totalSize = docsInFolder.reduce((sum, d) => sum + (d.fileSize || 0), 0);
+      const sorted = [...docsInFolder].sort((a, b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0));
+      stats[f] = {
+        count: docsInFolder.length,
+        size: totalSize,
+        latestDate: sorted[0] ? (sorted[0].date || sorted[0].createdAt) : null,
+        documents: docsInFolder
+      };
+    });
+    return stats;
+  }, [documents, folders]);
+
+  const sortedFolders = useMemo(() => {
+    const list = [...folders];
+    list.sort((a, b) => {
+      const statA = folderStats[a] || { count: 0, size: 0, latestDate: 0 };
+      const statB = folderStats[b] || { count: 0, size: 0, latestDate: 0 };
+      if (sortBy === 'name') {
+        return a.localeCompare(b);
+      }
+      if (sortBy === 'size') {
+        return statB.size - statA.size;
+      }
+      if (sortBy === 'oldest') {
+        return new Date(statA.latestDate || 0) - new Date(statB.latestDate || 0);
+      }
+      return new Date(statB.latestDate || 0) - new Date(statA.latestDate || 0);
+    });
+    return list;
+  }, [folders, folderStats, sortBy]);
+
+  const unfiledDocuments = useMemo(() => {
+    const known = new Set(folders.map(f => f.toLowerCase()));
+    return filteredDocuments.filter(d => !d.folder || !known.has(d.folder.toLowerCase()));
+  }, [filteredDocuments, folders]);
+
   const totalBytes = useMemo(() => {
     return documents.reduce((sum, d) => sum + (d.fileSize || 0), 0);
   }, [documents]);
+
+  const renderDocumentCard = (doc) => {
+    const badge = getFileBadge(doc.fileType, doc.fileName);
+    const IconComp = badge.icon;
+
+    return (
+      <Card
+        key={doc.id}
+        className="p-4 flex flex-col justify-between hover:border-[#1B4B91]/50 hover:shadow-md transition-all group"
+      >
+        <div>
+          {/* Card Header: Badge & Quick Actions */}
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div className={`p-2.5 rounded-[10px] ${badge.bg} ${badge.color} shrink-0`}>
+              <IconComp className="w-5 h-5" />
+            </div>
+            <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                onClick={() => setPreviewDoc(doc)}
+                title="Preview document"
+                className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[#1B4B91] hover:bg-[var(--surface-subtle)] cursor-pointer"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDownload(doc)}
+                title="Download file"
+                className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[#1B4B91] hover:bg-[var(--surface-subtle)] cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingDoc(doc);
+                  setEditingIsNewFolder(false);
+                  setEditingNewFolderInput('');
+                }}
+                title="Edit details"
+                className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[#1B4B91] hover:bg-[var(--surface-subtle)] cursor-pointer"
+              >
+                <Edit3 className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmDoc(doc)}
+                title="Delete document"
+                className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-rose-500 hover:bg-[var(--surface-subtle)] cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Document Title & File Details */}
+          <h3
+            onClick={() => setPreviewDoc(doc)}
+            title={doc.name}
+            className="font-semibold text-[15px] text-[var(--ink)] line-clamp-1 cursor-pointer hover:text-[#1B4B91]"
+          >
+            {doc.name}
+          </h3>
+          <p className="text-[12px] text-[var(--muted)] line-clamp-1 mt-0.5" title={doc.fileName}>
+            {doc.fileName || 'Document file'}
+          </p>
+
+          {/* Notes snippet if present */}
+          {doc.notes && (
+            <p className="text-[12px] text-[var(--muted)] bg-[var(--surface-subtle)] p-2 rounded-[6px] mt-2.5 line-clamp-2">
+              {doc.notes}
+            </p>
+          )}
+        </div>
+
+        {/* Card Footer: Folder Tag & File Meta */}
+        <div className="pt-3 mt-3 border-t border-[var(--line)] flex items-center justify-between text-[11px] text-[var(--muted)]">
+          <span
+            className="inline-flex items-center gap-1.5 font-medium px-2 py-0.5 rounded-[6px] bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400 text-[11px] cursor-pointer hover:bg-amber-500/20 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedFolder(doc.folder);
+            }}
+            title={`View folder "${doc.folder}"`}
+          >
+            <Folder className="w-3.5 h-3.5 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-400" />
+            <span>{doc.folder}</span>
+          </span>
+          <div className="flex items-center gap-1.5">
+            <span>{formatFileSize(doc.fileSize)}</span>
+            <span>•</span>
+            <span>{doc.date ? new Date(doc.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
+          </div>
+        </div>
+      </Card>
+    );
+  };
+
+  const renderDocumentRow = (doc) => {
+    const badge = getFileBadge(doc.fileType, doc.fileName);
+    const IconComp = badge.icon;
+
+    return (
+      <div
+        key={doc.id}
+        className="p-3.5 flex items-center justify-between gap-4 hover:bg-[var(--surface-subtle)] transition-colors group"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`p-2 rounded-[8px] ${badge.bg} ${badge.color} shrink-0`}>
+            <IconComp className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span
+                onClick={() => setPreviewDoc(doc)}
+                className="font-semibold text-[14px] text-[var(--ink)] truncate cursor-pointer hover:text-[#1B4B91]"
+              >
+                {doc.name}
+              </span>
+              <span
+                className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-[6px] bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400 shrink-0 cursor-pointer hover:bg-amber-500/20 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedFolder(doc.folder);
+                }}
+                title={`View folder "${doc.folder}"`}
+              >
+                <Folder className="w-3.5 h-3.5 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-400" />
+                <span>{doc.folder}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-[12px] text-[var(--muted)] truncate mt-0.5">
+              <span>{doc.fileName}</span>
+              <span>•</span>
+              <span>{formatFileSize(doc.fileSize)}</span>
+              <span>•</span>
+              <span>Uploaded {doc.date ? new Date(doc.date).toLocaleDateString() : ''}</span>
+              {doc.notes && (
+                <>
+                  <span>•</span>
+                  <span className="italic truncate">{doc.notes}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* List Action Buttons */}
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPreviewDoc(doc)}
+            title="Preview document"
+          >
+            <Eye className="w-4 h-4" />
+            <span className="hidden md:inline">View</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleDownload(doc)}
+            title="Download file"
+          >
+            <Download className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setEditingDoc(doc);
+              setEditingIsNewFolder(false);
+              setEditingNewFolderInput('');
+            }}
+            title="Edit details"
+          >
+            <Edit3 className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDeleteConfirmDoc(doc)}
+            title="Delete document"
+            className="text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderFolderCard = (folderName) => {
+    const stat = folderStats[folderName] || { count: 0, size: 0, latestDate: null };
+
+    return (
+      <Card
+        key={`folder-card-${folderName}`}
+        onClick={() => setSelectedFolder(folderName)}
+        className="p-5 flex flex-col justify-between hover:border-amber-500/60 hover:shadow-lg transition-all cursor-pointer group bg-[var(--surface)] relative overflow-hidden"
+      >
+        <div className="flex items-start justify-between gap-3 mb-3">
+          {/* Large Amber Folder Icon */}
+          <div className="w-12 h-12 rounded-[12px] bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 group-hover:scale-105 group-hover:bg-amber-500/20 transition-all shadow-xs">
+            <Folder className="w-7 h-7 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-300" />
+          </div>
+
+          {/* Folder Quick Actions */}
+          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => {
+                setDocFolder(folderName);
+                setNewDocFolderInput('');
+                setUploadError('');
+                setIsUploadModalOpen(true);
+              }}
+              title={`Add document to ${folderName}`}
+              className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[#1B4B91] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            {stat.count === 0 && (
+              <button
+                type="button"
+                onClick={() => handleDeleteFolder(folderName)}
+                title={`Delete empty folder "${folderName}"`}
+                className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-rose-500 hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-[16px] text-[var(--ink)] group-hover:text-[#1B4B91] transition-colors truncate">
+            {folderName}
+          </h3>
+          <p className="text-[12px] text-[var(--muted)] mt-1 flex items-center gap-1.5">
+            <span>{stat.count} document{stat.count === 1 ? '' : 's'}</span>
+            {stat.size > 0 && (
+              <>
+                <span>•</span>
+                <span>{formatFileSize(stat.size)}</span>
+              </>
+            )}
+          </p>
+        </div>
+
+        <div className="pt-3 mt-3 border-t border-[var(--line)] flex items-center justify-between text-[11px] text-[var(--muted)]">
+          <span className="text-[#1B4B91] font-medium group-hover:underline flex items-center gap-1">
+            <span>Open folder</span>
+            <span className="text-[13px]">→</span>
+          </span>
+          {stat.latestDate && (
+            <span>{new Date(stat.latestDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          )}
+        </div>
+      </Card>
+    );
+  };
+
+  const renderFolderRow = (folderName) => {
+    const stat = folderStats[folderName] || { count: 0, size: 0, latestDate: null };
+
+    return (
+      <div
+        key={`folder-row-${folderName}`}
+        onClick={() => setSelectedFolder(folderName)}
+        className="p-4 flex items-center justify-between gap-4 hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer group"
+      >
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-10 h-10 rounded-[10px] bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 group-hover:scale-105 transition-all shrink-0 shadow-xs">
+            <Folder className="w-5 h-5 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-300" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-[15px] text-[var(--ink)] group-hover:text-[#1B4B91] transition-colors truncate">
+                {folderName}
+              </span>
+              <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-500/15 text-amber-700 dark:text-amber-300 shrink-0">
+                {stat.count} document{stat.count === 1 ? '' : 's'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-[12px] text-[var(--muted)] truncate mt-0.5">
+              <span>Folder</span>
+              {stat.size > 0 && (
+                <>
+                  <span>•</span>
+                  <span>{formatFileSize(stat.size)}</span>
+                </>
+              )}
+              {stat.latestDate && (
+                <>
+                  <span>•</span>
+                  <span>Updated {new Date(stat.latestDate).toLocaleDateString()}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setSelectedFolder(folderName)}
+          >
+            <span>Open</span>
+            <span className="text-[13px]">→</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setDocFolder(folderName);
+              setNewDocFolderInput('');
+              setUploadError('');
+              setIsUploadModalOpen(true);
+            }}
+            title={`Add document to ${folderName}`}
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
+          {stat.count === 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDeleteFolder(folderName)}
+              title={`Delete empty folder "${folderName}"`}
+              className="text-rose-500 hover:text-rose-600"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -561,74 +943,155 @@ export default function DocumentVaultPage({
         </div>
       </Card>
 
-      {/* Folders Navigation Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-        <button
-          type="button"
-          onClick={() => setSelectedFolder('All')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px] font-medium transition-all shrink-0 cursor-pointer border ${
-            selectedFolder === 'All'
-              ? 'bg-[#1B4B91] text-white border-[#1B4B91] shadow-xs'
-              : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)] hover:border-[var(--line-strong)] border-[var(--line)] shadow-xs'
-          }`}
-        >
-          <Folder className={`w-4 h-4 shrink-0 ${selectedFolder === 'All' ? 'text-white fill-white/30' : 'text-blue-500 fill-blue-500/30'}`} />
-          <span>All Documents</span>
-          <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-medium ${
-            selectedFolder === 'All' ? 'bg-white/20 text-white' : 'bg-[var(--line)] text-[var(--ink)]'
-          }`}>
-            {folderCounts.All || 0}
-          </span>
-        </button>
+      {/* Folder Selection Bar / Dropdown Menu */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          {/* Dropdown Menu for All Documents / Folders */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsFolderDropdownOpen(!isFolderDropdownOpen)}
+              className="flex items-center gap-2.5 px-3.5 py-2 rounded-[10px] text-[13px] font-medium border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:border-amber-500/40 shadow-xs cursor-pointer transition-all"
+            >
+              <Folder className={`w-4 h-4 shrink-0 ${selectedFolder === 'All' ? 'text-blue-500 fill-blue-500/30' : 'text-amber-500 fill-amber-400'}`} />
+              <span className="font-semibold">
+                {selectedFolder === 'All' ? 'All Documents' : selectedFolder}
+              </span>
+              <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                selectedFolder === 'All'
+                  ? 'bg-[#1B4B91]/15 text-[#1B4B91]'
+                  : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+              }`}>
+                {selectedFolder === 'All' ? (folderCounts.All || 0) : (folderCounts[selectedFolder] || 0)}
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 text-[var(--muted)] transition-transform ${isFolderDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
 
-        {folders.map(f => {
-          const isSelected = selectedFolder === f;
-          const count = folderCounts[f] || 0;
+            {isFolderDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => setIsFolderDropdownOpen(false)}
+                />
+                <Card className="absolute left-0 top-full mt-1.5 w-64 py-1.5 z-40 flex flex-col shadow-xl border border-[var(--line)]">
+                  <div className="px-3 py-1.5 border-b border-[var(--line)] flex items-center justify-between text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider">
+                    <span>Select Folder</span>
+                    <span>{folders.length} folder{folders.length === 1 ? '' : 's'}</span>
+                  </div>
 
-          return (
-            <div key={f} className="flex items-center group shrink-0">
-              <button
-                type="button"
-                onClick={() => setSelectedFolder(f)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px] font-medium transition-all cursor-pointer border ${
-                  isSelected
-                    ? 'bg-[#1B4B91] text-white border-[#1B4B91] shadow-xs'
-                    : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)] hover:border-amber-500/40 border-[var(--line)] shadow-xs'
-                }`}
-              >
-                <Folder className={`w-4 h-4 shrink-0 ${isSelected ? 'text-amber-300 fill-amber-300' : 'text-amber-500 fill-amber-400'}`} />
-                <span className="font-medium">{f}</span>
-                <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-medium ${
-                  isSelected ? 'bg-white/20 text-white' : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                }`}>
-                  {count}
-                </span>
-              </button>
+                  <div className="max-h-64 overflow-y-auto flex flex-col gap-0.5 px-1.5 py-1">
+                    {/* All Documents Option */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFolder('All');
+                        setIsFolderDropdownOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 rounded-[8px] text-[13px] font-medium flex items-center justify-between text-left cursor-pointer transition-colors ${
+                        selectedFolder === 'All'
+                          ? 'bg-[#1B4B91]/10 text-[#1B4B91]'
+                          : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {selectedFolder === 'All' ? (
+                          <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" />
+                        ) : (
+                          <Folder className="w-3.5 h-3.5 text-blue-500 fill-blue-500/30 shrink-0" />
+                        )}
+                        <span>All Documents</span>
+                      </div>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
+                        {folderCounts.All || 0}
+                      </span>
+                    </button>
 
-              {/* Delete empty folder button */}
-              {count === 0 && (
-                <button
-                  type="button"
-                  title={`Delete empty folder "${f}"`}
-                  onClick={() => handleDeleteFolder(f)}
-                  className="ml-1 p-1 text-[var(--muted)] hover:text-rose-500 rounded-full hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          );
-        })}
+                    {/* Each Folder Option */}
+                    {folders.map(f => {
+                      const isSelected = selectedFolder === f;
+                      const count = folderCounts[f] || 0;
+                      return (
+                        <div
+                          key={f}
+                          className={`w-full px-3 py-2 rounded-[8px] text-[13px] font-medium flex items-center justify-between text-left cursor-pointer transition-colors ${
+                            isSelected
+                              ? 'bg-[#1B4B91]/10 text-[#1B4B91]'
+                              : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                          }`}
+                          onClick={() => {
+                            setSelectedFolder(f);
+                            setIsFolderDropdownOpen(false);
+                          }}
+                        >
+                          <div className="flex items-center gap-2 truncate pr-2">
+                            {isSelected ? (
+                              <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" />
+                            ) : (
+                              <Folder className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
+                            )}
+                            <span className="truncate">{f}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
+                              {count}
+                            </span>
+                            {count === 0 && (
+                              <button
+                                type="button"
+                                title={`Delete empty folder "${f}"`}
+                                onClick={() => handleDeleteFolder(f)}
+                                className="p-0.5 text-[var(--muted)] hover:text-rose-500 rounded transition-colors"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-        {/* Create folder button in folder bar */}
-        <button
-          type="button"
+                  <div className="pt-1.5 mt-1 border-t border-[var(--line)] px-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-[#1B4B91]"
+                      onClick={() => {
+                        setIsFolderDropdownOpen(false);
+                        setIsNewFolderModalOpen(true);
+                      }}
+                    >
+                      <FolderPlus className="w-4 h-4 text-amber-500" />
+                      <span>Create new folder</span>
+                    </Button>
+                  </div>
+                </Card>
+              </>
+            )}
+          </div>
+
+          {/* Breadcrumb / Back button if inside a folder */}
+          {selectedFolder !== 'All' && (
+            <button
+              type="button"
+              onClick={() => setSelectedFolder('All')}
+              className="text-[13px] text-[#1B4B91] hover:underline flex items-center gap-1 font-medium cursor-pointer"
+            >
+              <span>← Back to All Documents</span>
+            </button>
+          )}
+        </div>
+
+        {/* Right side New Folder Button */}
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => setIsNewFolderModalOpen(true)}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px] font-medium transition-all shrink-0 cursor-pointer border border-dashed border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:border-amber-500 bg-[var(--surface)] shadow-xs"
+          className="text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
         >
-          <FolderPlus className="w-4 h-4 text-amber-500 fill-amber-500/20" />
-          <span>+ New folder</span>
-        </button>
+          <FolderPlus className="w-4 h-4 text-amber-500" />
+          <span>New folder</span>
+        </Button>
       </div>
 
       {/* Active Folder Header Banner */}
@@ -679,218 +1142,66 @@ export default function DocumentVaultPage({
       )}
 
       {/* Main Documents Content Canvas */}
-      {filteredDocuments.length === 0 ? (
-        <EmptyState
-          icon={Folder}
-          title={searchQuery ? 'No matching documents found' : selectedFolder !== 'All' ? `No documents in "${selectedFolder}"` : 'No documents in your vault'}
-          description={
-            searchQuery
-              ? `We couldn't find any documents matching "${searchQuery}". Try a different keyword.`
-              : selectedFolder !== 'All'
-              ? `This folder is currently empty. Click below to add documents into "${selectedFolder}".`
-              : 'Add receipts, tax filings, insurance policies, or legal deeds to keep them safe and organized.'
-          }
-          actionLabel={selectedFolder !== 'All' ? `Add document to ${selectedFolder}` : 'Upload document'}
-          onAction={handleOpenUploadModal}
-        />
-      ) : viewMode === 'grid' ? (
-        /* Grid View Layout */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredDocuments.map((doc) => {
-            const badge = getFileBadge(doc.fileType, doc.fileName);
-            const IconComp = badge.icon;
-
-            return (
-              <Card
-                key={doc.id}
-                className="p-4 flex flex-col justify-between hover:border-[#1B4B91]/50 hover:shadow-md transition-all group"
-              >
-                <div>
-                  {/* Card Header: Badge & Quick Actions */}
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className={`p-2.5 rounded-[10px] ${badge.bg} ${badge.color} shrink-0`}>
-                      <IconComp className="w-5 h-5" />
-                    </div>
-                    <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
-                      <button
-                        type="button"
-                        onClick={() => setPreviewDoc(doc)}
-                        title="Preview document"
-                        className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[#1B4B91] hover:bg-[var(--surface-subtle)] cursor-pointer"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDownload(doc)}
-                        title="Download file"
-                        className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[#1B4B91] hover:bg-[var(--surface-subtle)] cursor-pointer"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingDoc(doc);
-                          setEditingIsNewFolder(false);
-                          setEditingNewFolderInput('');
-                        }}
-                        title="Edit details"
-                        className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[#1B4B91] hover:bg-[var(--surface-subtle)] cursor-pointer"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirmDoc(doc)}
-                        title="Delete document"
-                        className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-rose-500 hover:bg-[var(--surface-subtle)] cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Document Title & File Details */}
-                  <h3
-                    onClick={() => setPreviewDoc(doc)}
-                    title={doc.name}
-                    className="font-semibold text-[15px] text-[var(--ink)] line-clamp-1 cursor-pointer hover:text-[#1B4B91]"
-                  >
-                    {doc.name}
-                  </h3>
-                  <p className="text-[12px] text-[var(--muted)] line-clamp-1 mt-0.5" title={doc.fileName}>
-                    {doc.fileName || 'Document file'}
-                  </p>
-
-                  {/* Notes snippet if present */}
-                  {doc.notes && (
-                    <p className="text-[12px] text-[var(--muted)] bg-[var(--surface-subtle)] p-2 rounded-[6px] mt-2.5 line-clamp-2">
-                      {doc.notes}
-                    </p>
-                  )}
-                </div>
-
-                {/* Card Footer: Folder Tag & File Meta */}
-                <div className="pt-3 mt-3 border-t border-[var(--line)] flex items-center justify-between text-[11px] text-[var(--muted)]">
-                  <span
-                    className="inline-flex items-center gap-1.5 font-medium px-2 py-0.5 rounded-[6px] bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400 text-[11px] cursor-pointer hover:bg-amber-500/20 transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedFolder(doc.folder);
-                    }}
-                    title={`View folder "${doc.folder}"`}
-                  >
-                    <Folder className="w-3.5 h-3.5 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-400" />
-                    <span>{doc.folder}</span>
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <span>{formatFileSize(doc.fileSize)}</span>
-                    <span>•</span>
-                    <span>{doc.date ? new Date(doc.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
-        /* List View Layout */
-        <Card className="divide-y divide-[var(--line)] overflow-hidden">
-          {filteredDocuments.map((doc) => {
-            const badge = getFileBadge(doc.fileType, doc.fileName);
-            const IconComp = badge.icon;
-
-            return (
-              <div
-                key={doc.id}
-                className="p-3.5 flex items-center justify-between gap-4 hover:bg-[var(--surface-subtle)] transition-colors group"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`p-2 rounded-[8px] ${badge.bg} ${badge.color} shrink-0`}>
-                    <IconComp className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span
-                        onClick={() => setPreviewDoc(doc)}
-                        className="font-semibold text-[14px] text-[var(--ink)] truncate cursor-pointer hover:text-[#1B4B91]"
-                      >
-                        {doc.name}
-                      </span>
-                      <span
-                        className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-[6px] bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400 shrink-0 cursor-pointer hover:bg-amber-500/20 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedFolder(doc.folder);
-                        }}
-                        title={`View folder "${doc.folder}"`}
-                      >
-                        <Folder className="w-3.5 h-3.5 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-400" />
-                        <span>{doc.folder}</span>
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-[12px] text-[var(--muted)] truncate mt-0.5">
-                      <span>{doc.fileName}</span>
-                      <span>•</span>
-                      <span>{formatFileSize(doc.fileSize)}</span>
-                      <span>•</span>
-                      <span>Uploaded {doc.date ? new Date(doc.date).toLocaleDateString() : ''}</span>
-                      {doc.notes && (
-                        <>
-                          <span>•</span>
-                          <span className="italic truncate">{doc.notes}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* List Action Buttons */}
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setPreviewDoc(doc)}
-                    title="Preview document"
-                  >
-                    <Eye className="w-4 h-4" />
-                    <span className="hidden md:inline">View</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDownload(doc)}
-                    title="Download file"
-                  >
-                    <Download className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setEditingDoc(doc);
-                      setEditingIsNewFolder(false);
-                      setEditingNewFolderInput('');
-                    }}
-                    title="Edit details"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDeleteConfirmDoc(doc)}
-                    title="Delete document"
-                    className="hover:text-rose-500"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
+      {selectedFolder === 'All' && !searchQuery.trim() ? (
+        /* Root / All Documents View: Grouped into Folders */
+        folders.length === 0 && documents.length === 0 ? (
+          <EmptyState
+            icon={Folder}
+            title="No documents in your vault"
+            description="Add receipts, tax filings, insurance policies, or legal deeds to keep them safe and organized."
+            actionLabel="Upload document"
+            onAction={handleOpenUploadModal}
+          />
+        ) : folders.length > 0 ? (
+          <div className="flex flex-col gap-6">
+            {/* Folders Grid / List */}
+            {viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {sortedFolders.map(renderFolderCard)}
+                {unfiledDocuments.map(renderDocumentCard)}
               </div>
-            );
-          })}
-        </Card>
+            ) : (
+              <Card className="divide-y divide-[var(--line)] overflow-hidden">
+                {sortedFolders.map(renderFolderRow)}
+                {unfiledDocuments.map(renderDocumentRow)}
+              </Card>
+            )}
+          </div>
+        ) : (
+          /* Folders empty, but documents exist without folders */
+          viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredDocuments.map(renderDocumentCard)}
+            </div>
+          ) : (
+            <Card className="divide-y divide-[var(--line)] overflow-hidden">
+              {filteredDocuments.map(renderDocumentRow)}
+            </Card>
+          )
+        )
+      ) : (
+        /* Specific Folder View OR Active Search View */
+        filteredDocuments.length === 0 ? (
+          <EmptyState
+            icon={Folder}
+            title={searchQuery ? 'No matching documents found' : `No documents in "${selectedFolder}"`}
+            description={
+              searchQuery
+                ? `We couldn't find any documents matching "${searchQuery}". Try a different keyword.`
+                : `This folder is currently empty. Click below to add documents into "${selectedFolder}".`
+            }
+            actionLabel={selectedFolder !== 'All' ? `Add document to ${selectedFolder}` : 'Upload document'}
+            onAction={handleOpenUploadModal}
+          />
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredDocuments.map(renderDocumentCard)}
+          </div>
+        ) : (
+          <Card className="divide-y divide-[var(--line)] overflow-hidden">
+            {filteredDocuments.map(renderDocumentRow)}
+          </Card>
+        )
       )}
 
       {/* Footer Storage Usage Metric */}
