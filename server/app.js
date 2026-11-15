@@ -4686,7 +4686,7 @@ const SERVER_LAUNCH_SHA = (() => {
 
 // Format commit messages into polished, developer-grade user-facing release notes
 function formatUserFacingReleaseNote(rawText) {
-  if (!rawText || typeof rawText !== 'string') return 'Performance improvements and bug fixes';
+  if (!rawText || typeof rawText !== 'string') return 'Minor fixes and improvements';
   let text = rawText.trim();
   text = text.replace(/^(?:feat|fix|perf|refactor|chore|style|test|build|ci|docs)(?:\([^)]+\))?:\s*/i, '');
   text = text

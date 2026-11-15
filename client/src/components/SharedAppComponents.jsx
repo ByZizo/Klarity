@@ -16,7 +16,7 @@ marked.setOptions({
   gfm: true
 });
 
-export const CURRENT_APP_VERSION = '3.12.56';
+export const CURRENT_APP_VERSION = '3.12.57';
 
 export const LATEST_RELEASE_NOTES = [
   {
@@ -99,7 +99,7 @@ export function formatVersionString(version) {
 }
 
 export function formatUserFacingReleaseNote(rawText) {
-  if (!rawText || typeof rawText !== 'string') return 'Performance improvements and bug fixes';
+  if (!rawText || typeof rawText !== 'string') return 'Minor fixes and improvements';
   let text = rawText.trim();
   text = text.replace(/^(?:feat|fix|perf|refactor|chore|style|test|build|ci|docs)(?:\([^)]+\))?:\s*/i, '');
   text = text
@@ -155,9 +155,14 @@ export function formatCleanUpdateMessage(_rawMsg, rawVer) {
   return `New update available (${verStr})`;
 }
 
+export function isActualBugFix(str) {
+  const s = String(str || '').toLowerCase();
+  return /\b(bug|bugfix|crash|crashes|crashed|crashing|error|errors|exception|exceptions|fail|fails|failed|failure|broken|unhandled|regression|freeze|freezing|not loading|cannot delete|unable to|prevent crash|glitch)\b/i.test(s);
+}
+
 export function isMovementOrMinorTweak(str) {
   const s = String(str || '').toLowerCase();
-  return /\b(move|moving|moved|reposition|repositioned|repositioning|reorder|reordered|reordering|swap|swapped|swapping|switch|switched|switching|places|left side|right side|layout|align|alignment|spacing|tweak|tweaks|minor|fix|fixes|fixed|glitch|bug|bugfix|polish|clean up|cleanup)\b/i.test(s);
+  return /\b(move|moving|moved|reposition|repositioned|repositioning|reorder|reordered|reordering|swap|swapped|swapping|switch|switched|switching|places|left side|right side|layout|align|alignment|spacing|padding|margin|tweak|tweaks|minor|polish|clean up|cleanup|refactor|cosmetic|styling|restyle|label|wording|subtle)\b/i.test(s);
 }
 
 export function formatWhatsNewHighlights(changes) {
@@ -175,15 +180,18 @@ export function formatWhatsNewHighlights(changes) {
   }
 
   const items = [];
-  let hasMinorOrMovement = false;
+  let hasActualBug = false;
+  let hasMinorFix = false;
 
   for (const raw of list) {
     if (typeof raw !== 'string') continue;
     const clean = raw.trim();
     if (!clean) continue;
 
-    if (isMovementOrMinorTweak(clean)) {
-      hasMinorOrMovement = true;
+    if (isActualBugFix(clean)) {
+      hasActualBug = true;
+    } else if (isMovementOrMinorTweak(clean)) {
+      hasMinorFix = true;
     } else {
       const formatted = formatUserFacingReleaseNote(clean);
       if (formatted && !items.some(existing => existing.toLowerCase() === formatted.toLowerCase())) {
@@ -192,8 +200,14 @@ export function formatWhatsNewHighlights(changes) {
     }
   }
 
-  if (hasMinorOrMovement && !items.some(i => i.toLowerCase() === 'bug fixes')) {
+  // Keep 'Bug fixes' strictly for things that were actually causing bugs
+  if (hasActualBug && !items.some(i => i.toLowerCase() === 'bug fixes')) {
     items.push('Bug fixes');
+  }
+
+  // Small changes that don't affect the app on a major scale are known as 'Minor fixes'
+  if (hasMinorFix && !items.some(i => i.toLowerCase() === 'minor fixes')) {
+    items.push('Minor fixes');
   }
 
   if (items.length > 0) {
@@ -204,7 +218,7 @@ export function formatWhatsNewHighlights(changes) {
     return LATEST_RELEASE_NOTES[0].highlights.slice(0, 4);
   }
 
-  return ['Performance improvements and bug fixes'];
+  return ['Minor fixes and improvements'];
 }
 
 // Universal Subpage Header: Centered title, leveled Back to Overview, and 3-dot dropdown actions menu

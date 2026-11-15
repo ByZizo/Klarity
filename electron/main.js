@@ -154,9 +154,14 @@ function formatUserFacingReleaseNote(rawText) {
   return text;
 }
 
+function isActualBugFix(str) {
+  const s = String(str || '').toLowerCase();
+  return /\b(bug|bugfix|crash|crashes|crashed|crashing|error|errors|exception|exceptions|fail|fails|failed|failure|broken|unhandled|regression|freeze|freezing|not loading|cannot delete|unable to|prevent crash|glitch)\b/i.test(s);
+}
+
 function isMovementOrMinorTweak(str) {
   const s = String(str || '').toLowerCase();
-  return /\b(move|moving|moved|reposition|repositioned|repositioning|reorder|reordered|reordering|swap|swapped|swapping|switch|switched|switching|places|left side|right side|layout|align|alignment|spacing|tweak|tweaks|minor|fix|fixes|fixed|glitch|bug|bugfix|polish|clean up|cleanup)\b/i.test(s);
+  return /\b(move|moving|moved|reposition|repositioned|repositioning|reorder|reordered|reordering|swap|swapped|swapping|switch|switched|switching|places|left side|right side|layout|align|alignment|spacing|padding|margin|tweak|tweaks|minor|polish|clean up|cleanup|refactor|cosmetic|styling|restyle|label|wording|subtle)\b/i.test(s);
 }
 
 function formatWhatsNewHighlights(changes) {
@@ -174,15 +179,18 @@ function formatWhatsNewHighlights(changes) {
   }
 
   const items = [];
-  let hasMinorOrMovement = false;
+  let hasActualBug = false;
+  let hasMinorFix = false;
 
   for (const raw of list) {
     if (typeof raw !== 'string') continue;
     const clean = raw.trim();
     if (!clean) continue;
 
-    if (isMovementOrMinorTweak(clean)) {
-      hasMinorOrMovement = true;
+    if (isActualBugFix(clean)) {
+      hasActualBug = true;
+    } else if (isMovementOrMinorTweak(clean)) {
+      hasMinorFix = true;
     } else {
       const formatted = formatUserFacingReleaseNote(clean);
       if (formatted && !items.some(existing => existing.toLowerCase() === formatted.toLowerCase())) {
@@ -191,15 +199,21 @@ function formatWhatsNewHighlights(changes) {
     }
   }
 
-  if (hasMinorOrMovement && !items.some(i => i.toLowerCase() === 'bug fixes')) {
+  // Keep 'Bug fixes' strictly for things that were actually causing bugs
+  if (hasActualBug && !items.some(i => i.toLowerCase() === 'bug fixes')) {
     items.push('Bug fixes');
+  }
+
+  // Small changes that don't affect the app on a major scale are known as 'Minor fixes'
+  if (hasMinorFix && !items.some(i => i.toLowerCase() === 'minor fixes')) {
+    items.push('Minor fixes');
   }
 
   if (items.length > 0) {
     return items.slice(0, 4);
   }
 
-  return ["Bug fixes"];
+  return ['Minor fixes'];
 }
 
 function saveWhatsNewData(changes, versionOrSha, explicitVersion) {
