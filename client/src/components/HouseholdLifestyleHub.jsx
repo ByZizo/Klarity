@@ -3773,12 +3773,9 @@ export default function HouseholdLifestyleHub({
           {/* ============================================================= */}
           {householdView === 'saved' && (
             <div className="flex flex-col gap-4">
-              {/* Header Bar: Clean title matching Health section (no cluttered button in the header) */}
+              {/* Header Bar */}
               <div className="px-1">
                 <h2 className="font-semibold text-xl text-[var(--ink)] tracking-tight">Household</h2>
-                <p className="text-[13px] text-[var(--muted)] mt-0.5">
-                  1 active property · Click card to expand or collapse details
-                </p>
               </div>
 
               {/* Restyled Household Card with Spacious Layout */}
@@ -5616,13 +5613,10 @@ export default function HouseholdLifestyleHub({
           {/* STATE 3: SAVED (Collapsible Multi-Vehicle Insurance List) */}
           {autoView === 'saved' && (
             <div className="flex flex-col gap-4">
-              {/* Header Bar with Count and Add Card button */}
+              {/* Header Bar with Add Card button */}
               <div className="flex items-center justify-between flex-wrap gap-3 px-1">
                 <div>
                   <h2 className="font-semibold text-lg text-slate-900 dark:text-white">Vehicles & Auto insurance</h2>
-                  <p className="text-[13px] text-slate-500 dark:text-slate-400">
-                    {metrics.fleet.vehicles.length === 1 ? '1 active vehicle & insurance card' : `${metrics.fleet.vehicles.length} active vehicles & insurance cards`} · Click any card to expand or minimize
-                  </p>
                 </div>
                 {isOverview ? (
                   <button
@@ -6416,13 +6410,10 @@ export default function HouseholdLifestyleHub({
           {/* STATE 3: SAVED (Collapsible Multi-Card Insurance List) */}
           {healthView === 'saved' && (
             <div className="flex flex-col gap-4">
-              {/* Header Bar with Count and Add Card button */}
+              {/* Header Bar with Add Card button */}
               <div className="flex items-center justify-between flex-wrap gap-3 px-1">
                 <div>
                   <h2 className="font-semibold text-lg text-slate-900 dark:text-white">Health insurance</h2>
-                  <p className="text-[13px] text-slate-500 dark:text-slate-400">
-                    {policies.length === 1 ? '1 active card' : `${policies.length} active cards`} · Click any card to expand or minimize
-                  </p>
                 </div>
                 {isOverview ? (
                   <button
