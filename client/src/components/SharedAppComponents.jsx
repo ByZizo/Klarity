@@ -16,7 +16,65 @@ marked.setOptions({
   gfm: true
 });
 
-export const CURRENT_APP_VERSION = '3.12.55';
+export const CURRENT_APP_VERSION = '3.12.56';
+
+export const LATEST_RELEASE_NOTES = [
+  {
+    version: 'v3.12.56',
+    title: 'What\'s New & Release Highlights Update',
+    highlights: [
+      'Updated Settings About page with live, real recent feature release notes',
+      'Document Vault folder cards grouping in All Documents view with live storage metrics',
+      'Quick folder switcher dropdown menu with custom folder creator',
+      'Compact icon-only Vault switcher (Passwords & Documents) with live count badges',
+      'Cleaned up Lifestyle & Household category tabs by removing redundant headings'
+    ]
+  },
+  {
+    version: 'v3.12.50',
+    title: 'Document Vault & Folder Management',
+    highlights: [
+      'Interactive folder creation dropdown with custom folder naming',
+      'Visual folder logos and per-folder upload shortcuts',
+      'Permanent document deletion confirmation dialog with warning prompt'
+    ]
+  },
+  {
+    version: 'v3.12.45',
+    title: 'Document Vault & Secure Records',
+    highlights: [
+      'Secure document holder inside Vault for PDFs, deeds, insurance, and records',
+      'Built-in document previewer and instant file download',
+      'Unified Passwords and Documents section toggle'
+    ]
+  },
+  {
+    version: 'v3.12.40',
+    title: 'Customizable New Tab Quick Notes',
+    highlights: [
+      'Freely draggable notes box with persistent positioning on homepage',
+      'New Tab settings controls for note box dimensions, font selection, and color themes',
+      'Left-docked layout preserving strictly centered search bar and Speed Dial'
+    ]
+  },
+  {
+    version: 'v3.12.35',
+    title: 'Built-in Web Browser & Media Shielding',
+    highlights: [
+      'Built-in YouTube ad blocking, SponsorBlock skipping, and DeArrow clean titles',
+      'Dedicated in-browser AI Assistant sidebar for instant page analysis and Q&A',
+      'Multi-tab management, customizable bookmark folders, and Speed Dial shortcuts'
+    ]
+  },
+  {
+    version: 'v3.12.23',
+    title: 'Navigation Groups & Accessibility',
+    highlights: [
+      'Labeled navigation groups (Overview, Money, Plan, Home and life, Vault, Advisor)',
+      'Mobile 5-tab quick bar and accessible form controls across all pages'
+    ]
+  }
+];
 
 export function isSemverNewer(remoteVer, currentVer = CURRENT_APP_VERSION) {
   if (!remoteVer || !currentVer) return false;
@@ -142,7 +200,11 @@ export function formatWhatsNewHighlights(changes) {
     return items.slice(0, 4);
   }
 
-  return ["Bug fixes"];
+  if (typeof LATEST_RELEASE_NOTES !== 'undefined' && LATEST_RELEASE_NOTES.length > 0) {
+    return LATEST_RELEASE_NOTES[0].highlights.slice(0, 4);
+  }
+
+  return ['Performance improvements and bug fixes'];
 }
 
 // Universal Subpage Header: Centered title, leveled Back to Overview, and 3-dot dropdown actions menu

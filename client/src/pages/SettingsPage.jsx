@@ -33,7 +33,13 @@ import {
   Bookmark
 } from 'lucide-react';
 import { Button, Card, Pill, ConfirmDialog } from '../components/ui';
-import { formatCleanUpdateMessage, formatWhatsNewHighlights } from '../components/SharedAppComponents';
+import {
+  formatCleanUpdateMessage,
+  formatWhatsNewHighlights,
+  formatVersionString,
+  CURRENT_APP_VERSION,
+  LATEST_RELEASE_NOTES
+} from '../components/SharedAppComponents';
 import { SEARCH_ENGINES, DEFAULT_BROWSER_SETTINGS, clearBrowserSessionState } from '../utils/browserSettings';
 import {
   hasMasterPinSet,
@@ -1866,7 +1872,7 @@ export function SettingsPage({
                       <div className="flex items-center gap-2.5">
                         <h4 className="font-serif text-[18px] font-semibold text-[var(--ink)]">Klarity Finance</h4>
                         <Pill variant="success">
-                          {formatVersionString ? formatVersionString(desktopAppInfo.version || '3.12.24') : 'v3.12.24'}
+                          {formatVersionString(desktopAppInfo.version || CURRENT_APP_VERSION)}
                         </Pill>
                       </div>
                       <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
@@ -1987,7 +1993,12 @@ export function SettingsPage({
                 {/* Concise 3-line What's New with link to full notes */}
                 <Card className="p-5 flex flex-col gap-3">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-[16px] font-semibold text-[var(--ink)]">What&apos;s new</h4>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-[16px] font-semibold text-[var(--ink)]">What&apos;s new</h4>
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#1B4B91]/10 text-[#1B4B91] border border-[#1B4B91]/20">
+                        {formatVersionString(desktopAppInfo.version || CURRENT_APP_VERSION)}
+                      </span>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setShowFullReleaseNotes((prev) => !prev)}
@@ -2008,16 +2019,20 @@ export function SettingsPage({
                   </ul>
 
                   {showFullReleaseNotes && (
-                    <div className="mt-3 pt-3 border-t border-[var(--line)] space-y-2 text-[13px] font-medium text-[var(--muted)]">
-                      <p>
-                        <span className="font-semibold text-[var(--ink)]">v3.12.23:</span> Added labeled navigation groups (Overview, Money, Plan, Home and life, Vault, Advisor), mobile 5-tab bar, and accessible form controls across all pages.
-                      </p>
-                      <p>
-                        <span className="font-semibold text-[var(--ink)]">v3.12.20:</span> Added Home Warranty provider category in Household and improved multi-card filtering across Transactions, Bills, Subscriptions, and Budgets.
-                      </p>
-                      <p>
-                        <span className="font-semibold text-[var(--ink)]">v3.12.15:</span> Added local GGUF AI advisor support and automatic PII redaction for web search queries.
-                      </p>
+                    <div className="mt-3 pt-3 border-t border-[var(--line)] space-y-3.5 text-[13px] font-medium text-[var(--muted)]">
+                      {LATEST_RELEASE_NOTES.map((note) => (
+                        <div key={note.version} className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-[var(--ink)]">{note.version}</span>
+                            <span className="text-[var(--ink)] font-medium">• {note.title}</span>
+                          </div>
+                          <ul className="list-disc list-inside space-y-0.5 pl-2 text-[var(--muted)] text-[12.5px]">
+                            {note.highlights.map((h, hi) => (
+                              <li key={hi}>{h}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </Card>
