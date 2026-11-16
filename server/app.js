@@ -4853,6 +4853,47 @@ app.get('/api/app/update-check', async (req, res) => {
   }
 });
 
+// Apply full-package update in standalone/web self-hosted environments in a single step
+app.post('/api/app/update-apply', async (req, res) => {
+  try {
+    const repoDir = path.join(__dirname, '..');
+    const localDataPath = path.join(repoDir, 'server', 'data.json');
+    let localDataBackup = null;
+    if (fs.existsSync(localDataPath)) {
+      try { localDataBackup = fs.readFileSync(localDataPath, 'utf8'); } catch {}
+    }
+
+    // Pull full latest package in a single step
+    try {
+      require('child_process').execSync('git fetch origin main --quiet', { cwd: repoDir, windowsHide: true, timeout: 25000 });
+    } catch {
+      try {
+        require('child_process').execSync('git fetch origin main --unshallow --quiet', { cwd: repoDir, windowsHide: true, timeout: 35000 });
+      } catch {}
+    }
+    require('child_process').execSync('git reset --hard origin/main', { cwd: repoDir, windowsHide: true });
+
+    if (localDataBackup) {
+      try { fs.writeFileSync(localDataPath, localDataBackup, 'utf8'); } catch {}
+    }
+
+    try {
+      require('child_process').execSync('npm --prefix client run build', { cwd: repoDir, windowsHide: true, timeout: 60000 });
+    } catch {
+      try {
+        require('child_process').execSync('npm --prefix client install --prefer-offline --no-audit', { cwd: repoDir, windowsHide: true, timeout: 60000 });
+        require('child_process').execSync('npm --prefix client run build', { cwd: repoDir, windowsHide: true, timeout: 60000 });
+      } catch (buildErr) {
+        return res.json({ ok: false, error: buildErr.message });
+      }
+    }
+
+    return res.json({ ok: true, message: 'Updated to latest full release' });
+  } catch (err) {
+    return res.json({ ok: false, error: err.message });
+  }
+});
+
 // Serve compiled frontend assets when running inside the Native Desktop App or local standalone server
 const clientDistPath = path.join(__dirname, '../client/dist');
 if (fs.existsSync(clientDistPath)) {

@@ -16,7 +16,7 @@ marked.setOptions({
   gfm: true
 });
 
-export const CURRENT_APP_VERSION = '3.12.58';
+export const CURRENT_APP_VERSION = '3.12.59';
 
 export const LATEST_RELEASE_NOTES = [
   {

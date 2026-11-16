@@ -878,8 +878,12 @@ ipcMain.handle('klarity:install-update-now', async () => {
       } catch {}
     }
 
-    // Pull latest code
-    await runShell('git fetch origin main --quiet', repoDir);
+    // Pull complete latest code in a single step (handles skipping multiple versions seamlessly)
+    try {
+      await runShell('git fetch origin main --quiet', repoDir);
+    } catch {
+      await runShell('git fetch origin main --unshallow --quiet', repoDir).catch(() => {});
+    }
     await runShell('git reset --hard origin/main', repoDir);
 
     // Restore user data if it existed so user data is permanently preserved across updates
@@ -889,11 +893,17 @@ ipcMain.handle('klarity:install-update-now', async () => {
       } catch {}
     }
 
-    // Rebuild client so frontend reflects new code
+    // Rebuild client so frontend reflects new code (install missing dependencies if multi-version jump added packages)
     try {
       await runShell('npm --prefix client run build', repoDir);
     } catch (bErr) {
-      console.warn('Frontend rebuild during update note:', bErr.message);
+      console.warn('Frontend rebuild during update note, attempting dependency install first:', bErr.message);
+      try {
+        await runShell('npm --prefix client install --prefer-offline --no-audit', repoDir);
+        await runShell('npm --prefix client run build', repoDir);
+      } catch (iErr) {
+        console.error('Frontend build after install failed:', iErr.message);
+      }
     }
 
     const newSha = await runShell('git rev-parse HEAD', repoDir).catch(() => 'latest');

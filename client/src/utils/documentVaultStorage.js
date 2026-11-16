@@ -51,16 +51,36 @@ export function formatFileSize(bytes) {
  */
 export function loadDocumentFolders() {
   try {
-    const version = localStorage.getItem('klarity_vault_doc_folders_v');
-    if (version !== '2') {
-      localStorage.setItem('klarity_vault_doc_folders_v', '2');
-      localStorage.removeItem(FOLDERS_KEY);
-      return [];
-    }
     const raw = localStorage.getItem(FOLDERS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? Array.from(new Set(parsed.filter(Boolean))) : [];
+    let folders = [];
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          folders = parsed.filter(Boolean);
+        }
+      } catch {}
+    }
+
+    // Cumulative check: also discover any custom folders present on existing documents in metadata
+    try {
+      const metaRaw = localStorage.getItem(META_KEY);
+      if (metaRaw) {
+        const metaDocs = JSON.parse(metaRaw);
+        if (Array.isArray(metaDocs)) {
+          metaDocs.forEach(d => {
+            if (d && typeof d.folder === 'string' && d.folder.trim()) {
+              folders.push(d.folder.trim());
+            }
+          });
+        }
+      }
+    } catch {}
+
+    const unique = Array.from(new Set(folders.filter(Boolean)));
+    localStorage.setItem('klarity_vault_doc_folders_v', '2');
+    localStorage.setItem(FOLDERS_KEY, JSON.stringify(unique));
+    return unique;
   } catch {
     return [];
   }

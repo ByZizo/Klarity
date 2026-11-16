@@ -96,6 +96,7 @@ import {
   reencryptLegacyStorage,
   sanitizeHtmlAgainstInjection
 } from './utils/securityCrypto';
+import { runCumulativeClientMigrations } from './utils/cumulativeMigrations';
 
 // ============================================================================
 // SECURITY: Global /api fetch interceptor with Bearer token & 401 auto-signout
@@ -506,6 +507,9 @@ function KlarityApp() {
         }
       } else {
         setNotificationToast('Updating Klarity and reloading...');
+        try {
+          await fetch('/api/app/update-apply', { method: 'POST' });
+        } catch {}
         setTimeout(() => window.location.reload(), 1500);
       }
     } catch (err) {
@@ -539,9 +543,9 @@ function KlarityApp() {
     }
   }, [desktopAppInfo.updateStatus?.state, desktopAppInfo.updateStatus?.commitSha, desktopAppInfo.updateStatus?.fullSha, desktopAppInfo.updateStatus?.latestVersion, updatePromptDismissed]);
 
-  // Run background storage encryption audit on mount so all sensitive localStorage keys use ENCv2
+  // Run background cumulative migrations on mount so older clients instantly catch up to current schema in one step
   useEffect(() => {
-    enforceStorageEncryptionAudit();
+    runCumulativeClientMigrations();
   }, []);
   // 1-Week Session Verification across Electron disk store and Backend
   useEffect(() => {

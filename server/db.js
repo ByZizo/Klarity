@@ -149,21 +149,130 @@ function decryptDisk(cipherText) {
   }
 }
 
+function ensureCumulativeDataSchema(data) {
+  if (!data || typeof data !== 'object') {
+    data = JSON.parse(JSON.stringify(initialSeedData));
+    return data;
+  }
+
+  // Ensure all top-level collections exist
+  if (!Array.isArray(data.users)) data.users = [];
+  if (!Array.isArray(data.sessions)) data.sessions = [];
+  if (!Array.isArray(data.accounts)) data.accounts = [];
+  if (!Array.isArray(data.bills)) data.bills = [];
+  if (!Array.isArray(data.subscriptions)) data.subscriptions = [];
+  if (!Array.isArray(data.transactions)) data.transactions = [];
+  if (!Array.isArray(data.budgets)) data.budgets = [];
+  if (!Array.isArray(data.savingsGoals)) data.savingsGoals = [];
+  if (!Array.isArray(data.manualAssets)) data.manualAssets = [];
+  if (!Array.isArray(data.retirementPlans)) data.retirementPlans = [];
+  if (!data.userSettings || typeof data.userSettings !== 'object') data.userSettings = {};
+  if (!Array.isArray(data.plaidItems)) data.plaidItems = [];
+  if (!data.householdProfiles || typeof data.householdProfiles !== 'object') data.householdProfiles = {};
+  if (!data.userVaults || typeof data.userVaults !== 'object') data.userVaults = {};
+
+  // Idempotently normalize users
+  data.users.forEach((u, idx) => {
+    if (!u.id) u.id = idx === 0 ? 'u-owner' : `u-user-${idx + 1}`;
+    if (!u.role) u.role = idx === 0 ? 'Primary Member' : 'Member';
+    if (u.avatar === undefined) u.avatar = '';
+    if (u.email) u.email = u.email.trim().toLowerCase();
+  });
+
+  // Idempotently normalize accounts
+  data.accounts.forEach(a => {
+    if (!a.id) a.id = `acc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    if (!a.name) a.name = 'Account';
+    if (!a.institution) a.institution = 'Unknown Bank';
+    if (!a.type) a.type = 'depository';
+    if (a.balance === undefined) a.balance = 0;
+    else a.balance = Number(a.balance) || 0;
+    if (a.limit === undefined) a.limit = Number(a.creditLimit || 0);
+    if (a.creditLimit === undefined) a.creditLimit = Number(a.limit || 0);
+    if (a.apr === undefined) a.apr = 0;
+    if (a.mask === undefined) a.mask = '0000';
+    if (a.isManual === undefined) a.isManual = true;
+  });
+
+  // Idempotently normalize bills
+  data.bills.forEach(b => {
+    if (!b.id) b.id = `bill-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    if (!b.biller) b.biller = b.name || 'Biller';
+    if (!b.name) b.name = b.biller || 'Bill';
+    if (b.expectedAmount === undefined) b.expectedAmount = 0;
+    else b.expectedAmount = Number(b.expectedAmount) || 0;
+    if (!b.frequency) b.frequency = 'monthly';
+    if (!b.status) b.status = 'upcoming';
+    if (b.autopay === undefined) b.autopay = false;
+    else b.autopay = Boolean(b.autopay);
+    if (!b.category) b.category = 'Utilities';
+  });
+
+  // Idempotently normalize subscriptions
+  data.subscriptions.forEach(s => {
+    if (!s.id) s.id = `sub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    if (!s.service) s.service = s.name || 'Subscription';
+    if (!s.name) s.name = s.service || 'Subscription';
+    if (s.amount === undefined) s.amount = 0;
+    else s.amount = Number(s.amount) || 0;
+    if (!s.billingCycle) s.billingCycle = 'monthly';
+    if (!s.status) s.status = 'active';
+    if (!s.category) s.category = 'Subscriptions';
+  });
+
+  // Idempotently normalize budgets
+  data.budgets.forEach(b => {
+    if (!b.id) b.id = `bgt-${b.category || Date.now()}`;
+    if (!b.category) b.category = 'General';
+    if (b.monthlyLimit === undefined) b.monthlyLimit = Number(b.limit || 0);
+    if (b.spent === undefined) b.spent = 0;
+  });
+
+  // Idempotently normalize household profiles
+  for (const uid of Object.keys(data.householdProfiles)) {
+    const prof = data.householdProfiles[uid];
+    if (prof && typeof prof === 'object') {
+      if (!Array.isArray(prof.properties)) prof.properties = [];
+      if (!Array.isArray(prof.vehicles)) prof.vehicles = [];
+      if (!Array.isArray(prof.healthProfiles)) prof.healthProfiles = [];
+      if (!prof.lifestyleData || typeof prof.lifestyleData !== 'object') prof.lifestyleData = {};
+    }
+  }
+
+  // Idempotently normalize user vaults
+  for (const uid of Object.keys(data.userVaults)) {
+    const v = data.userVaults[uid];
+    if (v && typeof v === 'object') {
+      if (!Array.isArray(v.credentials)) v.credentials = [];
+      if (!Array.isArray(v.sections)) v.sections = ['Favorites', 'General', 'Utilities', 'Finance', 'Personal'];
+      if (!Array.isArray(v.documents)) v.documents = [];
+      if (!Array.isArray(v.folders)) v.folders = [];
+    }
+  }
+
+  return data;
+}
+
 function readLocalData() {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const raw = fs.readFileSync(DATA_FILE, 'utf8').trim();
+      let parsed = null;
       if (raw.startsWith('DISK_ENC_V1:')) {
         const decryptedStr = decryptDisk(raw.slice('DISK_ENC_V1:'.length));
-        if (decryptedStr) return JSON.parse(decryptedStr);
+        if (decryptedStr) parsed = JSON.parse(decryptedStr);
+      } else if (raw) {
+        parsed = JSON.parse(raw);
       }
-      return JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        return ensureCumulativeDataSchema(parsed);
+      }
     }
   } catch (err) {
     if (err && err.message && err.message.startsWith('FATAL:')) throw err;
     console.error('Error reading local file:', err.message);
   }
-  return memoryData;
+  return ensureCumulativeDataSchema(memoryData);
 }
 
 function writeLocalData(data) {
@@ -875,7 +984,16 @@ const db = {
       data[table] = data[table].filter(item => !(item.id === id && (item.ownerId === userId || item.userId === userId)));
       writeLocalData(data);
     }
-  }
+  },
+
+  ensureCumulativeDataSchema
 };
+
+// Prime and ensure schema migration on initial module load
+try {
+  readLocalData();
+} catch (initErr) {
+  console.warn('Initial schema prime notice:', initErr.message);
+}
 
 module.exports = db;
