@@ -16,9 +16,18 @@ marked.setOptions({
   gfm: true
 });
 
-export const CURRENT_APP_VERSION = '3.12.57';
+export const CURRENT_APP_VERSION = '3.12.58';
 
 export const LATEST_RELEASE_NOTES = [
+  {
+    version: 'v3.12.58',
+    title: 'Budget Overview & Spending Bar Realignment',
+    highlights: [
+      'Fixed vertical and horizontal alignment of the Spent this month progress bar in Budgets',
+      'Balanced column dividers and symmetric padding across budget summary cards',
+      'Accurate release notes distinguishing minor fixes from bug fixes'
+    ]
+  },
   {
     version: 'v3.12.56',
     title: 'What\'s New & Release Highlights Update',

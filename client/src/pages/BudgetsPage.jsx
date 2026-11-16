@@ -207,8 +207,8 @@ export function BudgetsPage({
         </div>
 
         {/* Budget Summary Metrics Card */}
-        <Card className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4 divide-y sm:divide-y-0 sm:divide-x divide-[var(--line)]">
-          <div>
+        <Card className="p-5 grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[var(--line)] gap-4 sm:gap-0">
+          <div className="pb-3 sm:pb-0 sm:pr-6">
             <span className="text-[13px] text-[var(--muted)] font-medium">Spent in {activeBudget.category}</span>
             <p className="font-serif text-[24px] font-semibold text-[var(--ink)] mt-1">
               {fmtMoney(activeBudget.spent)}
@@ -218,7 +218,7 @@ export function BudgetsPage({
             </p>
           </div>
 
-          <div className="pt-3 sm:pt-0 sm:pl-6">
+          <div className="py-3 sm:py-0 sm:px-6">
             <span className="text-[13px] text-[var(--muted)] font-medium">Monthly limit</span>
             {editingBudgetId === activeBudget.id ? (
               <div className="flex items-center gap-1.5 mt-1.5">
@@ -509,26 +509,28 @@ export function BudgetsPage({
       </Card>
 
       {/* Summary Totals Bar */}
-      <Card className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4 divide-y sm:divide-y-0 sm:divide-x divide-[var(--line)]">
-        <div>
+      <Card className="p-5 grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[var(--line)] gap-4 sm:gap-0">
+        <div className="pb-3 sm:pb-0 sm:pr-6">
           <span className="text-[13px] text-[var(--muted)] font-medium">Total monthly budget</span>
           <p className="font-serif text-[24px] font-semibold text-[var(--ink)] mt-1">{fmtMoney(totalBudgetLimit, 0)}</p>
           <p className="text-[13px] font-medium text-[var(--muted)] mt-1">{computedBudgets.length} active categories</p>
         </div>
-        <div className="pt-3 sm:pt-0 sm:pl-6">
+        <div className="py-3 sm:py-0 sm:px-6">
           <span className="text-[13px] text-[var(--muted)] font-medium">Spent this month</span>
           <p className="font-serif text-[24px] font-semibold text-[var(--ink)] mt-1">{fmtMoney(totalBudgetSpent)}</p>
-          <div className="w-full h-2 bg-[var(--surface-subtle)] rounded-full overflow-hidden mt-2">
-            <div
-              className={`h-full rounded-full transition-all ${
-                totalBudgetSpent > totalBudgetLimit
-                  ? 'bg-[#B91C1C]'
-                  : totalBudgetSpent > totalBudgetLimit * 0.8
-                  ? 'bg-[#B45309]'
-                  : 'bg-[#1B4B91]'
-              }`}
-              style={{ width: `${Math.min(100, Math.round((totalBudgetSpent / (totalBudgetLimit || 1)) * 100))}%` }}
-            />
+          <div className="h-[20px] flex items-center mt-1">
+            <div className="w-full h-2 bg-[var(--surface-subtle)] rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  totalBudgetSpent > totalBudgetLimit
+                    ? 'bg-[#B91C1C]'
+                    : totalBudgetSpent > totalBudgetLimit * 0.8
+                    ? 'bg-[#B45309]'
+                    : 'bg-[#1B4B91]'
+                }`}
+                style={{ width: `${Math.min(100, Math.round((totalBudgetSpent / (totalBudgetLimit || 1)) * 100))}%` }}
+              />
+            </div>
           </div>
         </div>
         <div className="pt-3 sm:pt-0 sm:pl-6">
