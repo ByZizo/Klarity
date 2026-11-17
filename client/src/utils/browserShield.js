@@ -4,18 +4,67 @@ export function buildYouTubeAdShieldScript(enabled = true) {
   if (!enabled) return '';
   return `
 (function() {
-  if (window.__klarityAdShieldInjected) return;
+  if (window.__klarityAdShieldInjected) {
+    if (typeof window.__klarityCleanYouTubeAdSlots === 'function') {
+      window.__klarityCleanYouTubeAdSlots();
+    }
+    return;
+  }
   window.__klarityAdShieldInjected = true;
 
-  // 1. Inject CSS to hide all static banner ads, promoted overlays, and masthead slots
+  // 1. Inject comprehensive CSS to hide all ad elements AND collapse parent grid card containers
   const style = document.createElement('style');
   style.id = 'klarity-adblock-style';
   style.textContent = \`
+    /* 1. Collapse full homepage grid items containing ads so no white/empty card gaps are left */
+    ytd-rich-item-renderer:has(ytd-ad-slot-renderer),
+    ytd-rich-item-renderer:has(ytd-in-feed-ad-layout-renderer),
+    ytd-rich-item-renderer:has(.ytd-in-feed-ad-layout-renderer),
+    ytd-rich-item-renderer:has([id*="ad-badge"]),
+    ytd-rich-item-renderer:has(.badge-style-type-ad),
+    ytd-rich-item-renderer:has(ytd-badge-supported-renderer:has(.badge-style-type-ad)),
+    ytd-rich-item-renderer:has(ytd-promoted-sparkles-web-renderer),
+    ytd-rich-item-renderer:has(ytd-promoted-video-renderer),
+    ytd-rich-item-renderer:has(ytd-display-ad-renderer),
+    ytd-rich-item-renderer:has(#masthead-ad),
+    ytd-rich-item-renderer:has(ad-slot-renderer),
+    ytd-rich-item-renderer:has(yt-inline-ad-renderer),
+    ytd-rich-item-renderer:has([aria-label*="Sponsored" i]),
+    ytd-rich-item-renderer:has([aria-label*="Ad" i]),
+    ytd-rich-item-renderer:has(.ad-container),
+    ytd-rich-item-renderer:has(#sparkles-container),
+    ytd-rich-item-renderer:has(ytd-brand-video-singleton-renderer),
+    ytd-rich-item-renderer:has(ytd-shopping-companion-carousel-renderer),
+
+    /* 2. Collapse full homepage sections & masthead ad banners */
+    ytd-rich-section-renderer:has(ytd-statement-banner-renderer),
+    ytd-rich-section-renderer:has(ytd-banner-promo-renderer),
+    ytd-rich-section-renderer:has(#masthead-ad),
+    ytd-rich-section-renderer:has(ytd-ad-slot-renderer),
+    ytd-rich-section-renderer:has(ytd-in-feed-ad-layout-renderer),
+    ytd-rich-section-renderer:has(ytd-primetime-promo-renderer),
+    ytd-rich-section-renderer:has(.ytd-in-feed-ad-layout-renderer),
+    ytd-rich-section-renderer:has(#statement-banner),
+
+    /* 3. Collapse search results & watch page compact ad containers */
+    ytd-video-renderer:has(ytd-ad-slot-renderer),
+    ytd-video-renderer:has(ytd-in-feed-ad-layout-renderer),
+    ytd-video-renderer:has(.badge-style-type-ad),
+    ytd-compact-video-renderer:has(ytd-ad-slot-renderer),
+    ytd-compact-video-renderer:has(ytd-in-feed-ad-layout-renderer),
+    ytd-compact-video-renderer:has(.badge-style-type-ad),
+    ytd-compact-promoted-video-renderer,
+    ytd-search-pyv-renderer,
+    ytd-promoted-sparkles-text-search-renderer,
+
+    /* 4. Collapse individual ad components and overlays */
+    #masthead-ad,
+    ytd-masthead-ad-v3-renderer,
+    ytd-primetime-promo-renderer,
     ytd-promoted-sparkles-web-renderer,
     ytd-promoted-video-renderer,
     ytd-ad-slot-renderer,
     ytd-display-ad-renderer,
-    #masthead-ad,
     ytd-banner-promo-renderer,
     .ytp-ad-module,
     .ytp-ad-overlay-container,
@@ -24,8 +73,19 @@ export function buildYouTubeAdShieldScript(enabled = true) {
     ytd-player-legacy-desktop-watch-ads-renderer,
     #player-ads,
     tp-yt-paper-dialog:has(ytd-enforcement-message-view-model),
-    ytd-enforcement-message-view-model {
+    ytd-enforcement-message-view-model,
+    #panels ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"],
+    ytd-action-companion-ad-renderer,
+    .ytd-action-companion-ad-renderer,
+    ad-slot-renderer,
+    yt-inline-ad-renderer {
       display: none !important;
+      visibility: hidden !important;
+      height: 0 !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
     }
 
     /* Protect YouTube captions, subtitle tracks, and CC toggle */
@@ -40,11 +100,96 @@ export function buildYouTubeAdShieldScript(enabled = true) {
   \`;
   (document.head || document.documentElement).appendChild(style);
 
-  // 2. Real-time in-player video ad fast-forward & skip engine
+  // 2. Active DOM Scrubber: Remove empty orphaned ad boxes and collapse grid elements
+  function cleanYouTubeAdSlots() {
+    try {
+      // Direct ad elements: remove parent grid item or the element itself
+      const directAdElements = document.querySelectorAll(
+        'ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, .ytd-in-feed-ad-layout-renderer, ' +
+        'ytd-promoted-sparkles-web-renderer, ytd-promoted-video-renderer, ytd-display-ad-renderer, ' +
+        'ytd-banner-promo-renderer, ytd-statement-banner-renderer, #masthead-ad, ' +
+        'ytd-masthead-ad-v3-renderer, ytd-primetime-promo-renderer, ad-slot-renderer, ' +
+        'yt-inline-ad-renderer, [id*="ad-badge"], .badge-style-type-ad'
+      );
+
+      directAdElements.forEach((el) => {
+        const cardParent = el.closest('ytd-rich-item-renderer, ytd-rich-section-renderer, ytd-video-renderer, ytd-compact-video-renderer');
+        if (cardParent) {
+          cardParent.style.setProperty('display', 'none', 'important');
+          cardParent.remove();
+        } else {
+          el.style.setProperty('display', 'none', 'important');
+          el.remove();
+        }
+      });
+
+      // Scan all ytd-rich-item-renderer in the grid: remove any empty or orphaned card placeholders
+      const richItems = document.querySelectorAll('ytd-rich-item-renderer');
+      richItems.forEach((item) => {
+        const hasMedia = item.querySelector(
+          'ytd-rich-grid-media, #thumbnail, #video-title, ytd-reel-item-renderer, ytd-post-renderer, ytd-continuation-item-renderer, [is-placeholder], .skeleton-bg-color'
+        );
+        const hasAd = item.querySelector(
+          'ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, .ytd-in-feed-ad-layout-renderer, [id*="ad-badge"], .badge-style-type-ad, [aria-label*="Sponsored" i]'
+        );
+
+        if (hasAd) {
+          item.style.setProperty('display', 'none', 'important');
+          item.remove();
+          return;
+        }
+
+        if (!hasMedia) {
+          const content = item.querySelector('#content');
+          const text = item.textContent?.trim() || '';
+          if (!content || content.children.length === 0 || content.offsetHeight === 0 || text === '' || text.includes('Sponsored') || text === 'Ad') {
+            item.style.setProperty('display', 'none', 'important');
+            item.remove();
+          }
+        }
+      });
+
+      // Scan ytd-rich-section-renderer (masthead promo strips or ad banners between rows)
+      const richSections = document.querySelectorAll('ytd-rich-section-renderer');
+      richSections.forEach((section) => {
+        const hasValidContent = section.querySelector('ytd-rich-shelf-renderer, ytd-reel-shelf-renderer');
+        const hasAd = section.querySelector(
+          'ytd-statement-banner-renderer, ytd-banner-promo-renderer, #masthead-ad, ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, ytd-primetime-promo-renderer'
+        );
+        if (hasAd || !hasValidContent) {
+          section.style.setProperty('display', 'none', 'important');
+          section.remove();
+        }
+      });
+    } catch (e) {}
+  }
+  window.__klarityCleanYouTubeAdSlots = cleanYouTubeAdSlots;
+
+  // Run DOM cleaner immediately and observe for newly appended feed items
+  cleanYouTubeAdSlots();
+
+  try {
+    const observer = new MutationObserver(() => {
+      cleanYouTubeAdSlots();
+    });
+    observer.observe(document.body || document.documentElement, {
+      childList: true,
+      subtree: true
+    });
+  } catch (e) {}
+
+  // 3. Real-time in-player video ad fast-forward & skip engine
   let lastAdSkippedTime = 0;
+  let lastSlotCleanTime = 0;
 
   function processVideoAds() {
     try {
+      const now = Date.now();
+      if (now - lastSlotCleanTime > 350) {
+        lastSlotCleanTime = now;
+        cleanYouTubeAdSlots();
+      }
+
       const player = document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
       const video = document.querySelector('video');
 
