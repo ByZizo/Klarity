@@ -326,7 +326,14 @@ export function loadNewTabNotes() {
 
 export function saveNewTabNotes(notes) {
   try {
-    localStorage.setItem(NEWTAB_NOTES_KEY, String(notes || ''));
+    const val = String(notes || '');
+    const prev = localStorage.getItem(NEWTAB_NOTES_KEY) || '';
+    if (prev !== val) {
+      localStorage.setItem(NEWTAB_NOTES_KEY, val);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('klarity:notes-updated', { detail: { notes: val } }));
+      }
+    }
   } catch {}
 }
 

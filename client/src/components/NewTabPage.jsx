@@ -271,6 +271,17 @@ export function NewTabPage({ searchEngineId, onNavigate, onOpenNewTab }) {
   }, [notes]);
 
   useEffect(() => {
+    const handleSyncNotes = (e) => {
+      const incoming = e?.detail?.notes;
+      if (typeof incoming === 'string') {
+        setNotes((prev) => (prev !== incoming ? incoming : prev));
+      }
+    };
+    window.addEventListener('klarity:notes-updated', handleSyncNotes);
+    return () => window.removeEventListener('klarity:notes-updated', handleSyncNotes);
+  }, []);
+
+  useEffect(() => {
     if (!prefs.showClock) return undefined;
     const timer = setInterval(() => setNow(new Date()), 15000);
     return () => clearInterval(timer);

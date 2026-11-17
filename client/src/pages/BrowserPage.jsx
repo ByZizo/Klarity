@@ -25,7 +25,10 @@ import {
   Copy,
   RotateCcw,
   MessageSquare,
-  Bot
+  Bot,
+  StickyNote,
+  Link2,
+  Check
 } from 'lucide-react';
 import { Button, Card } from '../components/ui';
 import { NewTabPage } from '../components/NewTabPage';
@@ -43,7 +46,9 @@ import {
   isNewTabUrl,
   resolveBrowserDestination,
   loadBrowserSessionState,
-  saveBrowserSessionState
+  saveBrowserSessionState,
+  loadNewTabNotes,
+  saveNewTabNotes
 } from '../utils/browserSettings';
 
 function createTabObject(url, title = 'New Tab', extra = {}) {
@@ -176,6 +181,51 @@ export function BrowserPage({
   const [isBrowserAiLoading, setIsBrowserAiLoading] = useState(false);
   const browserAiMessagesEndRef = useRef(null);
   const browserAiInputRef = useRef(null);
+
+  // In-Browser Quick Notes Sidebar State (Accessible on any webpage, synced with New Tab notes)
+  const [isNotesSidebarOpen, setIsNotesSidebarOpen] = useState(false);
+  const [browserNotes, setBrowserNotes] = useState(() => loadNewTabNotes());
+  const [notesCopiedFeedback, setNotesCopiedFeedback] = useState(false);
+  const browserNotesRef = useRef(null);
+
+  useEffect(() => {
+    saveNewTabNotes(browserNotes);
+  }, [browserNotes]);
+
+  useEffect(() => {
+    const handleNotesSync = (e) => {
+      const incoming = e?.detail?.notes;
+      if (typeof incoming === 'string') {
+        setBrowserNotes((prev) => (prev !== incoming ? incoming : prev));
+      }
+    };
+    window.addEventListener('klarity:notes-updated', handleNotesSync);
+    return () => window.removeEventListener('klarity:notes-updated', handleNotesSync);
+  }, []);
+
+  const handleInsertCurrentPageLink = () => {
+    if (!activeTab?.url || isNewTabUrl(activeTab.url)) return;
+    const titlePart = activeTab.title && activeTab.title !== activeTab.url ? `${activeTab.title} — ` : '';
+    const linkLine = `${titlePart}${activeTab.url}`;
+    setBrowserNotes((prev) => {
+      const trimmed = String(prev || '').trimEnd();
+      return trimmed ? `${trimmed}\n${linkLine}\n` : `${linkLine}\n`;
+    });
+    setTimeout(() => {
+      if (browserNotesRef.current) {
+        browserNotesRef.current.focus();
+        browserNotesRef.current.scrollTop = browserNotesRef.current.scrollHeight;
+      }
+    }, 30);
+  };
+
+  const handleCopyBrowserNotes = async () => {
+    try {
+      await navigator.clipboard.writeText(browserNotes || '');
+      setNotesCopiedFeedback(true);
+      setTimeout(() => setNotesCopiedFeedback(false), 1800);
+    } catch {}
+  };
 
   // Add Bookmark / Folder Popover State
   const [isAddBookmarkOpen, setIsAddBookmarkOpen] = useState(false);
@@ -1553,6 +1603,31 @@ export function BrowserPage({
             )}
           </div>
 
+          {/* Quick Notes Sidebar Toggle Button (Available on any page) */}
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                const nextState = !isNotesSidebarOpen;
+                setIsNotesSidebarOpen(nextState);
+                if (nextState) {
+                  setIsBrowserAiSidebarOpen(false);
+                  setTimeout(() => browserNotesRef.current?.focus(), 50);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
+                isNotesSidebarOpen
+                  ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                  : 'bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)]'
+              }`}
+              title={isNotesSidebarOpen ? 'Close Quick Notes' : 'Open Quick Notes'}
+              aria-label="Quick Notes"
+            >
+              <StickyNote className={`w-3.5 h-3.5 ${isNotesSidebarOpen ? 'text-white' : 'text-amber-500'}`} />
+              <span className="hidden sm:inline">Notes</span>
+            </button>
+          </div>
+
           {/* In-Browser AI Copilot Sidebar Toggle Button */}
           <div className="relative shrink-0">
             <button
@@ -1560,8 +1635,11 @@ export function BrowserPage({
               onClick={() => {
                 const nextState = !isBrowserAiSidebarOpen;
                 setIsBrowserAiSidebarOpen(nextState);
-                if (nextState && activeTabId) {
-                  extractPageContentForTab(activeTabId);
+                if (nextState) {
+                  setIsNotesSidebarOpen(false);
+                  if (activeTabId) {
+                    extractPageContentForTab(activeTabId);
+                  }
                 }
               }}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
@@ -1910,6 +1988,79 @@ export function BrowserPage({
             </div>
           )}
         </div>
+
+        {/* Dedicated In-Browser Quick Notes Sidebar (Accessible on any browser page) */}
+        {isNotesSidebarOpen && (
+          <aside
+            aria-label="Browser Quick Notes"
+            className="w-80 sm:w-88 md:w-96 shrink-0 h-full bg-[var(--surface)] border-l border-[var(--line)] flex flex-col z-30 shadow-2xl transition-all"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--line)] bg-[var(--surface-subtle)]/40">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                  <StickyNote className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-[var(--ink)]">Quick Notes</div>
+                  <div className="text-[10px] text-[var(--muted)]">Synced & auto-saved across tabs</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNotesSidebarOpen(false)}
+                className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                title="Close Quick Notes"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Action Bar: Insert Current Page Link & Copy */}
+            <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-[var(--line)] bg-[var(--surface-subtle)]/20">
+              <button
+                type="button"
+                onClick={handleInsertCurrentPageLink}
+                disabled={!activeTab?.url || isNewTabUrl(activeTab.url)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--brand-soft)] text-[var(--brand)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity cursor-pointer"
+                title="Append current page title and URL into notes"
+              >
+                <Link2 className="w-3.5 h-3.5" />
+                <span>Insert Page Link</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyBrowserNotes}
+                disabled={!browserNotes}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                title="Copy all notes to clipboard"
+              >
+                {notesCopiedFeedback ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-emerald-600 dark:text-emerald-400">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Notes Editor */}
+            <div className="flex-1 p-3 flex flex-col min-h-0">
+              <textarea
+                ref={browserNotesRef}
+                value={browserNotes}
+                onChange={(e) => setBrowserNotes(e.target.value)}
+                placeholder="Jot down notes, paste links (Ctrl+V), or click 'Insert Page Link' above to save the current webpage..."
+                className="w-full h-full flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--surface-subtle)]/50 p-3 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/60 leading-relaxed"
+              />
+            </div>
+          </aside>
+        )}
 
         {/* Dedicated In-Browser AI Sidebar (Edge Copilot / Aria Style, fully contained in browser) */}
         {isBrowserAiSidebarOpen && (
