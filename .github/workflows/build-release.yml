@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
 
     steps:
@@ -23,7 +23,7 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install Root & Client Dependencies
+      - name: Install Dependencies
         run: |
           npm install
           cd client
@@ -39,3 +39,33 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx electron-builder --win --publish always
+
+  build-chromeos-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          npm install
+          cd client
+          npm install
+          cd ..
+
+      - name: Build Frontend
+        run: |
+          npm run build
+
+      - name: Build Chrome OS & Linux Packages (.deb, .AppImage) & Publish to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx electron-builder --linux deb AppImage --publish always

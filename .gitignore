@@ -36,3 +36,8 @@ client/dist/
 *.traineddata
 
 *.zip
+
+dist-linux/
+*.tar.gz
+*.deb
+*.AppImage

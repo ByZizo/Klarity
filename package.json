@@ -10,7 +10,9 @@
     "build": "npm --prefix client install && npm --prefix client run build",
     "desktop": "npm --prefix client run build && npx electron .",
     "start": "node server/index.js",
-    "dist": "npm run build && npx electron-builder --win"
+    "dist": "npm run build && npx electron-builder --win",
+    "dist:chromeos": "npm run build && npx electron-builder --linux deb",
+    "dist:linux": "npm run build && npx electron-builder --linux deb AppImage"
   },
   "build": {
     "appId": "com.klarity.finance",
@@ -38,6 +40,19 @@
       "target": [
         "dmg"
       ]
+    },
+    "linux": {
+      "target": [
+        "deb",
+        "AppImage"
+      ],
+      "maintainer": "Ziyad Elmahi <ziyadelmahi@gmail.com>",
+      "category": "Office",
+      "synopsis": "Klarity Personal & Family Finance Assistant",
+      "description": "A clean, private finance tracker with a built-in AI assistant to help you manage your money, cards, and bills on Chrome OS and Linux."
+    },
+    "deb": {
+      "priority": "optional"
     }
   },
   "workspaces": [
@@ -51,7 +66,10 @@
     "plaid",
     "gemini"
   ],
-  "author": "Ziyad Elmahi",
+  "author": {
+    "name": "Ziyad Elmahi",
+    "email": "ziyadelmahi@gmail.com"
+  },
   "license": "MIT",
   "dependencies": {
     "@google/genai": "^2.31.0",
