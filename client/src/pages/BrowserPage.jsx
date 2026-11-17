@@ -31,7 +31,8 @@ import {
   Check,
   PanelRight,
   Layers,
-  GripHorizontal
+  GripHorizontal,
+  Edit2
 } from 'lucide-react';
 import { Button, Card } from '../components/ui';
 import { NewTabPage } from '../components/NewTabPage';
@@ -185,8 +186,8 @@ export function BrowserPage({
   const browserAiMessagesEndRef = useRef(null);
   const browserAiInputRef = useRef(null);
 
-  // In-Browser Quick Notes State (Accessible on any webpage, synced with New Tab notes)
-  // Supports both Docked Sidebar Notes and Draggable Floating Notes
+  // In-Browser Notes State (Accessible on any webpage, auto-saving with custom sections)
+  // Supports both Docked Sidebar Notes and Smoothly Resizable Draggable Floating Notes
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [notesDisplayMode, setNotesDisplayMode] = useState(() => {
     try {
@@ -195,12 +196,44 @@ export function BrowserPage({
       return 'sidebar';
     }
   });
-  const [isNotesMenuOpen, setIsNotesMenuOpen] = useState(false);
-  const notesMenuRef = useRef(null);
-  const [browserNotes, setBrowserNotes] = useState(() => loadNewTabNotes());
+
+  // Persistent Note Sections
+  const [noteSections, setNoteSections] = useState(() => {
+    try {
+      const raw = localStorage.getItem('klarity_browser_note_sections');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+    const legacyNote = loadNewTabNotes() || '';
+    return [
+      { id: 'sec-general', title: 'General', content: legacyNote, updatedAt: Date.now() }
+    ];
+  });
+
+  const [activeSectionId, setActiveSectionId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_active_note_section');
+      if (saved) return saved;
+    } catch {}
+    return 'sec-general';
+  });
+
+  const [editingSectionId, setEditingSectionId] = useState(null);
+  const [sectionTitleDraft, setSectionTitleDraft] = useState('');
   const [notesCopiedFeedback, setNotesCopiedFeedback] = useState(false);
   const browserNotesRef = useRef(null);
   const floatingNotesRef = useRef(null);
+
+  // Active section safe resolution
+  const activeSection = noteSections.find((s) => s.id === activeSectionId) || noteSections[0] || {
+    id: 'sec-general',
+    title: 'General',
+    content: ''
+  };
 
   // Floating Notes drag position and state
   const [floatingNotesPos, setFloatingNotesPos] = useState(() => {
@@ -218,11 +251,101 @@ export function BrowserPage({
   const [isDraggingNotes, setIsDraggingNotes] = useState(false);
   const notesDragStartRef = useRef({ mouseX: 0, mouseY: 0, cardX: 0, cardY: 0, parentW: 0, parentH: 0, cardW: 0, cardH: 0 });
 
+  // Floating Notes size and resizing state
+  const [floatingNotesSize, setFloatingNotesSize] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_floating_notes_size');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed?.width === 'number' && typeof parsed?.height === 'number') {
+          return parsed;
+        }
+      }
+    } catch {}
+    return { width: 380, height: 460 };
+  });
+  const [isResizingNotes, setIsResizingNotes] = useState(false);
+  const notesResizeStartRef = useRef({ mouseX: 0, mouseY: 0, startW: 0, startH: 0 });
+
   useEffect(() => {
     try {
       localStorage.setItem('klarity_browser_notes_mode', notesDisplayMode);
     } catch {}
   }, [notesDisplayMode]);
+
+  // Reliable Auto-Save for Note Sections
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_browser_note_sections', JSON.stringify(noteSections));
+      localStorage.setItem('klarity_active_note_section', activeSectionId);
+      // Sync the primary note with New Tab page
+      saveNewTabNotes(activeSection.content);
+    } catch {}
+  }, [noteSections, activeSectionId, activeSection.content]);
+
+  // Live Cross-Tab / Cross-Window Sync
+  useEffect(() => {
+    const handleNotesSync = (e) => {
+      const incoming = e?.detail?.notes;
+      const targetSectionId = e?.detail?.sectionId;
+      if (typeof incoming === 'string') {
+        setNoteSections((prev) =>
+          prev.map((s) => {
+            if (targetSectionId ? s.id === targetSectionId : s.id === activeSectionId) {
+              return s.content !== incoming ? { ...s, content: incoming, updatedAt: Date.now() } : s;
+            }
+            return s;
+          })
+        );
+      }
+    };
+    window.addEventListener('klarity:notes-updated', handleNotesSync);
+    return () => window.removeEventListener('klarity:notes-updated', handleNotesSync);
+  }, [activeSectionId]);
+
+  // Handlers for Custom Note Sections
+  const handleUpdateActiveSectionContent = (newContent) => {
+    setNoteSections((prev) =>
+      prev.map((s) => (s.id === activeSection.id ? { ...s, content: newContent, updatedAt: Date.now() } : s))
+    );
+  };
+
+  const handleAddNoteSection = () => {
+    const newId = `sec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newTitle = `Note ${noteSections.length + 1}`;
+    const newSection = { id: newId, title: newTitle, content: '', updatedAt: Date.now() };
+    setNoteSections((prev) => [...prev, newSection]);
+    setActiveSectionId(newId);
+    setTimeout(() => {
+      browserNotesRef.current?.focus();
+    }, 50);
+  };
+
+  const handleDeleteNoteSection = (sectionId, e) => {
+    if (e) e.stopPropagation();
+    if (noteSections.length <= 1) return;
+    setNoteSections((prev) => {
+      const filtered = prev.filter((s) => s.id !== sectionId);
+      if (activeSectionId === sectionId) {
+        setActiveSectionId(filtered[0]?.id || 'sec-general');
+      }
+      return filtered;
+    });
+  };
+
+  const handleStartRenameSection = (section, e) => {
+    if (e) e.stopPropagation();
+    setEditingSectionId(section.id);
+    setSectionTitleDraft(section.title);
+  };
+
+  const handleSaveRenameSection = (sectionId) => {
+    const cleanTitle = sectionTitleDraft.trim() || 'Untitled';
+    setNoteSections((prev) =>
+      prev.map((s) => (s.id === sectionId ? { ...s, title: cleanTitle, updatedAt: Date.now() } : s))
+    );
+    setEditingSectionId(null);
+  };
 
   const handleFloatingDragStart = (e) => {
     if (e.button !== 0) return;
@@ -281,29 +404,55 @@ export function BrowserPage({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  useEffect(() => {
-    saveNewTabNotes(browserNotes);
-  }, [browserNotes]);
+  const handleFloatingResizeStart = (e) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
 
-  useEffect(() => {
-    const handleNotesSync = (e) => {
-      const incoming = e?.detail?.notes;
-      if (typeof incoming === 'string') {
-        setBrowserNotes((prev) => (prev !== incoming ? incoming : prev));
-      }
+    notesResizeStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startW: floatingNotesSize.width,
+      startH: floatingNotesSize.height
     };
-    window.addEventListener('klarity:notes-updated', handleNotesSync);
-    return () => window.removeEventListener('klarity:notes-updated', handleNotesSync);
-  }, []);
+    setIsResizingNotes(true);
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - notesResizeStartRef.current.mouseX;
+      const deltaY = moveEvent.clientY - notesResizeStartRef.current.mouseY;
+
+      const minW = 280;
+      const maxW = Math.max(380, (window.innerWidth || 1200) - floatingNotesPos.x - 20);
+      const minH = 240;
+      const maxH = Math.max(300, (window.innerHeight || 800) - floatingNotesPos.y - 20);
+
+      const nextW = Math.round(Math.min(maxW, Math.max(minW, notesResizeStartRef.current.startW + deltaX)));
+      const nextH = Math.round(Math.min(maxH, Math.max(minH, notesResizeStartRef.current.startH + deltaY)));
+
+      const nextSize = { width: nextW, height: nextH };
+      setFloatingNotesSize(nextSize);
+      try {
+        localStorage.setItem('klarity_floating_notes_size', JSON.stringify(nextSize));
+      } catch {}
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      setIsResizingNotes(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
 
   const handleInsertCurrentPageLink = () => {
     if (!activeTab?.url || isNewTabUrl(activeTab.url)) return;
     const titlePart = activeTab.title && activeTab.title !== activeTab.url ? `${activeTab.title} — ` : '';
     const linkLine = `${titlePart}${activeTab.url}`;
-    setBrowserNotes((prev) => {
-      const trimmed = String(prev || '').trimEnd();
-      return trimmed ? `${trimmed}\n${linkLine}\n` : `${linkLine}\n`;
-    });
+    const trimmed = String(activeSection.content || '').trimEnd();
+    const updated = trimmed ? `${trimmed}\n${linkLine}\n` : `${linkLine}\n`;
+    handleUpdateActiveSectionContent(updated);
     setTimeout(() => {
       if (browserNotesRef.current) {
         browserNotesRef.current.focus();
@@ -314,7 +463,7 @@ export function BrowserPage({
 
   const handleCopyBrowserNotes = async () => {
     try {
-      await navigator.clipboard.writeText(browserNotes || '');
+      await navigator.clipboard.writeText(activeSection.content || '');
       setNotesCopiedFeedback(true);
       setTimeout(() => setNotesCopiedFeedback(false), 1800);
     } catch {}
@@ -413,16 +562,12 @@ export function BrowserPage({
       if (groupEditorRef.current && !groupEditorRef.current.contains(e.target)) {
         setEditingGroupId(null);
       }
-      if (notesMenuRef.current && !notesMenuRef.current.contains(e.target)) {
-        setIsNotesMenuOpen(false);
-      }
     };
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         setTabContextMenu(null);
         setEditingGroupId(null);
         setIsAiPopoverOpen(false);
-        setIsNotesMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -1700,102 +1845,31 @@ export function BrowserPage({
             )}
           </div>
 
-          {/* Quick Notes Toggle & Mode Chooser (Available on any page) */}
-          <div className="relative shrink-0" ref={notesMenuRef}>
-            <div className="flex items-center rounded-xl border border-[var(--line)] overflow-hidden shadow-2xs bg-[var(--surface-subtle)]">
-              <button
-                type="button"
-                onClick={() => {
-                  if (isNotesOpen) {
-                    setIsNotesOpen(false);
-                    setIsNotesMenuOpen(false);
-                  } else {
-                    setIsNotesMenuOpen((prev) => !prev);
+          {/* Quick Notes Button (Clicking anywhere opens directly to last saved layout) */}
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                const nextState = !isNotesOpen;
+                setIsNotesOpen(nextState);
+                if (nextState) {
+                  if (notesDisplayMode === 'sidebar') {
+                    setIsBrowserAiSidebarOpen(false);
                   }
-                }}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
-                  isNotesOpen
-                    ? 'bg-amber-500 text-white'
-                    : 'hover:bg-[var(--surface-hover)] text-[var(--ink)]'
-                }`}
-                title={isNotesOpen ? 'Close Quick Notes' : 'Open Notes (Choose Sidebar or Floating)'}
-                aria-label="Quick Notes"
-              >
-                <StickyNote className={`w-3.5 h-3.5 ${isNotesOpen ? 'text-white' : 'text-amber-500'}`} />
-                <span className="hidden sm:inline">Notes</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsNotesMenuOpen((prev) => !prev)}
-                className={`px-1.5 py-1.5 transition-colors cursor-pointer border-l ${
-                  isNotesOpen
-                    ? 'border-amber-400/30 bg-amber-600 text-white hover:bg-amber-700'
-                    : 'border-[var(--line)] hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
-                title="Choose Notes view (Sidebar or Floating)"
-                aria-label="Notes view options"
-              >
-                <ChevronDown className="w-3 h-3" />
-              </button>
-            </div>
-
-            {/* Mode Chooser Dropdown */}
-            {isNotesMenuOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-60 p-1.5 bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-2xl z-50 flex flex-col gap-1">
-                <div className="px-2.5 pt-1.5 pb-1 text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wider">
-                  Open Notes As
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNotesDisplayMode('sidebar');
-                    setIsNotesOpen(true);
-                    setIsNotesMenuOpen(false);
-                    setIsBrowserAiSidebarOpen(false);
-                    setTimeout(() => browserNotesRef.current?.focus(), 50);
-                  }}
-                  className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors cursor-pointer ${
-                    isNotesOpen && notesDisplayMode === 'sidebar'
-                      ? 'bg-amber-500/15 text-amber-500 font-semibold'
-                      : 'hover:bg-[var(--surface-subtle)] text-[var(--ink)]'
-                  }`}
-                >
-                  <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
-                    <PanelRight className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold">Sidebar Notes</div>
-                    <div className="text-[10px] text-[var(--muted)] leading-tight">Docked to the right of page</div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNotesDisplayMode('floating');
-                    setIsNotesOpen(true);
-                    setIsNotesMenuOpen(false);
-                    setIsBrowserAiSidebarOpen(false);
-                    setTimeout(() => browserNotesRef.current?.focus(), 50);
-                  }}
-                  className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors cursor-pointer ${
-                    isNotesOpen && notesDisplayMode === 'floating'
-                      ? 'bg-amber-500/15 text-amber-500 font-semibold'
-                      : 'hover:bg-[var(--surface-subtle)] text-[var(--ink)]'
-                  }`}
-                >
-                  <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
-                    <Layers className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold">Floating Notes</div>
-                    <div className="text-[10px] text-[var(--muted)] leading-tight">Movable card anywhere on page</div>
-                  </div>
-                </button>
-              </div>
-            )}
+                  setTimeout(() => browserNotesRef.current?.focus(), 50);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
+                isNotesOpen
+                  ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                  : 'bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)]'
+              }`}
+              title={isNotesOpen ? 'Close Quick Notes' : 'Open Quick Notes'}
+              aria-label="Quick Notes"
+            >
+              <StickyNote className={`w-3.5 h-3.5 ${isNotesOpen ? 'text-white' : 'text-amber-500'}`} />
+              <span className="hidden sm:inline">Notes</span>
+            </button>
           </div>
 
           {/* In-Browser AI Copilot Sidebar Toggle Button */}
@@ -2160,7 +2234,7 @@ export function BrowserPage({
             </div>
           )}
 
-          {/* Draggable Floating Quick Notes Card (Over any webpage / New Tab) */}
+          {/* Draggable & Resizable Floating Quick Notes Window (Over any webpage / New Tab) */}
           {isNotesOpen && notesDisplayMode === 'floating' && (
             <aside
               ref={floatingNotesRef}
@@ -2168,22 +2242,24 @@ export function BrowserPage({
               style={{
                 left: `${floatingNotesPos.x}px`,
                 top: `${floatingNotesPos.y}px`,
-                width: '360px',
-                height: '440px'
+                width: `${floatingNotesSize.width}px`,
+                height: `${floatingNotesSize.height}px`,
+                minWidth: '280px',
+                minHeight: '240px'
               }}
               className={`absolute z-40 flex flex-col rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl overflow-hidden transition-shadow select-none ${
-                isDraggingNotes ? 'shadow-2xl ring-2 ring-amber-500/50' : 'hover:border-[var(--muted)]/40'
+                isDraggingNotes ? 'shadow-2xl ring-2 ring-amber-500/50' : isResizingNotes ? 'ring-2 ring-amber-500/50' : 'hover:border-[var(--muted)]/40'
               }`}
             >
               {/* Draggable Header & Action Bar */}
               <div
                 onMouseDown={handleFloatingDragStart}
-                className="flex items-center justify-between gap-1.5 px-3 py-2 border-b border-[var(--line)] bg-[var(--surface-subtle)]/70 cursor-grab active:cursor-grabbing select-none"
+                className="flex items-center justify-between gap-1.5 px-3 py-2 border-b border-[var(--line)] bg-[var(--surface-subtle)]/70 cursor-grab active:cursor-grabbing select-none shrink-0"
                 title="Click and drag to move notes anywhere"
               >
                 <div className="flex items-center gap-1.5">
                   <GripHorizontal className="w-4 h-4 text-[var(--muted)] hover:text-amber-500 transition-colors" />
-                  {/* Segmented Mode Selector */}
+                  {/* Icon-Only Mode Switcher (Sidebar vs Floating) */}
                   <div
                     className="flex items-center p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)]"
                     onMouseDown={(e) => e.stopPropagation()}
@@ -2191,20 +2267,28 @@ export function BrowserPage({
                     <button
                       type="button"
                       onClick={() => setNotesDisplayMode('sidebar')}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer transition-all"
+                      className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                        notesDisplayMode === 'sidebar'
+                          ? 'bg-amber-500 text-white shadow-2xs'
+                          : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
+                      }`}
                       title="Dock as sidebar"
+                      aria-label="Sidebar notes"
                     >
-                      <PanelRight className="w-3 h-3" />
-                      <span>Sidebar</span>
+                      <PanelRight className="w-3.5 h-3.5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => setNotesDisplayMode('floating')}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-500 text-white shadow-2xs cursor-pointer transition-all"
-                      title="Floating mode active"
+                      className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                        notesDisplayMode === 'floating'
+                          ? 'bg-amber-500 text-white shadow-2xs'
+                          : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
+                      }`}
+                      title="Floating window active"
+                      aria-label="Floating notes"
                     >
-                      <Layers className="w-3 h-3" />
-                      <span>Floating</span>
+                      <Layers className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -2218,14 +2302,14 @@ export function BrowserPage({
                     title="Insert current page link"
                   >
                     <Link2 className="w-3 h-3" />
-                    <span>Link</span>
+                    <span className="hidden sm:inline">Link</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleCopyBrowserNotes}
-                    disabled={!browserNotes}
+                    disabled={!activeSection?.content}
                     className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                    title="Copy notes to clipboard"
+                    title="Copy active section notes"
                   >
                     {notesCopiedFeedback ? (
                       <>
@@ -2243,29 +2327,141 @@ export function BrowserPage({
                     type="button"
                     onClick={() => setIsNotesOpen(false)}
                     className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer ml-0.5"
-                    title="Close Quick Notes"
+                    title="Close Notes"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
 
-              {/* Notes Editor */}
-              <div className="flex-1 p-2.5 flex flex-col min-h-0 bg-[var(--surface)] select-text">
+              {/* Sections / Categories Tab Bar */}
+              <div
+                className="flex items-center gap-1 px-2.5 py-1.5 border-b border-[var(--line)] bg-[var(--surface-subtle)]/40 overflow-x-auto no-scrollbar shrink-0 select-none"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                {noteSections.map((sec) => {
+                  const isActive = sec.id === activeSection.id;
+                  const isEditing = editingSectionId === sec.id;
+
+                  if (isEditing) {
+                    return (
+                      <form
+                        key={sec.id}
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleSaveRenameSection(sec.id);
+                        }}
+                        className="flex items-center gap-1 shrink-0"
+                      >
+                        <input
+                          type="text"
+                          value={sectionTitleDraft}
+                          onChange={(e) => setSectionTitleDraft(e.target.value)}
+                          onBlur={() => handleSaveRenameSection(sec.id)}
+                          autoFocus
+                          className="w-20 px-1.5 py-0.5 rounded text-xs bg-[var(--surface)] border border-amber-500 outline-none text-[var(--ink)] font-medium"
+                        />
+                        <button
+                          type="submit"
+                          className="p-0.5 rounded text-emerald-500 hover:bg-[var(--surface)] cursor-pointer"
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                      </form>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={sec.id}
+                      onClick={() => setActiveSectionId(sec.id)}
+                      onDoubleClick={(e) => handleStartRenameSection(sec, e)}
+                      className={`group/sec flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium transition-all cursor-pointer shrink-0 border ${
+                        isActive
+                          ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 font-semibold shadow-2xs'
+                          : 'bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] border-[var(--line)]'
+                      }`}
+                      title={`${sec.title} (Double-click to rename)`}
+                    >
+                      <span className="max-w-[90px] truncate">{sec.title}</span>
+                      {isActive && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleStartRenameSection(sec, e)}
+                          className="opacity-0 group-hover/sec:opacity-100 p-0.5 rounded hover:text-[var(--ink)] cursor-pointer transition-opacity"
+                          title="Rename section"
+                        >
+                          <Edit2 className="w-2.5 h-2.5" />
+                        </button>
+                      )}
+                      {noteSections.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteNoteSection(sec.id, e)}
+                          className="opacity-0 group-hover/sec:opacity-100 p-0.5 rounded hover:text-rose-500 cursor-pointer transition-opacity"
+                          title="Delete section"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={handleAddNoteSection}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] border border-dashed border-[var(--line)] hover:border-amber-500/50 transition-colors cursor-pointer shrink-0"
+                  title="Create new section"
+                >
+                  <Plus className="w-3 h-3 text-amber-500" />
+                  <span className="text-[11px]">New</span>
+                </button>
+              </div>
+
+              {/* Notes Textarea Editor */}
+              <div className="flex-1 p-2.5 flex flex-col min-h-0 bg-[var(--surface)] select-text relative">
                 <textarea
                   ref={browserNotesRef}
-                  value={browserNotes}
-                  onChange={(e) => setBrowserNotes(e.target.value)}
-                  placeholder="Jot down notes, paste links (Ctrl+V), or click 'Link' above to save the current webpage..."
+                  value={activeSection?.content || ''}
+                  onChange={(e) => handleUpdateActiveSectionContent(e.target.value)}
+                  placeholder={`Jot down notes in ${activeSection?.title || 'this section'}, paste links (Ctrl+V), or click 'Link' above to save the current webpage...`}
                   className="w-full h-full flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--surface-subtle)]/40 p-3 text-xs text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/60 leading-relaxed select-text"
                 />
+              </div>
+
+              {/* Status Bar with Auto-Save and Resize Corner */}
+              <div className="flex items-center justify-between px-3 py-1.5 border-t border-[var(--line)] bg-[var(--surface-subtle)]/50 text-[10px] text-[var(--muted)] select-none shrink-0 relative">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                  <span>Auto-saved</span>
+                </div>
+                <div className="flex items-center gap-3 pr-3">
+                  <span>{(activeSection?.content || '').length} chars</span>
+                </div>
+
+                {/* Corner Resize Handle */}
+                <div
+                  onMouseDown={handleFloatingResizeStart}
+                  className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize flex items-center justify-center text-[var(--muted)] hover:text-amber-500 transition-colors z-20 select-none group/resize"
+                  title="Click and drag to resize floating notes"
+                  aria-label="Resize notes"
+                >
+                  <svg viewBox="0 0 16 16" className="w-2.5 h-2.5 stroke-current fill-none stroke-2 opacity-60 group-hover/resize:opacity-100">
+                    <path d="M14 14H10M14 14V10M14 8L8 14M14 3L3 14" strokeLinecap="round" />
+                  </svg>
+                </div>
               </div>
             </aside>
           )}
 
-          {/* Full-screen drag overlay while dragging floating notes */}
-          {isDraggingNotes && (
-            <div className="fixed inset-0 z-[100] cursor-grabbing select-none" />
+          {/* Full-screen overlay while dragging or resizing floating notes */}
+          {(isDraggingNotes || isResizingNotes) && (
+            <div
+              className={`fixed inset-0 z-[100] select-none ${
+                isResizingNotes ? 'cursor-se-resize' : 'cursor-grabbing'
+              }`}
+            />
           )}
         </div>
 
@@ -2275,27 +2471,35 @@ export function BrowserPage({
             aria-label="Browser Quick Notes"
             className="w-80 sm:w-88 md:w-96 shrink-0 h-full bg-[var(--surface)] border-l border-[var(--line)] flex flex-col z-30 shadow-2xl transition-all"
           >
-            {/* Action Bar (Top of sidebar - redundant header removed per user request) */}
-            <div className="flex items-center justify-between gap-1.5 px-3 py-2 border-b border-[var(--line)] bg-[var(--surface-subtle)]/60">
-              {/* Segmented Mode Selector: Sidebar vs Floating */}
+            {/* Action Bar (Top of sidebar - Icon-Only Mode Switcher & Actions) */}
+            <div className="flex items-center justify-between gap-1.5 px-3 py-2 border-b border-[var(--line)] bg-[var(--surface-subtle)]/60 shrink-0 select-none">
+              {/* Icon-Only Mode Switcher: Sidebar vs Floating */}
               <div className="flex items-center p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)]">
                 <button
                   type="button"
                   onClick={() => setNotesDisplayMode('sidebar')}
-                  className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold bg-amber-500 text-white shadow-2xs cursor-pointer transition-all"
+                  className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                    notesDisplayMode === 'sidebar'
+                      ? 'bg-amber-500 text-white shadow-2xs'
+                      : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
+                  }`}
                   title="Sidebar mode active"
+                  aria-label="Sidebar notes"
                 >
-                  <PanelRight className="w-3 h-3" />
-                  <span>Sidebar</span>
+                  <PanelRight className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setNotesDisplayMode('floating')}
-                  className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer transition-all"
+                  className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                    notesDisplayMode === 'floating'
+                      ? 'bg-amber-500 text-white shadow-2xs'
+                      : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
+                  }`}
                   title="Switch to floating notes"
+                  aria-label="Floating notes"
                 >
-                  <Layers className="w-3 h-3" />
-                  <span>Floating</span>
+                  <Layers className="w-3.5 h-3.5" />
                 </button>
               </div>
 
@@ -2314,9 +2518,9 @@ export function BrowserPage({
                 <button
                   type="button"
                   onClick={handleCopyBrowserNotes}
-                  disabled={!browserNotes}
+                  disabled={!activeSection?.content}
                   className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                  title="Copy notes to clipboard"
+                  title="Copy active section notes"
                 >
                   {notesCopiedFeedback ? (
                     <>
@@ -2334,22 +2538,115 @@ export function BrowserPage({
                   type="button"
                   onClick={() => setIsNotesOpen(false)}
                   className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer ml-0.5"
-                  title="Close Quick Notes"
+                  title="Close Notes"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
 
-            {/* Notes Editor */}
+            {/* Sections / Categories Tab Bar */}
+            <div className="flex items-center gap-1 px-2.5 py-1.5 border-b border-[var(--line)] bg-[var(--surface-subtle)]/40 overflow-x-auto no-scrollbar shrink-0 select-none">
+              {noteSections.map((sec) => {
+                const isActive = sec.id === activeSection.id;
+                const isEditing = editingSectionId === sec.id;
+
+                if (isEditing) {
+                  return (
+                    <form
+                      key={sec.id}
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleSaveRenameSection(sec.id);
+                      }}
+                      className="flex items-center gap-1 shrink-0"
+                    >
+                      <input
+                        type="text"
+                        value={sectionTitleDraft}
+                        onChange={(e) => setSectionTitleDraft(e.target.value)}
+                        onBlur={() => handleSaveRenameSection(sec.id)}
+                        autoFocus
+                        className="w-20 px-1.5 py-0.5 rounded text-xs bg-[var(--surface)] border border-amber-500 outline-none text-[var(--ink)] font-medium"
+                      />
+                      <button
+                        type="submit"
+                        className="p-0.5 rounded text-emerald-500 hover:bg-[var(--surface)] cursor-pointer"
+                      >
+                        <Check className="w-3 h-3" />
+                      </button>
+                    </form>
+                  );
+                }
+
+                return (
+                  <div
+                    key={sec.id}
+                    onClick={() => setActiveSectionId(sec.id)}
+                    onDoubleClick={(e) => handleStartRenameSection(sec, e)}
+                    className={`group/sec flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium transition-all cursor-pointer shrink-0 border ${
+                      isActive
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 font-semibold shadow-2xs'
+                        : 'bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] border-[var(--line)]'
+                    }`}
+                    title={`${sec.title} (Double-click to rename)`}
+                  >
+                    <span className="max-w-[90px] truncate">{sec.title}</span>
+                    {isActive && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleStartRenameSection(sec, e)}
+                        className="opacity-0 group-hover/sec:opacity-100 p-0.5 rounded hover:text-[var(--ink)] cursor-pointer transition-opacity"
+                        title="Rename section"
+                      >
+                        <Edit2 className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                    {noteSections.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteNoteSection(sec.id, e)}
+                        className="opacity-0 group-hover/sec:opacity-100 p-0.5 rounded hover:text-rose-500 cursor-pointer transition-opacity"
+                        title="Delete section"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={handleAddNoteSection}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] border border-dashed border-[var(--line)] hover:border-amber-500/50 transition-colors cursor-pointer shrink-0"
+                title="Create new section"
+              >
+                <Plus className="w-3 h-3 text-amber-500" />
+                <span className="text-[11px]">New</span>
+              </button>
+            </div>
+
+            {/* Notes Textarea Editor */}
             <div className="flex-1 p-3 flex flex-col min-h-0 bg-[var(--surface)]">
               <textarea
                 ref={browserNotesRef}
-                value={browserNotes}
-                onChange={(e) => setBrowserNotes(e.target.value)}
-                placeholder="Jot down notes, paste links (Ctrl+V), or click 'Link' above to save the current webpage..."
+                value={activeSection?.content || ''}
+                onChange={(e) => handleUpdateActiveSectionContent(e.target.value)}
+                placeholder={`Jot down notes in ${activeSection?.title || 'this section'}, paste links (Ctrl+V), or click 'Link' above to save the current webpage...`}
                 className="w-full h-full flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--surface-subtle)]/50 p-3 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/60 leading-relaxed"
               />
+            </div>
+
+            {/* Status Bar with Auto-Save */}
+            <div className="flex items-center justify-between px-3 py-1.5 border-t border-[var(--line)] bg-[var(--surface-subtle)]/50 text-[10px] text-[var(--muted)] select-none shrink-0">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                <span>Auto-saved</span>
+              </div>
+              <div>
+                <span>{(activeSection?.content || '').length} chars</span>
+              </div>
             </div>
           </aside>
         )}
