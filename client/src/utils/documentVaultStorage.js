@@ -134,6 +134,11 @@ export async function getAllDocuments() {
 /**
  * Save or update a single document in IndexedDB
  */
+export function sanitizeDocumentFileName(name, fallback = 'document') {
+  const raw = String(name || fallback).replace(/\\/g, '/').split('/').pop() || fallback;
+  return raw.replace(/\.\.+/g, '.').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim() || fallback;
+}
+
 export async function saveDocument(document) {
   if (!document || !document.id) {
     throw new Error('Document must have a valid ID.');
@@ -141,6 +146,8 @@ export async function saveDocument(document) {
 
   const cleanDoc = {
     ...document,
+    fileName: document.fileName ? sanitizeDocumentFileName(document.fileName) : document.fileName,
+    folder: document.folder ? String(document.folder).replace(/[\\/]+|\.\.+/g, '').trim() : document.folder,
     updatedAt: new Date().toISOString()
   };
 

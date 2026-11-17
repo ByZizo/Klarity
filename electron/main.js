@@ -715,14 +715,20 @@ async function createDesktopWindow() {
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (
-      url.startsWith('http://127.0.0.1') ||
-      url.startsWith('http://localhost') ||
-      url.includes('plaid.com')
-    ) {
-      return { action: 'allow' };
-    }
-    shell.openExternal(url);
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        return { action: 'deny' };
+      }
+      const host = parsed.hostname.toLowerCase();
+      if (
+        (parsed.protocol === 'http:' && (host === '127.0.0.1' || host === 'localhost')) ||
+        (parsed.protocol === 'https:' && (host === 'plaid.com' || host.endsWith('.plaid.com')))
+      ) {
+        return { action: 'allow' };
+      }
+      shell.openExternal(parsed.toString());
+    } catch {}
     return { action: 'deny' };
   });
 
