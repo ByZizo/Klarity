@@ -22,9 +22,11 @@ import {
   Tag,
   ArrowUpDown,
   Check,
-  KeyRound
+  KeyRound,
+  PenTool
 } from 'lucide-react';
 import { Button, Card, EmptyState, ConfirmDialog, Pill } from './ui';
+import PdfEditorModal from './PdfEditorModal';
 import {
   getAllDocuments,
   saveDocument,
@@ -83,6 +85,35 @@ export default function DocumentVaultPage({
   const [editingNewFile, setEditingNewFile] = useState(null);
 
   const fileInputRef = useRef(null);
+  const pdfFileInputRef = useRef(null);
+  const [editingPdfDoc, setEditingPdfDoc] = useState(null);
+
+  const handleOpenPdfFromDisk = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setEditingPdfDoc({
+        id: `doc_${Date.now()}`,
+        name: file.name.replace(/\.[^/.]+$/, ''),
+        fileName: file.name,
+        fileType: file.type || 'application/pdf',
+        fileSize: file.size,
+        dataUrl: event.target.result,
+        folder: selectedFolder !== 'All' ? selectedFolder : 'Financial'
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleSavePdfToVault = async (editedDoc) => {
+    await saveDocument(editedDoc);
+    const updatedDocs = await getAllDocuments();
+    setDocuments(updatedDocs || []);
+    if (onDocumentsCountChange) onDocumentsCountChange(updatedDocs?.length || 0);
+    notify('Document successfully saved to Vault!');
+  };
 
   // Load documents on mount
   useEffect(() => {
@@ -493,6 +524,16 @@ export default function DocumentVaultPage({
               >
                 <Eye className="w-4 h-4" />
               </button>
+              {(doc.fileType?.includes('pdf') || doc.fileName?.toLowerCase().endsWith('.pdf')) && (
+                <button
+                  type="button"
+                  onClick={() => setEditingPdfDoc(doc)}
+                  title="Open in PDF Editor"
+                  className="p-1.5 rounded-[6px] text-[#1B4B91] hover:bg-[#1B4B91]/10 cursor-pointer"
+                >
+                  <PenTool className="w-4 h-4" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleDownload(doc)}
@@ -627,6 +668,18 @@ export default function DocumentVaultPage({
             <Eye className="w-4 h-4" />
             <span className="hidden md:inline">View</span>
           </Button>
+          {(doc.fileType?.includes('pdf') || doc.fileName?.toLowerCase().endsWith('.pdf')) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEditingPdfDoc(doc)}
+              title="Open in PDF Editor"
+              className="text-[#1B4B91] hover:bg-[#1B4B91]/10"
+            >
+              <PenTool className="w-4 h-4" />
+              <span className="hidden md:inline">Edit</span>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -930,6 +983,25 @@ export default function DocumentVaultPage({
               <List className="w-4 h-4" />
             </button>
           </div>
+
+          {/* PDF Editor File Picker & Button */}
+          <input
+            type="file"
+            ref={pdfFileInputRef}
+            accept="application/pdf"
+            className="hidden"
+            onChange={handleOpenPdfFromDisk}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => pdfFileInputRef.current?.click()}
+            title="Open any PDF in the built-in PDF Editor"
+            className="hidden sm:inline-flex items-center gap-1.5 border-[var(--line)] hover:border-[#1B4B91]/50 text-[var(--ink)]"
+          >
+            <PenTool className="w-4 h-4 text-[#1B4B91]" />
+            <span>PDF Editor</span>
+          </Button>
 
           {/* Upload Document Primary Button (Anchored Prominently on the Far Right) */}
           <Button
@@ -1415,6 +1487,22 @@ export default function DocumentVaultPage({
               </div>
 
               <div className="flex items-center gap-2">
+                {(previewDoc.fileType?.includes('pdf') || previewDoc.fileName?.toLowerCase().endsWith('.pdf')) && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      const doc = previewDoc;
+                      setPreviewDoc(null);
+                      setEditingPdfDoc(doc);
+                    }}
+                    title="Open and annotate in Klarity PDF Editor"
+                    className="bg-[#1B4B91] hover:bg-[#2563eb]"
+                  >
+                    <PenTool className="w-4 h-4" />
+                    <span>Edit PDF</span>
+                  </Button>
+                )}
                 <Button
                   variant="secondary"
                   size="sm"
@@ -1725,6 +1813,17 @@ export default function DocumentVaultPage({
         onConfirm={handleDeleteDocument}
         onCancel={() => setDeleteConfirmDoc(null)}
       />
+
+      {/* Full-featured PDF Editor Modal */}
+      {editingPdfDoc && (
+        <PdfEditorModal
+          isOpen={Boolean(editingPdfDoc)}
+          onClose={() => setEditingPdfDoc(null)}
+          initialDocument={editingPdfDoc}
+          onSaveToVault={handleSavePdfToVault}
+          onShowToast={notify}
+        />
+      )}
     </div>
   );
 }
