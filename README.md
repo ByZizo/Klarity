@@ -2,8 +2,8 @@
 
 A clean, private finance tracker with a built-in AI assistant to help you stay on top of your money, cards, and bills.
 
-[![Download for Windows](https://img.shields.io/badge/Download-Windows%20(.exe)-18457c?logo=windows&style=for-the-badge)](https://github.com/ByZizo/Krystal/releases)
-[![Download for Chrome OS & Linux](https://img.shields.io/badge/Download-Chrome%20OS%20%2F%20Linux%20(.deb)-22c55e?logo=linux&style=for-the-badge)](https://github.com/ByZizo/Krystal/releases)
+[![Download for Windows](https://img.shields.io/badge/Download-Windows%20(.exe)-18457c?logo=windows&style=for-the-badge)](https://github.com/ByZizo/Krystal/releases/latest)
+[![Download for Chrome OS & Linux](https://img.shields.io/badge/Download-Chrome%20OS%20%2F%20Linux%20(.deb)-22c55e?logo=linux&style=for-the-badge)](https://github.com/ByZizo/Krystal/releases/latest)
 
 ---
 
@@ -11,21 +11,23 @@ A clean, private finance tracker with a built-in AI assistant to help you stay o
 
 No coding or terminal needed. When downloaded, the app installs onto your computer as **Krystal**.
 
+> **Note:** Always click the **`.exe`** (Windows), **`.deb`** (Chrome OS / Ubuntu), or **`.AppImage`** (Linux) download links on the release page. `.blockmap` and `.yml` files are only used internally for automatic updates.
+
 ### 🪟 Windows (.exe)
-1. Go to the **[Releases Page](https://github.com/ByZizo/Krystal/releases)**.
-2. Download **`Krystal-Setup.exe`** (or the standalone `Krystal.exe`).
+1. Go to the **[Latest Release Download Page](https://github.com/ByZizo/Krystal/releases/latest)**.
+2. Download **`Krystal-Setup-3.12.59.exe`** (or **`Krystal-Portable-3.12.59.exe`** for no installation).
 3. Double-click the file to install and launch **Krystal**. An icon will automatically be placed on your desktop and Start menu.
 
 ### 💻 Chrome OS / Chromebook (.deb)
 1. Ensure the **Linux development environment** is turned on in your Chromebook Settings (`Settings` → `Developers` → `Linux development environment` → `Turn on`).
-2. Go to the **[Releases Page](https://github.com/ByZizo/Krystal/releases)**.
-3. Download **`krystal_*_amd64.deb`**.
+2. Go to the **[Latest Release Download Page](https://github.com/ByZizo/Krystal/releases/latest)**.
+3. Download **`krystal_3.12.59_amd64.deb`**.
 4. Open the Files app on your Chromebook, right-click the `.deb` file, and select **"Install with Linux"**.
 5. Once complete, launch **Krystal** directly from your Chromebook App Launcher.
 
 ### 🐧 Linux (.deb or .AppImage)
-- **Debian / Ubuntu / Mint**: Download `krystal_*_amd64.deb` and run `sudo dpkg -i krystal_*_amd64.deb`.
-- **AppImage**: Download `krystal-*.AppImage`, make it executable (`chmod +x krystal-*.AppImage`), and double-click to run.
+- **Debian / Ubuntu / Mint**: Download `krystal_3.12.59_amd64.deb` and run `sudo dpkg -i krystal_3.12.59_amd64.deb`.
+- **AppImage**: Download `Krystal-3.12.59-x86_64.AppImage`, make it executable (`chmod +x Krystal-3.12.59-x86_64.AppImage`), and double-click to run.
 
 ---
 

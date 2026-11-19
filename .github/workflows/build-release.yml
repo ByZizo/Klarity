@@ -20,25 +20,44 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install Dependencies
-        run: |
-          npm install
-          cd client
-          npm install
-          cd ..
+        run: npm install
 
       - name: Build Frontend
-        run: |
-          npm run build
+        run: npm run build --workspace=client
 
-      - name: Build Windows Installer (.exe) & Publish to GitHub Releases
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Windows Installers & Auto-Update Files (.exe, .blockmap, latest.yml)
+        run: npx electron-builder --win --publish never
+
+      - name: Verify Windows Build Artifacts
+        shell: pwsh
         run: |
-          npx electron-builder --win --publish always
+          Get-ChildItem dist
+          $required = @(
+            (Get-ChildItem dist -Filter "Krystal-Setup-*.exe" | Select-Object -First 1),
+            (Get-ChildItem dist -Filter "Krystal-Portable-*.exe" | Select-Object -First 1),
+            (Get-ChildItem dist -Filter "*.blockmap" | Select-Object -First 1),
+            (Get-ChildItem dist -Filter "latest.yml" | Select-Object -First 1)
+          )
+          if ($required -contains $null) {
+            Write-Error "Missing one or more required Windows release artifacts in dist/"
+            exit 1
+          }
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-assets
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest.yml
 
   build-chromeos-linux:
     runs-on: ubuntu-latest
@@ -50,22 +69,83 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install Dependencies
-        run: |
-          npm install
-          cd client
-          npm install
-          cd ..
+        run: npm install
 
       - name: Build Frontend
-        run: |
-          npm run build
+        run: npm run build --workspace=client
 
-      - name: Build Chrome OS & Linux Packages (.deb, .AppImage) & Publish to GitHub Releases
+      - name: Build Chrome OS & Linux Packages (.deb, .AppImage)
+        run: npx electron-builder --linux deb AppImage --publish never
+
+      - name: Verify Chrome OS & Linux Build Artifacts
+        run: |
+          ls -la dist/
+          ls dist/*.deb >/dev/null 2>&1 || { echo "Missing .deb package"; exit 1; }
+          ls dist/*.AppImage >/dev/null 2>&1 || { echo "Missing .AppImage package"; exit 1; }
+
+      - name: Upload Chrome OS & Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release-assets
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            dist/*.deb
+            dist/*.AppImage
+            dist/latest-linux.yml
+
+  publish-release:
+    needs: [build-windows, build-chromeos-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download Built Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate Download Page & Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npx electron-builder --linux deb AppImage --publish always
+          ls -lh release-assets/
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v${VERSION}"
+          fi
+
+          node scripts/generate-release-notes.mjs \
+            --tag "$TAG" \
+            --dir release-assets \
+            --repo "$GITHUB_REPOSITORY" \
+            --out RELEASE_NOTES.md
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-assets/* --clobber
+            gh release edit "$TAG" \
+              --title "Krystal v${VERSION}" \
+              --notes-file RELEASE_NOTES.md \
+              --draft=false \
+              --latest
+          else
+            gh release create "$TAG" release-assets/* \
+              --title "Krystal v${VERSION}" \
+              --notes-file RELEASE_NOTES.md \
+              --latest
+          fi
