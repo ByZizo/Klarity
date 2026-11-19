@@ -32,7 +32,7 @@ It also includes a built-in AI financial advisor that analyzes your real numbers
 - **Debt Payoff Engine** — Compare payoff methods like Avalanche vs. Snowball with clear timelines, interest savings, and payoff dates.
 - **AI Financial Assistant** — Ask questions about your money, get debt payoff recommendations, or analyze your spending. Works with Google Gemini, OpenAI, or Claude.
 - **Password & Account Vault** — A secure, client-side encrypted vault to keep financial logins, account numbers, and notes safe.
-- **100% Private & Bank-Grade Security** — Your financial data is encrypted locally using the standard browser **Web Crypto API (AES-256-GCM)**. Encryption keys and master PINs are derived with **PBKDF2 (SHA-256, 600,000 iterations)** with cryptographically random salts (`crypto.getRandomValues`). You own your data.
+- **100% Local & Private** — Everything runs and stays 100% local on your own device, with no external servers tracking your accounts. Your data never leaves your computer, so your finances stay completely private and in your hands.
 
 ---
 
