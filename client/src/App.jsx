@@ -4008,7 +4008,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
       if (!replyText) {
         if (json.actionsExecuted && json.actionsExecuted.length > 0) {
-          replyText = `Done! I updated ${json.actionsExecuted.length} item${json.actionsExecuted.length === 1 ? '' : 's'} in your Klarity account.`;
+          replyText = `Done! I updated ${json.actionsExecuted.length} item${json.actionsExecuted.length === 1 ? '' : 's'} in your Krystal account.`;
         } else {
           replyText = buildPersonalizedAdvisorBriefing().fullBriefingMd;
         }
@@ -4031,7 +4031,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         browserTargetUrl &&
         !/in-app browser|copy the link|open.*browser/i.test(replyText)
       ) {
-        replyText = `${replyText}\n\nWould you like to open this in Klarity's in-app browser or copy the link?`;
+        replyText = `${replyText}\n\nWould you like to open this in Krystal's in-app browser or copy the link?`;
       }
 
       // Build context-aware interactive Action Buttons for the assistant bubble
@@ -4095,7 +4095,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)] flex flex-col items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <KlarityLogo className="w-12 h-12 text-[#1B4B91]" />
-          <span className="font-serif text-[24px] font-semibold tracking-tight text-[var(--ink)]">Klarity</span>
+          <span className="font-serif text-[24px] font-semibold tracking-tight text-[var(--ink)]">Krystal</span>
         </div>
       </div>
     );
@@ -4108,7 +4108,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         <header className="border-b border-[var(--line)] bg-[var(--surface)] px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <KlarityLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
-            <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">Klarity</span>
+            <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">Krystal</span>
           </div>
         </header>
 
@@ -4119,7 +4119,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 <KlarityLogo className="w-7 h-7 text-[#1B4B91]" />
               </div>
               <h1 className="font-serif text-[26px] font-semibold tracking-tight text-[var(--ink)]">
-                Sign in to Klarity
+                Sign in to Krystal
               </h1>
               <p className="text-[15px] font-medium text-[var(--muted)] mt-1">
                 Manage your cards, balances, and household bills securely.
@@ -4268,7 +4268,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         </div>
 
         <footer className="border-t border-[var(--line)] py-4 text-center text-[13px] font-medium text-[var(--muted)]">
-          © 2026 Klarity. Personal financial data is encrypted and private.
+          © 2026 Krystal Finance. Personal financial data is encrypted and private.
         </footer>
       </div>
     );
@@ -4282,7 +4282,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         <header className="border-b border-[var(--line)] bg-[var(--surface)] px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <KlarityLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
-            <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">Klarity</span>
+            <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">Krystal</span>
           </div>
           <Button variant="danger" size="sm" onClick={handleLogout}>
             Sign out
@@ -4299,7 +4299,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 Session locked
               </h1>
               <p className="text-[15px] font-medium text-[var(--muted)] mt-1">
-                Klarity locked automatically after {autoLockMinutes} minutes of inactivity. Enter your {isPasswordMode ? 'master password' : 'security PIN'} to resume.
+                Krystal locked automatically after {autoLockMinutes} minutes of inactivity. Enter your {isPasswordMode ? 'master password' : 'security PIN'} to resume.
               </p>
               <div className="mt-2">
                 <Pill variant="neutral">{currentUser?.email || 'Account'}</Pill>
@@ -4348,7 +4348,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         </div>
 
         <footer className="border-t border-[var(--line)] py-4 text-center text-[13px] font-medium text-[var(--muted)]">
-          Session protected by Klarity Security
+          Session protected by Krystal Security
         </footer>
       </div>
     );
@@ -5402,7 +5402,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               >
                 <KlarityLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
                 <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">
-                  Klarity
+                  Krystal
                 </span>
               </button>
               <div className="flex items-center gap-1">
@@ -5432,7 +5432,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               <button
                 type="button"
                 onClick={() => setActiveTab('dashboard')}
-                aria-label="Klarity Overview"
+                aria-label="Krystal Overview"
                 title="Overview"
                 className="p-1.5 rounded-[8px] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
               >
@@ -5577,7 +5577,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             className="flex items-center gap-2 text-left cursor-pointer"
           >
             <KlarityLogo className="w-6 h-6 text-[#1B4B91]" />
-            <span className="font-serif text-[20px] font-semibold text-[var(--ink)]">Klarity</span>
+            <span className="font-serif text-[20px] font-semibold text-[var(--ink)]">Krystal</span>
           </button>
           <div className="flex items-center gap-2">
             <button
@@ -7669,7 +7669,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               </Pill>
             </div>
             <p className="text-[15px] font-medium text-[var(--ink)] leading-relaxed">
-              A new version of Klarity is ready to install with improvements and updates.
+              A new version of Krystal is ready to install with improvements and updates.
             </p>
             <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
               <Button
@@ -7708,7 +7708,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             {/* Centered Title & Version Pill */}
             <div className="flex items-center justify-center gap-2">
               <h3 id="whats-new-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)] text-center">
-                What&apos;s new in Klarity
+                What&apos;s new in Krystal
               </h3>
               <Pill variant="success">
                 {formatVersionString ? formatVersionString(whatsNewData.version || CURRENT_APP_VERSION) : CURRENT_APP_VERSION}

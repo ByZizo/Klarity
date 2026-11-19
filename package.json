@@ -1,7 +1,7 @@
 {
-  "name": "klarity",
+  "name": "krystal",
   "version": "3.12.59",
-  "description": "A clean, private finance tracker with a built-in AI assistant to help you manage your money, cards, and bills.",
+  "description": "A clean, private finance tracker with a built-in AI assistant to help you manage your money, cards, and bills on Windows, Chrome OS, and Linux.",
   "main": "electron/main.js",
   "scripts": {
     "server": "node server/index.js",
@@ -15,8 +15,8 @@
     "dist:linux": "npm run build && npx electron-builder --linux deb AppImage"
   },
   "build": {
-    "appId": "com.klarity.finance",
-    "productName": "Klarity",
+    "appId": "com.krystal.finance",
+    "productName": "Krystal",
     "publish": [
       {
         "provider": "github",
@@ -48,7 +48,7 @@
       ],
       "maintainer": "Ziyad Elmahi <ziyadelmahi@gmail.com>",
       "category": "Office",
-      "synopsis": "Klarity Personal & Family Finance Assistant",
+      "synopsis": "Krystal Personal & Family Finance Assistant",
       "description": "A clean, private finance tracker with a built-in AI assistant to help you manage your money, cards, and bills on Chrome OS and Linux."
     },
     "deb": {

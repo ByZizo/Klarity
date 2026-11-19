@@ -35,7 +35,7 @@ class GlobalErrorBoundary extends Component {
               onClick={() => { window.location.reload(); }}
               style={{ padding: '8px 16px', backgroundColor: '#18457c', color: '#ffffff', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
             >
-              Reload Klarity
+              Reload Krystal
             </button>
           </div>
         </div>

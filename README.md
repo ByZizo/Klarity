@@ -1,24 +1,37 @@
-# Klarity
+# Krystal Finance
 
 A clean, private finance tracker with a built-in AI assistant to help you stay on top of your money, cards, and bills.
 
 [![Download for Windows](https://img.shields.io/badge/Download-Windows%20(.exe)-18457c?logo=windows&style=for-the-badge)](https://github.com/ByZizo/Klarity/releases)
+[![Download for Chrome OS & Linux](https://img.shields.io/badge/Download-Chrome%20OS%20%2F%20Linux%20(.deb)-22c55e?logo=linux&style=for-the-badge)](https://github.com/ByZizo/Klarity/releases)
 
 ---
 
 ## 📥 Download & Install (Easiest Way)
 
-No coding or terminal needed. To install Klarity on your computer:
+No coding or terminal needed. When downloaded, the app installs onto your computer as **Krystal**.
 
+### 🪟 Windows (.exe)
 1. Go to the **[Releases Page](https://github.com/ByZizo/Klarity/releases)**.
-2. Download **`Klarity-Setup.exe`** (or the portable `.exe`).
-3. Double-click the file to install and open Klarity. An icon will automatically be placed on your desktop.
+2. Download **`Krystal-Setup.exe`** (or the standalone `Krystal.exe`).
+3. Double-click the file to install and launch **Krystal**. An icon will automatically be placed on your desktop and Start menu.
+
+### 💻 Chrome OS / Chromebook (.deb)
+1. Ensure the **Linux development environment** is turned on in your Chromebook Settings (`Settings` → `Developers` → `Linux development environment` → `Turn on`).
+2. Go to the **[Releases Page](https://github.com/ByZizo/Klarity/releases)**.
+3. Download **`krystal_*_amd64.deb`**.
+4. Open the Files app on your Chromebook, right-click the `.deb` file, and select **"Install with Linux"**.
+5. Once complete, launch **Krystal** directly from your Chromebook App Launcher.
+
+### 🐧 Linux (.deb or .AppImage)
+- **Debian / Ubuntu / Mint**: Download `krystal_*_amd64.deb` and run `sudo dpkg -i krystal_*_amd64.deb`.
+- **AppImage**: Download `krystal-*.AppImage`, make it executable (`chmod +x krystal-*.AppImage`), and double-click to run.
 
 ---
 
-## What is Klarity?
+## What is Krystal Finance?
 
-Klarity gives you a simple, single dashboard to manage your financial life without ads, data selling, or clutter. Whether you want to connect your bank accounts or enter everything manually, Klarity helps you track balances, plan debt payoffs, and stay ahead of upcoming bills.
+Krystal Finance gives you a simple, single dashboard to manage your financial life without ads, data selling, or clutter. Whether you want to connect your bank accounts or enter everything manually, Krystal helps you track balances, plan debt payoffs, and stay ahead of upcoming bills.
 
 It also includes a built-in AI financial advisor that analyzes your real numbers and gives you direct, practical advice—like how to pay down high-interest cards fastest, where you can trim monthly expenses, and how much you can safely save.
 
@@ -32,6 +45,7 @@ It also includes a built-in AI financial advisor that analyzes your real numbers
 - **Debt Payoff Engine** — Compare payoff methods like Avalanche vs. Snowball with clear timelines, interest savings, and payoff dates.
 - **AI Financial Assistant** — Ask questions about your money, get debt payoff recommendations, or analyze your spending. Works with Google Gemini, OpenAI, or Claude.
 - **Password & Account Vault** — A secure, client-side encrypted vault to keep financial logins, account numbers, and notes safe.
+- **Integrated PDF Document Editor** — Annotate, sign, highlight, draw, and stamp bank statements and tax forms directly in the app.
 - **100% Local & Private** — Everything runs and stays 100% local on your own device, with no external servers tracking your accounts. Your data never leaves your computer, so your finances stay completely private and in your hands.
 
 ---
@@ -62,11 +76,18 @@ If you prefer to run or build from source code:
    npm run dist
    ```
 
+5. Build for Chrome OS & Linux (.deb / AppImage):
+   ```bash
+   npm run dist:chromeos
+   # or
+   npm run dist:linux
+   ```
+
 ---
 
 ## Tech Stack & Security
 
-- **Frontend:** React, Vite, Tailwind CSS, Lucide Icons
+- **Frontend:** React, Vite, Tailwind CSS, Lucide Icons, PDF.js, PDF-lib
 - **Desktop:** Electron, Electron Builder
 - **Backend:** Node.js, Express
 - **AI Integration:** Google Gemini, OpenAI, Anthropic Claude

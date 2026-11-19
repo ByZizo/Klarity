@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 // Hardened Context-Isolated Preload Bridge (Zero direct Node.js access exposed to DOM)
-contextBridge.exposeInMainWorld('klarityDesktop', {
+const desktopBridge = {
   isDesktopApp: true,
   platform: process.platform,
   getAppInfo: () => ipcRenderer.invoke('klarity:get-app-info'),
@@ -40,4 +40,7 @@ contextBridge.exposeInMainWorld('klarityDesktop', {
     ipcRenderer.on('klarity:adblock-stats', handler);
     return () => ipcRenderer.removeListener('klarity:adblock-stats', handler);
   }
-});
+};
+
+contextBridge.exposeInMainWorld('klarityDesktop', desktopBridge);
+contextBridge.exposeInMainWorld('krystalDesktop', desktopBridge);

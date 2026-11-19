@@ -7,8 +7,19 @@ const crypto = require('crypto');
 const DESKTOP_IPC_SECRET = crypto.randomBytes(32).toString('hex');
 
 // Ensure App name and userData path are set immediately before any lock checks
-app.setName('Klarity');
-const userDataDir = path.join(app.getPath('appData'), 'Klarity');
+app.setName('Krystal');
+const oldUserDataDir = path.join(app.getPath('appData'), 'Klarity');
+const userDataDir = path.join(app.getPath('appData'), 'Krystal');
+
+// Seamless migration: copy existing user data from Klarity to Krystal if needed
+if (!fs.existsSync(userDataDir) && fs.existsSync(oldUserDataDir)) {
+  try {
+    fs.cpSync(oldUserDataDir, userDataDir, { recursive: true });
+  } catch (err) {
+    console.warn('Migration from Klarity to Krystal directory note:', err.message);
+  }
+}
+
 if (!fs.existsSync(userDataDir)) {
   try { fs.mkdirSync(userDataDir, { recursive: true }); } catch {}
 }
@@ -234,7 +245,7 @@ function saveWhatsNewData(changes, versionOrSha, explicitVersion) {
       shown: false,
       version: cleanVer,
       commitSha: versionOrSha || cleanVer,
-      title: "What's New in Klarity",
+      title: "What's New in Krystal",
       changes: formatWhatsNewHighlights(changes),
       updatedAt: Date.now()
     };
@@ -397,7 +408,7 @@ async function checkForGitHubUpdate() {
         recentChanges: recentCommits,
         message: commitTitle
           ? `New update available (${formattedSemVer}): ${commitTitle}`
-          : `A new version of Klarity (${formattedSemVer}) is available!`
+          : `A new version of Krystal (${formattedSemVer}) is available!`
       });
       return updateStatusState;
     }
@@ -676,7 +687,7 @@ async function createDesktopWindow() {
     height: 900,
     minWidth: 960,
     minHeight: 640,
-    title: 'Klarity — Private Financial & Password Suite',
+    title: 'Krystal — Private Financial & Password Suite',
     icon: path.join(__dirname, 'klarity.ico'),
     backgroundColor: '#f8fafc',
     autoHideMenuBar: true,
@@ -863,7 +874,7 @@ ipcMain.handle('klarity:install-update-now', async () => {
   try {
     broadcastUpdateStatus({
       state: 'installing',
-      message: 'Downloading latest update & rebuilding Klarity...'
+      message: 'Downloading latest update & rebuilding Krystal...'
     });
 
     // Capture previous HEAD SHA before updating to extract exact incoming commits
