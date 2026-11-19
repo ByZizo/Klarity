@@ -22,20 +22,22 @@ export function AuthPage({
   forgotSuccess = '',
   setForgotSuccess,
   handleForgotPasswordSubmit,
+  KrystalLogo,
   KlarityLogo
 }) {
+  const LogoComponent = KrystalLogo || KlarityLogo;
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)] flex flex-col justify-center items-center p-4">
       <Card className="w-full max-w-md p-6 sm:p-8 shadow-sm">
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-12 h-12 rounded-[12px] bg-[#1B4B91]/10 text-[#1B4B91] flex items-center justify-center mb-3">
-            {KlarityLogo ? <KlarityLogo className="w-7 h-7 text-[#1B4B91]" /> : <ShieldCheck className="w-7 h-7" />}
+            {LogoComponent ? <LogoComponent className="w-7 h-7 text-[#1B4B91]" /> : <ShieldCheck className="w-7 h-7" />}
           </div>
           <h1 className="font-serif text-[26px] font-semibold text-[var(--ink)]">
             {authMode === 'login'
-              ? 'Sign in to Klarity'
+              ? 'Sign in to Krystal'
               : authMode === 'register'
-              ? 'Create your Klarity account'
+              ? 'Create your Krystal account'
               : 'Reset your password'}
           </h1>
           <p className="text-[15px] font-medium text-[var(--muted)] mt-1">

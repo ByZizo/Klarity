@@ -5,7 +5,7 @@
   "functions": {
     "api/index.js": {
       "includeFiles": "server/**",
-      "excludeFiles": "{.git/**,.env*,server/.env*,server/data.json,server/.klarity_master.key}"
+      "excludeFiles": "{.git/**,.env*,server/.env*,server/data.json,server/.klarity_master.key,server/.krystal_master.key}"
     }
   },
   "headers": [

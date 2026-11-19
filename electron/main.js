@@ -289,7 +289,7 @@ async function checkForGitHubUpdate() {
     try {
       const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Krystal/commits?per_page=5&_t=${Date.now()}`, {
         headers: {
-          'User-Agent': 'KlarityDesktopApp',
+          'User-Agent': 'KrystalDesktopApp',
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
         }
@@ -324,7 +324,7 @@ async function checkForGitHubUpdate() {
     try {
       const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Krystal/main/package.json?_t=${Date.now()}`, {
         headers: {
-          'User-Agent': 'KlarityDesktopApp',
+          'User-Agent': 'KrystalDesktopApp',
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
         }
@@ -481,7 +481,7 @@ async function startEmbeddedBackend() {
 
   // Automatically verify/download default local GGUF model on launch
   localModelEngine.ensureInitialized({ autoDownload: true }).catch(err => {
-    console.warn('[Klarity Local AI] Desktop background init notice:', err.message);
+    console.warn('[Krystal Local AI] Desktop background init notice:', err.message);
   });
 
   const preferredPorts = [5173, 5000, 3000, 0];
@@ -497,13 +497,13 @@ async function startEmbeddedBackend() {
         });
       });
       localServerPort = port;
-      console.log(`Klarity Desktop Embedded Engine bound to http://localhost:${localServerPort}`);
+      console.log(`Krystal Desktop Embedded Engine bound to http://localhost:${localServerPort}`);
       return localServerPort;
     } catch (err) {
       // Port busy, try next preferred port
     }
   }
-  throw new Error('Could not bind local Klarity engine port');
+  throw new Error('Could not bind local Krystal engine port');
 }
 
 let browserRuntimePrefs = {
@@ -688,7 +688,7 @@ async function createDesktopWindow() {
     minWidth: 960,
     minHeight: 640,
     title: 'Krystal — Private Financial & Password Suite',
-    icon: path.join(__dirname, 'klarity.ico'),
+    icon: path.join(__dirname, 'krystal.ico'),
     backgroundColor: '#f8fafc',
     autoHideMenuBar: true,
     show: true,
@@ -1064,7 +1064,7 @@ ipcMain.handle('klarity:browser-get-sponsor-segments', async (_e, videoId) => {
   try {
     const hash = crypto.createHash('sha256').update(videoId).digest('hex').slice(0, 4);
     const res = await fetch(`https://sponsor.ajay.app/api/skipSegments/${hash}?service=YouTube&categories=["sponsor","selfpromo","interaction","intro","outro"]&actionTypes=["skip"]`, {
-      headers: { 'User-Agent': 'KlarityBrowser/1.0' }
+      headers: { 'User-Agent': 'KrystalBrowser/1.0' }
     });
     if (res.ok) {
       const data = await res.json();
@@ -1085,7 +1085,7 @@ ipcMain.handle('klarity:browser-get-dearrow-branding', async (_e, videoId) => {
   if (!videoId || typeof videoId !== 'string') return null;
   try {
     const res = await fetch(`https://sponsor.ajay.app/api/branding?videoID=${encodeURIComponent(videoId)}`, {
-      headers: { 'User-Agent': 'KlarityBrowser/1.0' }
+      headers: { 'User-Agent': 'KrystalBrowser/1.0' }
     });
     if (res.ok) {
       const data = await res.json();

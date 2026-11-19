@@ -14,7 +14,7 @@ class GlobalErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('Klarity UI uncaught render error:', error, errorInfo);
+    console.error('Krystal UI uncaught render error:', error, errorInfo);
   }
 
   render() {

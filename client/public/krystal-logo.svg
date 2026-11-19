@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Bank Pediment / Roof Gable -->
+  <path d="M24 5.5L42.5 15H5.5L24 5.5Z" fill="#18457c"/>
+  
+  <!-- Entablature / Architrave (Roof Beam) -->
+  <rect x="6.5" y="16.5" width="35" height="3" rx="1" fill="#18457c"/>
+  
+  <!-- The "K" Pillar Structure -->
+  <!-- Left Column / Stem of the K -->
+  <rect x="11" y="21" width="5.5" height="16.5" rx="0.75" fill="#18457c"/>
+  
+  <!-- Upper & Lower Diagonal Arms of the K -->
+  <path d="M16.5 28.2L28.8 21H34.8L21.2 29L35.2 37.5H29.2L16.5 29.8V28.2Z" fill="#18457c"/>
+  
+  <!-- Upper Base Step -->
+  <rect x="6.5" y="39" width="35" height="3" rx="1" fill="#18457c"/>
+  
+  <!-- Lower Foundation Step -->
+  <rect x="3.5" y="43" width="41" height="3" rx="1" fill="#18457c"/>
+</svg>

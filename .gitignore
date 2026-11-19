@@ -21,8 +21,11 @@ data.json
 *.enc
 .klarity_master.key
 server/.klarity_master.key
+.krystal_master.key
+server/.krystal_master.key
 *.key
 klarity_session.json
+krystal_session.json
 feedback.json
 server/feedback.json
 whats_new.json

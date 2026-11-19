@@ -192,7 +192,7 @@ async function scrapeWithDdgInstantApi(cleanQuery, maxResults = 5) {
       `https://api.duckduckgo.com/?q=${encodeURIComponent(cleanQuery)}&format=json&no_html=1&skip_disambig=1`,
       {
         signal: controller.signal,
-        headers: { 'User-Agent': 'KlarityDesktop/1.0' }
+        headers: { 'User-Agent': 'KrystalDesktop/1.0' }
       }
     );
     clearTimeout(timeoutId);

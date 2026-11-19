@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Reusable Klarity Row component
+ * Reusable Krystal Row component
  * Layout: label left, value right, optional muted detail
  */
 export function Row({

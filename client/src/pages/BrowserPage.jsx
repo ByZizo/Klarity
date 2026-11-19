@@ -1258,7 +1258,7 @@ export function BrowserPage({
 
   const openAddPopover = (presetFolderId = '') => {
     setAddMode('bookmark');
-    setBmTitleInput(activeTab?.title && activeTab.title !== 'Klarity Browser' ? activeTab.title : '');
+    setBmTitleInput(activeTab?.title && activeTab.title !== 'Krystal Browser' ? activeTab.title : '');
     setBmUrlInput(activeTab?.url || homeUrl);
     setBmFolderId(presetFolderId || '');
     setFolderNameInput('');
@@ -1805,7 +1805,7 @@ export function BrowserPage({
                 <div className="flex items-center justify-between pb-2 border-b border-[var(--line)]">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    <span className="text-xs font-bold text-[var(--ink)]">Klarity Ad Blocker</span>
+                    <span className="text-xs font-bold text-[var(--ink)]">Krystal Ad Blocker</span>
                   </div>
                   <span
                     className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
@@ -2221,7 +2221,7 @@ export function BrowserPage({
                 <div>
                   <h3 className="font-serif text-lg font-bold text-[var(--ink)]">In-App Browser</h3>
                   <p className="text-xs text-[var(--muted)] mt-1.5 leading-relaxed">
-                    Embedded browsing runs natively in the Klarity Desktop application.
+                    Embedded browsing runs natively in the Krystal Desktop application.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

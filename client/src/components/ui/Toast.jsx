@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 
 /**
- * Reusable Klarity Toast component
+ * Reusable Krystal Toast component
  * Variants: 'success' | 'error'
  * Auto-dismisses after durationMs (default 4000ms)
  */

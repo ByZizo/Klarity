@@ -4689,7 +4689,7 @@ export default function HouseholdLifestyleHub({
                           </b>
                           <p className="text-[13px] text-slate-400 dark:text-slate-500 max-w-sm">
                             {selectedBillProvider === 'all'
-                              ? 'Once your payments or utility accounts sync in Klarity, verified household bills will appear here.'
+                              ? 'Once your payments or utility accounts sync in Krystal, verified household bills will appear here.'
                               : 'When payments for this provider are detected in your connected accounts, they will be tracked here automatically.'}
                           </p>
                           {selectedBillProvider !== 'all' && (
@@ -5114,7 +5114,7 @@ export default function HouseholdLifestyleHub({
                         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                           <div>
                             <h3 className="font-semibold text-slate-900 text-sm">Statements & Contracts</h3>
-                            <p className="text-[13px] text-slate-500 mt-0.5">Upload bills, rate sheets, or warranties (PDF or image). Klarity auto-extracts your account & cost.</p>
+                            <p className="text-[13px] text-slate-500 mt-0.5">Upload bills, rate sheets, or warranties (PDF or image). Krystal auto-extracts your account & cost.</p>
                           </div>
                           <span className="px-2.5 py-1 rounded-[8px] bg-slate-100 text-slate-600 text-[13px] font-semibold">
                             {docs.length} on file

@@ -31,15 +31,24 @@
       "package.json"
     ],
     "win": {
+      "icon": "electron/krystal.ico",
       "target": [
         "nsis",
         "portable"
-      ]
+      ],
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}.${ext}"
     },
     "mac": {
       "target": [
         "dmg"
-      ]
+      ],
+      "artifactName": "${productName}-${version}.${ext}"
     },
     "linux": {
       "target": [
@@ -49,7 +58,8 @@
       "maintainer": "Ziyad Elmahi <ziyadelmahi@gmail.com>",
       "category": "Office",
       "synopsis": "Krystal Personal & Family Finance Assistant",
-      "description": "A clean, private finance tracker with a built-in AI assistant to help you manage your money, cards, and bills on Chrome OS and Linux."
+      "description": "A clean, private finance tracker with a built-in AI assistant to help you manage your money, cards, and bills on Chrome OS and Linux.",
+      "artifactName": "krystal_${version}_${arch}.${ext}"
     },
     "deb": {
       "priority": "optional"

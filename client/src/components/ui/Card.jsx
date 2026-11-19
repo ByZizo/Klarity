@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Reusable Klarity Card component
+ * Reusable Krystal Card component
  * Radius: 12px (--radius-card)
  */
 export function Card({

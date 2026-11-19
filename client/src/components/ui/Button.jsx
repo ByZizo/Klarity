@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Reusable Klarity Button component
+ * Reusable Krystal Button component
  * Variants: 'primary' | 'secondary' | 'ghost' | 'danger'
  * Radius: 8px (--radius-control)
  */

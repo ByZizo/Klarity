@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Reusable Klarity Pill component
+ * Reusable Krystal Pill component
  * Variants: 'neutral' | 'brand' | 'success' | 'warning' | 'danger'
  * Minimum text size: 13px, normal case, 8px radius
  */
