@@ -2,8 +2,8 @@
 
 A clean, private finance tracker with a built-in AI assistant to help you stay on top of your money, cards, and bills.
 
-[![Download for Windows](https://img.shields.io/badge/Download-Windows%20(.exe)-18457c?logo=windows&style=for-the-badge)](https://github.com/ByZizo/Klarity/releases)
-[![Download for Chrome OS & Linux](https://img.shields.io/badge/Download-Chrome%20OS%20%2F%20Linux%20(.deb)-22c55e?logo=linux&style=for-the-badge)](https://github.com/ByZizo/Klarity/releases)
+[![Download for Windows](https://img.shields.io/badge/Download-Windows%20(.exe)-18457c?logo=windows&style=for-the-badge)](https://github.com/ByZizo/Krystal/releases)
+[![Download for Chrome OS & Linux](https://img.shields.io/badge/Download-Chrome%20OS%20%2F%20Linux%20(.deb)-22c55e?logo=linux&style=for-the-badge)](https://github.com/ByZizo/Krystal/releases)
 
 ---
 
@@ -12,13 +12,13 @@ A clean, private finance tracker with a built-in AI assistant to help you stay o
 No coding or terminal needed. When downloaded, the app installs onto your computer as **Krystal**.
 
 ### 🪟 Windows (.exe)
-1. Go to the **[Releases Page](https://github.com/ByZizo/Klarity/releases)**.
+1. Go to the **[Releases Page](https://github.com/ByZizo/Krystal/releases)**.
 2. Download **`Krystal-Setup.exe`** (or the standalone `Krystal.exe`).
 3. Double-click the file to install and launch **Krystal**. An icon will automatically be placed on your desktop and Start menu.
 
 ### 💻 Chrome OS / Chromebook (.deb)
 1. Ensure the **Linux development environment** is turned on in your Chromebook Settings (`Settings` → `Developers` → `Linux development environment` → `Turn on`).
-2. Go to the **[Releases Page](https://github.com/ByZizo/Klarity/releases)**.
+2. Go to the **[Releases Page](https://github.com/ByZizo/Krystal/releases)**.
 3. Download **`krystal_*_amd64.deb`**.
 4. Open the Files app on your Chromebook, right-click the `.deb` file, and select **"Install with Linux"**.
 5. Once complete, launch **Krystal** directly from your Chromebook App Launcher.
@@ -56,8 +56,8 @@ If you prefer to run or build from source code:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/ByZizo/Klarity.git
-   cd Klarity
+   git clone https://github.com/ByZizo/Krystal.git
+   cd Krystal
    ```
 
 2. Install dependencies:

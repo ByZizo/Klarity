@@ -271,7 +271,7 @@ function broadcastUpdateStatus(patch) {
   }
 }
 
-// Check GitHub (ByZizo/Klarity) for any newly pushed updates
+// Check GitHub (ByZizo/Krystal) for any newly pushed updates
 async function checkForGitHubUpdate() {
   const repoDir = path.join(__dirname, '..');
   try {
@@ -287,7 +287,7 @@ async function checkForGitHubUpdate() {
 
     // 1. Fetch latest commits on main from GitHub API (with cache-busting so newly pushed commits appear immediately)
     try {
-      const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5&_t=${Date.now()}`, {
+      const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Krystal/commits?per_page=5&_t=${Date.now()}`, {
         headers: {
           'User-Agent': 'KlarityDesktopApp',
           'Cache-Control': 'no-cache',
@@ -322,7 +322,7 @@ async function checkForGitHubUpdate() {
     // Fetch remote package.json to get semantic version (with cache-buster for GitHub raw CDN)
     let remoteVersion = null;
     try {
-      const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json?_t=${Date.now()}`, {
+      const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Krystal/main/package.json?_t=${Date.now()}`, {
         headers: {
           'User-Agent': 'KlarityDesktopApp',
           'Cache-Control': 'no-cache',
@@ -861,7 +861,7 @@ ipcMain.handle('klarity:get-app-info', () => ({
   isDesktopApp: true,
   version: app.getVersion(),
   userDataDir: app.getPath('userData'),
-  repo: 'ByZizo/Klarity',
+  repo: 'ByZizo/Krystal',
   updateStatus: updateStatusState
 }));
 
