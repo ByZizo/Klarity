@@ -431,7 +431,7 @@ export function SettingsPage({
                 <div>
                   <h3 className="font-serif text-[22px] font-semibold text-[var(--ink)]">Profile</h3>
                   <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
-                    Manage how your name and account details appear in Krystal.
+                    Manage how your name and account details appear in Klarity.
                   </p>
                 </div>
 
@@ -1151,7 +1151,7 @@ export function SettingsPage({
                       <div>
                         <h4 className="text-[16px] font-semibold text-[var(--ink)]">Inactivity timeout</h4>
                         <p className="text-[13px] font-medium text-[var(--muted)]">
-                          Automatically lock or sign out when Krystal is left unattended.
+                          Automatically lock or sign out when Klarity is left unattended.
                         </p>
                       </div>
                     </div>
@@ -1861,7 +1861,7 @@ export function SettingsPage({
             {normalizedTab === 'about' && (
               <div className="flex flex-col gap-6">
                 <div>
-                  <h3 className="font-serif text-[22px] font-semibold text-[var(--ink)]">About Krystal</h3>
+                  <h3 className="font-serif text-[22px] font-semibold text-[var(--ink)]">About Klarity Finance</h3>
                   <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
                     Current software version and summary of recent improvements.
                   </p>
@@ -1871,13 +1871,13 @@ export function SettingsPage({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-2.5">
-                        <h4 className="font-serif text-[18px] font-semibold text-[var(--ink)]">Krystal Finance</h4>
+                        <h4 className="font-serif text-[18px] font-semibold text-[var(--ink)]">Klarity Finance</h4>
                         <Pill variant="success">
                           {formatVersionString(desktopAppInfo.version || CURRENT_APP_VERSION)}
                         </Pill>
                       </div>
                       <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
-                        {desktopAppInfo.isDesktopApp ? 'Krystal Desktop Application' : 'Krystal Web Application'}
+                        {desktopAppInfo.isDesktopApp ? 'Klarity Desktop Application' : 'Klarity Web Application'}
                         {desktopAppInfo.updateStatus?.message
                           ? ` • ${formatCleanUpdateMessage(
                               desktopAppInfo.updateStatus.message,
@@ -1922,10 +1922,10 @@ export function SettingsPage({
                     </div>
                     <div>
                       <h4 className="text-[16px] font-semibold text-[var(--ink)] flex items-center gap-2">
-                        Support Development
+                        Support Klarity Finance
                       </h4>
                       <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
-                        Krystal is free and completely private. If it helps you manage your finances, consider buying me a coffee!
+                        Klarity is free and completely private. If it helps you manage your finances, consider buying me a coffee!
                       </p>
                     </div>
                   </div>
@@ -1947,7 +1947,7 @@ export function SettingsPage({
                     <div>
                       <h4 className="text-[16px] font-semibold text-[var(--ink)]">Feedback</h4>
                       <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
-                        Share thoughts, report bugs, or request features to help improve Krystal.
+                        Share thoughts, report bugs, or request features to help improve Klarity.
                       </p>
                     </div>
                     <Pill variant="brand">User feedback</Pill>

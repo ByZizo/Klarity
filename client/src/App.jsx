@@ -75,7 +75,7 @@ import {
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
 import { marked } from 'marked';
-import KrystalLogo from './components/KrystalLogo';
+import KlarityLogo from './components/KlarityLogo';
 import LegalShieldStatusCard from './components/LegalShieldStatusCard';
 import InteractivePayoffComparison from './components/InteractivePayoffComparison';
 import HardshipPlaybookModal from './components/HardshipPlaybookModal';
@@ -137,9 +137,8 @@ if (typeof window !== 'undefined' && !window.__klarityFetchPatched) {
               window.klarityDesktop.clearSession();
             }
           } catch {}
-          const signOutFn = window.__triggerKrystalSignOut || window.__triggerKlaritySignOut;
-          if (typeof signOutFn === 'function') {
-            signOutFn();
+          if (typeof window.__triggerKlaritySignOut === 'function') {
+            window.__triggerKlaritySignOut();
           }
         }
       }
@@ -190,10 +189,10 @@ import {
 } from './utils/browserSettings';
 
 export default function App() {
-  return <KrystalApp />;
+  return <KlarityApp />;
 }
 
-function KrystalApp() {
+function KlarityApp() {
   // Current user state (Synchronously initialized from localStorage to prevent OAuth flicker)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -402,7 +401,7 @@ function KrystalApp() {
               recentChanges: (data.recentChanges || []).map(formatUserFacingReleaseNote),
               message: humanizedMsg
                 ? `${humanizedMsg}.`
-                : `A new update for Krystal (v${data.latestVersion || CURRENT_APP_VERSION}) is ready to install.`
+                : `A new update for Klarity (v${data.latestVersion || CURRENT_APP_VERSION}) is ready to install.`
             }
           }));
         } else if (data && data.ok) {
@@ -507,7 +506,7 @@ function KrystalApp() {
           setTimeout(() => setNotificationToast(''), 4000);
         }
       } else {
-        setNotificationToast('Updating Krystal and reloading...');
+        setNotificationToast('Updating Klarity and reloading...');
         try {
           await fetch('/api/app/update-apply', { method: 'POST' });
         } catch {}
@@ -520,7 +519,7 @@ function KrystalApp() {
     }
   };
 
-  // Trigger update notification prompt when Krystal opens or when a new update is pushed to GitHub
+  // Trigger update notification prompt when Klarity opens or when a new update is pushed to GitHub
   useEffect(() => {
     if (
       (desktopAppInfo.updateStatus?.state === 'available' || desktopAppInfo.updateStatus?.state === 'ready') &&
@@ -1524,7 +1523,7 @@ function KrystalApp() {
         messages: [
           {
             role: 'assistant',
-            text: "Hello! I am Krystal, your personal financial advisor. I monitor your actual connected cards, real APRs, and utility bills to help you optimize cash flow and pay off debt. How can I help you today?"
+            text: "Hello! I am Klarity, your personal financial advisor. I monitor your actual connected cards, real APRs, and utility bills to help you optimize cash flow and pay off debt. How can I help you today?"
           }
         ]
       }
@@ -1737,7 +1736,7 @@ function KrystalApp() {
     return active?.messages || [
       {
         role: 'assistant',
-        text: "Hello! I am Krystal, your personal financial advisor. I monitor your actual connected cards, real APRs, and utility bills to help you optimize cash flow and pay off debt. How can I help you today?"
+        text: "Hello! I am Klarity, your personal financial advisor. I monitor your actual connected cards, real APRs, and utility bills to help you optimize cash flow and pay off debt. How can I help you today?"
       }
     ];
   });
@@ -2130,7 +2129,7 @@ function KrystalApp() {
       messages: [
         {
           role: 'assistant',
-          text: "Hello! I am Krystal, your personal financial advisor. What financial questions or bills would you like to explore?"
+          text: "Hello! I am Klarity, your personal financial advisor. What financial questions or bills would you like to explore?"
         }
       ]
     };
@@ -2776,7 +2775,7 @@ function KrystalApp() {
 
         if (res.ok && json.user) {
           await handleAuthSessionSuccess(json.user, json.session);
-          setNotificationToast(`Welcome to Krystal, ${json.user.name}!`);
+          setNotificationToast(`Welcome to Klarity, ${json.user.name}!`);
           setTimeout(() => setNotificationToast(''), 4000);
         } else {
           setAuthError(json.error || 'Failed to create account. Please try again.');
@@ -2821,7 +2820,6 @@ function KrystalApp() {
   };
 
   const handleLogout = async () => {
-    window.__triggerKrystalSignOut = null;
     window.__triggerKlaritySignOut = null;
     setCurrentUser(null);
     setAuthSession(null);
@@ -3119,7 +3117,7 @@ function KrystalApp() {
             recentChanges: (data.recentChanges || []).map(formatUserFacingReleaseNote),
             message: humanizedMsg
               ? `${humanizedMsg}.`
-              : `A new update for Krystal (v${data.latestVersion || CURRENT_APP_VERSION}) is ready!`
+              : `A new update for Klarity (v${data.latestVersion || CURRENT_APP_VERSION}) is ready!`
           };
         } else if (data && data.ok && !statusPayload) {
           statusPayload = {
@@ -3140,7 +3138,7 @@ function KrystalApp() {
         setIsUpdateModalOpen(true);
         setNotificationToast('New update found! Ready to install.');
       } else {
-        setNotificationToast(`You are running the latest version of Krystal (v${CURRENT_APP_VERSION}).`);
+        setNotificationToast(`You are running the latest version of Klarity (v${CURRENT_APP_VERSION}).`);
       }
       setTimeout(() => setNotificationToast(''), 3500);
     } catch {
@@ -4010,7 +4008,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
       if (!replyText) {
         if (json.actionsExecuted && json.actionsExecuted.length > 0) {
-          replyText = `Done! I updated ${json.actionsExecuted.length} item${json.actionsExecuted.length === 1 ? '' : 's'} in your Krystal account.`;
+          replyText = `Done! I updated ${json.actionsExecuted.length} item${json.actionsExecuted.length === 1 ? '' : 's'} in your Klarity account.`;
         } else {
           replyText = buildPersonalizedAdvisorBriefing().fullBriefingMd;
         }
@@ -4033,7 +4031,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         browserTargetUrl &&
         !/in-app browser|copy the link|open.*browser/i.test(replyText)
       ) {
-        replyText = `${replyText}\n\nWould you like to open this in Krystal's in-app browser or copy the link?`;
+        replyText = `${replyText}\n\nWould you like to open this in Klarity's in-app browser or copy the link?`;
       }
 
       // Build context-aware interactive Action Buttons for the assistant bubble
@@ -4096,8 +4094,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
     return (
       <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)] flex flex-col items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <KrystalLogo className="w-12 h-12 text-[#1B4B91]" />
-          <span className="font-serif text-[24px] font-semibold tracking-tight text-[var(--ink)]">Krystal</span>
+          <KlarityLogo className="w-12 h-12 text-[#1B4B91]" />
+          <span className="font-serif text-[24px] font-semibold tracking-tight text-[var(--ink)]">Klarity</span>
         </div>
       </div>
     );
@@ -4109,8 +4107,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)] flex flex-col justify-between">
         <header className="border-b border-[var(--line)] bg-[var(--surface)] px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <KrystalLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
-            <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">Krystal</span>
+            <KlarityLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
+            <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">Klarity</span>
           </div>
         </header>
 
@@ -4118,10 +4116,10 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           <Card className="max-w-md w-full p-6 sm:p-8 flex flex-col gap-6 shadow-sm">
             <div className="text-center">
               <div className="w-12 h-12 rounded-[12px] bg-[#1B4B91]/10 flex items-center justify-center mx-auto mb-3">
-                <KrystalLogo className="w-7 h-7 text-[#1B4B91]" />
+                <KlarityLogo className="w-7 h-7 text-[#1B4B91]" />
               </div>
               <h1 className="font-serif text-[26px] font-semibold tracking-tight text-[var(--ink)]">
-                Sign in to Krystal
+                Sign in to Klarity
               </h1>
               <p className="text-[15px] font-medium text-[var(--muted)] mt-1">
                 Manage your cards, balances, and household bills securely.
@@ -4270,7 +4268,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         </div>
 
         <footer className="border-t border-[var(--line)] py-4 text-center text-[13px] font-medium text-[var(--muted)]">
-          © 2026 Krystal Finance. Personal financial data is encrypted and private.
+          © 2026 Klarity Finance. Personal financial data is encrypted and private.
         </footer>
       </div>
     );
@@ -4283,8 +4281,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)] flex flex-col justify-between">
         <header className="border-b border-[var(--line)] bg-[var(--surface)] px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <KrystalLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
-            <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">Krystal</span>
+            <KlarityLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
+            <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">Klarity</span>
           </div>
           <Button variant="danger" size="sm" onClick={handleLogout}>
             Sign out
@@ -4301,7 +4299,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 Session locked
               </h1>
               <p className="text-[15px] font-medium text-[var(--muted)] mt-1">
-                Krystal locked automatically after {autoLockMinutes} minutes of inactivity. Enter your {isPasswordMode ? 'master password' : 'security PIN'} to resume.
+                Klarity locked automatically after {autoLockMinutes} minutes of inactivity. Enter your {isPasswordMode ? 'master password' : 'security PIN'} to resume.
               </p>
               <div className="mt-2">
                 <Pill variant="neutral">{currentUser?.email || 'Account'}</Pill>
@@ -4350,7 +4348,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         </div>
 
         <footer className="border-t border-[var(--line)] py-4 text-center text-[13px] font-medium text-[var(--muted)]">
-          Session protected by Krystal Security
+          Session protected by Klarity Security
         </footer>
       </div>
     );
@@ -5402,9 +5400,9 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 onClick={() => setActiveTab('dashboard')}
                 className="flex items-center gap-2.5 text-left rounded-[8px] py-1 cursor-pointer"
               >
-                <KrystalLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
+                <KlarityLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
                 <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">
-                  Krystal
+                  Klarity
                 </span>
               </button>
               <div className="flex items-center gap-1">
@@ -5434,11 +5432,11 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               <button
                 type="button"
                 onClick={() => setActiveTab('dashboard')}
-                aria-label="Krystal Overview"
+                aria-label="Klarity Overview"
                 title="Overview"
                 className="p-1.5 rounded-[8px] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
               >
-                <KrystalLogo className="w-7 h-7 text-[#1B4B91]" />
+                <KlarityLogo className="w-7 h-7 text-[#1B4B91]" />
               </button>
               <button
                 type="button"
@@ -5578,8 +5576,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             onClick={() => setActiveTab('dashboard')}
             className="flex items-center gap-2 text-left cursor-pointer"
           >
-            <KrystalLogo className="w-6 h-6 text-[#1B4B91]" />
-            <span className="font-serif text-[20px] font-semibold text-[var(--ink)]">Krystal</span>
+            <KlarityLogo className="w-6 h-6 text-[#1B4B91]" />
+            <span className="font-serif text-[20px] font-semibold text-[var(--ink)]">Klarity</span>
           </button>
           <div className="flex items-center gap-2">
             <button
@@ -7671,7 +7669,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               </Pill>
             </div>
             <p className="text-[15px] font-medium text-[var(--ink)] leading-relaxed">
-              A new version of Krystal is ready to install with improvements and updates.
+              A new version of Klarity is ready to install with improvements and updates.
             </p>
             <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
               <Button
@@ -7710,7 +7708,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             {/* Centered Title & Version Pill */}
             <div className="flex items-center justify-center gap-2">
               <h3 id="whats-new-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)] text-center">
-                What&apos;s new in Krystal
+                What&apos;s new in Klarity
               </h3>
               <Pill variant="success">
                 {formatVersionString ? formatVersionString(whatsNewData.version || CURRENT_APP_VERSION) : CURRENT_APP_VERSION}

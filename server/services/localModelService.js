@@ -16,7 +16,7 @@ const {
 } = require('./webSearchService');
 
 const DEFAULT_SYSTEM_PROMPT =
-  "You are Krystal, the user's personal financial & lifestyle AI advisor, inspired by Google Gemini. You have live, real-time internet access through Krystal's integrated web search pipeline.\n\n" +
+  "You are Klarity, the user's personal financial & lifestyle AI advisor, inspired by Google Gemini. You have live, real-time internet access through Klarity's integrated web search pipeline.\n\n" +
   "CORE INSTRUCTION & MEMORY EXECUTION:\n" +
   "- ALWAYS ANSWER EXACTLY WHAT THE USER ASKS. Never dump an unrequested full financial report, table, or credit card audit unless the user specifically asked for a full financial summary or briefing.\n" +
   "- When the user tells you personal facts or asks you to remember something (e.g. 'add that I'm 23 years old to your memory', 'remember that I prefer avalanche', 'remember my car is a Honda'):\n" +
@@ -93,7 +93,7 @@ class LocalModelEngine extends EventEmitter {
   getModelsDirectory() {
     const baseUserData =
       process.env.KLARITY_USER_DATA_DIR ||
-      path.join(os.homedir(), 'AppData', 'Roaming', 'Krystal');
+      path.join(os.homedir(), 'AppData', 'Roaming', 'Klarity');
     const modelsDir = path.join(baseUserData, 'models');
     if (!fs.existsSync(modelsDir)) {
       try {
@@ -188,7 +188,7 @@ class LocalModelEngine extends EventEmitter {
       error: null
     });
 
-    console.log(`[Krystal Local AI] Starting download: ${spec.name} -> ${targetPath}`);
+    console.log(`[Klarity Local AI] Starting download: ${spec.name} -> ${targetPath}`);
 
     const startTime = Date.now();
     let lastLoggedPct = -5;
@@ -214,7 +214,7 @@ class LocalModelEngine extends EventEmitter {
       if (pct - lastLoggedPct >= 5) {
         lastLoggedPct = pct;
         console.log(
-          `[Krystal Local AI] Download progress: ${pct.toFixed(1)}% (${dlMB}/${totMB} MB @ ${speedMBps} MB/s)`
+          `[Klarity Local AI] Download progress: ${pct.toFixed(1)}% (${dlMB}/${totMB} MB @ ${speedMBps} MB/s)`
         );
       }
 
@@ -238,13 +238,13 @@ class LocalModelEngine extends EventEmitter {
         });
         const resolvedPath = await downloader.download();
         if (resolvedPath && fs.existsSync(resolvedPath)) {
-          console.log(`[Krystal Local AI] Model downloaded via node-llama-cpp: ${resolvedPath}`);
+          console.log(`[Klarity Local AI] Model downloaded via node-llama-cpp: ${resolvedPath}`);
           return resolvedPath;
         }
       }
     } catch (downloaderErr) {
       console.warn(
-        `[Krystal Local AI] createModelDownloader fallback to native stream (${downloaderErr.message})`
+        `[Klarity Local AI] createModelDownloader fallback to native stream (${downloaderErr.message})`
       );
     }
 
@@ -253,7 +253,7 @@ class LocalModelEngine extends EventEmitter {
       method: 'GET',
       redirect: 'follow',
       headers: {
-        'User-Agent': 'KrystalDesktop/1.0 (node-llama-cpp)'
+        'User-Agent': 'KlarityDesktop/1.0 (node-llama-cpp)'
       }
     });
 
@@ -290,7 +290,7 @@ class LocalModelEngine extends EventEmitter {
         } catch {}
       }
       fs.renameSync(tempPath, targetPath);
-      console.log(`[Krystal Local AI] Download complete: ${targetPath}`);
+      console.log(`[Klarity Local AI] Download complete: ${targetPath}`);
       return targetPath;
     } catch (streamErr) {
       try {
@@ -367,7 +367,7 @@ class LocalModelEngine extends EventEmitter {
           message: `Loading ${targetSpec.name} into node-llama-cpp context...`
         });
 
-        console.log(`[Krystal Local AI] Initializing node-llama-cpp with weights: ${modelPath}`);
+        console.log(`[Klarity Local AI] Initializing node-llama-cpp with weights: ${modelPath}`);
         const { getLlama, LlamaChatSession } = await import('node-llama-cpp');
 
         if (!this.llama) {
@@ -404,10 +404,10 @@ class LocalModelEngine extends EventEmitter {
           error: null
         });
 
-        console.log(`[Krystal Local AI] Persistent context session ready (${targetSpec.name})`);
+        console.log(`[Klarity Local AI] Persistent context session ready (${targetSpec.name})`);
         return this.status;
       } catch (err) {
-        console.error('[Krystal Local AI] Initialization error:', err.message);
+        console.error('[Klarity Local AI] Initialization error:', err.message);
         this.updateStatus({
           state: 'error',
           message: `Local AI initialization error: ${err.message}`,
@@ -456,7 +456,7 @@ class LocalModelEngine extends EventEmitter {
   /**
    * Format the RAG prompt according to the required specification:
    *
-   * System: You are Krystal's built-in intelligence assistant. Use the following live web data to answer the user accurately. If the context does not contain the answer, rely on your general knowledge.
+   * System: You are Klarity's built-in intelligence assistant. Use the following live web data to answer the user accurately. If the context does not contain the answer, rely on your general knowledge.
    *
    * Web Context:
    * [Extracted search results]
@@ -520,7 +520,7 @@ class LocalModelEngine extends EventEmitter {
    * @param {string} params.query - User's input query
    * @param {boolean} [params.enableWebSearch=true] - Whether to run live web retrieval
    * @param {string} [params.locationHint=''] - Optional city/ZIP for local queries
-   * @param {string} [params.financialContext=''] - Optional Krystal financial snapshot
+   * @param {string} [params.financialContext=''] - Optional Klarity financial snapshot
    * @param {number} [params.maxTokens=1024] - Max tokens to generate
    * @param {number} [params.temperature=0.7] - Sampling temperature
    * @param {function} [params.onToken] - Optional streaming token callback

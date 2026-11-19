@@ -1496,7 +1496,7 @@ export default function DocumentVaultPage({
                       setPreviewDoc(null);
                       setEditingPdfDoc(doc);
                     }}
-                    title="Open and annotate in Krystal PDF Editor"
+                    title="Open and annotate in Klarity PDF Editor"
                     className="bg-[#1B4B91] hover:bg-[#2563eb]"
                   >
                     <PenTool className="w-4 h-4" />

@@ -502,7 +502,7 @@ export default function PdfEditorModal({
       });
 
       if (saveToVaultMode && onSaveToVault) {
-        // Save back to Krystal Vault
+        // Save back to Klarity Vault
         await onSaveToVault({
           id: initialDocument?.id || `doc_${Date.now()}`,
           name: docName,
@@ -549,7 +549,7 @@ export default function PdfEditorModal({
     setAiLoading(true);
     setShowAiDrawer(true);
 
-    let systemInstruction = 'You are a financial advisor and document assistant in Krystal. Be concise, clear, and structured.';
+    let systemInstruction = 'You are a financial advisor and document assistant in Klarity. Be concise, clear, and structured.';
     let prompt = '';
 
     if (promptType === 'summary') {

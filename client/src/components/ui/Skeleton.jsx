@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Reusable Krystal Skeleton component for loading states
+ * Reusable Klarity Skeleton component for loading states
  */
 export function Skeleton({
   rows = 3,

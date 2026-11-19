@@ -218,7 +218,7 @@ export async function decryptPayload(cipherPayload, customSecret = '') {
 
       return new TextDecoder().decode(decryptedBuffer);
     } catch (err) {
-      console.warn('Krystal Security: Failed to decrypt ENCv3 payload:', err);
+      console.warn('Klarity Security: Failed to decrypt ENCv3 payload:', err);
       return null;
     }
   }
@@ -306,7 +306,7 @@ function decryptV2Payload(cipherPayload, customSecret = '') {
 
     const expectedMac = computeMacHexLegacy(ivHex, cipherBytes, keyBytes);
     if (expectedMac !== macHex) {
-      console.warn('Krystal Security: Integrity check mismatch during legacy ENCv2 decryption.');
+      console.warn('Klarity Security: Integrity check mismatch during legacy ENCv2 decryption.');
       return null;
     }
 
@@ -318,7 +318,7 @@ function decryptV2Payload(cipherPayload, customSecret = '') {
 
     return new TextDecoder().decode(plainBytes);
   } catch (err) {
-    console.warn('Krystal Security: Failed to decrypt legacy ENCv2 payload:', err);
+    console.warn('Klarity Security: Failed to decrypt legacy ENCv2 payload:', err);
     return null;
   }
 }
@@ -383,7 +383,7 @@ export const secureStorage = {
       localStorage.setItem(key, encrypted);
       return true;
     } catch (err) {
-      console.warn('Krystal Security: Failed to write encrypted storage:', err);
+      console.warn('Klarity Security: Failed to write encrypted storage:', err);
       return false;
     }
   },
@@ -636,11 +636,11 @@ export async function reencryptLegacyStorage(customSecret = '') {
           }
         }
       } catch (e) {
-        console.warn(`Krystal Security: Error migrating key ${key}:`, e);
+        console.warn(`Klarity Security: Error migrating key ${key}:`, e);
       }
     }
   } catch (err) {
-    console.warn('Krystal Security: Failed to re-encrypt legacy storage on unlock:', err);
+    console.warn('Klarity Security: Failed to re-encrypt legacy storage on unlock:', err);
   }
   return migratedCount;
 }
@@ -671,7 +671,7 @@ export async function enforceStorageEncryptionAudit(customSecret = '') {
         newlyEncryptedCount++;
       }
     } catch (err) {
-      console.warn(`Krystal Security: Audit error on ${key}:`, err);
+      console.warn(`Klarity Security: Audit error on ${key}:`, err);
     }
   }
 

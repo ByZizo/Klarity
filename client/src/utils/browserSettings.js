@@ -1,4 +1,4 @@
-// Shared configuration and persistence helpers for Krystal's In-App Browser
+// Shared configuration and persistence helpers for Klarity's In-App Browser
 
 export const SEARCH_ENGINES = [
   {

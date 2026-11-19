@@ -7,16 +7,16 @@ const crypto = require('crypto');
 const DESKTOP_IPC_SECRET = crypto.randomBytes(32).toString('hex');
 
 // Ensure App name and userData path are set immediately before any lock checks
-app.setName('Krystal');
-const oldUserDataDir = path.join(app.getPath('appData'), 'Klarity');
-const userDataDir = path.join(app.getPath('appData'), 'Krystal');
+app.setName('Klarity');
+const userDataDir = path.join(app.getPath('appData'), 'Klarity');
+const krystalUserDataDir = path.join(app.getPath('appData'), 'Krystal');
 
-// Seamless migration: copy existing user data from Klarity to Krystal if needed
-if (!fs.existsSync(userDataDir) && fs.existsSync(oldUserDataDir)) {
+// Seamless migration: preserve data if a user previously ran a Krystal build
+if (!fs.existsSync(userDataDir) && fs.existsSync(krystalUserDataDir)) {
   try {
-    fs.cpSync(oldUserDataDir, userDataDir, { recursive: true });
+    fs.cpSync(krystalUserDataDir, userDataDir, { recursive: true });
   } catch (err) {
-    console.warn('Migration from Klarity to Krystal directory note:', err.message);
+    console.warn('Migration from Krystal to Klarity directory note:', err.message);
   }
 }
 
@@ -245,7 +245,7 @@ function saveWhatsNewData(changes, versionOrSha, explicitVersion) {
       shown: false,
       version: cleanVer,
       commitSha: versionOrSha || cleanVer,
-      title: "What's New in Krystal",
+      title: "What's New in Klarity",
       changes: formatWhatsNewHighlights(changes),
       updatedAt: Date.now()
     };
@@ -271,7 +271,7 @@ function broadcastUpdateStatus(patch) {
   }
 }
 
-// Check GitHub (ByZizo/Krystal) for any newly pushed updates
+// Check GitHub (ByZizo/Klarity) for any newly pushed updates
 async function checkForGitHubUpdate() {
   const repoDir = path.join(__dirname, '..');
   try {
@@ -287,9 +287,9 @@ async function checkForGitHubUpdate() {
 
     // 1. Fetch latest commits on main from GitHub API (with cache-busting so newly pushed commits appear immediately)
     try {
-      const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Krystal/commits?per_page=5&_t=${Date.now()}`, {
+      const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5&_t=${Date.now()}`, {
         headers: {
-          'User-Agent': 'KrystalDesktopApp',
+          'User-Agent': 'KlarityDesktopApp',
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
         }
@@ -322,9 +322,9 @@ async function checkForGitHubUpdate() {
     // Fetch remote package.json to get semantic version (with cache-buster for GitHub raw CDN)
     let remoteVersion = null;
     try {
-      const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Krystal/main/package.json?_t=${Date.now()}`, {
+      const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json?_t=${Date.now()}`, {
         headers: {
-          'User-Agent': 'KrystalDesktopApp',
+          'User-Agent': 'KlarityDesktopApp',
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
         }
@@ -408,7 +408,7 @@ async function checkForGitHubUpdate() {
         recentChanges: recentCommits,
         message: commitTitle
           ? `New update available (${formattedSemVer}): ${commitTitle}`
-          : `A new version of Krystal (${formattedSemVer}) is available!`
+          : `A new version of Klarity (${formattedSemVer}) is available!`
       });
       return updateStatusState;
     }
@@ -481,7 +481,7 @@ async function startEmbeddedBackend() {
 
   // Automatically verify/download default local GGUF model on launch
   localModelEngine.ensureInitialized({ autoDownload: true }).catch(err => {
-    console.warn('[Krystal Local AI] Desktop background init notice:', err.message);
+    console.warn('[Klarity Local AI] Desktop background init notice:', err.message);
   });
 
   const preferredPorts = [5173, 5000, 3000, 0];
@@ -497,13 +497,13 @@ async function startEmbeddedBackend() {
         });
       });
       localServerPort = port;
-      console.log(`Krystal Desktop Embedded Engine bound to http://localhost:${localServerPort}`);
+      console.log(`Klarity Desktop Embedded Engine bound to http://localhost:${localServerPort}`);
       return localServerPort;
     } catch (err) {
       // Port busy, try next preferred port
     }
   }
-  throw new Error('Could not bind local Krystal engine port');
+  throw new Error('Could not bind local Klarity engine port');
 }
 
 let browserRuntimePrefs = {
@@ -687,8 +687,8 @@ async function createDesktopWindow() {
     height: 900,
     minWidth: 960,
     minHeight: 640,
-    title: 'Krystal — Private Financial & Password Suite',
-    icon: path.join(__dirname, 'krystal.ico'),
+    title: 'Klarity Finance — Private Financial & Password Suite',
+    icon: path.join(__dirname, 'klarity.ico'),
     backgroundColor: '#f8fafc',
     autoHideMenuBar: true,
     show: true,
@@ -861,7 +861,7 @@ ipcMain.handle('klarity:get-app-info', () => ({
   isDesktopApp: true,
   version: app.getVersion(),
   userDataDir: app.getPath('userData'),
-  repo: 'ByZizo/Krystal',
+  repo: 'ByZizo/Klarity',
   updateStatus: updateStatusState
 }));
 
@@ -874,7 +874,7 @@ ipcMain.handle('klarity:install-update-now', async () => {
   try {
     broadcastUpdateStatus({
       state: 'installing',
-      message: 'Downloading latest update & rebuilding Krystal...'
+      message: 'Downloading latest update & rebuilding Klarity...'
     });
 
     // Capture previous HEAD SHA before updating to extract exact incoming commits
@@ -1064,7 +1064,7 @@ ipcMain.handle('klarity:browser-get-sponsor-segments', async (_e, videoId) => {
   try {
     const hash = crypto.createHash('sha256').update(videoId).digest('hex').slice(0, 4);
     const res = await fetch(`https://sponsor.ajay.app/api/skipSegments/${hash}?service=YouTube&categories=["sponsor","selfpromo","interaction","intro","outro"]&actionTypes=["skip"]`, {
-      headers: { 'User-Agent': 'KrystalBrowser/1.0' }
+      headers: { 'User-Agent': 'KlarityBrowser/1.0' }
     });
     if (res.ok) {
       const data = await res.json();
@@ -1085,7 +1085,7 @@ ipcMain.handle('klarity:browser-get-dearrow-branding', async (_e, videoId) => {
   if (!videoId || typeof videoId !== 'string') return null;
   try {
     const res = await fetch(`https://sponsor.ajay.app/api/branding?videoID=${encodeURIComponent(videoId)}`, {
-      headers: { 'User-Agent': 'KrystalBrowser/1.0' }
+      headers: { 'User-Agent': 'KlarityBrowser/1.0' }
     });
     if (res.ok) {
       const data = await res.json();

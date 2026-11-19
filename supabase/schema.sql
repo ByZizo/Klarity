@@ -1,5 +1,5 @@
 -- ============================================================================
--- KRYSTAL PRODUCTION DATABASE SCHEMA
+-- KLARITY PRODUCTION DATABASE SCHEMA
 --
 -- Security Model:
 -- 1. Row Level Security (RLS) is ENABLED on every table.

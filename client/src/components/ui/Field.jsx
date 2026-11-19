@@ -1,7 +1,7 @@
 import React, { useId } from 'react';
 
 /**
- * Reusable Krystal Field component
+ * Reusable Klarity Field component
  * Includes visible label (min 13px), input/select/textarea or custom children, helper text, and error
  */
 export function Field({

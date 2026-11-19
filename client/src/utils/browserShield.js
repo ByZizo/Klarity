@@ -1,4 +1,4 @@
-// YouTube Ad Shield, SponsorBlock & DeArrow In-Page Engine for Krystal Browser
+// YouTube Ad Shield, SponsorBlock & DeArrow In-Page Engine for Klarity Browser
 
 export function buildYouTubeAdShieldScript(enabled = true) {
   if (!enabled) return '';

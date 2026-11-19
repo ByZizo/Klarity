@@ -1,5 +1,5 @@
 {
-  "name": "krystal",
+  "name": "klarity",
   "version": "3.12.59",
   "description": "A clean, private finance tracker with a built-in AI assistant to help you manage your money, cards, and bills on Windows, Chrome OS, and Linux.",
   "main": "electron/main.js",
@@ -15,13 +15,13 @@
     "dist:linux": "npm run build && npx electron-builder --linux deb AppImage"
   },
   "build": {
-    "appId": "com.krystal.finance",
-    "productName": "Krystal",
+    "appId": "com.klarity.finance",
+    "productName": "Klarity",
     "publish": [
       {
         "provider": "github",
         "owner": "ByZizo",
-        "repo": "Krystal"
+        "repo": "Klarity"
       }
     ],
     "files": [
@@ -31,20 +31,16 @@
       "package.json"
     ],
     "win": {
-      "icon": "electron/krystal.ico",
+      "icon": "electron/klarity.ico",
       "target": [
-        "nsis",
-        "portable"
+        "nsis"
       ]
     },
     "nsis": {
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Krystal",
+      "shortcutName": "Klarity",
       "artifactName": "${productName}-Setup-${version}.${ext}"
-    },
-    "portable": {
-      "artifactName": "${productName}-Portable-${version}.${ext}"
     },
     "mac": {
       "target": [
@@ -53,19 +49,19 @@
       "artifactName": "${productName}-${version}.${ext}"
     },
     "linux": {
-      "icon": "electron/krystal.png",
+      "icon": "electron/klarity.png",
       "target": [
         "deb",
         "AppImage"
       ],
       "maintainer": "Ziyad Elmahi <ziyadelmahi@gmail.com>",
       "category": "Office",
-      "synopsis": "Krystal Personal & Family Finance Assistant",
+      "synopsis": "Klarity Finance — Personal & Family Finance Assistant",
       "description": "A clean, private finance tracker with a built-in AI assistant to help you manage your money, cards, and bills on Chrome OS and Linux."
     },
     "deb": {
       "priority": "optional",
-      "artifactName": "krystal_${version}_${arch}.${ext}"
+      "artifactName": "klarity_${version}_${arch}.${ext}"
     },
     "appImage": {
       "artifactName": "${productName}-${version}-${arch}.${ext}"

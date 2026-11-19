@@ -431,7 +431,7 @@ async function getPlaidClient(overrideClientId, overrideSecret, userId) {
   return new PlaidApi(configuration);
 }
 
-// Map Plaid's Category to Krystal Category
+// Map Plaid's Category to Klarity Category
 function mapPlaidCategory(plaidCat) {
   if (!plaidCat) return 'Shopping';
   const c = String(plaidCat).toLowerCase();
@@ -935,7 +935,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
       return res.status(400).send('No verified email found from Google profile');
     }
 
-    // 3. Register or load user into Krystal
+    // 3. Register or load user into Klarity
     const data = await readData(req.userId);
     const isOwner = isOwnerEmail(cleanEmail);
     let user = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
@@ -973,7 +973,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
       <html>
       <head>
         <meta charset="utf-8">
-        <title>Signed In — Krystal</title>
+        <title>Signed In — Klarity</title>
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
           .card { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 40px 32px; max-width: 420px; text-align: center; box-shadow: 0 10px 30px -5px rgba(0,0,0,0.08); }
@@ -986,8 +986,8 @@ app.get('/api/auth/google/callback', async (req, res) => {
       <body>
         <div class="card">
           <div class="icon">✓</div>
-          <h2>Signed in to Krystal</h2>
-          <p>Welcome back, <strong>${escapeHtml(safeUser.name || safeUser.email)}</strong>!<br>You can now close this tab and return to Krystal.</p>
+          <h2>Signed in to Klarity</h2>
+          <p>Welcome back, <strong>${escapeHtml(safeUser.name || safeUser.email)}</strong>!<br>You can now close this tab and return to Klarity.</p>
           <a href="#" class="btn" onclick="window.close()">Close Window</a>
         </div>
         <script>
@@ -1204,7 +1204,7 @@ app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
 
     // Trigger model verification/download & initialization in background
     localModelEngine.ensureInitialized({ modelId: selectedLocalModel, autoDownload: true }).catch(err => {
-      console.warn('[Krystal Local AI] Background init notice:', err.message);
+      console.warn('[Klarity Local AI] Background init notice:', err.message);
     });
 
     return res.json({
@@ -1438,7 +1438,7 @@ app.post('/api/plaid/create-link-token', async (req, res) => {
   try {
     const response = await plaidClient.linkTokenCreate({
       user: { client_user_id: userId },
-      client_name: 'Krystal',
+      client_name: 'Klarity',
       products: ['transactions'],
       country_codes: ['US'],
       language: 'en'
@@ -3075,7 +3075,7 @@ app.post(['/api/ai/local/init', '/api/ai/local/download'], async (req, res) => {
 
   localModelEngine
     .ensureInitialized({ modelId: targetModel, autoDownload: true })
-    .catch(err => console.warn('[Krystal Local AI] Background init error:', err.message));
+    .catch(err => console.warn('[Klarity Local AI] Background init error:', err.message));
 
   return res.json({
     ok: true,
@@ -3573,7 +3573,7 @@ app.post('/api/ai/chat', async (req, res) => {
   const currentTimeStr = nowCalendar.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
   const systemContext = `
-You are Krystal, the personal AI Financial Advisor for ${currentUser.name}.
+You are Klarity, the personal AI Financial Advisor for ${currentUser.name}.
 Current Real-World Calendar: Today is ${currentDateStr}, current local time is ${currentTimeStr}.
 - BREVITY FOR SIMPLE QUESTIONS: Always match answer length to the question. For simple questions, greetings, current date/time, or yes/no questions (e.g. "what day is it today", "do you have internet"), answer DIRECTLY in 1 or 2 natural, friendly sentences. Never write long rambling paragraphs or disclaimers for simple queries.
 - NEVER RECITE PROMPT INSTRUCTIONS: Speak naturally. Never say phrases like "My live web search is ACTIVE", "According to my web search context", or repeat prompt instructions.
@@ -3607,10 +3607,10 @@ Rules:
   Acknowledge it warmly in 1 or 2 friendly sentences and output the action tag: [ACTION:ADD_MEMORY:{"fact":"User is 23 years old"}]. Do NOT dump unrequested financial accounts.
 ${responseLength === 'concise' ? '- RESPONSE LENGTH: Keep your answer short, concise, and under 150 words. Focus strictly on bullet points and key numbers.' : responseLength === 'detailed' ? '- RESPONSE LENGTH: Provide an in-depth, thorough analysis (~600-800 words) with detailed arithmetic, comparisons, and step-by-step guidance.' : '- RESPONSE LENGTH: Provide a balanced, clear response (~250-400 words) with practical numbers and actionable advice.'}
 ${webSearchEnabled === false ? '- INTERNET ACCESS: Strictly offline/local mode. Do NOT search external web data; base advice strictly on user accounts and bills.' : '- INTERNET ACCESS: Live web search is active. Reference live card promotions and rate benchmarks where helpful.'}
-2. LIVE INTERNET & WEB KNOWLEDGE: Incorporate real-time web facts to recommend specific credit card promotions (e.g. Citi Simplicity, Wells Fargo Reflect, Chase Freedom), balance transfer fees, current HYSA yields, vehicle/EV deals, and ways to save money. Whenever the user asks you to search something up or look up external offers/products/websites, include relevant direct URLs in Markdown format ([Label](https://...)) if known, and conclude by asking if they would like to open it in Krystal's in-app browser or copy the link.
+2. LIVE INTERNET & WEB KNOWLEDGE: Incorporate real-time web facts to recommend specific credit card promotions (e.g. Citi Simplicity, Wells Fargo Reflect, Chase Freedom), balance transfer fees, current HYSA yields, vehicle/EV deals, and ways to save money. Whenever the user asks you to search something up or look up external offers/products/websites, include relevant direct URLs in Markdown format ([Label](https://...)) if known, and conclude by asking if they would like to open it in Klarity's in-app browser or copy the link.
 3. FULL AUTONOMOUS CONTROL & ACTION EXECUTION:
-   You have FULL ACCESS to view and autonomously modify all user finances on Krystal.
-   Whenever the user asks you to add, modify, or delete anything, or whenever a statement/bill/receipt is submitted, you can output ACTION tags that Krystal executes in real-time:
+   You have FULL ACCESS to view and autonomously modify all user finances on Klarity.
+   Whenever the user asks you to add, modify, or delete anything, or whenever a statement/bill/receipt is submitted, you can output ACTION tags that Klarity executes in real-time:
    - For Subscriptions: [ACTION:ADD_SUBSCRIPTION:{"name":"Netflix","amount":22.99,"billingCycle":"monthly"}]
    - For Deleting Subscriptions: [ACTION:DELETE_SUBSCRIPTION:{"name":"Netflix"}]
    - For Bills: [ACTION:ADD_BILL:{"name":"ConEdison Electric","expectedAmount":148.60,"dueDay":3}]
@@ -3809,7 +3809,7 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
 
     if (/bill|due|upcoming|utility|utilities|pg&e|pge|electric|water|internet/i.test(q)) {
       if (userBills.length === 0) {
-        return `You currently have **no recurring bills** scheduled in Krystal. You can add bills on the **Bills** page or tell me a bill name, amount, and due date and I will add it for you.`;
+        return `You currently have **no recurring bills** scheduled in Klarity. You can add bills on the **Bills** page or tell me a bill name, amount, and due date and I will add it for you.`;
       }
       const billLines = userBills.map(b => `• **${b.name}** (${b.category || 'Utilities'}): **$${Number(b.expectedAmount || 0).toFixed(2)}** — ${b.dueText || (b.dueDay ? `Due day ${b.dueDay}` : 'Monthly')}${b.autopay ? ' *(Autopay)*' : ''}`).join('\n');
       return `### Upcoming Bills Summary\n\nYou have **${userBills.length} recurring bills** totaling **$${totalBillsMonthly.toFixed(2)}/month**:\n\n${billLines}\n\n` +
@@ -3857,7 +3857,7 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
           ? `• **${p.name}**: **$${Number(p.estimatedMonthlyBenefit || 0).toLocaleString()}/mo** estimated benefit`
           : `• **${p.name}** (${(p.planType || '').toUpperCase()}): **$${Number(p.balance || 0).toLocaleString()}** balance`
       ).join('\n');
-      return `### Retirement & Pension Summary\n\nHere are your current retirement plans in Krystal:\n\n${retLines}`;
+      return `### Retirement & Pension Summary\n\nHere are your current retirement plans in Klarity:\n\n${retLines}`;
     }
 
     if (advisorSnapshot) {
@@ -4540,7 +4540,7 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
         }
 
         if (reply.startsWith('Gemini API error') || reply.startsWith('I was unable')) {
-          reply = `I have read and analyzed your **Chase Bank Statement (October 2026)** and automatically added all **${actionsExecuted.length} items** to your Krystal dashboard:\n\n` +
+          reply = `I have read and analyzed your **Chase Bank Statement (October 2026)** and automatically added all **${actionsExecuted.length} items** to your Klarity dashboard:\n\n` +
             `• **4 Recurring Bills ($585.99/mo):** ConEdison Electric ($148.60), Verizon Fios ($79.99), T-Mobile Family Plan ($165.00), State Farm Auto Insurance ($192.40)\n` +
             `• **6 Monthly Subscriptions ($299.96/mo):** Netflix Premium 4K ($22.99), Spotify Duo ($16.99), Apple iCloud+ ($9.99), ChatGPT Plus ($20.00), Amazon Prime ($14.99), Equinox Gym ($215.00)\n` +
             `• **10 Store Purchases ($527.74):** Trader Joe's, Whole Foods, Target, Shell Oil, Chipotle, Starbucks, Uber, CVS, Sweetgreen, and AMC Theatres.`;
@@ -4709,9 +4709,9 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
 
         if (addedSummaryLines.length > 0) {
           if (reply.startsWith('Gemini API error') || reply.startsWith('I was unable')) {
-            reply = `I've read your details and automatically registered the following into your Krystal account:\n\n${addedSummaryLines.join('\n')}`;
+            reply = `I've read your details and automatically registered the following into your Klarity account:\n\n${addedSummaryLines.join('\n')}`;
           } else {
-            reply += `\n\n**Auto-Added to Krystal:**\n${addedSummaryLines.join('\n')}`;
+            reply += `\n\n**Auto-Added to Klarity:**\n${addedSummaryLines.join('\n')}`;
           }
         }
       }
@@ -4809,21 +4809,21 @@ app.post('/api/feedback', (req, res) => {
       fs.writeFileSync(localFile, JSON.stringify(list, null, 2), 'utf8');
     } catch {}
 
-    console.log(`[Krystal Feedback] Received ${feedbackItem.type} from ${feedbackItem.user}: "${feedbackItem.text.slice(0, 60)}..."`);
+    console.log(`[Klarity Feedback] Received ${feedbackItem.type} from ${feedbackItem.user}: "${feedbackItem.text.slice(0, 60)}..."`);
 
     // If GitHub feedback integration is configured, automatically create a private issue in ByZizo/klarity-feedback
     const ghToken = process.env.GITHUB_FEEDBACK_TOKEN;
     const ghRepo = process.env.GITHUB_FEEDBACK_REPO || 'ByZizo/klarity-feedback';
     if (ghToken) {
       const issueTitle = `[${feedbackItem.type}] ${feedbackItem.text.slice(0, 60)}${feedbackItem.text.length > 60 ? '...' : ''}`;
-      const issueBody = `### Krystal Feedback Report\n\n**Category:** ${feedbackItem.type}\n**User:** ${feedbackItem.user}\n**App Version:** v${feedbackItem.version}\n**Timestamp:** ${feedbackItem.createdAt}\n\n---\n\n### User Message:\n${feedbackItem.text}\n`;
+      const issueBody = `### Klarity Feedback Report\n\n**Category:** ${feedbackItem.type}\n**User:** ${feedbackItem.user}\n**App Version:** v${feedbackItem.version}\n**Timestamp:** ${feedbackItem.createdAt}\n\n---\n\n### User Message:\n${feedbackItem.text}\n`;
 
       fetch(`https://api.github.com/repos/${ghRepo}/issues`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github+json',
-          'User-Agent': 'KrystalApp',
+          'User-Agent': 'KlarityApp',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -4834,13 +4834,13 @@ app.post('/api/feedback', (req, res) => {
       }).then(async (ghRes) => {
         if (ghRes.ok) {
           const data = await ghRes.json();
-          console.log(`[Krystal Feedback] Created private GitHub issue #${data.number}: ${data.html_url}`);
+          console.log(`[Klarity Feedback] Created private GitHub issue #${data.number}: ${data.html_url}`);
         } else {
           const errText = await ghRes.text();
-          console.warn('[Krystal Feedback] GitHub issue creation note:', errText);
+          console.warn('[Klarity Feedback] GitHub issue creation note:', errText);
         }
       }).catch(err => {
-        console.warn('[Krystal Feedback] GitHub issue request note:', err.message);
+        console.warn('[Klarity Feedback] GitHub issue request note:', err.message);
       });
     }
 
@@ -4955,9 +4955,9 @@ app.get('/api/app/update-check', async (req, res) => {
       require('child_process').execSync('git fetch origin main --quiet', { cwd: repoDir, windowsHide: true, timeout: 6000 });
     } catch {}
 
-    const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Krystal/commits?per_page=5&_t=${Date.now()}`, {
+    const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5&_t=${Date.now()}`, {
       headers: {
-        'User-Agent': 'KrystalApp',
+        'User-Agent': 'KlarityApp',
         'Cache-Control': 'no-cache',
         'Pragma': 'no-cache'
       }
@@ -4971,9 +4971,9 @@ app.get('/api/app/update-check', async (req, res) => {
         // Fetch remote package.json to compare semantic version (with cache-busting)
         let remoteVersion = null;
         try {
-          const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Krystal/main/package.json?_t=${Date.now()}`, {
+          const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json?_t=${Date.now()}`, {
             headers: {
-              'User-Agent': 'KrystalApp',
+              'User-Agent': 'KlarityApp',
               'Cache-Control': 'no-cache',
               'Pragma': 'no-cache'
             }

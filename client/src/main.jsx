@@ -14,7 +14,7 @@ class GlobalErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('Krystal UI uncaught render error:', error, errorInfo);
+    console.error('Klarity UI uncaught render error:', error, errorInfo);
   }
 
   render() {
@@ -35,7 +35,7 @@ class GlobalErrorBoundary extends Component {
               onClick={() => { window.location.reload(); }}
               style={{ padding: '8px 16px', backgroundColor: '#18457c', color: '#ffffff', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
             >
-              Reload Krystal
+              Reload Klarity
             </button>
           </div>
         </div>

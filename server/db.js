@@ -1,5 +1,5 @@
 // ============================================================================
-// KRYSTAL DATABASE & STORAGE ADAPTER
+// KLARITY DATABASE & STORAGE ADAPTER
 //
 // Dual-Mode Architecture:
 // 1. Hosted Mode (Supabase):
@@ -9,7 +9,7 @@
 //      accounts, bills, subscriptions, transactions, budgets, savings_goals,
 //      manual_assets, user_settings, plaid_items).
 // 2. Desktop Mode (Electron & Local Encrypted Storage):
-//    - Preserves local AES-256-GCM encrypted file storage (krystal_vault_data.enc).
+//    - Preserves local AES-256-GCM encrypted file storage (klarity_vault_data.enc).
 //    - Provides 100% offline self-contained privacy on user's machine.
 // ============================================================================
 
@@ -33,24 +33,18 @@ if (isSupabaseEnabled) {
         autoRefreshToken: false
       }
     });
-    console.log('Krystal Server: Connected to Supabase Cloud Database via Service-Role Key');
+    console.log('Klarity Server: Connected to Supabase Cloud Database via Service-Role Key');
   } catch (err) {
-    console.error('Krystal Server: Failed to initialize Supabase client:', err.message);
+    console.error('Klarity Server: Failed to initialize Supabase client:', err.message);
   }
 }
 
 // ----------------------------------------------------------------------------
 // Local Encrypted File Configuration for Desktop App
 // ----------------------------------------------------------------------------
-let DATA_FILE = path.join(__dirname, 'data.json');
-if (process.env.KLARITY_USER_DATA_DIR) {
-  const newEncPath = path.join(process.env.KLARITY_USER_DATA_DIR, 'krystal_vault_data.enc');
-  const legacyEncPath = path.join(process.env.KLARITY_USER_DATA_DIR, 'klarity_vault_data.enc');
-  if (!fs.existsSync(newEncPath) && fs.existsSync(legacyEncPath)) {
-    try { fs.copyFileSync(legacyEncPath, newEncPath); } catch {}
-  }
-  DATA_FILE = fs.existsSync(newEncPath) ? newEncPath : (fs.existsSync(legacyEncPath) ? legacyEncPath : newEncPath);
-}
+const DATA_FILE = process.env.KLARITY_USER_DATA_DIR
+  ? path.join(process.env.KLARITY_USER_DATA_DIR, 'klarity_vault_data.enc')
+  : path.join(__dirname, 'data.json');
 
 const ownerEmailsFromEnv = process.env.OWNER_EMAILS
   ? process.env.OWNER_EMAILS.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
@@ -94,21 +88,12 @@ function getOrCreateInstallationKey() {
     return cachedInstallationKey;
   }
   const keyDir = process.env.KLARITY_USER_DATA_DIR || __dirname;
-  const legacyKeyFile = path.join(keyDir, '.klarity_master.key');
-  const keyFile = path.join(keyDir, '.krystal_master.key');
+  const keyFile = path.join(keyDir, '.klarity_master.key');
   try {
     if (fs.existsSync(keyFile)) {
       const existing = fs.readFileSync(keyFile, 'utf8').trim();
       if (existing.length >= 32) {
         cachedInstallationKey = existing;
-        return cachedInstallationKey;
-      }
-    }
-    if (fs.existsSync(legacyKeyFile)) {
-      const existingLegacy = fs.readFileSync(legacyKeyFile, 'utf8').trim();
-      if (existingLegacy.length >= 32) {
-        cachedInstallationKey = existingLegacy;
-        try { fs.writeFileSync(keyFile, existingLegacy, { encoding: 'utf8', mode: 0o600 }); } catch {}
         return cachedInstallationKey;
       }
     }

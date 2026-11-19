@@ -3,7 +3,7 @@ import { AlertCircle } from 'lucide-react';
 import { Button } from './Button';
 
 /**
- * Reusable Krystal ConfirmDialog component
+ * Reusable Klarity ConfirmDialog component
  * Replaces all native browser confirm dialogs calls with an accessible in-app modal
  */
 export function ConfirmDialog({

@@ -43,4 +43,3 @@ const desktopBridge = {
 };
 
 contextBridge.exposeInMainWorld('klarityDesktop', desktopBridge);
-contextBridge.exposeInMainWorld('krystalDesktop', desktopBridge);

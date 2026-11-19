@@ -88,7 +88,7 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
   const tag = args.tag;
   const dir = args.dir;
-  const repo = args.repo || 'ByZizo/Krystal';
+  const repo = args.repo || 'ByZizo/Klarity';
   const out = args.out || 'RELEASE_NOTES.md';
 
   if (!tag || !dir) {
@@ -99,28 +99,21 @@ function main() {
   const version = tag.replace(/^v/i, '');
   const assets = collectAssets(dir, repo, tag);
 
-  // Match primary user installers and portable binaries dynamically from built files.
-  const winSetup = assets.find((a) => /^Krystal-Setup-.*\.exe$/i.test(a.name))
-    || assets.find((a) => /Setup.*\.exe$/i.test(a.name));
-  const winPortable = assets.find((a) => /^Krystal-Portable-.*\.exe$/i.test(a.name))
-    || assets.find((a) => /\.exe$/i.test(a.name) && a !== winSetup);
-  const linuxDeb = assets.find((a) => /\.deb$/i.test(a.name));
-  const linuxAppImage = assets.find((a) => /\.AppImage$/i.test(a.name));
+  // Match single Windows installer and Linux packages dynamically from built files.
+  const winSetup = assets.find((a) => /^Klarity-Setup-.*\.exe$/i.test(a.name))
+    || assets.find((a) => /\.exe$/i.test(a.name));
+  const linuxDeb = assets.find((a) => /^klarity_.*\.deb$/i.test(a.name))
+    || assets.find((a) => /\.deb$/i.test(a.name));
+  const linuxAppImage = assets.find((a) => /^Klarity-.*\.AppImage$/i.test(a.name))
+    || assets.find((a) => /\.AppImage$/i.test(a.name));
 
   const primarySpecs = [
     {
       asset: winSetup,
-      platform: '🪟 **Windows Installer (Recommended)**',
-      badge: 'https://img.shields.io/badge/Download-Windows%20Installer%20(.exe)-18457c?logo=windows&style=for-the-badge',
-      badgeAlt: 'Download Windows Installer (.exe)',
-      bestFor: 'Standard Windows setup. Double-click to install **Krystal** with Desktop & Start Menu shortcuts.',
-    },
-    {
-      asset: winPortable,
-      platform: '🪟 **Windows Portable (No Install)**',
-      badge: 'https://img.shields.io/badge/Download-Windows%20Portable%20(.exe)-475569?logo=windows&style=for-the-badge',
-      badgeAlt: 'Download Windows Portable (.exe)',
-      bestFor: 'Standalone `.exe`. Run **Krystal** immediately from any folder or USB drive.',
+      platform: '🪟 **Windows Installer (`.exe`)**',
+      badge: 'https://img.shields.io/badge/Download-Windows%20(.exe)-18457c?logo=windows&style=for-the-badge',
+      badgeAlt: 'Download for Windows (.exe)',
+      bestFor: 'Double-click to install **Klarity** with Desktop & Start Menu shortcuts.',
     },
     {
       asset: linuxDeb,
@@ -141,9 +134,9 @@ function main() {
   const metaFiles = assets.filter((a) => /\.blockmap$/i.test(a.name) || /^latest.*\.ya?ml$/i.test(a.name));
 
   const lines = [];
-  lines.push(`# 💎 Download Krystal (v${version})`);
+  lines.push(`# 💎 Download Klarity Finance (v${version})`);
   lines.push('');
-  lines.push('100% local, private personal & family finance suite.');
+  lines.push('100% local, private personal & family finance suite. Installs on your computer as **Klarity**.');
   lines.push('');
 
   if (primarySpecs.length > 0) {
@@ -165,9 +158,9 @@ function main() {
     lines.push('');
   }
 
-  const setupName = winSetup ? winSetup.name : `Krystal-Setup-${version}.exe`;
-  const debName = linuxDeb ? linuxDeb.name : `krystal_${version}_amd64.deb`;
-  const appImageName = linuxAppImage ? linuxAppImage.name : `Krystal-${version}-x86_64.AppImage`;
+  const setupName = winSetup ? winSetup.name : `Klarity-Setup-${version}.exe`;
+  const debName = linuxDeb ? linuxDeb.name : `klarity_${version}_amd64.deb`;
+  const appImageName = linuxAppImage ? linuxAppImage.name : `Klarity-${version}-x86_64.AppImage`;
 
   lines.push('---');
   lines.push('');
@@ -175,14 +168,14 @@ function main() {
   lines.push('');
   lines.push('### 🪟 Windows (`.exe`)');
   lines.push(`1. Download **\`${setupName}\`** from the table above (do **not** open \`.blockmap\` files).`);
-  lines.push('2. Double-click the `.exe` file to install **Krystal** and create Desktop & Start Menu shortcuts.');
+  lines.push('2. Double-click the `.exe` file to install **Klarity** and create Desktop & Start Menu shortcuts.');
   lines.push('3. If Windows Defender SmartScreen shows *"Windows protected your PC"* (normal for open-source apps without a paid certificate), click **More info → Run anyway**.');
   lines.push('');
   lines.push('### 💻 Chrome OS / Chromebook (`.deb`)');
   lines.push('1. Ensure **Linux development environment** is enabled in Chromebook **Settings → Developers**.');
   lines.push(`2. Download **\`${debName}\`** from the table above.`);
   lines.push('3. Open the **Files** app, right-click the `.deb` file, and choose **Install with Linux**.');
-  lines.push('4. Open **Krystal** from your Chromebook App Launcher.');
+  lines.push('4. Open **Klarity** from your Chromebook App Launcher.');
   lines.push('');
   lines.push('### 🐧 Linux (`.deb` / `.AppImage`)');
   lines.push(`- **Debian / Ubuntu / Mint:** \`sudo dpkg -i ${debName}\``);
@@ -206,11 +199,11 @@ function main() {
   lines.push('');
   lines.push("## What's Included");
   lines.push('');
-  lines.push('- **Krystal Finance Branding & Desktop App:** Renamed across UI, installers, shortcuts, and local vaults as **Krystal**.');
+  lines.push('- **Klarity Finance Branding & Desktop App:** Branded as **Klarity Finance** and installs cleanly on your computer as **Klarity**.');
   lines.push('- **Integrated PDF Editor:** Annotate, sign, highlight, draw, and fill bank statements and forms right inside your encrypted vault.');
   lines.push('- **Refactored Notes Workspace:** Auto-saving notes with custom sections, icon-only toolbar, and smoothly resizable floating window.');
-  lines.push('- **Support & About Page:** Added Buy Me a Coffee support link in **Settings → About**.');
-  lines.push('- **100% Local & Private:** Your financial data stays strictly on your own device with zero external account tracking.');
+  lines.push('- **Support & About Page:** Added Buy Me a Coffee support button in **Settings → About**.');
+  lines.push('- **100% Local & Private:** Everything runs and stays 100% local on your own device with zero external account tracking.');
   lines.push('');
 
   fs.writeFileSync(out, `${lines.join('\n')}\n`, 'utf8');

@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from './Button';
 
 /**
- * Reusable Krystal EmptyState component
+ * Reusable Klarity EmptyState component
  * Displays a clear message and one primary action button
  */
 export function EmptyState({

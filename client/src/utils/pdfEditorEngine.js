@@ -1,5 +1,5 @@
 // ============================================================================
-// KRYSTAL PDF EDITOR ENGINE
+// KLARITY PDF EDITOR ENGINE
 // Pure client-side PDF rendering (pdfjs-dist) and vector manipulation (pdf-lib)
 // ============================================================================
 

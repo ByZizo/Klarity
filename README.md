@@ -1,39 +1,39 @@
-# Krystal Finance
+# Klarity Finance
 
 A clean, private finance tracker with a built-in AI assistant to help you stay on top of your money, cards, and bills.
 
-[![Download for Windows](https://img.shields.io/badge/Download-Windows%20(.exe)-18457c?logo=windows&style=for-the-badge)](https://github.com/ByZizo/Krystal/releases/latest)
-[![Download for Chrome OS & Linux](https://img.shields.io/badge/Download-Chrome%20OS%20%2F%20Linux%20(.deb)-22c55e?logo=linux&style=for-the-badge)](https://github.com/ByZizo/Krystal/releases/latest)
+[![Download for Windows](https://img.shields.io/badge/Download-Windows%20(.exe)-18457c?logo=windows&style=for-the-badge)](https://github.com/ByZizo/Klarity/releases/latest)
+[![Download for Chrome OS & Linux](https://img.shields.io/badge/Download-Chrome%20OS%20%2F%20Linux%20(.deb)-22c55e?logo=linux&style=for-the-badge)](https://github.com/ByZizo/Klarity/releases/latest)
 
 ---
 
 ## 📥 Download & Install (Easiest Way)
 
-No coding or terminal needed. When downloaded, the app installs onto your computer as **Krystal**.
+No coding or terminal needed. When downloaded, the app installs onto your computer as **Klarity**.
 
 > **Note:** Always click the **`.exe`** (Windows), **`.deb`** (Chrome OS / Ubuntu), or **`.AppImage`** (Linux) download links on the release page. `.blockmap` and `.yml` files are only used internally for automatic updates.
 
 ### 🪟 Windows (.exe)
-1. Go to the **[Latest Release Download Page](https://github.com/ByZizo/Krystal/releases/latest)**.
-2. Download **`Krystal-Setup-3.12.59.exe`** (or **`Krystal-Portable-3.12.59.exe`** for no installation).
-3. Double-click the file to install and launch **Krystal**. An icon will automatically be placed on your desktop and Start menu.
+1. Go to the **[Latest Release Download Page](https://github.com/ByZizo/Klarity/releases/latest)**.
+2. Download **`Klarity-Setup-3.12.59.exe`**.
+3. Double-click the file to install and launch **Klarity**. An icon will automatically be placed on your desktop and Start menu.
 
 ### 💻 Chrome OS / Chromebook (.deb)
 1. Ensure the **Linux development environment** is turned on in your Chromebook Settings (`Settings` → `Developers` → `Linux development environment` → `Turn on`).
-2. Go to the **[Latest Release Download Page](https://github.com/ByZizo/Krystal/releases/latest)**.
-3. Download **`krystal_3.12.59_amd64.deb`**.
+2. Go to the **[Latest Release Download Page](https://github.com/ByZizo/Klarity/releases/latest)**.
+3. Download **`klarity_3.12.59_amd64.deb`**.
 4. Open the Files app on your Chromebook, right-click the `.deb` file, and select **"Install with Linux"**.
-5. Once complete, launch **Krystal** directly from your Chromebook App Launcher.
+5. Once complete, launch **Klarity** directly from your Chromebook App Launcher.
 
 ### 🐧 Linux (.deb or .AppImage)
-- **Debian / Ubuntu / Mint**: Download `krystal_3.12.59_amd64.deb` and run `sudo dpkg -i krystal_3.12.59_amd64.deb`.
-- **AppImage**: Download `Krystal-3.12.59-x86_64.AppImage`, make it executable (`chmod +x Krystal-3.12.59-x86_64.AppImage`), and double-click to run.
+- **Debian / Ubuntu / Mint**: Download `klarity_3.12.59_amd64.deb` and run `sudo dpkg -i klarity_3.12.59_amd64.deb`.
+- **AppImage**: Download `Klarity-3.12.59-x86_64.AppImage`, make it executable (`chmod +x Klarity-3.12.59-x86_64.AppImage`), and double-click to run.
 
 ---
 
-## What is Krystal Finance?
+## What is Klarity Finance?
 
-Krystal Finance gives you a simple, single dashboard to manage your financial life without ads, data selling, or clutter. Whether you want to connect your bank accounts or enter everything manually, Krystal helps you track balances, plan debt payoffs, and stay ahead of upcoming bills.
+Klarity Finance gives you a simple, single dashboard to manage your financial life without ads, data selling, or clutter. Whether you want to connect your bank accounts or enter everything manually, Klarity helps you track balances, plan debt payoffs, and stay ahead of upcoming bills.
 
 It also includes a built-in AI financial advisor that analyzes your real numbers and gives you direct, practical advice—like how to pay down high-interest cards fastest, where you can trim monthly expenses, and how much you can safely save.
 
@@ -58,8 +58,8 @@ If you prefer to run or build from source code:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/ByZizo/Krystal.git
-   cd Krystal
+   git clone https://github.com/ByZizo/Klarity.git
+   cd Klarity
    ```
 
 2. Install dependencies:

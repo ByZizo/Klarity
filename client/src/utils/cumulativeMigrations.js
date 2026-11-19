@@ -251,7 +251,7 @@ export async function runCumulativeClientMigrations() {
 
     return { ok: true, results: migrationResults };
   } catch (err) {
-    console.error('Krystal cumulative migration exception:', err);
+    console.error('Klarity cumulative migration exception:', err);
     return { ok: false, error: err.message };
   }
 }
