@@ -1954,11 +1954,12 @@ export function BrowserPage({
             <button
               type="button"
               onClick={() => setIsAdBlockPopoverOpen((prev) => !prev)}
-              title="Ad & Tracker Blocker"
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-2xs ${
+              aria-label={adBlockEnabled ? `Ad & Tracker Blocker (${adsBlockedCount} blocked)` : 'Ad & Tracker Blocker (Paused)'}
+              title={adBlockEnabled ? `Ad & Tracker Blocker (${adsBlockedCount} blocked)` : 'Ad & Tracker Blocker (Paused)'}
+              className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-center ${
                 adBlockEnabled
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
-                  : 'bg-[var(--surface-subtle)] border-[var(--line)] text-[var(--muted)]'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/60'
+                  : 'border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)]'
               }`}
             >
               {adBlockEnabled ? (
@@ -1966,10 +1967,6 @@ export function BrowserPage({
               ) : (
                 <ShieldAlert className="w-4 h-4 text-amber-600" />
               )}
-              <span className="hidden sm:inline">
-                {adBlockEnabled ? `${adsBlockedCount} Blocked` : 'Ad Block Off'}
-              </span>
-              <ChevronDown className="w-3 h-3 opacity-70" />
             </button>
 
             {isAdBlockPopoverOpen && (
@@ -2031,16 +2028,15 @@ export function BrowserPage({
                   setTimeout(() => browserNotesRef.current?.focus(), 50);
                 }
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
+              className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-center shrink-0 ${
                 isNotesOpen
-                  ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
-                  : 'bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)]'
+                  ? 'bg-amber-500 text-white border-amber-500'
+                  : 'border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)]'
               }`}
               title={isNotesOpen ? 'Close Quick Notes' : 'Open Quick Notes'}
               aria-label="Quick Notes"
             >
-              <StickyNote className={`w-3.5 h-3.5 ${isNotesOpen ? 'text-white' : 'text-amber-500'}`} />
-              <span className="hidden sm:inline">Notes</span>
+              <StickyNote className={`w-4 h-4 ${isNotesOpen ? 'text-white' : 'text-amber-500'}`} />
             </button>
           </div>
 
@@ -2060,16 +2056,15 @@ export function BrowserPage({
                   }
                 }
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
+              className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-center shrink-0 ${
                 isBrowserAiSidebarOpen
-                  ? 'bg-[var(--brand)] text-white border-[var(--brand)] shadow-sm'
-                  : 'bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)]'
+                  ? 'bg-[var(--brand)] text-white border-[var(--brand)]'
+                  : 'border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)]'
               }`}
               title={isBrowserAiSidebarOpen ? 'Close AI Sidebar' : 'Open Browser AI Copilot'}
               aria-label="Browser AI"
             >
-              <Sparkles className={`w-3.5 h-3.5 ${isBrowserAiSidebarOpen ? 'text-white' : 'text-[var(--brand)]'}`} />
-              <span className="hidden sm:inline">AI Copilot</span>
+              <Sparkles className={`w-4 h-4 ${isBrowserAiSidebarOpen ? 'text-white' : 'text-[var(--brand)]'}`} />
             </button>
           </div>
 
