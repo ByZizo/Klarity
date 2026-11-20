@@ -64,7 +64,6 @@ import {
   Check,
   SlidersHorizontal,
   Calculator,
-  RefreshCw,
   Square,
   Copy,
   PhoneCall,
@@ -346,7 +345,6 @@ function KlarityApp() {
       setIsSubmittingFeedback(false);
     }
   };
-  const [isRefreshingApp, setIsRefreshingApp] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
 
   useEffect(() => {
@@ -359,28 +357,6 @@ function KlarityApp() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
-
-  const handleRefreshApp = async () => {
-    setIsRefreshingApp(true);
-    try {
-      if (currentUser) {
-        await Promise.all([
-          fetchSettings(currentUser),
-          fetchData(currentUser, viewHousehold)
-        ]);
-      }
-      if (typeof window !== 'undefined' && window.klarityDesktop?.checkForUpdates) {
-        const st = await window.klarityDesktop.checkForUpdates();
-        if (st && (st.state === 'available' || st.state === 'ready')) {
-          setUpdateBannerDismissed(false);
-        }
-      }
-      setNotificationToast('App refreshed');
-      setTimeout(() => setNotificationToast(''), 2500);
-    } catch {} finally {
-      setTimeout(() => setIsRefreshingApp(false), 400);
-    }
-  };
 
   useEffect(() => {
     const checkServerUpdate = async () => {
@@ -5327,6 +5303,35 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
     setTimeout(() => setNotificationToast(''), 4000);
   };
 
+  const isUpdateInstalling =
+    isInstallingUpdate || desktopAppInfo.updateStatus?.state === 'installing';
+  const hasAvailableUpdate =
+    desktopAppInfo.updateStatus?.state === 'available' ||
+    desktopAppInfo.updateStatus?.state === 'ready';
+  const showUpdateIconButton = hasAvailableUpdate || isUpdateInstalling;
+  const updateButtonLabel = isUpdateInstalling
+    ? 'Installing update...'
+    : `Update available (${formatVersionString(
+        desktopAppInfo.updateStatus?.latestVersion || CURRENT_APP_VERSION
+      )})`;
+
+  const renderUpdateIconButton = (sizeClass = 'w-8 h-8') =>
+    showUpdateIconButton && (
+      <button
+        type="button"
+        onClick={() => setIsUpdateModalOpen(true)}
+        disabled={isUpdateInstalling}
+        aria-label={updateButtonLabel}
+        title={updateButtonLabel}
+        className={`group relative ${sizeClass} rounded-[8px] flex items-center justify-center text-[var(--brand)] bg-[var(--brand-soft)] hover:bg-[var(--brand)] hover:text-white transition-colors cursor-pointer disabled:opacity-60`}
+      >
+        <ArrowUpCircle className={`w-4 h-4 ${isUpdateInstalling ? 'animate-pulse' : ''}`} />
+        {!isUpdateInstalling && (
+          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[var(--brand)] group-hover:bg-white ring-2 ring-[var(--surface)]" />
+        )}
+      </button>
+    );
+
   return (
     <div className={`min-h-screen bg-[var(--bg)] text-[var(--ink)] flex font-sans antialiased ${normalizedActiveTab === 'browser' ? 'h-screen max-h-screen overflow-hidden' : ''}`}>
       {linkToken && (
@@ -5407,16 +5412,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 </span>
               </button>
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={handleRefreshApp}
-                  disabled={isRefreshingApp}
-                  aria-label="Refresh financial data"
-                  title="Refresh financial data"
-                  className="w-8 h-8 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isRefreshingApp ? 'animate-spin text-[#1B4B91]' : ''}`} />
-                </button>
+                {renderUpdateIconButton('w-8 h-8')}
                 <button
                   type="button"
                   onClick={() => setIsSidebarCompact(true)}
@@ -5540,16 +5536,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           </div>
         ) : (
           <div className="py-3 border-t border-[var(--line)] bg-[var(--surface)] flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={handleRefreshApp}
-              disabled={isRefreshingApp}
-              aria-label="Refresh financial data"
-              title="Refresh financial data"
-              className="w-9 h-9 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshingApp ? 'animate-spin text-[#1B4B91]' : ''}`} />
-            </button>
+            {renderUpdateIconButton('w-9 h-9')}
             <button
               type="button"
               aria-label="Open settings"
@@ -5581,14 +5568,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             <span className="font-serif text-[20px] font-semibold text-[var(--ink)]">Klarity</span>
           </button>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleRefreshApp}
-              aria-label="Refresh financial data"
-              className="w-9 h-9 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] cursor-pointer"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshingApp ? 'animate-spin text-[#1B4B91]' : ''}`} />
-            </button>
+            {renderUpdateIconButton('w-9 h-9')}
             <button
               type="button"
               onClick={() => {
