@@ -758,13 +758,38 @@ async function createDesktopWindow() {
   }, 60 * 1000);
 }
 
-// Native Desktop Google Sign-In (RFC 8252 Loopback via Default System Browser — Bypasses all WebView/Passkey blocks)
+// Native Desktop Google Sign-In (RFC 8252 Loopback + Secret-Free OIDC id_token via Default System Browser)
 ipcMain.handle('klarity:google-sign-in', async () => {
-  const sid = 'dsk-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
-  const clientId = '207624653160-vbp60vuujhl2h8jshvnosad9m2ft75jq.apps.googleusercontent.com';
+  const sid = 'dsk-' + Date.now() + '-' + crypto.randomBytes(6).toString('hex');
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const clientId =
+    process.env.GOOGLE_CLIENT_ID ||
+    process.env.VITE_GOOGLE_CLIENT_ID ||
+    '207624653160-vbp60vuujhl2h8jshvnosad9m2ft75jq.apps.googleusercontent.com';
   const port = localServerPort || 5173;
   const redirectUri = `http://localhost:${port}/api/auth/google/callback`;
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20profile%20email&state=${sid}&prompt=select_account`;
+
+  try {
+    const initRes = await fetch(`http://localhost:${port}/api/auth/google/init-desktop`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-klarity-desktop-secret': DESKTOP_IPC_SECRET
+      },
+      body: JSON.stringify({ sid, nonce })
+    });
+    if (!initRes.ok) {
+      return { ok: false, error: 'Failed to initialize desktop Google Sign-In session.' };
+    }
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Could not reach local auth server.' };
+  }
+
+  const authUrl =
+    `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=id_token&scope=openid%20profile%20email` +
+    `&state=${encodeURIComponent(sid)}&nonce=${encodeURIComponent(nonce)}&prompt=select_account`;
 
   // Open real system browser (Chrome/Edge) where user is already logged in with full passkey support
   shell.openExternal(authUrl);

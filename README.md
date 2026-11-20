@@ -15,19 +15,19 @@ No coding or terminal needed. When downloaded, the app installs onto your comput
 
 ### 🪟 Windows (.exe)
 1. Go to the **[Latest Release Download Page](https://github.com/ByZizo/Klarity/releases/latest)**.
-2. Download **`Klarity-Setup-3.12.59.exe`**.
+2. Download **`Klarity-Setup-3.12.60.exe`**.
 3. Double-click the file to install and launch **Klarity**. An icon will automatically be placed on your desktop and Start menu.
 
 ### 💻 Chrome OS / Chromebook (.deb)
 1. Ensure the **Linux development environment** is turned on in your Chromebook Settings (`Settings` → `Developers` → `Linux development environment` → `Turn on`).
 2. Go to the **[Latest Release Download Page](https://github.com/ByZizo/Klarity/releases/latest)**.
-3. Download **`klarity_3.12.59_amd64.deb`**.
+3. Download **`klarity_3.12.60_amd64.deb`**.
 4. Open the Files app on your Chromebook, right-click the `.deb` file, and select **"Install with Linux"**.
 5. Once complete, launch **Klarity** directly from your Chromebook App Launcher.
 
 ### 🐧 Linux (.deb or .AppImage)
-- **Debian / Ubuntu / Mint**: Download `klarity_3.12.59_amd64.deb` and run `sudo dpkg -i klarity_3.12.59_amd64.deb`.
-- **AppImage**: Download `Klarity-3.12.59-x86_64.AppImage`, make it executable (`chmod +x Klarity-3.12.59-x86_64.AppImage`), and double-click to run.
+- **Debian / Ubuntu / Mint**: Download `klarity_3.12.60_amd64.deb` and run `sudo dpkg -i klarity_3.12.60_amd64.deb`.
+- **AppImage**: Download `Klarity-3.12.60-x86_64.AppImage`, make it executable (`chmod +x Klarity-3.12.60-x86_64.AppImage`), and double-click to run.
 
 ---
 

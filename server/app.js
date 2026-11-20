@@ -628,6 +628,8 @@ async function requireAuth(req, res, next) {
     '/auth/login',
     '/auth/setup-owner',
     '/auth/google',
+    '/auth/google/init-desktop',
+    '/auth/google/complete-desktop',
     '/auth/google/callback',
     '/auth/google/check-session',
     '/auth/session',
@@ -636,6 +638,8 @@ async function requireAuth(req, res, next) {
     '/api/auth/login',
     '/api/auth/setup-owner',
     '/api/auth/google',
+    '/api/auth/google/init-desktop',
+    '/api/auth/google/complete-desktop',
     '/api/auth/google/callback',
     '/api/auth/google/check-session',
     '/api/auth/session',
@@ -882,26 +886,233 @@ app.post('/api/auth/setup-owner', async (req, res) => {
   });
 });
 
-// Memory maps for Desktop Browser Loopback OAuth
+// Memory maps & helpers for Google OAuth (Secret-free OIDC id_token + legacy code fallback)
+const DEFAULT_GOOGLE_CLIENT_ID = '207624653160-vbp60vuujhl2h8jshvnosad9m2ft75jq.apps.googleusercontent.com';
+const DESKTOP_AUTH_NONCE_TTL_MS = 10 * 60 * 1000;
+
 if (!global.completedDesktopAuths) {
   global.completedDesktopAuths = new Map();
 }
+if (!global.pendingDesktopAuthNonces) {
+  global.pendingDesktopAuthNonces = new Map();
+}
+
+function getGoogleClientId() {
+  return (process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID).trim();
+}
+
+function pruneExpiredDesktopAuthNonces() {
+  const cutoff = Date.now() - DESKTOP_AUTH_NONCE_TTL_MS;
+  for (const [k, entry] of global.pendingDesktopAuthNonces.entries()) {
+    if (!entry || entry.createdAt < cutoff) {
+      global.pendingDesktopAuthNonces.delete(k);
+    }
+  }
+}
+
+async function verifyGoogleIdToken(idToken, { expectedNonce = null } = {}) {
+  const tokenStr = String(idToken || '').trim();
+  if (!tokenStr) {
+    throw new Error('Missing Google ID token.');
+  }
+  const verifyRes = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(tokenStr)}`
+  );
+  const info = await verifyRes.json().catch(() => ({}));
+  if (!verifyRes.ok) {
+    throw new Error(info.error_description || info.error || 'Google ID token verification failed.');
+  }
+  const expectedClientId = getGoogleClientId();
+  if (info.aud !== expectedClientId) {
+    throw new Error('Google token audience mismatch.');
+  }
+  const validIssuers = new Set(['https://accounts.google.com', 'accounts.google.com']);
+  if (!validIssuers.has(info.iss)) {
+    throw new Error('Invalid Google token issuer.');
+  }
+  if (!(Number(info.exp || 0) * 1000 > Date.now())) {
+    throw new Error('Google ID token has expired.');
+  }
+  const cleanEmail = (info.email || '').trim().toLowerCase();
+  const isVerified = info.email_verified === true || info.email_verified === 'true';
+  if (!cleanEmail || !isVerified) {
+    throw new Error('No verified email found in Google ID token.');
+  }
+  if (expectedNonce && info.nonce !== expectedNonce) {
+    throw new Error('Invalid Google auth nonce.');
+  }
+  return {
+    email: cleanEmail,
+    name: info.name || info.given_name || cleanEmail.split('@')[0],
+    picture: info.picture || ''
+  };
+}
+
+async function upsertGoogleUserAndCreateSession(reqUserId, profile) {
+  const cleanEmail = (profile.email || '').trim().toLowerCase();
+  const data = await readData(reqUserId);
+  const isOwner = isOwnerEmail(cleanEmail);
+  let user = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
+
+  if (!user) {
+    user = {
+      id: isOwner ? 'u-owner' : `u-${Date.now()}`,
+      email: cleanEmail,
+      name: profile.name || cleanEmail.split('@')[0],
+      avatar: profile.picture || '',
+      role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member'
+    };
+    data.users = data.users || [];
+    data.users.push(user);
+    await writeData(data, reqUserId);
+  } else if (profile.name || profile.picture) {
+    if (profile.name) user.name = profile.name;
+    if (profile.picture) user.avatar = profile.picture;
+    await writeData(data, reqUserId);
+  }
+
+  const safeUser = sanitizeUser(user);
+  const session = await createUserSession(data, safeUser);
+  return { safeUser, session };
+}
+
+function renderGoogleCallbackCardHtml({ title, heading, messageHtml }) {
+  return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${title}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+          .card { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 40px 32px; max-width: 420px; text-align: center; box-shadow: 0 10px 30px -5px rgba(0,0,0,0.08); }
+          .icon { width: 56px; height: 56px; background: #18457c; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; font-size: 28px; }
+          h2 { color: #0f172a; margin: 0 0 8px; font-size: 22px; }
+          p { color: #64748b; font-size: 14px; margin: 0 0 24px; line-height: 1.5; }
+          .btn { background: #18457c; color: white; padding: 11px 24px; border-radius: 12px; text-decoration: none; font-size: 13px; font-weight: 600; display: inline-block; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="icon" id="status-icon">✓</div>
+          <h2 id="status-heading">${heading}</h2>
+          <p id="status-msg">${messageHtml}</p>
+          <a href="#" class="btn" onclick="window.close()">Close Window</a>
+        </div>
+      </body>
+      </html>
+    `;
+}
+
+app.post('/api/auth/google/init-desktop', async (req, res) => {
+  if (!isVerifiedDesktopLoopbackRequest(req)) {
+    return res.status(403).json({ error: 'Forbidden: Desktop loopback verification failed.' });
+  }
+  const sid = String(req.body?.sid || '').trim();
+  const nonce = String(req.body?.nonce || '').trim();
+  if (!sid || !nonce) {
+    return res.status(400).json({ error: 'Missing sid or nonce' });
+  }
+  pruneExpiredDesktopAuthNonces();
+  global.pendingDesktopAuthNonces.set(sid, { nonce, createdAt: Date.now() });
+  return res.json({ ok: true });
+});
 
 app.get('/api/auth/google/callback', async (req, res) => {
   const { code, state, error } = req.query;
-  if (error || !code) {
+  if (error) {
     return res.send(`
       <!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:50px;">
         <h3>Sign-in cancelled or failed</h3>
-        <p>${escapeHtml(error || 'No authorization code received')}</p>
+        <p>${escapeHtml(error)}</p>
         <button onclick="window.close()">Close this window</button>
       </body></html>
     `);
   }
 
+  // Secret-free OIDC id_token flow (tokens arrive in URL fragment #id_token=...&state=...)
+  if (!code) {
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Completing sign-in — Klarity</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+          .card { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 40px 32px; max-width: 420px; text-align: center; box-shadow: 0 10px 30px -5px rgba(0,0,0,0.08); }
+          .icon { width: 56px; height: 56px; background: #18457c; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; font-size: 28px; }
+          h2 { color: #0f172a; margin: 0 0 8px; font-size: 22px; }
+          p { color: #64748b; font-size: 14px; margin: 0 0 24px; line-height: 1.5; }
+          .btn { background: #18457c; color: white; padding: 11px 24px; border-radius: 12px; text-decoration: none; font-size: 13px; font-weight: 600; display: inline-block; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="icon" id="status-icon">...</div>
+          <h2 id="status-heading">Completing Google Sign-In...</h2>
+          <p id="status-msg">Please wait a moment while Klarity verifies your account.</p>
+          <a href="#" class="btn" onclick="window.close()">Close Window</a>
+        </div>
+        <script>
+          (async function () {
+            var iconEl = document.getElementById('status-icon');
+            var headingEl = document.getElementById('status-heading');
+            var msgEl = document.getElementById('status-msg');
+            function showErr(msg) {
+              iconEl.textContent = '!';
+              iconEl.style.background = '#b91c1c';
+              headingEl.textContent = 'Sign-in failed';
+              msgEl.textContent = msg;
+            }
+            try {
+              var hashStr = (window.location.hash || '').replace(/^#/, '');
+              var params = new URLSearchParams(hashStr);
+              if (window.history && window.history.replaceState) {
+                window.history.replaceState(null, '', window.location.pathname);
+              }
+              var err = params.get('error');
+              if (err) {
+                showErr(params.get('error_description') || err);
+                return;
+              }
+              var idToken = params.get('id_token');
+              var st = params.get('state');
+              if (!idToken || !st) {
+                showErr('Missing Google sign-in token. Please try signing in again from Klarity.');
+                return;
+              }
+              var resp = await fetch('/api/auth/google/complete-desktop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idToken: idToken, state: st })
+              });
+              var json = await resp.json().catch(function () { return {}; });
+              if (!resp.ok || !json.ok) {
+                showErr(json.error || 'Could not complete sign-in.');
+                return;
+              }
+              iconEl.textContent = '✓';
+              headingEl.textContent = 'Signed in to Klarity';
+              var displayName = json.name || json.email || 'User';
+              msgEl.textContent = 'Welcome back, ' + displayName + '! You can close this tab and return to Klarity.';
+              setTimeout(function () { try { window.close(); } catch (e) {} }, 1500);
+            } catch (e) {
+              showErr('Failed to verify Google sign-in response.');
+            }
+          })();
+        </script>
+      </body>
+      </html>
+    `);
+  }
+
   try {
-    const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+    const clientId = getGoogleClientId();
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientSecret) {
+      return res.status(400).send('Authorization code sign-in requires a local client secret. Please retry Google Sign-In from the Klarity app.');
+    }
     const hostPort = (req.headers.host && req.headers.host.includes(':')) ? req.headers.host.split(':')[1] : (req.socket.localPort || 5173);
     const redirectUri = `http://localhost:${hostPort}/api/auth/google/callback`;
 
@@ -921,7 +1132,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
     const tokenData = await tokenRes.json();
     if (!tokenRes.ok || !tokenData.access_token) {
       console.error('Google token exchange error:', tokenData);
-      return res.status(400).send(`Authentication error: ${tokenData.error_description || 'Token exchange failed'}`);
+      return res.status(400).send(`Authentication error: ${escapeHtml(tokenData.error_description || 'Token exchange failed')}`);
     }
 
     // 2. Fetch authenticated user profile from Google
@@ -936,29 +1147,11 @@ app.get('/api/auth/google/callback', async (req, res) => {
     }
 
     // 3. Register or load user into Klarity
-    const data = await readData(req.userId);
-    const isOwner = isOwnerEmail(cleanEmail);
-    let user = (data.users || []).find(u => u.email.toLowerCase() === cleanEmail);
-
-    if (!user) {
-      user = {
-        id: isOwner ? 'u-owner' : `u-${Date.now()}`,
-        email: cleanEmail,
-        name: profile.name || cleanEmail.split('@')[0],
-        avatar: profile.picture || '',
-        role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member'
-      };
-      data.users = data.users || [];
-      data.users.push(user);
-      await writeData(data, req.userId);
-    } else if (profile.name || profile.picture) {
-      if (profile.name) user.name = profile.name;
-      if (profile.picture) user.avatar = profile.picture;
-      await writeData(data, req.userId);
-    }
-
-    const safeUser = sanitizeUser(user);
-    const session = await createUserSession(data, safeUser);
+    const { safeUser, session } = await upsertGoogleUserAndCreateSession(req.userId, {
+      email: cleanEmail,
+      name: profile.name,
+      picture: profile.picture
+    });
 
     // Save for desktop app poller with full user info
     if (state) {
@@ -968,38 +1161,50 @@ app.get('/api/auth/google/callback', async (req, res) => {
       });
     }
 
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Signed In — Klarity</title>
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-          .card { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 40px 32px; max-width: 420px; text-align: center; box-shadow: 0 10px 30px -5px rgba(0,0,0,0.08); }
-          .icon { width: 56px; height: 56px; background: #18457c; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; font-size: 28px; }
-          h2 { color: #0f172a; margin: 0 0 8px; font-size: 22px; }
-          p { color: #64748b; font-size: 14px; margin: 0 0 24px; line-height: 1.5; }
-          .btn { background: #18457c; color: white; padding: 11px 24px; border-radius: 12px; text-decoration: none; font-size: 13px; font-weight: 600; display: inline-block; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <div class="icon">✓</div>
-          <h2>Signed in to Klarity</h2>
-          <p>Welcome back, <strong>${escapeHtml(safeUser.name || safeUser.email)}</strong>!<br>You can now close this tab and return to Klarity.</p>
-          <a href="#" class="btn" onclick="window.close()">Close Window</a>
-        </div>
-        <script>
-          setTimeout(() => { try { window.close(); } catch {} }, 1500);
-        </script>
-      </body>
-      </html>
-    `);
+    res.send(
+      renderGoogleCallbackCardHtml({
+        title: 'Signed In — Klarity',
+        heading: 'Signed in to Klarity',
+        messageHtml: `Welcome back, <strong>${escapeHtml(safeUser.name || safeUser.email)}</strong>!<br>You can now close this tab and return to Klarity.`
+      }).replace(
+        '</body>',
+        '<script>setTimeout(() => { try { window.close(); } catch {} }, 1500);</script></body>'
+      )
+    );
   } catch (err) {
     console.error('Google OAuth callback error:', err);
     res.status(500).send(`Error completing login: ${escapeHtml(err.message)}`);
   }
+});
+
+app.post('/api/auth/google/complete-desktop', async (req, res) => {
+  const idToken = String(req.body?.idToken || '').trim();
+  const state = String(req.body?.state || '').trim();
+  if (!idToken || !state) {
+    return res.status(400).json({ error: 'Missing idToken or state.' });
+  }
+
+  pruneExpiredDesktopAuthNonces();
+  const pending = global.pendingDesktopAuthNonces.get(state);
+  global.pendingDesktopAuthNonces.delete(state);
+  if (!pending || Date.now() - pending.createdAt > DESKTOP_AUTH_NONCE_TTL_MS) {
+    return res.status(400).json({ error: 'Sign-in session expired or invalid. Please try again.' });
+  }
+
+  let profile;
+  try {
+    profile = await verifyGoogleIdToken(idToken, { expectedNonce: pending.nonce });
+  } catch (err) {
+    return res.status(401).json({ error: err.message || 'Google ID token verification failed.' });
+  }
+
+  const { safeUser, session } = await upsertGoogleUserAndCreateSession(req.userId, profile);
+  global.completedDesktopAuths.set(state, {
+    user: safeUser,
+    session: { token: session.token, expiresAt: session.expiresAt, user: safeUser }
+  });
+
+  return res.json({ ok: true, name: safeUser.name, email: safeUser.email });
 });
 
 app.get('/api/auth/google/check-session', async (req, res) => {
@@ -1017,13 +1222,22 @@ app.get('/api/auth/google/check-session', async (req, res) => {
 });
 
 app.post('/api/auth/google', async (req, res) => {
-  const { accessToken, desktopVerified, email: fallbackEmail, name: fallbackName, avatar } = req.body;
+  const { idToken, accessToken, desktopVerified, email: fallbackEmail, name: fallbackName, avatar } = req.body;
 
   let verifiedEmail = '';
   let verifiedName = '';
   let verifiedPicture = avatar || '';
 
-  if (accessToken) {
+  if (idToken) {
+    try {
+      const profile = await verifyGoogleIdToken(idToken);
+      verifiedEmail = profile.email;
+      verifiedName = profile.name || verifiedName;
+      verifiedPicture = profile.picture || verifiedPicture;
+    } catch (err) {
+      return res.status(401).json({ error: err.message || 'Google ID token verification failed.' });
+    }
+  } else if (accessToken) {
     try {
       const gRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
         headers: { Authorization: `Bearer ${accessToken}` }
@@ -1048,36 +1262,15 @@ app.post('/api/auth/google', async (req, res) => {
     return res.status(401).json({ error: 'Valid Google OAuth authentication is required.' });
   }
 
-  const data = await readData(req.userId);
-  const isOwner = isOwnerEmail(verifiedEmail);
-  let user = (data.users || []).find(u => u.email.toLowerCase() === verifiedEmail);
-
-  if (!user) {
-    user = {
-      id: isOwner ? 'u-owner' : `u-${Date.now()}`,
-      email: verifiedEmail,
-      name: verifiedName || fallbackName || verifiedEmail.split('@')[0],
-      avatar: verifiedPicture,
-      role: isOwner || (data.users || []).length === 0 ? 'Primary Member' : 'Member'
-    };
-    data.users = data.users || [];
-    data.users.push(user);
-    await writeData(data, req.userId);
-  } else if (verifiedName || verifiedPicture) {
-    if (verifiedName) user.name = verifiedName;
-    if (verifiedPicture) user.avatar = verifiedPicture;
-    await writeData(data, req.userId);
-  }
-
-  const safeUser = sanitizeUser(user);
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const tokenHash = hashToken(rawToken);
-  const expiresAt = Date.now() + SESSION_DURATION_MS;
-  await db.createSession(safeUser.id, tokenHash, expiresAt);
+  const { safeUser, session } = await upsertGoogleUserAndCreateSession(req.userId, {
+    email: verifiedEmail,
+    name: verifiedName || fallbackName,
+    picture: verifiedPicture
+  });
 
   res.json({
     user: safeUser,
-    session: { token: rawToken, expiresAt, user: safeUser }
+    session
   });
 });
 

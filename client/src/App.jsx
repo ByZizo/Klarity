@@ -2709,6 +2709,7 @@ function KlarityApp() {
           name: profile.name || profile.given_name || profile.email.split('@')[0],
           avatar: profile.picture || '',
           sub: profile.sub || profile.id,
+          idToken: profile.idToken || '',
           accessToken: profile.accessToken || '',
           desktopVerified: Boolean(profile.desktopVerified)
         })
@@ -2730,7 +2731,7 @@ function KlarityApp() {
   const handleGoogleOfficialSuccess = async (credentialResponse) => {
     try {
       const decoded = jwtDecode(credentialResponse.credential);
-      await handleGoogleProfileSuccess(decoded);
+      await handleGoogleProfileSuccess({ ...decoded, idToken: credentialResponse.credential });
     } catch (err) {
       console.error('Credential decode error:', err);
       setAuthError('Google credential decode failed.');
