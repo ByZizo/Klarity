@@ -332,7 +332,8 @@ export function SettingsPage({
     { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' && settingsAiProvider !== 'local' },
     { id: 'bank', label: 'Bank', dot: settingsPlaidStatus !== 'connected' },
     { id: 'security', label: 'Security' },
-    { id: 'about', label: 'About' }
+    { id: 'about', label: 'About' },
+    { id: 'support', label: 'Support', dividerBefore: true }
   ];
 
   const DEFAULT_CONFIG = {
@@ -376,7 +377,7 @@ export function SettingsPage({
           {/* Left Navigation Tabs (Hidden when opened directly as Browser Settings) */}
           {!browserOnly && (
           <div className="w-full md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-[var(--line)] p-4 sm:p-5 flex flex-col justify-between bg-[var(--surface-subtle)]">
-            <div>
+            <div className="min-h-0 md:overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
                 <h2 id="settings-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)]">
                   Settings
@@ -395,21 +396,29 @@ export function SettingsPage({
                 {tabs.map((tab) => {
                   const isActive = normalizedTab === tab.id;
                   return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setSettingsActiveTab(tab.id)}
-                      className={`w-full text-left px-3.5 py-2.5 rounded-[8px] text-[15px] flex items-center justify-between transition-colors cursor-pointer shrink-0 ${
-                        isActive
-                          ? 'bg-[#1B4B91] text-white font-semibold'
-                          : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface)] font-medium'
-                      }`}
-                    >
-                      <span>{tab.label}</span>
-                      {tab.dot && (
-                        <span className="w-2 h-2 rounded-full bg-[#B45309] shrink-0 ml-2" />
+                    <React.Fragment key={tab.id}>
+                      {tab.dividerBefore && (
+                        <div
+                          className="w-px self-stretch bg-[var(--line)] mx-1 md:w-full md:h-px md:my-1.5 md:mx-0 shrink-0"
+                          role="separator"
+                          aria-hidden="true"
+                        />
                       )}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setSettingsActiveTab(tab.id)}
+                        className={`w-full text-left px-3.5 py-2.5 rounded-[8px] text-[15px] flex items-center justify-between transition-colors cursor-pointer shrink-0 ${
+                          isActive
+                            ? 'bg-[#1B4B91] text-white font-semibold'
+                            : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface)] font-medium'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        {tab.dot && (
+                          <span className="w-2 h-2 rounded-full bg-[#B45309] shrink-0 ml-2" />
+                        )}
+                      </button>
+                    </React.Fragment>
                   );
                 })}
               </nav>
@@ -1914,110 +1923,6 @@ export function SettingsPage({
                   </div>
                 </Card>
 
-                {/* Support Development / Buy Me a Coffee */}
-                <Card className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-amber-200/70 dark:border-amber-900/40 bg-gradient-to-r from-amber-50/70 to-yellow-50/40 dark:from-amber-950/25 dark:to-yellow-950/15">
-                  <div className="flex items-start gap-3.5">
-                    <div className="w-10 h-10 rounded-[12px] bg-[#FFDD00] flex items-center justify-center shrink-0 shadow-sm text-black">
-                      <Coffee className="w-5 h-5 fill-black stroke-black" />
-                    </div>
-                    <div>
-                      <h4 className="text-[16px] font-semibold text-[var(--ink)] flex items-center gap-2">
-                        Support Klarity Finance
-                      </h4>
-                      <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
-                        Klarity is free and completely private. If it helps you manage your finances, consider buying me a coffee!
-                      </p>
-                    </div>
-                  </div>
-                  <a
-                    href="https://buymeacoffee.com/byzizo"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[10px] bg-[#FFDD00] hover:bg-[#FFD000] active:scale-[0.98] text-[#000000] font-bold text-[14px] shadow-sm hover:shadow-md transition-all duration-150 shrink-0 border border-[#E5C300] cursor-pointer"
-                  >
-                    <Coffee className="w-4 h-4 fill-[#000000] stroke-[#000000]" />
-                    <span>Buy me a coffee</span>
-                    <ExternalLink className="w-3.5 h-3.5 opacity-70 ml-0.5" />
-                  </a>
-                </Card>
-
-                {/* Feedback Section */}
-                <Card className="p-5 flex flex-col gap-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <h4 className="text-[16px] font-semibold text-[var(--ink)]">Feedback</h4>
-                      <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
-                        Share thoughts, report bugs, or request features to help improve Klarity.
-                      </p>
-                    </div>
-                    <Pill variant="brand">User feedback</Pill>
-                  </div>
-
-                  <form
-                    onSubmit={(e) => {
-                      if (handleSendFeedback) {
-                        handleSendFeedback(e);
-                      } else {
-                        e.preventDefault();
-                      }
-                    }}
-                    className="flex flex-col gap-3 pt-1"
-                  >
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {['General Feedback', 'Feature Request', 'Bug Report'].map((type) => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => setFeedbackType && setFeedbackType(type)}
-                          className={`px-3 py-1.5 rounded-[8px] text-[13px] font-semibold border transition-colors cursor-pointer ${
-                            feedbackType === type
-                              ? 'bg-[#1B4B91] text-white border-[#1B4B91]'
-                              : 'bg-[var(--surface-subtle)] text-[var(--muted)] border-[var(--line)] hover:text-[var(--ink)]'
-                          }`}
-                        >
-                          {type}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div>
-                      <label htmlFor="about-feedback-textarea" className="sr-only">
-                        Your feedback message
-                      </label>
-                      <textarea
-                        id="about-feedback-textarea"
-                        value={feedbackText}
-                        onChange={(e) => setFeedbackText && setFeedbackText(e.target.value)}
-                        rows={3}
-                        placeholder="What can we improve? Let us know what you'd like to see..."
-                        className="w-full text-[15px] font-medium p-3 rounded-[8px] border border-[var(--line)] bg-[var(--surface-subtle)] text-[var(--ink)] placeholder:text-[var(--muted)] resize-none"
-                      />
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                      {feedbackSubmitted ? (
-                        <span className="inline-flex items-center gap-1.5 text-[13px] text-[#15803D] font-semibold bg-[#15803D]/10 px-3 py-1.5 rounded-[8px] border border-[#15803D]/25">
-                          <CheckCircle2 className="w-4 h-4" />
-                          Thank you! Your feedback has been received.
-                        </span>
-                      ) : (
-                        <span className="text-[13px] font-medium text-[var(--muted)]">
-                          Your feedback directly shapes upcoming updates.
-                        </span>
-                      )}
-
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        size="sm"
-                        disabled={!feedbackText.trim() || isSubmittingFeedback}
-                      >
-                        {isSubmittingFeedback ? 'Sending...' : 'Send Feedback'}
-                      </Button>
-                    </div>
-                  </form>
-                </Card>
-
                 {/* Concise 3-line What's New with link to full notes */}
                 <Card className="p-5 flex flex-col gap-3">
                   <div className="flex items-center justify-between">
@@ -2063,6 +1968,122 @@ export function SettingsPage({
                       ))}
                     </div>
                   )}
+                </Card>
+              </div>
+            )}
+
+            {/* TAB 7: SUPPORT */}
+            {normalizedTab === 'support' && (
+              <div className="flex flex-col gap-6">
+                <div>
+                  <h3 className="font-serif text-[22px] font-semibold text-[var(--ink)]">Support</h3>
+                  <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
+                    Share feedback or help support the ongoing development of Klarity Finance.
+                  </p>
+                </div>
+
+                {/* Feedback Section */}
+                <Card className="p-5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-[16px] font-semibold text-[var(--ink)]">Feedback</h4>
+                      <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
+                        Share thoughts, report bugs, or request features to help improve Klarity.
+                      </p>
+                    </div>
+                    <Pill variant="brand">User feedback</Pill>
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      if (handleSendFeedback) {
+                        handleSendFeedback(e);
+                      } else {
+                        e.preventDefault();
+                      }
+                    }}
+                    className="flex flex-col gap-3 pt-1"
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {['General Feedback', 'Feature Request', 'Bug Report'].map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setFeedbackType && setFeedbackType(type)}
+                          className={`px-3 py-1.5 rounded-[8px] text-[13px] font-semibold border transition-colors cursor-pointer ${
+                            feedbackType === type
+                              ? 'bg-[#1B4B91] text-white border-[#1B4B91]'
+                              : 'bg-[var(--surface-subtle)] text-[var(--muted)] border-[var(--line)] hover:text-[var(--ink)]'
+                          }`}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div>
+                      <label htmlFor="support-feedback-textarea" className="sr-only">
+                        Your feedback message
+                      </label>
+                      <textarea
+                        id="support-feedback-textarea"
+                        value={feedbackText}
+                        onChange={(e) => setFeedbackText && setFeedbackText(e.target.value)}
+                        rows={3}
+                        placeholder="What can we improve? Let us know what you'd like to see..."
+                        className="w-full text-[15px] font-medium p-3 rounded-[8px] border border-[var(--line)] bg-[var(--surface-subtle)] text-[var(--ink)] placeholder:text-[var(--muted)] resize-none"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      {feedbackSubmitted ? (
+                        <span className="inline-flex items-center gap-1.5 text-[13px] text-[#15803D] font-semibold bg-[#15803D]/10 px-3 py-1.5 rounded-[8px] border border-[#15803D]/25">
+                          <CheckCircle2 className="w-4 h-4" />
+                          Thank you! Your feedback has been received.
+                        </span>
+                      ) : (
+                        <span className="text-[13px] font-medium text-[var(--muted)]">
+                          Your feedback directly shapes upcoming updates.
+                        </span>
+                      )}
+
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="sm"
+                        disabled={!feedbackText.trim() || isSubmittingFeedback}
+                      >
+                        {isSubmittingFeedback ? 'Sending...' : 'Send Feedback'}
+                      </Button>
+                    </div>
+                  </form>
+                </Card>
+
+                {/* Support Development / Buy Me a Coffee */}
+                <Card className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-amber-200/70 dark:border-amber-900/40 bg-gradient-to-r from-amber-50/70 to-yellow-50/40 dark:from-amber-950/25 dark:to-yellow-950/15">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-[12px] bg-[#FFDD00] flex items-center justify-center shrink-0 shadow-sm text-black">
+                      <Coffee className="w-5 h-5 fill-black stroke-black" />
+                    </div>
+                    <div>
+                      <h4 className="text-[16px] font-semibold text-[var(--ink)] flex items-center gap-2">
+                        Support Klarity Finance
+                      </h4>
+                      <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
+                        Klarity is free and completely private. If it helps you manage your finances, consider buying me a coffee!
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    href="https://buymeacoffee.com/byzizo"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[10px] bg-[#FFDD00] hover:bg-[#FFD000] active:scale-[0.98] text-[#000000] font-bold text-[14px] shadow-sm hover:shadow-md transition-all duration-150 shrink-0 border border-[#E5C300] cursor-pointer"
+                  >
+                    <Coffee className="w-4 h-4 fill-[#000000] stroke-[#000000]" />
+                    <span>Buy me a coffee</span>
+                    <ExternalLink className="w-3.5 h-3.5 opacity-70 ml-0.5" />
+                  </a>
                 </Card>
               </div>
             )}
