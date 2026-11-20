@@ -56,7 +56,8 @@ import {
   loadBrowserSessionState,
   saveBrowserSessionState,
   loadNewTabNotes,
-  saveNewTabNotes
+  saveNewTabNotes,
+  loadNewTabPrefs
 } from '../utils/browserSettings';
 
 function formatDownloadBytes(bytes) {
@@ -235,6 +236,14 @@ export function BrowserPage({
   // In-Browser Notes State (Accessible on any webpage, auto-saving with custom sections)
   // Supports both Docked Sidebar Notes and Smoothly Resizable Draggable Floating Notes
   const [isNotesOpen, setIsNotesOpen] = useState(false);
+  const [showNotesOnHomepage, setShowNotesOnHomepage] = useState(() => {
+    try {
+      return loadNewTabPrefs().showNotes !== false;
+    } catch {
+      return true;
+    }
+  });
+  const [homepageNotesDismissed, setHomepageNotesDismissed] = useState(false);
   const [notesDisplayMode, setNotesDisplayMode] = useState(() => {
     try {
       return localStorage.getItem('klarity_browser_notes_mode') || 'sidebar';
@@ -292,7 +301,7 @@ export function BrowserPage({
         }
       }
     } catch {}
-    return { x: 30, y: 30 };
+    return { x: 24, y: 24 };
   });
   const [isDraggingNotes, setIsDraggingNotes] = useState(false);
   const notesDragStartRef = useRef({ mouseX: 0, mouseY: 0, cardX: 0, cardY: 0, parentW: 0, parentH: 0, cardW: 0, cardH: 0 });
@@ -308,10 +317,47 @@ export function BrowserPage({
         }
       }
     } catch {}
-    return { width: 380, height: 460 };
+    return { width: 320, height: 420 };
   });
   const [isResizingNotes, setIsResizingNotes] = useState(false);
   const notesResizeStartRef = useRef({ mouseX: 0, mouseY: 0, startW: 0, startH: 0 });
+
+  const isOnHomepage = isNewTabUrl(activeTab?.url);
+  const prevActiveTabIdRef = useRef(activeTabId);
+  const prevOnHomepageRef = useRef(isOnHomepage);
+
+  useEffect(() => {
+    const switchedTab = prevActiveTabIdRef.current !== activeTabId;
+    const navigatedToHome = !prevOnHomepageRef.current && isOnHomepage;
+    if (isOnHomepage && (switchedTab || navigatedToHome)) {
+      setHomepageNotesDismissed(false);
+    }
+    prevActiveTabIdRef.current = activeTabId;
+    prevOnHomepageRef.current = isOnHomepage;
+  }, [activeTabId, isOnHomepage]);
+
+  const isShowingHomepageAutoNotes =
+    !isNotesOpen && isOnHomepage && showNotesOnHomepage && !homepageNotesDismissed;
+  const isNotesVisible = isNotesOpen || isShowingHomepageAutoNotes;
+  const activeNotesLayout = isNotesOpen ? notesDisplayMode : 'floating';
+
+  const handleCloseNotes = () => {
+    setIsNotesOpen(false);
+    if (isOnHomepage) {
+      setHomepageNotesDismissed(true);
+    }
+  };
+
+  const handleToggleHomepageNotes = (enabled) => {
+    const nextVal = Boolean(enabled);
+    setShowNotesOnHomepage(nextVal);
+    if (nextVal) {
+      setHomepageNotesDismissed(false);
+    } else {
+      setHomepageNotesDismissed(true);
+      setIsNotesOpen(false);
+    }
+  };
 
   useEffect(() => {
     try {
@@ -2019,9 +2065,11 @@ export function BrowserPage({
             <button
               type="button"
               onClick={() => {
-                const nextState = !isNotesOpen;
-                setIsNotesOpen(nextState);
-                if (nextState) {
+                if (isNotesVisible) {
+                  handleCloseNotes();
+                } else {
+                  setIsNotesOpen(true);
+                  setHomepageNotesDismissed(false);
                   if (notesDisplayMode === 'sidebar') {
                     setIsBrowserAiSidebarOpen(false);
                   }
@@ -2029,14 +2077,14 @@ export function BrowserPage({
                 }
               }}
               className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-center shrink-0 ${
-                isNotesOpen
+                isNotesVisible
                   ? 'bg-amber-500 text-white border-amber-500'
                   : 'border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)]'
               }`}
-              title={isNotesOpen ? 'Close Quick Notes' : 'Open Quick Notes'}
+              title={isNotesVisible ? 'Close Quick Notes' : 'Open Quick Notes'}
               aria-label="Quick Notes"
             >
-              <StickyNote className={`w-4 h-4 ${isNotesOpen ? 'text-white' : 'text-amber-500'}`} />
+              <StickyNote className={`w-4 h-4 ${isNotesVisible ? 'text-white' : 'text-amber-500'}`} />
             </button>
           </div>
 
@@ -2048,7 +2096,7 @@ export function BrowserPage({
                 const nextState = !isBrowserAiSidebarOpen;
                 setIsBrowserAiSidebarOpen(nextState);
                 if (nextState) {
-                  if (notesDisplayMode === 'sidebar') {
+                  if (activeNotesLayout === 'sidebar') {
                     setIsNotesOpen(false);
                   }
                   if (activeTabId) {
@@ -2610,6 +2658,8 @@ export function BrowserPage({
                         onOpenNewTab={(url, title) =>
                           handleNewTab({ url, title, insertAfterTabId: tab.id })
                         }
+                        showHomepageNotes={showNotesOnHomepage}
+                        onToggleHomepageNotes={handleToggleHomepageNotes}
                       />
                     </div>
                   )}
@@ -2623,6 +2673,8 @@ export function BrowserPage({
               onOpenNewTab={(url, title) =>
                 handleNewTab({ url, title, insertAfterTabId: activeTabId })
               }
+              showHomepageNotes={showNotesOnHomepage}
+              onToggleHomepageNotes={handleToggleHomepageNotes}
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-[var(--surface-subtle)]">
@@ -2647,7 +2699,7 @@ export function BrowserPage({
           )}
 
           {/* Draggable & Resizable Floating Quick Notes Window (Over any webpage / New Tab) */}
-          {isNotesOpen && notesDisplayMode === 'floating' && (
+          {isNotesVisible && activeNotesLayout === 'floating' && (
             <aside
               ref={floatingNotesRef}
               aria-label="Floating Quick Notes"
@@ -2678,9 +2730,13 @@ export function BrowserPage({
                   >
                     <button
                       type="button"
-                      onClick={() => setNotesDisplayMode('sidebar')}
+                      onClick={() => {
+                        setNotesDisplayMode('sidebar');
+                        setIsNotesOpen(true);
+                        setIsBrowserAiSidebarOpen(false);
+                      }}
                       className={`p-1.5 rounded-md transition-all cursor-pointer ${
-                        notesDisplayMode === 'sidebar'
+                        activeNotesLayout === 'sidebar'
                           ? 'bg-amber-500 text-white shadow-2xs'
                           : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
                       }`}
@@ -2691,9 +2747,12 @@ export function BrowserPage({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setNotesDisplayMode('floating')}
+                      onClick={() => {
+                        setNotesDisplayMode('floating');
+                        setIsNotesOpen(true);
+                      }}
                       className={`p-1.5 rounded-md transition-all cursor-pointer ${
-                        notesDisplayMode === 'floating'
+                        activeNotesLayout === 'floating'
                           ? 'bg-amber-500 text-white shadow-2xs'
                           : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
                       }`}
@@ -2737,7 +2796,7 @@ export function BrowserPage({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setIsNotesOpen(false)}
+                    onClick={handleCloseNotes}
                     className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer ml-0.5"
                     title="Close Notes"
                   >
@@ -2878,7 +2937,7 @@ export function BrowserPage({
         </div>
 
         {/* Dedicated In-Browser Quick Notes Sidebar (Accessible on any browser page) */}
-        {isNotesOpen && notesDisplayMode === 'sidebar' && (
+        {isNotesVisible && activeNotesLayout === 'sidebar' && (
           <aside
             aria-label="Browser Quick Notes"
             className="w-80 sm:w-88 md:w-96 shrink-0 h-full bg-[var(--surface)] border-l border-[var(--line)] flex flex-col z-30 shadow-2xl transition-all"
@@ -2889,9 +2948,13 @@ export function BrowserPage({
               <div className="flex items-center p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)]">
                 <button
                   type="button"
-                  onClick={() => setNotesDisplayMode('sidebar')}
+                  onClick={() => {
+                    setNotesDisplayMode('sidebar');
+                    setIsNotesOpen(true);
+                    setIsBrowserAiSidebarOpen(false);
+                  }}
                   className={`p-1.5 rounded-md transition-all cursor-pointer ${
-                    notesDisplayMode === 'sidebar'
+                    activeNotesLayout === 'sidebar'
                       ? 'bg-amber-500 text-white shadow-2xs'
                       : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
                   }`}
@@ -2902,9 +2965,12 @@ export function BrowserPage({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setNotesDisplayMode('floating')}
+                  onClick={() => {
+                    setNotesDisplayMode('floating');
+                    setIsNotesOpen(true);
+                  }}
                   className={`p-1.5 rounded-md transition-all cursor-pointer ${
-                    notesDisplayMode === 'floating'
+                    activeNotesLayout === 'floating'
                       ? 'bg-amber-500 text-white shadow-2xs'
                       : 'text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
                   }`}
@@ -2948,7 +3014,7 @@ export function BrowserPage({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsNotesOpen(false)}
+                  onClick={handleCloseNotes}
                   className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer ml-0.5"
                   title="Close Notes"
                 >
