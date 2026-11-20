@@ -32,7 +32,11 @@ import {
   PanelRight,
   Layers,
   GripHorizontal,
-  Edit2
+  Edit2,
+  Download,
+  FolderOpen,
+  FileText,
+  AlertCircle
 } from 'lucide-react';
 import { Button, Card } from '../components/ui';
 import { NewTabPage } from '../components/NewTabPage';
@@ -54,6 +58,40 @@ import {
   loadNewTabNotes,
   saveNewTabNotes
 } from '../utils/browserSettings';
+
+function formatDownloadBytes(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const idx = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)));
+  const scaled = value / Math.pow(1024, idx);
+  return `${scaled >= 10 || idx === 0 ? Math.round(scaled) : scaled.toFixed(1)} ${units[idx]}`;
+}
+
+function formatDownloadHost(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.hostname.replace(/^www\./i, '');
+    }
+  } catch {}
+  return '';
+}
+
+function formatDownloadTime(ts) {
+  const timeMs = Number(ts);
+  if (!Number.isFinite(timeMs) || timeMs <= 0) return '';
+  const diffSec = Math.max(0, Math.floor((Date.now() - timeMs) / 1000));
+  if (diffSec < 60) return 'Just now';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  const date = new Date(timeMs);
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
 
 function createTabObject(url, title = 'New Tab', extra = {}) {
   return {
@@ -177,6 +215,14 @@ export function BrowserPage({
   const [adsBlockedCount, setAdsBlockedCount] = useState(0);
   const [isAdBlockPopoverOpen, setIsAdBlockPopoverOpen] = useState(false);
   const adBlockPopoverRef = useRef(null);
+
+  // Browser Downloads State
+  const [browserDownloads, setBrowserDownloads] = useState([]);
+  const [isDownloadsPopoverOpen, setIsDownloadsPopoverOpen] = useState(false);
+  const [hasUnseenDownload, setHasUnseenDownload] = useState(false);
+  const downloadsPopoverRef = useRef(null);
+  const isDownloadsPopoverOpenRef = useRef(false);
+  const knownCompletedIdsRef = useRef(new Set());
 
   // Dedicated In-Browser AI Sidebar State (Self-contained, doesn't open global app advisor)
   const [isBrowserAiSidebarOpen, setIsBrowserAiSidebarOpen] = useState(false);
@@ -541,11 +587,120 @@ export function BrowserPage({
     };
   }, [isDesktop]);
 
+  // Keep Downloads popover open state ref synced for IPC callbacks
+  useEffect(() => {
+    isDownloadsPopoverOpenRef.current = isDownloadsPopoverOpen;
+  }, [isDownloadsPopoverOpen]);
+
+  // Initialize and subscribe to Browser Downloads from Electron
+  useEffect(() => {
+    let unsubscribe = null;
+    if (isDesktop && window.klarityDesktop?.getBrowserDownloads) {
+      window.klarityDesktop
+        .getBrowserDownloads()
+        .then((items) => {
+          if (Array.isArray(items)) {
+            items.forEach((d) => {
+              if (d.state === 'completed') knownCompletedIdsRef.current.add(d.id);
+            });
+            setBrowserDownloads(items);
+          }
+        })
+        .catch(() => {});
+
+      if (window.klarityDesktop?.onBrowserDownloads) {
+        unsubscribe = window.klarityDesktop.onBrowserDownloads((items) => {
+          if (!Array.isArray(items)) return;
+          let hasNewlyCompleted = false;
+          items.forEach((d) => {
+            if (d.state === 'completed' && !knownCompletedIdsRef.current.has(d.id)) {
+              knownCompletedIdsRef.current.add(d.id);
+              hasNewlyCompleted = true;
+            }
+          });
+          setBrowserDownloads(items);
+          if (hasNewlyCompleted && !isDownloadsPopoverOpenRef.current) {
+            setHasUnseenDownload(true);
+          }
+        });
+      }
+    }
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [isDesktop]);
+
+  const refreshBrowserDownloads = async () => {
+    if (!isDesktop || !window.klarityDesktop?.getBrowserDownloads) return;
+    try {
+      const items = await window.klarityDesktop.getBrowserDownloads();
+      if (Array.isArray(items)) setBrowserDownloads(items);
+    } catch {}
+  };
+
+  const handleToggleDownloadsPopover = () => {
+    const nextOpen = !isDownloadsPopoverOpen;
+    setIsDownloadsPopoverOpen(nextOpen);
+    if (nextOpen) {
+      setHasUnseenDownload(false);
+      refreshBrowserDownloads();
+    }
+  };
+
+  const handleOpenDownloadItem = async (item) => {
+    if (!item?.id || !isDesktop || !window.klarityDesktop?.openBrowserDownload) return;
+    try {
+      const res = await window.klarityDesktop.openBrowserDownload(item.id);
+      if (!res?.ok) refreshBrowserDownloads();
+    } catch {}
+  };
+
+  const handleShowDownloadInFolder = async (item) => {
+    if (!item?.id || !isDesktop || !window.klarityDesktop?.showBrowserDownloadInFolder) return;
+    try {
+      const res = await window.klarityDesktop.showBrowserDownloadInFolder(item.id);
+      if (!res?.ok) refreshBrowserDownloads();
+    } catch {}
+  };
+
+  const handleOpenDownloadsFolder = async () => {
+    if (!isDesktop || !window.klarityDesktop?.openBrowserDownloadsFolder) return;
+    try {
+      await window.klarityDesktop.openBrowserDownloadsFolder();
+    } catch {}
+  };
+
+  const handleCancelDownloadItem = async (id) => {
+    if (!id || !isDesktop || !window.klarityDesktop?.cancelBrowserDownload) return;
+    try {
+      await window.klarityDesktop.cancelBrowserDownload(id);
+    } catch {}
+  };
+
+  const handleRemoveDownloadItem = async (id) => {
+    if (!id || !isDesktop || !window.klarityDesktop?.removeBrowserDownload) return;
+    try {
+      const items = await window.klarityDesktop.removeBrowserDownload(id);
+      if (Array.isArray(items)) setBrowserDownloads(items);
+    } catch {}
+  };
+
+  const handleClearDownloads = async () => {
+    if (!isDesktop || !window.klarityDesktop?.clearBrowserDownloads) return;
+    try {
+      const items = await window.klarityDesktop.clearBrowserDownloads();
+      if (Array.isArray(items)) setBrowserDownloads(items);
+    } catch {}
+  };
+
   // Close popovers and context menus on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (adBlockPopoverRef.current && !adBlockPopoverRef.current.contains(e.target)) {
         setIsAdBlockPopoverOpen(false);
+      }
+      if (downloadsPopoverRef.current && !downloadsPopoverRef.current.contains(e.target)) {
+        setIsDownloadsPopoverOpen(false);
       }
       if (aiPopoverRef.current && !aiPopoverRef.current.contains(e.target)) {
         setIsAiPopoverOpen(false);
@@ -568,6 +723,7 @@ export function BrowserPage({
         setTabContextMenu(null);
         setEditingGroupId(null);
         setIsAiPopoverOpen(false);
+        setIsDownloadsPopoverOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -1314,6 +1470,22 @@ export function BrowserPage({
   const renderedGroupHeaders = new Set();
   const contextTab = tabContextMenu ? tabs.find((t) => t.id === tabContextMenu.tabId) : null;
 
+  // Derived Browser Downloads status for top-right toolbar button
+  const activeDownloads = browserDownloads.filter(
+    (d) => d.state === 'progressing' || d.state === 'paused'
+  );
+  const hasFinishedDownloads = browserDownloads.some(
+    (d) => d.state !== 'progressing' && d.state !== 'paused'
+  );
+  const activeTotalBytes = activeDownloads.reduce((sum, d) => sum + (d.totalBytes || 0), 0);
+  const activeReceivedBytes = activeDownloads.reduce((sum, d) => sum + (d.receivedBytes || 0), 0);
+  const activeProgressPct =
+    activeTotalBytes > 0
+      ? Math.min(100, Math.round((activeReceivedBytes / activeTotalBytes) * 100))
+      : activeDownloads.length > 0
+      ? 35
+      : null;
+
   return (
     <div className="flex flex-col h-full w-full bg-[var(--background)] overflow-hidden flex-1 min-h-0">
       {/* 0. CHROME/EDGE STYLE TAB STRIP WITH TAB GROUPS */}
@@ -1899,6 +2071,251 @@ export function BrowserPage({
               <Sparkles className={`w-3.5 h-3.5 ${isBrowserAiSidebarOpen ? 'text-white' : 'text-[var(--brand)]'}`} />
               <span className="hidden sm:inline">AI Copilot</span>
             </button>
+          </div>
+
+          {/* Browser Downloads Button & Popover */}
+          <div className="relative shrink-0" ref={downloadsPopoverRef}>
+            <button
+              type="button"
+              onClick={handleToggleDownloadsPopover}
+              aria-label={activeDownloads.length > 0 ? `Downloads (${activeDownloads.length} in progress)` : 'Downloads'}
+              title={activeDownloads.length > 0 ? `Downloading (${activeDownloads.length})...` : 'Downloads'}
+              className={`relative p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                isDownloadsPopoverOpen
+                  ? 'bg-[var(--brand)] text-white border-[var(--brand)]'
+                  : activeDownloads.length > 0
+                  ? 'bg-[var(--brand-soft)] border-[var(--brand)]/40 text-[var(--brand)] hover:bg-[var(--surface-hover)]'
+                  : 'border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)]'
+              }`}
+            >
+              <Download className={`w-4 h-4 ${activeDownloads.length > 0 ? 'animate-pulse' : ''}`} />
+              {activeProgressPct != null && (
+                <span className="absolute inset-x-1 bottom-0.5 h-0.5 rounded-full bg-black/10 dark:bg-white/15 overflow-hidden">
+                  <span className="block h-full bg-current transition-all duration-150" style={{ width: `${activeProgressPct}%` }} />
+                </span>
+              )}
+              {hasUnseenDownload && activeDownloads.length === 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--surface)]" />
+              )}
+            </button>
+
+            {isDownloadsPopoverOpen && (
+              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-xl z-50 overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-[var(--line)] bg-[var(--surface-subtle)]/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Download className="w-4 h-4 text-[var(--brand)] shrink-0" />
+                    <span className="text-xs font-bold text-[var(--ink)]">Downloads</span>
+                    {browserDownloads.length > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-[var(--surface-subtle)] border border-[var(--line)] text-[var(--muted)]">
+                        {browserDownloads.length}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isDesktop && (
+                      <button
+                        type="button"
+                        onClick={handleOpenDownloadsFolder}
+                        title="Open downloads folder"
+                        aria-label="Open downloads folder"
+                        className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {hasFinishedDownloads && (
+                      <button
+                        type="button"
+                        onClick={handleClearDownloads}
+                        className="px-2 py-1 rounded-lg text-[11px] font-medium hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {!isDesktop ? (
+                  <div className="p-5 text-center text-xs text-[var(--muted)]">
+                    Browser downloads are saved and managed inside the Klarity desktop app.
+                  </div>
+                ) : browserDownloads.length === 0 ? (
+                  <div className="p-6 flex flex-col items-center text-center gap-2">
+                    <div className="w-9 h-9 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] flex items-center justify-center text-[var(--muted)]">
+                      <Download className="w-4 h-4" />
+                    </div>
+                    <div className="text-xs font-semibold text-[var(--ink)]">No downloads yet</div>
+                    <p className="text-[11px] text-[var(--muted)] leading-relaxed">
+                      Files you download while browsing will appear here for quick access.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleOpenDownloadsFolder}
+                      className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--ink)] transition-colors cursor-pointer"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5 text-[var(--brand)]" />
+                      <span>Open Downloads Folder</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto divide-y divide-[var(--line)]">
+                    {browserDownloads.map((item) => {
+                      const isActiveItem = item.state === 'progressing' || item.state === 'paused';
+                      const isCompletedItem = item.state === 'completed';
+                      const isMissingFile = isCompletedItem && item.exists === false;
+                      const isFailedItem = item.state === 'interrupted' || item.state === 'cancelled';
+                      const itemPct =
+                        item.totalBytes > 0
+                          ? Math.min(100, Math.round(((item.receivedBytes || 0) / item.totalBytes) * 100))
+                          : null;
+
+                      const subtitleText = isActiveItem
+                        ? `${formatDownloadBytes(item.receivedBytes)}${
+                            item.totalBytes > 0
+                              ? ` / ${formatDownloadBytes(item.totalBytes)}${itemPct != null ? ` (${itemPct}%)` : ''}`
+                              : ''
+                          }${item.state === 'paused' ? ' • Paused' : ''}`
+                        : isMissingFile
+                        ? ['File moved or deleted', formatDownloadTime(item.completedAt || item.startedAt)]
+                            .filter(Boolean)
+                            .join(' • ')
+                        : isFailedItem
+                        ? [
+                            item.state === 'cancelled' ? 'Cancelled' : 'Download interrupted',
+                            item.totalBytes > 0
+                              ? `${formatDownloadBytes(item.receivedBytes)} / ${formatDownloadBytes(item.totalBytes)}`
+                              : null
+                          ]
+                            .filter(Boolean)
+                            .join(' • ')
+                        : [
+                            item.totalBytes > 0 || item.receivedBytes > 0
+                              ? formatDownloadBytes(item.totalBytes || item.receivedBytes)
+                              : null,
+                            formatDownloadHost(item.url),
+                            formatDownloadTime(item.completedAt || item.startedAt)
+                          ]
+                            .filter(Boolean)
+                            .join(' • ');
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="group px-3.5 py-2.5 flex items-start gap-2.5 hover:bg-[var(--surface-subtle)]/50 transition-colors"
+                        >
+                          <div
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                              isActiveItem
+                                ? 'bg-[var(--brand-soft)] border-[var(--brand)]/30 text-[var(--brand)]'
+                                : isCompletedItem && !isMissingFile
+                                ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-600 dark:text-emerald-400'
+                                : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60 text-rose-500'
+                            }`}
+                          >
+                            {isActiveItem ? (
+                              <Download className="w-4 h-4 animate-pulse" />
+                            ) : isCompletedItem && !isMissingFile ? (
+                              <FileText className="w-4 h-4" />
+                            ) : (
+                              <AlertCircle className="w-4 h-4" />
+                            )}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            {isCompletedItem && !isMissingFile ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDownloadItem(item)}
+                                title={`Open ${item.filename}`}
+                                className="block w-full text-left text-xs font-semibold text-[var(--ink)] hover:text-[var(--brand)] truncate cursor-pointer"
+                              >
+                                {item.filename}
+                              </button>
+                            ) : (
+                              <div
+                                title={item.filename}
+                                className={`text-xs font-semibold truncate ${
+                                  isMissingFile || isFailedItem
+                                    ? 'text-[var(--muted)] line-through'
+                                    : 'text-[var(--ink)]'
+                                }`}
+                              >
+                                {item.filename}
+                              </div>
+                            )}
+
+                            {subtitleText && (
+                              <div className="text-[11px] text-[var(--muted)] truncate mt-0.5">
+                                {subtitleText}
+                              </div>
+                            )}
+
+                            {isActiveItem && (
+                              <div className="mt-1.5 h-1.5 w-full rounded-full bg-[var(--surface-subtle)] overflow-hidden">
+                                <div
+                                  className={`h-full bg-[var(--brand)] transition-all duration-150 ${
+                                    itemPct == null ? 'w-1/2 animate-pulse' : ''
+                                  }`}
+                                  style={itemPct != null ? { width: `${itemPct}%` } : undefined}
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
+                            {isActiveItem ? (
+                              <button
+                                type="button"
+                                onClick={() => handleCancelDownloadItem(item.id)}
+                                title="Cancel download"
+                                aria-label={`Cancel ${item.filename}`}
+                                className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 text-[var(--muted)] hover:text-rose-600 transition-colors cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <>
+                                {isCompletedItem && !isMissingFile && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenDownloadItem(item)}
+                                      title="Open file"
+                                      aria-label={`Open ${item.filename}`}
+                                      className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--brand)] transition-colors cursor-pointer"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleShowDownloadInFolder(item)}
+                                      title="Show in folder"
+                                      aria-label={`Show ${item.filename} in folder`}
+                                      className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
+                                    >
+                                      <FolderOpen className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveDownloadItem(item.id)}
+                                  title="Remove from list"
+                                  aria-label={`Remove ${item.filename} from downloads list`}
+                                  className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 text-[var(--muted)] hover:text-rose-600 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Browser Settings Shortcut */}

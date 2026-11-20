@@ -32,8 +32,21 @@ const desktopBridge = {
   getBrowserPrefs: () => ipcRenderer.invoke('klarity:browser-get-prefs'),
   updateBrowserPrefs: (prefs) => ipcRenderer.invoke('klarity:browser-update-prefs', prefs),
   selectBrowserDownloadDir: () => ipcRenderer.invoke('klarity:browser-select-download-dir'),
+  getBrowserDownloads: () => ipcRenderer.invoke('klarity:browser-get-downloads'),
+  openBrowserDownload: (id) => ipcRenderer.invoke('klarity:browser-open-download', id),
+  showBrowserDownloadInFolder: (id) => ipcRenderer.invoke('klarity:browser-show-download', id),
+  openBrowserDownloadsFolder: () => ipcRenderer.invoke('klarity:browser-open-downloads-folder'),
+  cancelBrowserDownload: (id) => ipcRenderer.invoke('klarity:browser-cancel-download', id),
+  removeBrowserDownload: (id) => ipcRenderer.invoke('klarity:browser-remove-download', id),
+  clearBrowserDownloads: () => ipcRenderer.invoke('klarity:browser-clear-downloads'),
   getSponsorSegments: (videoId) => ipcRenderer.invoke('klarity:browser-get-sponsor-segments', videoId),
   getDeArrowBranding: (videoId) => ipcRenderer.invoke('klarity:browser-get-dearrow-branding', videoId),
+  onBrowserDownloads: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const handler = (_event, items) => callback(items);
+    ipcRenderer.on('klarity:browser-downloads', handler);
+    return () => ipcRenderer.removeListener('klarity:browser-downloads', handler);
+  },
   onAdBlockStats: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const handler = (_event, stats) => callback(stats);

@@ -528,6 +528,76 @@ function saveBrowserRuntimePrefs(nextPrefs) {
   return browserRuntimePrefs;
 }
 
+const MAX_BROWSER_DOWNLOADS = 100;
+const browserDownloadsFile = path.join(app.getPath('userData'), 'browser_downloads.json');
+const activeBrowserDownloadItems = new Map();
+let browserDownloadsListenerAttached = false;
+let browserDownloads = [];
+try {
+  if (fs.existsSync(browserDownloadsFile)) {
+    const savedDownloads = JSON.parse(fs.readFileSync(browserDownloadsFile, 'utf8'));
+    if (Array.isArray(savedDownloads)) {
+      browserDownloads = savedDownloads.slice(0, MAX_BROWSER_DOWNLOADS).map((d) => ({
+        ...d,
+        state: d.state === 'progressing' || d.state === 'paused' ? 'interrupted' : d.state
+      }));
+    }
+  }
+} catch {}
+
+function saveBrowserDownloads() {
+  try {
+    const persistable = browserDownloads.slice(0, MAX_BROWSER_DOWNLOADS).map(({ exists, ...rest }) => rest);
+    fs.writeFileSync(browserDownloadsFile, JSON.stringify(persistable, null, 2), 'utf8');
+  } catch {}
+}
+
+function getSerializedBrowserDownloads() {
+  return browserDownloads.slice(0, MAX_BROWSER_DOWNLOADS).map((d) => ({
+    ...d,
+    exists:
+      d.state === 'progressing' || d.state === 'paused'
+        ? true
+        : Boolean(d.savePath && fs.existsSync(d.savePath))
+  }));
+}
+
+function broadcastBrowserDownloads() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('klarity:browser-downloads', getSerializedBrowserDownloads());
+  }
+}
+
+function ensureDownloadDirectory(targetDir) {
+  let resolvedDir = targetDir || app.getPath('downloads');
+  try {
+    fs.mkdirSync(resolvedDir, { recursive: true });
+    return resolvedDir;
+  } catch {
+    const fallbackDir = app.getPath('downloads');
+    try {
+      fs.mkdirSync(fallbackDir, { recursive: true });
+    } catch {}
+    return fallbackDir;
+  }
+}
+
+function getUniqueDownloadPath(targetDir, rawFileName) {
+  const safeName =
+    path.basename(String(rawFileName || 'download')).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_') || 'download';
+  const resolvedDir = ensureDownloadDirectory(targetDir);
+  const parsed = path.parse(safeName);
+  const baseName = parsed.name || 'download';
+  const ext = parsed.ext || '';
+  let candidate = path.join(resolvedDir, safeName);
+  let counter = 1;
+  while (fs.existsSync(candidate) && counter < 1000) {
+    candidate = path.join(resolvedDir, `${baseName} (${counter})${ext}`);
+    counter += 1;
+  }
+  return candidate;
+}
+
 async function createDesktopWindow() {
   const port = await startEmbeddedBackend();
 
@@ -581,22 +651,74 @@ async function createDesktopWindow() {
     callback({ responseHeaders });
   });
 
-  browserSession.on('will-download', (_event, item) => {
-    const fileName = item.getFilename();
-    const targetDir = browserRuntimePrefs.downloadPath || app.getPath('downloads');
-    if (browserRuntimePrefs.askWhereToSave && mainWindow && !mainWindow.isDestroyed()) {
-      const chosen = dialog.showSaveDialogSync(mainWindow, {
-        defaultPath: path.join(targetDir, fileName)
-      });
-      if (chosen) {
-        item.setSavePath(chosen);
+  if (!browserDownloadsListenerAttached) {
+    browserDownloadsListenerAttached = true;
+    browserSession.on('will-download', (_event, item) => {
+      const targetDir = browserRuntimePrefs.downloadPath || app.getPath('downloads');
+      let savePath;
+      if (browserRuntimePrefs.askWhereToSave && mainWindow && !mainWindow.isDestroyed()) {
+        const chosen = dialog.showSaveDialogSync(mainWindow, {
+          defaultPath: getUniqueDownloadPath(targetDir, item.getFilename())
+        });
+        if (!chosen) {
+          item.cancel();
+          return;
+        }
+        savePath = chosen;
       } else {
-        item.cancel();
+        savePath = getUniqueDownloadPath(targetDir, item.getFilename());
       }
-    } else {
-      item.setSavePath(path.join(targetDir, fileName));
-    }
-  });
+
+      item.setSavePath(savePath);
+
+      const downloadId = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const record = {
+        id: downloadId,
+        filename: path.basename(savePath),
+        savePath,
+        url: item.getURL() || '',
+        mimeType: item.getMimeType() || '',
+        totalBytes: item.getTotalBytes() || 0,
+        receivedBytes: item.getReceivedBytes() || 0,
+        state: 'progressing',
+        startedAt: Date.now(),
+        completedAt: null
+      };
+
+      browserDownloads = [record, ...browserDownloads].slice(0, MAX_BROWSER_DOWNLOADS);
+      activeBrowserDownloadItems.set(downloadId, item);
+      saveBrowserDownloads();
+      broadcastBrowserDownloads();
+
+      let lastBroadcastAt = Date.now();
+      let lastBroadcastState = record.state;
+
+      item.on('updated', (_e, state) => {
+        record.receivedBytes = item.getReceivedBytes() || 0;
+        record.totalBytes = item.getTotalBytes() || record.totalBytes;
+        const nextState =
+          state === 'interrupted' ? 'interrupted' : item.isPaused() ? 'paused' : 'progressing';
+        record.state = nextState;
+        const now = Date.now();
+        if (nextState !== lastBroadcastState || now - lastBroadcastAt >= 150) {
+          lastBroadcastState = nextState;
+          lastBroadcastAt = now;
+          broadcastBrowserDownloads();
+        }
+      });
+
+      item.once('done', (_e, state) => {
+        activeBrowserDownloadItems.delete(downloadId);
+        record.receivedBytes = item.getReceivedBytes() || record.receivedBytes;
+        record.totalBytes = item.getTotalBytes() || record.totalBytes;
+        record.state =
+          state === 'completed' ? 'completed' : state === 'cancelled' ? 'cancelled' : 'interrupted';
+        record.completedAt = Date.now();
+        saveBrowserDownloads();
+        broadcastBrowserDownloads();
+      });
+    });
+  }
 
   const AD_BLOCK_DOMAINS = [
     'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
@@ -1140,6 +1262,70 @@ ipcMain.handle('klarity:browser-select-download-dir', async () => {
   }
   const updated = saveBrowserRuntimePrefs({ downloadPath: result.filePaths[0] });
   return { canceled: false, downloadPath: updated.downloadPath };
+});
+
+function findExistingBrowserDownload(id) {
+  const record = browserDownloads.find((d) => d.id === id);
+  if (!record || !record.savePath || !fs.existsSync(record.savePath)) {
+    broadcastBrowserDownloads();
+    return null;
+  }
+  return record;
+}
+
+ipcMain.handle('klarity:browser-get-downloads', () => {
+  return getSerializedBrowserDownloads();
+});
+
+ipcMain.handle('klarity:browser-open-download', async (_e, id) => {
+  const record = findExistingBrowserDownload(id);
+  if (!record) return { ok: false, error: 'File not found' };
+  const errMsg = await shell.openPath(record.savePath);
+  return { ok: !errMsg, error: errMsg || null };
+});
+
+ipcMain.handle('klarity:browser-show-download', (_e, id) => {
+  const record = findExistingBrowserDownload(id);
+  if (!record) return { ok: false, error: 'File not found' };
+  shell.showItemInFolder(record.savePath);
+  return { ok: true };
+});
+
+ipcMain.handle('klarity:browser-open-downloads-folder', async () => {
+  const targetDir = ensureDownloadDirectory(browserRuntimePrefs.downloadPath || app.getPath('downloads'));
+  const errMsg = await shell.openPath(targetDir);
+  return { ok: !errMsg, error: errMsg || null };
+});
+
+ipcMain.handle('klarity:browser-cancel-download', (_e, id) => {
+  const item = activeBrowserDownloadItems.get(id);
+  if (item && typeof item.cancel === 'function') {
+    try {
+      item.cancel();
+    } catch {}
+  }
+  return { ok: true };
+});
+
+ipcMain.handle('klarity:browser-remove-download', (_e, id) => {
+  const item = activeBrowserDownloadItems.get(id);
+  if (item && typeof item.cancel === 'function') {
+    try {
+      item.cancel();
+    } catch {}
+    activeBrowserDownloadItems.delete(id);
+  }
+  browserDownloads = browserDownloads.filter((d) => d.id !== id);
+  saveBrowserDownloads();
+  broadcastBrowserDownloads();
+  return getSerializedBrowserDownloads();
+});
+
+ipcMain.handle('klarity:browser-clear-downloads', () => {
+  browserDownloads = browserDownloads.filter((d) => d.state === 'progressing' || d.state === 'paused');
+  saveBrowserDownloads();
+  broadcastBrowserDownloads();
+  return getSerializedBrowserDownloads();
 });
 
 // Ensure embedded <webview> instances use a clean Chrome UA and open target=_blank links inside the webview
