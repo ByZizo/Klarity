@@ -16,9 +16,20 @@ marked.setOptions({
   gfm: true
 });
 
-export const CURRENT_APP_VERSION = '3.12.60';
+export const CURRENT_APP_VERSION = '3.12.61';
 
 export const LATEST_RELEASE_NOTES = [
+  {
+    version: 'v3.12.61',
+    title: 'Browser Downloads Manager, Unified Quick Notes & Support Tab',
+    highlights: [
+      'Added a top-right Downloads icon and persistent downloads manager in the Klarity Browser',
+      'Made the top-right Browser toolbar buttons icon-only for a cleaner layout',
+      'Replaced the separate homepage Quick Notes card with the unified multi-section Notes popout',
+      'Replaced the navigation refresh button with an update icon button whenever an update is ready',
+      'Moved Feedback and Buy Me a Coffee into a dedicated Support section in Settings'
+    ]
+  },
   {
     version: 'v3.12.58',
     title: 'Budget Overview & Spending Bar Realignment',
