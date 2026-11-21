@@ -148,6 +148,7 @@ export default function PasswordVaultPage({
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [openCardMenuId, setOpenCardMenuId] = useState(null);
   const [itemToDelete, setItemToDelete] = useState(null);
+  const [sectionToDelete, setSectionToDelete] = useState(null);
 
   const notify = (msg, type = 'success') => {
     if (onShowToast) onShowToast(msg, type);
@@ -964,11 +965,7 @@ export default function PasswordVaultPage({
               <ChevronDown className={`w-4 h-4 transition-transform ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
             </Button>
 
-            {isCategoryDropdownOpen && (() => {
-              const hasDeletableSection = allSections.some(
-                (sec) => sec.toLowerCase() !== 'favorites' && getSectionItemCount(sec) === 0
-              );
-              return (
+            {isCategoryDropdownOpen && (
               <>
                 <div
                   className="fixed inset-0 z-30"
@@ -1042,32 +1039,32 @@ export default function PasswordVaultPage({
                         setIsCategoryDropdownOpen(false);
                         setIsAddingSection(false);
                       }}
-                      className={`w-full px-3 py-2 rounded-[8px] text-[13px] font-medium flex items-center justify-between text-left cursor-pointer transition-colors ${
+                      className={`w-full px-3 py-2 rounded-[8px] text-[13px] font-medium flex items-center justify-between gap-2 text-left cursor-pointer transition-colors ${
                         selectedCategory === 'All'
                           ? 'bg-[#1B4B91]/10 text-[#1B4B91]'
                           : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        {selectedCategory === 'All' ? <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" /> : <span className="w-3.5 shrink-0" />}
+                        <span className="w-5 h-5 flex items-center justify-center shrink-0">
+                          {selectedCategory === 'All' && <Check className="w-3.5 h-3.5 text-[#1B4B91]" />}
+                        </span>
                         <span className="truncate">All</span>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)] min-w-[26px] text-center tabular-nums">
-                          {(vaultItems || []).length}
-                        </span>
-                        {hasDeletableSection && <span className="w-6 h-6 shrink-0" aria-hidden="true" />}
-                      </div>
+                      <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)] min-w-[26px] text-center tabular-nums shrink-0">
+                        {(vaultItems || []).length}
+                      </span>
                     </button>
 
                     {allSections.map(sec => {
                       const count = getSectionItemCount(sec);
                       const isSelected = selectedCategory.toLowerCase() === sec.toLowerCase();
                       const isBuiltInFavorites = sec.toLowerCase() === 'favorites';
+                      const canDeleteSection = count === 0 && !isBuiltInFavorites;
                       return (
                         <div
                           key={sec}
-                          className={`w-full px-3 py-2 rounded-[8px] text-[13px] font-medium flex items-center justify-between text-left cursor-pointer transition-colors ${
+                          className={`w-full px-3 py-2 rounded-[8px] text-[13px] font-medium flex items-center justify-between gap-2 text-left cursor-pointer transition-colors ${
                             isSelected
                               ? 'bg-[#1B4B91]/10 text-[#1B4B91]'
                               : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
@@ -1079,45 +1076,39 @@ export default function PasswordVaultPage({
                           }}
                         >
                           <div className="flex items-center gap-2 min-w-0 pr-2">
-                            {isSelected ? (
-                              <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" />
-                            ) : isBuiltInFavorites ? (
-                              <Star className="w-3.5 h-3.5 text-[#B45309] fill-[#B45309] shrink-0" />
-                            ) : (
-                              <span className="w-3.5 shrink-0" />
-                            )}
-                            <span className="truncate">{sec}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)] min-w-[26px] text-center tabular-nums">
-                              {count}
-                            </span>
-                            {hasDeletableSection && (
-                              count === 0 && !isBuiltInFavorites ? (
+                            <span className="w-5 h-5 flex items-center justify-center shrink-0">
+                              {canDeleteSection ? (
                                 <button
                                   type="button"
-                                  aria-label={`Delete empty section ${sec}`}
+                                  aria-label={`Delete section ${sec}`}
+                                  title="Delete section"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleDeleteSection(sec);
+                                    setIsCategoryDropdownOpen(false);
+                                    setSectionToDelete(sec);
                                   }}
-                                  className="w-6 h-6 flex items-center justify-center text-[var(--muted)] hover:text-[#B91C1C] rounded-[8px] transition-colors cursor-pointer shrink-0"
+                                  className="w-5 h-5 flex items-center justify-center text-[var(--muted)] hover:text-[#B91C1C] rounded-[6px] transition-colors cursor-pointer"
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
-                              ) : (
-                                <span className="w-6 h-6 shrink-0" aria-hidden="true" />
-                              )
-                            )}
+                              ) : isSelected ? (
+                                <Check className="w-3.5 h-3.5 text-[#1B4B91]" />
+                              ) : isBuiltInFavorites ? (
+                                <Star className="w-3.5 h-3.5 text-[#B45309] fill-[#B45309]" />
+                              ) : null}
+                            </span>
+                            <span className="truncate">{sec}</span>
                           </div>
+                          <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)] min-w-[26px] text-center tabular-nums shrink-0">
+                            {count}
+                          </span>
                         </div>
                       );
                     })}
                   </div>
                 </Card>
               </>
-              );
-            })()}
+            )}
           </div>
 
           {/* View Mode Toggle: Grid / List */}
@@ -1587,6 +1578,22 @@ export default function PasswordVaultPage({
       )}
       </>
       )}
+
+      {/* Delete Section Confirmation Dialog */}
+      <ConfirmDialog
+        open={Boolean(sectionToDelete)}
+        title="Delete section?"
+        message={sectionToDelete ? `Are you sure you want to delete the "${sectionToDelete}" section?` : ''}
+        confirmLabel="Delete section"
+        variant="danger"
+        onCancel={() => setSectionToDelete(null)}
+        onConfirm={() => {
+          if (sectionToDelete) {
+            handleDeleteSection(sectionToDelete);
+            setSectionToDelete(null);
+          }
+        }}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

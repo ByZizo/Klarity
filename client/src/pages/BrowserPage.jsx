@@ -246,6 +246,15 @@ export function BrowserPage({
   });
   const [isDraggingCalc, setIsDraggingCalc] = useState(false);
   const calcDragStartRef = useRef({ mouseX: 0, mouseY: 0, cardX: 0, cardY: 0, parentW: 0, parentH: 0, cardW: 0, cardH: 0 });
+  const [floatingCalcWidth, setFloatingCalcWidth] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem('klarity_floating_calc_width'));
+      if (Number.isFinite(saved) && saved >= 280 && saved <= 560) return saved;
+    } catch {}
+    return 320;
+  });
+  const [isResizingCalc, setIsResizingCalc] = useState(false);
+  const calcResizeStartRef = useRef({ mouseX: 0, mouseY: 0, startW: 320, startH: 430, aspect: 1.34, maxW: 540 });
 
   const [isOverflowMenuOpen, setIsOverflowMenuOpen] = useState(false);
   const overflowMenuRef = useRef(null);
@@ -616,6 +625,66 @@ export function BrowserPage({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       setIsResizingNotes(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleFloatingCalcResizeStart = (e) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const cardEl = floatingCalcRef.current;
+    const rect = cardEl?.getBoundingClientRect();
+    const parentRect = cardEl?.offsetParent?.getBoundingClientRect();
+
+    const isRightAnchored = !floatingCalcPos;
+    const startW = rect?.width || floatingCalcWidth || 320;
+    const startH = rect?.height || 430;
+    const aspect = startH / Math.max(1, startW);
+
+    const cardLeftRel = rect && parentRect ? rect.left - parentRect.left : 16;
+    const cardRightRel = rect && parentRect ? rect.right - parentRect.left : startW + 16;
+    const cardTopRel = rect && parentRect ? rect.top - parentRect.top : 16;
+    const availW = parentRect
+      ? Math.max(280, isRightAnchored ? cardRightRel - 12 : parentRect.width - cardLeftRel - 12)
+      : 540;
+    const availH = parentRect ? Math.max(300, parentRect.height - cardTopRel - 12) : 760;
+    const maxW = Math.min(540, Math.floor(availW), Math.floor(availH / Math.max(0.5, aspect)));
+
+    calcResizeStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startW,
+      startH,
+      aspect,
+      isRightAnchored,
+      maxW: Math.max(280, maxW)
+    };
+    setIsResizingCalc(true);
+
+    const handleMouseMove = (moveEvent) => {
+      const dx = moveEvent.clientX - calcResizeStartRef.current.mouseX;
+      const dy = moveEvent.clientY - calcResizeStartRef.current.mouseY;
+      const candidateFromX =
+        calcResizeStartRef.current.startW + (calcResizeStartRef.current.isRightAnchored ? -dx : dx);
+      const candidateFromY =
+        (calcResizeStartRef.current.startH + dy) / Math.max(0.5, calcResizeStartRef.current.aspect);
+      const chosen = Math.abs(dx) >= Math.abs(dy) ? candidateFromX : candidateFromY;
+      const nextW = Math.round(
+        Math.min(calcResizeStartRef.current.maxW, Math.max(280, chosen))
+      );
+      setFloatingCalcWidth(nextW);
+      try {
+        localStorage.setItem('klarity_floating_calc_width', String(nextW));
+      } catch {}
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      setIsResizingCalc(false);
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -2855,7 +2924,7 @@ export function BrowserPage({
               const isTabActive = tab.id === activeTabId;
               const showNewTab = isNewTabUrl(tab.url);
               const disableWebviewPointer =
-                isAnyToolbarPopoverOpen || isDraggingCalc || isDraggingNotes || isResizingNotes;
+                isAnyToolbarPopoverOpen || isDraggingCalc || isResizingCalc || isDraggingNotes || isResizingNotes;
               return (
                 <React.Fragment key={tab.id}>
                   <webview
@@ -2944,13 +3013,16 @@ export function BrowserPage({
             </div>
           )}
 
-          {/* Draggable Floating Calculator Window (Over any webpage / New Tab) */}
+          {/* Draggable & Proportionally Resizable Floating Calculator Window */}
           {isCalculatorOpen && (
             <BrowserCalculatorPopover
               floating={true}
               position={floatingCalcPos}
+              width={floatingCalcWidth}
               isDragging={isDraggingCalc}
+              isResizing={isResizingCalc}
               onDragStart={handleFloatingCalcDragStart}
+              onResizeStart={handleFloatingCalcResizeStart}
               cardRef={floatingCalcRef}
               onClose={() => setIsCalculatorOpen(false)}
             />

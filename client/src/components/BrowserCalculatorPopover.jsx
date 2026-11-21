@@ -19,8 +19,11 @@ export function BrowserCalculatorPopover({
   onClose,
   floating = false,
   position = null,
+  width = 320,
   isDragging = false,
+  isResizing = false,
   onDragStart,
+  onResizeStart,
   cardRef
 }) {
   const [expression, setExpression] = useState('');
@@ -199,19 +202,30 @@ export function BrowserCalculatorPopover({
     return res.ok ? res.formatted : null;
   }, [expression, justEvaluated]);
 
+  const scale = floating ? Math.max(0.875, Math.min(1.75, Number(width || 320) / 320)) : 1;
+  const scaledBtnHeight = Math.round(40 * scale);
+  const scaledBtnFont = Math.round(14 * scale);
+  const scaledPad = Math.round(14 * scale);
+  const scaledGap = Math.round(10 * scale);
+  const scaledGridGap = Math.round(6 * scale);
+  const scaledExprFont = Math.round(12 * scale);
+  const scaledResultFont = Math.round(20 * scale);
+  const scaledHistoryMaxH = Math.round(144 * scale);
+
   const keypadBtnClass =
-    'h-10 rounded-lg text-sm font-semibold border border-[var(--line)] transition-colors cursor-pointer flex items-center justify-center focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2';
+    'rounded-lg font-semibold border border-[var(--line)] transition-colors cursor-pointer flex items-center justify-center focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2';
 
   const wrapperClass = floating
-    ? `absolute z-40 w-80 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-2xl shadow-2xl overflow-hidden flex flex-col outline-none select-none transition-shadow ${
-        isDragging ? 'ring-2 ring-[var(--brand)]/50' : ''
+    ? `absolute z-40 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-2xl shadow-2xl overflow-hidden flex flex-col outline-none select-none transition-shadow ${
+        isDragging || isResizing ? 'ring-2 ring-[var(--brand)]/50' : ''
       }`
     : 'absolute right-0 top-full mt-2 w-80 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col outline-none select-none';
 
   const floatingStyle = floating
-    ? position
-      ? { left: `${position.x}px`, top: `${position.y}px` }
-      : { right: '16px', top: '16px' }
+    ? {
+        width: `${Math.round(width || 320)}px`,
+        ...(position ? { left: `${position.x}px`, top: `${position.y}px` } : { right: '16px', top: '16px' })
+      }
     : undefined;
 
   return (
@@ -247,11 +261,18 @@ export function BrowserCalculatorPopover({
         </button>
       </div>
 
-      <div className="p-3.5 flex flex-col gap-3">
+      <div
+        style={{ padding: `${scaledPad}px`, gap: `${scaledGap}px` }}
+        className="flex flex-col relative"
+      >
       {/* Display */}
-      <div className="p-3 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] flex flex-col gap-1">
+      <div
+        style={{ padding: `${Math.round(12 * scale)}px` }}
+        className="rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] flex flex-col gap-1"
+      >
         <div
-          className="text-xs font-medium text-[var(--muted)] text-right min-h-[18px] break-all"
+          style={{ fontSize: `${scaledExprFont}px`, minHeight: `${Math.round(18 * scale)}px` }}
+          className="font-medium text-[var(--muted)] text-right break-all"
           aria-label="Expression"
         >
           {expression || '0'}
@@ -280,10 +301,11 @@ export function BrowserCalculatorPopover({
 
           <div
             aria-live="polite"
+            style={!errorMsg ? { fontSize: `${scaledResultFont}px` } : undefined}
             className={`text-right font-semibold truncate ${
               errorMsg
                 ? 'text-xs text-[var(--danger)]'
-                : 'text-xl text-[var(--ink)] tabular-nums'
+                : 'text-[var(--ink)] tabular-nums'
             }`}
           >
             {errorMsg ? errorMsg : justEvaluated ? displayResult : livePreview ?? displayResult}
@@ -292,7 +314,14 @@ export function BrowserCalculatorPopover({
       </div>
 
       {/* Keypad: C, backspace, %, ÷, 7-9 ×, 4-6 −, 1-3 +, 0 . = */}
-      <div className="grid grid-cols-4 gap-1.5">
+      <div
+        style={{
+          gap: `${scaledGridGap}px`,
+          '--calc-btn-h': `${scaledBtnHeight}px`,
+          '--calc-btn-fs': `${scaledBtnFont}px`
+        }}
+        className="grid grid-cols-4 [&_button]:h-[var(--calc-btn-h)] [&_button]:text-[length:var(--calc-btn-fs)]"
+      >
         <button
           type="button"
           data-calc-key="C"
@@ -447,11 +476,14 @@ export function BrowserCalculatorPopover({
           )}
         </div>
         {history.length === 0 ? (
-          <div className="text-[11px] text-[var(--muted)] py-1">
+          <div className="text-[11px] text-[var(--muted)] py-1 pr-4">
             Recent calculations appear here. Click one to reuse its result.
           </div>
         ) : (
-          <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
+          <div
+            style={{ maxHeight: `${scaledHistoryMaxH}px` }}
+            className="flex flex-col gap-1 overflow-y-auto"
+          >
             {history.map((item) => (
               <button
                 key={item.id}
@@ -469,6 +501,19 @@ export function BrowserCalculatorPopover({
           </div>
         )}
       </div>
+
+      {floating && onResizeStart && (
+        <div
+          onMouseDown={onResizeStart}
+          className="absolute bottom-1 right-1 w-4 h-4 cursor-nwse-resize flex items-center justify-center text-[var(--muted)] hover:text-[var(--brand)] transition-colors z-20 select-none group/resize"
+          title="Click and drag to resize calculator"
+          aria-label="Resize calculator"
+        >
+          <svg viewBox="0 0 16 16" className="w-2.5 h-2.5 stroke-current fill-none stroke-2 opacity-60 group-hover/resize:opacity-100">
+            <path d="M14 14H10M14 14V10M14 8L8 14M14 3L3 14" strokeLinecap="round" />
+          </svg>
+        </div>
+      )}
       </div>
     </aside>
   );
