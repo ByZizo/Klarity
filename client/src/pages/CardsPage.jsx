@@ -95,24 +95,24 @@ export function CardsPage({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 divide-y sm:divide-y-0 sm:divide-x divide-[var(--line)]">
           <div className="flex flex-col">
             <span className="text-[13px] font-medium text-[var(--muted)]">Total card debt</span>
-            <span className="font-serif text-[24px] font-semibold text-[var(--ink)] mt-0.5">{fmtMoney(displayCardBalances)}</span>
+            <span className="privacy-sensitive font-serif text-[24px] font-semibold text-[var(--ink)] mt-0.5">{fmtMoney(displayCardBalances)}</span>
             <span className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
               {displayCards.length} {displayCards.length === 1 ? 'card' : 'cards'}
             </span>
           </div>
           <div className="flex flex-col pt-3 sm:pt-0 sm:pl-4">
             <span className="text-[13px] font-medium text-[var(--muted)]">Available cash</span>
-            <span className="font-serif text-[24px] font-semibold text-[#15803D] mt-0.5">{fmtMoney(displayCash)}</span>
+            <span className="privacy-sensitive font-serif text-[24px] font-semibold text-[#15803D] mt-0.5">{fmtMoney(displayCash)}</span>
             <span className="text-[13px] font-medium text-[var(--muted)] mt-0.5">{rawCheckingList.length} checking</span>
           </div>
           <div className="flex flex-col pt-3 sm:pt-0 sm:pl-4">
             <span className="text-[13px] font-medium text-[var(--muted)]">Credit headroom</span>
-            <span className="font-serif text-[24px] font-semibold text-[var(--ink)] mt-0.5">{fmtMoney(totalAvailHeadroom, 0)}</span>
-            <span className="text-[13px] font-medium text-[var(--muted)] mt-0.5">of {fmtMoney(totalLimitAll, 0)} limit</span>
+            <span className="privacy-sensitive font-serif text-[24px] font-semibold text-[var(--ink)] mt-0.5">{fmtMoney(totalAvailHeadroom, 0)}</span>
+            <span className="text-[13px] font-medium text-[var(--muted)] mt-0.5">of <span className="privacy-sensitive">{fmtMoney(totalLimitAll, 0)}</span> limit</span>
           </div>
           <div className="flex flex-col pt-3 sm:pt-0 sm:pl-4">
             <span className="text-[13px] font-medium text-[var(--muted)]">Cash vs. debt</span>
-            <span className={`font-serif text-[24px] font-semibold mt-0.5 ${displayCash >= displayCardBalances ? 'text-[#15803D]' : 'text-[#B91C1C]'}`}>
+            <span className={`privacy-sensitive font-serif text-[24px] font-semibold mt-0.5 ${displayCash >= displayCardBalances ? 'text-[#15803D]' : 'text-[#B91C1C]'}`}>
               {displayCash >= displayCardBalances ? `+${fmtMoney(displayCash - displayCardBalances)}` : `-${fmtMoney(displayCardBalances - displayCash)}`}
             </span>
             <span className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
@@ -173,8 +173,8 @@ export function CardsPage({
 
                     <div className="mt-4">
                       <div className="flex items-baseline justify-between mb-1">
-                        <span className="font-serif text-[24px] font-semibold text-[var(--ink)]">{fmtMoney(card.balance)}</span>
-                        <span className="text-[13px] text-[var(--muted)] font-medium">{fmtMoney(card.limit, 0)} limit</span>
+                        <span className="privacy-sensitive font-serif text-[24px] font-semibold text-[var(--ink)]">{fmtMoney(card.balance)}</span>
+                        <span className="privacy-sensitive text-[13px] text-[var(--muted)] font-medium">{fmtMoney(card.limit, 0)} limit</span>
                       </div>
                       <div className="w-full h-2 bg-[var(--surface-subtle)] rounded-full overflow-hidden mt-1.5">
                         <div
@@ -183,7 +183,7 @@ export function CardsPage({
                         />
                       </div>
                       <div className="flex items-center justify-between text-[13px] font-medium text-[var(--muted)] mt-1.5">
-                        <span>{fmtMoney(Math.max(0, card.limit - card.balance), 0)} available</span>
+                        <span><span className="privacy-sensitive">{fmtMoney(Math.max(0, card.limit - card.balance), 0)}</span> available</span>
                         <span>{Math.round(util)}% used</span>
                       </div>
                     </div>
@@ -229,7 +229,7 @@ export function CardsPage({
                   </div>
 
                   <div className="mt-4">
-                    <span className="font-serif text-[24px] font-semibold text-[var(--ink)]">{fmtMoney(acc.balance)}</span>
+                    <span className="privacy-sensitive font-serif text-[24px] font-semibold text-[var(--ink)]">{fmtMoney(acc.balance)}</span>
                   </div>
                 </div>
 
@@ -262,7 +262,7 @@ export function CardsPage({
                   </div>
 
                   <div className="mt-4">
-                    <span className={`font-serif text-[24px] font-semibold ${ma.type === 'loan' ? 'text-[#B91C1C]' : 'text-[var(--ink)]'}`}>
+                    <span className={`privacy-sensitive font-serif text-[24px] font-semibold ${ma.type === 'loan' ? 'text-[#B91C1C]' : 'text-[var(--ink)]'}`}>
                       {ma.type === 'loan' ? `-${fmtMoney(ma.balance)}` : fmtMoney(ma.balance)}
                     </span>
                   </div>
@@ -370,11 +370,11 @@ export function CardsPage({
 
               <div className="p-4 rounded-[12px] border border-[var(--line)] bg-[var(--surface)] flex flex-col justify-between">
                 <span className="text-[13px] text-[var(--muted)] font-medium">Interest saved vs. minimums</span>
-                <p className="font-serif text-[22px] font-semibold text-[#15803D] mt-1">
+                <p className="privacy-sensitive font-serif text-[22px] font-semibold text-[#15803D] mt-1">
                   {fmtMoney(debtPayoffComparison.interestSavedVsMin)}
                 </p>
                 <p className="text-[13px] text-[var(--muted)] font-medium mt-1">
-                  Total interest: {fmtMoney(debtPayoffComparison.activePlan.totalInterest)}
+                  Total interest: <span className="privacy-sensitive">{fmtMoney(debtPayoffComparison.activePlan.totalInterest)}</span>
                 </p>
               </div>
 
@@ -393,7 +393,7 @@ export function CardsPage({
                 <div className="flex items-center gap-2.5 text-[var(--ink)] min-w-0 text-[15px] font-medium">
                   <Sparkles className="w-4 h-4 text-[#1B4B91] shrink-0" />
                   <span>
-                    You have <span className="font-semibold">{fmtMoney(projectedCashAfterBills)}</span> in checking after bills—enough to clear all card debt today.
+                    You have <span className="privacy-sensitive font-semibold">{fmtMoney(projectedCashAfterBills)}</span> in checking after bills—enough to clear all card debt today.
                   </span>
                 </div>
                 <Button

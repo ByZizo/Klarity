@@ -332,7 +332,7 @@ function maskSecret(val) {
 
 // User-scoped Settings Helper
 function getUserSettings(data, userId) {
-  if (!data) return { ai: {}, plaid: {}, featureFlags: { retirement: true, budgets: true, savingsGoals: true, vault: true } };
+  if (!data) return { ai: {}, plaid: {}, featureFlags: { retirement: true, budgets: true, savingsGoals: true, vault: true, household: true } };
   if (!data.userSettings) data.userSettings = {};
   const uid = userId || 'default';
 
@@ -380,7 +380,8 @@ function getUserSettings(data, userId) {
         retirement: true,
         budgets: true,
         savingsGoals: true,
-        vault: true
+        vault: true,
+        household: true
       }
     };
   } else {
@@ -398,7 +399,8 @@ function getUserSettings(data, userId) {
       retirement: true,
       budgets: true,
       savingsGoals: true,
-      vault: true
+      vault: true,
+      household: true
     };
   }
   return data.userSettings[uid];
@@ -1353,7 +1355,8 @@ app.post(['/api/feature-flags', '/api/settings/feature-flags'], async (req, res)
     retirement: incoming.retirement !== undefined ? Boolean(incoming.retirement) : (userSettings.featureFlags?.retirement ?? true),
     budgets: incoming.budgets !== undefined ? Boolean(incoming.budgets) : (userSettings.featureFlags?.budgets ?? true),
     savingsGoals: incoming.savingsGoals !== undefined ? Boolean(incoming.savingsGoals) : (userSettings.featureFlags?.savingsGoals ?? true),
-    vault: incoming.vault !== undefined ? Boolean(incoming.vault) : (userSettings.featureFlags?.vault ?? true)
+    vault: incoming.vault !== undefined ? Boolean(incoming.vault) : (userSettings.featureFlags?.vault ?? true),
+    household: incoming.household !== undefined ? Boolean(incoming.household) : (userSettings.featureFlags?.household ?? true)
   };
   await writeData(data, req.userId);
   res.json({ success: true, featureFlags: userSettings.featureFlags });

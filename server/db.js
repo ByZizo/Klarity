@@ -769,7 +769,8 @@ const db = {
             retirement: true,
             budgets: true,
             savingsGoals: true,
-            vault: true
+            vault: true,
+            household: true
           }
         };
       }
@@ -940,7 +941,7 @@ const db = {
           data_permissions: st.ai?.permissions || { bills: true, subscriptions: true, cards: true, purchases: true, retirement: true },
           encrypted_plaid_client_id: st.plaid?.encryptedClientId || '',
           encrypted_plaid_secret: st.plaid?.encryptedSecret || '',
-          feature_flags: st.featureFlags || { retirement: true, budgets: true, savingsGoals: true, vault: true },
+          feature_flags: st.featureFlags || { retirement: true, budgets: true, savingsGoals: true, vault: true, household: true },
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' }));
       }

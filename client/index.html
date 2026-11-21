@@ -28,14 +28,11 @@
             root.classList.remove('dark');
           }
 
-          var fontScale = localStorage.getItem('klarity_ui_font_scale') || 'normal';
           var density = localStorage.getItem('klarity_ui_density') || 'comfortable';
           var reduceMotion = localStorage.getItem('klarity_ui_reduce_motion') === 'true';
           var highFocus = localStorage.getItem('klarity_ui_high_focus') === 'true';
           var privacyMask = localStorage.getItem('klarity_ui_privacy_mask') === 'true';
 
-          if (fontScale === 'large') root.classList.add('font-scale-large');
-          if (fontScale === 'xlarge') root.classList.add('font-scale-xlarge');
           if (density === 'compact') root.classList.add('ui-density-compact');
           if (reduceMotion) root.classList.add('reduce-motion');
           if (highFocus) root.classList.add('high-focus');

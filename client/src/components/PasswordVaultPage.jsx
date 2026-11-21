@@ -964,7 +964,11 @@ export default function PasswordVaultPage({
               <ChevronDown className={`w-4 h-4 transition-transform ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
             </Button>
 
-            {isCategoryDropdownOpen && (
+            {isCategoryDropdownOpen && (() => {
+              const hasDeletableSection = allSections.some(
+                (sec) => sec.toLowerCase() !== 'favorites' && getSectionItemCount(sec) === 0
+              );
+              return (
               <>
                 <div
                   className="fixed inset-0 z-30"
@@ -973,7 +977,7 @@ export default function PasswordVaultPage({
                     setIsAddingSection(false);
                   }}
                 />
-                <Card className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-64 py-2 z-40 flex flex-col shadow-lg">
+                <Card padding="p-0" className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-64 py-2 z-40 flex flex-col shadow-lg">
                   <div className="px-2.5 pb-2 border-b border-[var(--line)]">
                     {isAddingSection ? (
                       <div className="flex items-center gap-1 bg-[var(--surface)] border border-[#1B4B91] rounded-[8px] px-2 py-1.5">
@@ -1044,13 +1048,16 @@ export default function PasswordVaultPage({
                           : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                       }`}
                     >
-                      <div className="flex items-center gap-2">
-                        {selectedCategory === 'All' ? <Check className="w-3.5 h-3.5 text-[#1B4B91]" /> : <span className="w-3.5" />}
-                        <span>All</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        {selectedCategory === 'All' ? <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" /> : <span className="w-3.5 shrink-0" />}
+                        <span className="truncate">All</span>
                       </div>
-                      <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
-                        {(vaultItems || []).length}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)] min-w-[26px] text-center tabular-nums">
+                          {(vaultItems || []).length}
+                        </span>
+                        {hasDeletableSection && <span className="w-6 h-6 shrink-0" aria-hidden="true" />}
+                      </div>
                     </button>
 
                     {allSections.map(sec => {
@@ -1071,7 +1078,7 @@ export default function PasswordVaultPage({
                             setIsAddingSection(false);
                           }}
                         >
-                          <div className="flex items-center gap-2 truncate pr-2">
+                          <div className="flex items-center gap-2 min-w-0 pr-2">
                             {isSelected ? (
                               <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" />
                             ) : isBuiltInFavorites ? (
@@ -1082,21 +1089,25 @@ export default function PasswordVaultPage({
                             <span className="truncate">{sec}</span>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
+                            <span className="text-[13px] px-2 py-0.5 rounded-[8px] font-medium bg-[var(--surface-subtle)] text-[var(--muted)] min-w-[26px] text-center tabular-nums">
                               {count}
                             </span>
-                            {count === 0 && !isBuiltInFavorites && (
-                              <button
-                                type="button"
-                                aria-label={`Delete empty section ${sec}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteSection(sec);
-                                }}
-                                className="p-1 text-[var(--muted)] hover:text-[#B91C1C] rounded-[8px] transition-colors"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
+                            {hasDeletableSection && (
+                              count === 0 && !isBuiltInFavorites ? (
+                                <button
+                                  type="button"
+                                  aria-label={`Delete empty section ${sec}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteSection(sec);
+                                  }}
+                                  className="w-6 h-6 flex items-center justify-center text-[var(--muted)] hover:text-[#B91C1C] rounded-[8px] transition-colors cursor-pointer shrink-0"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                <span className="w-6 h-6 shrink-0" aria-hidden="true" />
+                              )
                             )}
                           </div>
                         </div>
@@ -1105,7 +1116,8 @@ export default function PasswordVaultPage({
                   </div>
                 </Card>
               </>
-            )}
+              );
+            })()}
           </div>
 
           {/* View Mode Toggle: Grid / List */}

@@ -1039,13 +1039,15 @@ export default function DocumentVaultPage({
               <ChevronDown className={`w-3.5 h-3.5 text-[var(--muted)] transition-transform ${isFolderDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {isFolderDropdownOpen && (
+            {isFolderDropdownOpen && (() => {
+              const hasDeletableFolder = folders.some((f) => (folderCounts[f] || 0) === 0);
+              return (
               <>
                 <div
                   className="fixed inset-0 z-30"
                   onClick={() => setIsFolderDropdownOpen(false)}
                 />
-                <Card className="absolute left-0 top-full mt-1.5 w-64 py-1.5 z-40 flex flex-col shadow-xl border border-[var(--line)]">
+                <Card padding="p-0" className="absolute left-0 top-full mt-1.5 w-64 py-1.5 z-40 flex flex-col shadow-xl border border-[var(--line)]">
                   <div className="px-3 py-1.5 border-b border-[var(--line)] flex items-center justify-between text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider">
                     <span>Select Folder</span>
                     <span>{folders.length} folder{folders.length === 1 ? '' : 's'}</span>
@@ -1065,17 +1067,20 @@ export default function DocumentVaultPage({
                           : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                       }`}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         {selectedFolder === 'All' ? (
                           <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" />
                         ) : (
                           <Folder className="w-3.5 h-3.5 text-blue-500 fill-blue-500/30 shrink-0" />
                         )}
-                        <span>All Documents</span>
+                        <span className="truncate">All Documents</span>
                       </div>
-                      <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
-                        {folderCounts.All || 0}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[var(--surface-subtle)] text-[var(--muted)] min-w-[26px] text-center tabular-nums">
+                          {folderCounts.All || 0}
+                        </span>
+                        {hasDeletableFolder && <span className="w-5 h-5 shrink-0" aria-hidden="true" />}
+                      </div>
                     </button>
 
                     {/* Each Folder Option */}
@@ -1095,7 +1100,7 @@ export default function DocumentVaultPage({
                             setIsFolderDropdownOpen(false);
                           }}
                         >
-                          <div className="flex items-center gap-2 truncate pr-2">
+                          <div className="flex items-center gap-2 min-w-0 pr-2">
                             {isSelected ? (
                               <Check className="w-3.5 h-3.5 text-[#1B4B91] shrink-0" />
                             ) : (
@@ -1104,18 +1109,22 @@ export default function DocumentVaultPage({
                             <span className="truncate">{f}</span>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[var(--surface-subtle)] text-[var(--muted)]">
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[var(--surface-subtle)] text-[var(--muted)] min-w-[26px] text-center tabular-nums">
                               {count}
                             </span>
-                            {count === 0 && (
-                              <button
-                                type="button"
-                                title={`Delete empty folder "${f}"`}
-                                onClick={() => handleDeleteFolder(f)}
-                                className="p-0.5 text-[var(--muted)] hover:text-rose-500 rounded transition-colors"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
+                            {hasDeletableFolder && (
+                              count === 0 ? (
+                                <button
+                                  type="button"
+                                  title={`Delete empty folder "${f}"`}
+                                  onClick={() => handleDeleteFolder(f)}
+                                  className="w-5 h-5 flex items-center justify-center text-[var(--muted)] hover:text-rose-500 rounded transition-colors cursor-pointer shrink-0"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              ) : (
+                                <span className="w-5 h-5 shrink-0" aria-hidden="true" />
+                              )
                             )}
                           </div>
                         </div>
@@ -1139,7 +1148,8 @@ export default function DocumentVaultPage({
                   </div>
                 </Card>
               </>
-            )}
+              );
+            })()}
           </div>
 
           {/* Breadcrumb / Back button if inside a folder */}

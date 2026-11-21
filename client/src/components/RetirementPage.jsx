@@ -591,16 +591,16 @@ export default function RetirementPage({
                 Estimated monthly retirement income
               </div>
               <div>
-                <div className="text-[26px] font-semibold font-serif text-[var(--ink)]">
+                <div className="privacy-sensitive text-[26px] font-semibold font-serif text-[var(--ink)]">
                   ${metrics.totalEstimatedMonthlyIncome.toLocaleString('en-US')}<span className="text-[14px] font-sans font-medium text-[var(--muted)]">/mo</span>
                 </div>
                 <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
-                  ${metrics.totalPensionMonthly.toLocaleString('en-US')} pension + ${metrics.totalSocialSecurityMonthly.toLocaleString('en-US')} SS + ${metrics.monthlyDrawFromCurrentBalances.toLocaleString('en-US')} draw
+                  <span className="privacy-sensitive">${metrics.totalPensionMonthly.toLocaleString('en-US')}</span> pension + <span className="privacy-sensitive">${metrics.totalSocialSecurityMonthly.toLocaleString('en-US')}</span> SS + <span className="privacy-sensitive">${metrics.monthlyDrawFromCurrentBalances.toLocaleString('en-US')}</span> draw
                 </p>
               </div>
               <div className="mt-4 pt-3 border-t border-[var(--line)] flex items-center justify-between text-[13px]">
                 <span className="text-[var(--muted)] font-medium">Annualized</span>
-                <span className="font-semibold text-[var(--ink)]">${(metrics.totalEstimatedMonthlyIncome * 12).toLocaleString('en-US')}/yr</span>
+                <span className="privacy-sensitive font-semibold text-[var(--ink)]">${(metrics.totalEstimatedMonthlyIncome * 12).toLocaleString('en-US')}/yr</span>
               </div>
             </Card>
 
@@ -609,7 +609,7 @@ export default function RetirementPage({
                 Retirement account balances
               </div>
               <div>
-                <div className="text-[26px] font-semibold font-serif text-[var(--ink)]">
+                <div className="privacy-sensitive text-[26px] font-semibold font-serif text-[var(--ink)]">
                   ${metrics.totalDcBalances.toLocaleString('en-US')}
                 </div>
                 <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
@@ -618,7 +618,7 @@ export default function RetirementPage({
               </div>
               <div className="mt-4 pt-3 border-t border-[var(--line)] flex items-center justify-between text-[13px]">
                 <span className="text-[var(--muted)] font-medium">Monthly contributions</span>
-                <span className="font-semibold text-[#15803D]">+${(metrics.totalMonthlyEmployeeContributions + metrics.totalMonthlyEmployerMatches).toLocaleString('en-US')}/mo</span>
+                <span className="privacy-sensitive font-semibold text-[#15803D]">+${(metrics.totalMonthlyEmployeeContributions + metrics.totalMonthlyEmployerMatches).toLocaleString('en-US')}/mo</span>
               </div>
             </Card>
 
@@ -627,7 +627,7 @@ export default function RetirementPage({
                 Guaranteed pension &amp; Social Security
               </div>
               <div>
-                <div className="text-[26px] font-semibold font-serif text-[var(--ink)]">
+                <div className="privacy-sensitive text-[26px] font-semibold font-serif text-[var(--ink)]">
                   ${(metrics.totalPensionMonthly + metrics.totalSocialSecurityMonthly).toLocaleString('en-US')}<span className="text-[14px] font-sans font-medium text-[var(--muted)]">/mo</span>
                 </div>
                 <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
@@ -645,7 +645,7 @@ export default function RetirementPage({
                 Paycheck deductions saved
               </div>
               <div>
-                <div className="text-[26px] font-semibold font-serif text-[var(--ink)]">
+                <div className="privacy-sensitive text-[26px] font-semibold font-serif text-[var(--ink)]">
                   ${Math.round(metrics.totalPaycheckDeductions).toLocaleString('en-US')}<span className="text-[14px] font-sans font-medium text-[var(--muted)]">/mo</span>
                 </div>
                 <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
@@ -654,7 +654,7 @@ export default function RetirementPage({
               </div>
               <div className="mt-4 pt-3 border-t border-[var(--line)] flex items-center justify-between text-[13px]">
                 <span className="text-[var(--muted)] font-medium">Employer match</span>
-                <span className="font-semibold text-[#1B4B91]">+${metrics.totalMonthlyEmployerMatches.toLocaleString('en-US')}/mo</span>
+                <span className="privacy-sensitive font-semibold text-[#1B4B91]">+${metrics.totalMonthlyEmployerMatches.toLocaleString('en-US')}/mo</span>
               </div>
             </Card>
           </div>
@@ -677,13 +677,15 @@ export default function RetirementPage({
               <div className="flex items-center gap-4 bg-[var(--surface-subtle)] p-4 rounded-[8px] border border-[var(--line)] shrink-0">
                 <div>
                   <span className="text-[13px] text-[var(--muted)] block font-medium">Simulated monthly income</span>
-                  <span className="text-[24px] font-semibold font-serif text-[#1B4B91]">
+                  <span className="privacy-sensitive text-[24px] font-semibold font-serif text-[#1B4B91]">
                     ${simulation.simTotalMonthly.toLocaleString('en-US')}<span className="text-[13px] font-sans font-medium text-[var(--muted)]">/mo</span>
                   </span>
                 </div>
                 {simulation.diffFromBaseline !== 0 && (
                   <Pill variant={simulation.diffFromBaseline > 0 ? 'success' : 'danger'}>
-                    {simulation.diffFromBaseline > 0 ? `+${simulation.diffFromBaseline.toLocaleString('en-US')}/mo` : `${simulation.diffFromBaseline.toLocaleString('en-US')}/mo`}
+                    <span className="privacy-sensitive">
+                      {simulation.diffFromBaseline > 0 ? `+${simulation.diffFromBaseline.toLocaleString('en-US')}/mo` : `${simulation.diffFromBaseline.toLocaleString('en-US')}/mo`}
+                    </span>
                   </Pill>
                 )}
               </div>
@@ -803,15 +805,15 @@ export default function RetirementPage({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-[var(--line)]">
               <div className="p-3.5 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)]">
                 <span className="text-[var(--muted)] block text-[13px] font-medium">Simulated pension monthly</span>
-                <span className="text-[18px] font-semibold font-serif text-[var(--ink)]">${simulation.simPensionMonthly.toLocaleString('en-US')}/mo</span>
+                <span className="privacy-sensitive text-[18px] font-semibold font-serif text-[var(--ink)]">${simulation.simPensionMonthly.toLocaleString('en-US')}/mo</span>
               </div>
               <div className="p-3.5 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)]">
                 <span className="text-[var(--muted)] block text-[13px] font-medium">Social Security at age {simulatedAge}</span>
-                <span className="text-[18px] font-semibold font-serif text-[var(--ink)]">${simulation.simSocialSecurityMonthly.toLocaleString('en-US')}/mo</span>
+                <span className="privacy-sensitive text-[18px] font-semibold font-serif text-[var(--ink)]">${simulation.simSocialSecurityMonthly.toLocaleString('en-US')}/mo</span>
               </div>
               <div className="p-3.5 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)]">
                 <span className="text-[var(--muted)] block text-[13px] font-medium">Portfolio at age {simulatedAge}</span>
-                <span className="text-[18px] font-semibold font-serif text-[var(--ink)]">${simulation.simProjectedBalance.toLocaleString('en-US')}</span>
+                <span className="privacy-sensitive text-[18px] font-semibold font-serif text-[var(--ink)]">${simulation.simProjectedBalance.toLocaleString('en-US')}</span>
               </div>
             </div>
           </Card>
@@ -903,7 +905,7 @@ export default function RetirementPage({
                             <span className="text-[13px] font-medium text-[var(--muted)] block">
                               Estimated monthly benefit
                             </span>
-                            <div className="text-[22px] font-semibold font-serif text-[#15803D] mt-0.5">
+                            <div className="privacy-sensitive text-[22px] font-semibold font-serif text-[#15803D] mt-0.5">
                               ${Number(plan.estimatedMonthlyBenefit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               <span className="text-[13px] font-sans font-medium text-[var(--muted)]"> /mo</span>
                             </div>
@@ -913,7 +915,7 @@ export default function RetirementPage({
                             <span className="text-[13px] font-medium text-[var(--muted)] block">
                               Current account balance
                             </span>
-                            <div className="text-[22px] font-semibold font-serif text-[var(--ink)] mt-0.5">
+                            <div className="privacy-sensitive text-[22px] font-semibold font-serif text-[var(--ink)] mt-0.5">
                               ${Number(plan.balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                           </>
@@ -947,11 +949,11 @@ export default function RetirementPage({
                           <>
                             <div className="p-2.5 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)]">
                               <span className="text-[var(--muted)] text-[13px] block">Employee monthly</span>
-                              <span className="font-semibold text-[15px] text-[var(--ink)]">${Number(plan.employeeContribution || 0).toLocaleString('en-US')}/mo</span>
+                              <span className="privacy-sensitive font-semibold text-[15px] text-[var(--ink)]">${Number(plan.employeeContribution || 0).toLocaleString('en-US')}/mo</span>
                             </div>
                             <div className="p-2.5 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)]">
                               <span className="text-[var(--muted)] text-[13px] block">Employer match</span>
-                              <span className="font-semibold text-[15px] text-[#1B4B91]">${Number(plan.employerMatch || 0).toLocaleString('en-US')}/mo</span>
+                              <span className="privacy-sensitive font-semibold text-[15px] text-[#1B4B91]">${Number(plan.employerMatch || 0).toLocaleString('en-US')}/mo</span>
                             </div>
                           </>
                         )}

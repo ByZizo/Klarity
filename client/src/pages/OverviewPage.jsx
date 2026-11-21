@@ -127,17 +127,17 @@ export function OverviewPage({
       <Card className="p-5 grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[var(--line)] gap-4 sm:gap-6">
         <div>
           <div className="text-[13px] text-[var(--muted)] font-medium">Available cash</div>
-          <div className="font-serif text-[26px] font-semibold text-[var(--ink)] mt-1 tracking-tight">
+          <div className="privacy-sensitive font-serif text-[26px] font-semibold text-[var(--ink)] mt-1 tracking-tight">
             {fmtMoney(displayCash)}
           </div>
           <div className="text-[13px] text-[var(--muted)] font-medium mt-1.5">
-            <span className="text-[#15803D] font-semibold">Covers</span> bills due in 14 days ({fmtMoney(projectedCashAfterBills)} left)
+            <span className="text-[#15803D] font-semibold">Covers</span> bills due in 14 days (<span className="privacy-sensitive">{fmtMoney(projectedCashAfterBills)}</span> left)
           </div>
         </div>
 
         <div className="pt-4 sm:pt-0 sm:pl-6">
           <div className="text-[13px] text-[var(--muted)] font-medium">Card balances</div>
-          <div className="font-serif text-[26px] font-semibold text-[var(--ink)] mt-1 tracking-tight">
+          <div className="privacy-sensitive font-serif text-[26px] font-semibold text-[var(--ink)] mt-1 tracking-tight">
             {fmtMoney(displayCardBalances)}
           </div>
           <div className="text-[13px] text-[var(--muted)] font-medium mt-1.5">
@@ -147,7 +147,7 @@ export function OverviewPage({
 
         <div className="pt-4 sm:pt-0 sm:pl-6">
           <div className="text-[13px] text-[var(--muted)] font-medium">Due in 14 days</div>
-          <div className="font-serif text-[26px] font-semibold text-[var(--ink)] mt-1 tracking-tight">
+          <div className="privacy-sensitive font-serif text-[26px] font-semibold text-[var(--ink)] mt-1 tracking-tight">
             {fmtMoney(displayDue14Sum)}
           </div>
           <div className="text-[13px] text-[var(--muted)] font-medium mt-1.5">
@@ -217,7 +217,7 @@ export function OverviewPage({
                   {retirementPlans.length} {retirementPlans.length === 1 ? 'plan' : 'plans'} tracked
                 </Pill>
               </div>
-              <div className="font-serif text-[24px] font-semibold text-[var(--ink)] mt-1 tracking-tight">
+              <div className="privacy-sensitive font-serif text-[24px] font-semibold text-[var(--ink)] mt-1 tracking-tight">
                 ${Math.round(projectedRetirementMonthlyIncome).toLocaleString('en-US')}
                 <span className="text-[13px] font-sans font-medium text-[var(--muted)]">/mo</span>
               </div>
@@ -237,7 +237,7 @@ export function OverviewPage({
             <div>
               <span className="text-[13px] font-medium text-[var(--muted)]">Total net worth</span>
               <div className="flex flex-wrap items-baseline gap-2.5 mt-0.5">
-                <span className="font-serif text-[26px] font-semibold text-[var(--ink)]">
+                <span className="privacy-sensitive font-serif text-[26px] font-semibold text-[var(--ink)]">
                   {fmtMoney(totalNetWorth)}
                 </span>
                 <Pill variant="success">+4.2% this month</Pill>
@@ -296,21 +296,21 @@ export function OverviewPage({
               </Pill>
             </div>
             <p className="text-[13px] font-medium text-[var(--muted)] leading-relaxed">
-              Projected balance of <span className="font-semibold text-[var(--ink)]">{fmtMoney(projectedCashAfterBills)}</span> after upcoming bills ({fmtMoney(displayDue14Sum)} due in 14 days).
+              Projected balance of <span className="privacy-sensitive font-semibold text-[var(--ink)]">{fmtMoney(projectedCashAfterBills)}</span> after upcoming bills (<span className="privacy-sensitive">{fmtMoney(displayDue14Sum)}</span> due in 14 days).
             </p>
           </div>
           <div className="pt-2.5 border-t border-[var(--line)] flex flex-col gap-1.5 text-[13px]">
             <div className="flex items-center justify-between">
               <span className="text-[var(--muted)] font-medium">Checking and cash</span>
-              <span className="font-semibold text-[var(--ink)]">{fmtMoney(displayCash)}</span>
+              <span className="privacy-sensitive font-semibold text-[var(--ink)]">{fmtMoney(displayCash)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[var(--muted)] font-medium">Savings and investments</span>
-              <span className="font-semibold text-[var(--ink)]">{fmtMoney(manualPositiveAssets)}</span>
+              <span className="privacy-sensitive font-semibold text-[var(--ink)]">{fmtMoney(manualPositiveAssets)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[var(--muted)] font-medium">Credit debt and loans</span>
-              <span className="font-semibold text-[#B91C1C]">-{fmtMoney(displayCardBalances + manualLoans)}</span>
+              <span className="privacy-sensitive font-semibold text-[#B91C1C]">-{fmtMoney(displayCardBalances + manualLoans)}</span>
             </div>
           </div>
         </div>
@@ -344,7 +344,7 @@ export function OverviewPage({
                 </div>
 
                 <div className="mt-4">
-                  <div className="font-serif text-[22px] font-semibold tracking-tight mb-2">
+                  <div className="privacy-sensitive font-serif text-[22px] font-semibold tracking-tight mb-2">
                     {fmtMoney(card.balance)}
                   </div>
                   <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden mb-1.5">
@@ -403,7 +403,7 @@ export function OverviewPage({
                       <Pill variant={isUrgent ? 'warning' : 'brand'}>
                         In {bill.daysUntil} days
                       </Pill>
-                      <span className="text-[15px] font-semibold text-[var(--ink)] text-right">
+                      <span className="privacy-sensitive text-[15px] font-semibold text-[var(--ink)] text-right">
                         {fmtMoney(bill.amount)}
                       </span>
                     </div>
@@ -416,7 +416,7 @@ export function OverviewPage({
 
         <div className="-mx-5 -mb-5 px-5 py-3.5 bg-[var(--surface-subtle)] border-t border-[var(--line)] flex items-center justify-between text-[13px] mt-4">
           <span className="text-[var(--muted)] font-medium">Monthly bills total</span>
-          <span className="font-semibold text-[var(--ink)] text-[15px]">
+          <span className="privacy-sensitive font-semibold text-[var(--ink)] text-[15px]">
             {fmtMoney(displayTotalMonthlyBills)}
           </span>
         </div>
@@ -449,6 +449,7 @@ export function OverviewPage({
                     label={sub.name}
                     detail={sub.renewText}
                     value={fmtMoney(sub.amount)}
+                    valueClassName="privacy-sensitive"
                   />
                 ))}
               </div>
@@ -457,7 +458,7 @@ export function OverviewPage({
 
           <div className="-mx-5 -mb-5 px-5 py-3.5 bg-[var(--surface-subtle)] border-t border-[var(--line)] flex items-center justify-between text-[13px] mt-4">
             <span className="text-[var(--muted)] font-medium">Total per month</span>
-            <span className="font-semibold text-[var(--ink)] text-[15px]">
+            <span className="privacy-sensitive font-semibold text-[var(--ink)] text-[15px]">
               {fmtMoney(displayTotalSubs)}
             </span>
           </div>
@@ -491,7 +492,7 @@ export function OverviewPage({
                         <p className="text-[15px] font-medium text-[var(--ink)] truncate">{tx.name}</p>
                         <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5 truncate">{tx.subText}</p>
                       </div>
-                      <span className={`text-[15px] font-semibold shrink-0 ${isDeposit ? 'text-[#15803D]' : 'text-[var(--ink)]'}`}>
+                      <span className={`privacy-sensitive text-[15px] font-semibold shrink-0 ${isDeposit ? 'text-[#15803D]' : 'text-[var(--ink)]'}`}>
                         {isDeposit ? `+${fmtMoney(absAmount)}` : `-${fmtMoney(absAmount)}`}
                       </span>
                     </div>

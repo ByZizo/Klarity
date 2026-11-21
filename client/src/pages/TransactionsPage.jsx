@@ -142,11 +142,11 @@ export function TransactionsPage({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="p-4">
           <span className="text-[13px] font-medium text-[var(--muted)]">Total spending (filtered)</span>
-          <p className="font-serif text-[22px] font-semibold text-[var(--ink)] mt-1">{fmtMoney(filteredTxSpent)}</p>
+          <p className="privacy-sensitive font-serif text-[22px] font-semibold text-[var(--ink)] mt-1">{fmtMoney(filteredTxSpent)}</p>
         </Card>
         <Card className="p-4">
           <span className="text-[13px] font-medium text-[var(--muted)]">Deposits and income</span>
-          <p className="font-serif text-[22px] font-semibold text-[#15803D] mt-1">+{fmtMoney(filteredTxIncome)}</p>
+          <p className="privacy-sensitive font-serif text-[22px] font-semibold text-[#15803D] mt-1">+{fmtMoney(filteredTxIncome)}</p>
         </Card>
         <Card className="p-4">
           <span className="text-[13px] font-medium text-[var(--muted)]">Matching items</span>
@@ -256,7 +256,7 @@ export function TransactionsPage({
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <span className={`text-[15px] font-semibold ${isDeposit ? 'text-[#15803D]' : 'text-[var(--ink)]'}`}>
+                      <span className={`privacy-sensitive text-[15px] font-semibold ${isDeposit ? 'text-[#15803D]' : 'text-[var(--ink)]'}`}>
                         {isDeposit ? `+${fmtMoney(displayAmount)}` : `-${fmtMoney(displayAmount)}`}
                       </span>
                       <button
@@ -277,7 +277,7 @@ export function TransactionsPage({
 
         <div className="bg-[var(--surface-subtle)] px-5 py-3.5 border-t border-[var(--line)] flex items-center justify-between text-[13px]">
           <span className="text-[var(--muted)] font-medium">Total purchases ({filteredTransactions.length} shown)</span>
-          <span className="font-semibold text-[var(--ink)] text-[15px]">
+          <span className="privacy-sensitive font-semibold text-[var(--ink)] text-[15px]">
             {fmtMoney(filteredTxSpent)}
           </span>
         </div>

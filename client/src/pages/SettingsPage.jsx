@@ -60,6 +60,8 @@ export function SettingsPage({
   settingsDisplayName = '',
   setSettingsDisplayName,
   handleSaveProfile,
+  themeMode: propThemeMode,
+  handleThemeChange: propHandleThemeChange,
   uiFontScale = '100',
   handleSetFontScale,
   uiDensity = 'comfortable',
@@ -151,13 +153,15 @@ export function SettingsPage({
     ? 'bank'
     : settingsActiveTab || 'profile';
 
-  const [themeMode, setThemeMode] = useState(() => {
+  const [localThemeMode, setLocalThemeMode] = useState(() => {
     try {
       return localStorage.getItem('klarity_theme') || 'light';
     } catch {
       return 'light';
     }
   });
+  const activeThemeMode = propThemeMode || localThemeMode;
+  const currentFontScale = Math.min(200, Math.max(100, Number(uiFontScale) || 100));
 
   const [pinAlreadySet, setPinAlreadySet] = useState(() => hasMasterPinSet());
   const [currentPinInput, setCurrentPinInput] = useState('');
@@ -228,24 +232,29 @@ export function SettingsPage({
     }
   }, [isOpen]);
 
-  const handleThemeChange = (mode) => {
-    setThemeMode(mode);
+  const activeHandleThemeChange = (mode) => {
+    if (typeof propHandleThemeChange === 'function') {
+      propHandleThemeChange(mode);
+      return;
+    }
+    setLocalThemeMode(mode);
     try {
       localStorage.setItem('klarity_theme', mode);
-      const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-      if (mode === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        document.documentElement.classList.add('dark');
-      } else if (mode === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
-        document.documentElement.classList.remove('dark');
-      } else {
-        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-        document.documentElement.classList.toggle('dark', isDark);
+      const isDark =
+        mode === 'dark' ||
+        (mode === 'system' &&
+          typeof window !== 'undefined' &&
+          window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+      document.documentElement.classList.toggle('dark', isDark);
+      if (typeof window !== 'undefined' && window.klarityDesktop?.setThemeSource) {
+        window.klarityDesktop.setThemeSource(mode).catch(() => {});
       }
     } catch {}
     if (onShowToast) {
-      onShowToast(`Theme set to ${mode}`, 'success');
+      const label = mode === 'dark' ? 'Dark' : mode === 'system' ? 'System default' : 'Light';
+      onShowToast(`Theme set to ${label}`, 'success');
     }
   };
 
@@ -521,8 +530,9 @@ export function SettingsPage({
                     ].map((opt) => (
                       <Button
                         key={opt.id}
-                        variant={themeMode === opt.id ? 'primary' : 'secondary'}
-                        onClick={() => handleThemeChange(opt.id)}
+                        aria-pressed={activeThemeMode === opt.id}
+                        variant={activeThemeMode === opt.id ? 'primary' : 'secondary'}
+                        onClick={() => activeHandleThemeChange(opt.id)}
                       >
                         {opt.label}
                       </Button>
@@ -536,13 +546,13 @@ export function SettingsPage({
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="text-[16px] font-semibold text-[var(--ink)]">Readability scale</h4>
-                        <Pill variant="brand">{Number(uiFontScale) || 100}%</Pill>
+                        <Pill variant="brand">{currentFontScale}%</Pill>
                       </div>
                       <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
                         Scale page text and numbers up to 200% while keeping navigation controls fixed.
                       </p>
                     </div>
-                    {String(uiFontScale) !== '100' && (
+                    {currentFontScale !== 100 && (
                       <Button variant="ghost" size="sm" onClick={() => handleSetFontScale('100')}>
                         Reset to 100%
                       </Button>
@@ -551,7 +561,7 @@ export function SettingsPage({
 
                   <div>
                     <label htmlFor="readability-scale-range" className="block text-[13px] font-medium text-[var(--ink)] mb-1.5">
-                      Text and content zoom ({Number(uiFontScale) || 100}%)
+                      Text and content zoom ({currentFontScale}%)
                     </label>
                     <input
                       id="readability-scale-range"
@@ -559,17 +569,24 @@ export function SettingsPage({
                       min="100"
                       max="200"
                       step="5"
-                      value={Number(uiFontScale) || 100}
+                      value={currentFontScale}
+                      aria-valuetext={`${currentFontScale}%`}
                       onChange={(e) => handleSetFontScale(e.target.value)}
-                      className="w-full accent-[#1B4B91] cursor-pointer"
+                      className="w-full accent-[var(--brand)] cursor-pointer"
                     />
+                    <div className="flex items-center justify-between text-[12px] font-medium text-[var(--muted)] mt-1">
+                      <span>100%</span>
+                      <span>150%</span>
+                      <span>200%</span>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                     {[100, 125, 150, 175, 200].map((pct) => (
                       <Button
                         key={pct}
-                        variant={Number(uiFontScale) === pct ? 'primary' : 'secondary'}
+                        aria-pressed={currentFontScale === pct}
+                        variant={currentFontScale === pct ? 'primary' : 'secondary'}
                         size="sm"
                         onClick={() => handleSetFontScale(String(pct))}
                       >
@@ -595,6 +612,7 @@ export function SettingsPage({
                     ].map((d) => (
                       <Button
                         key={d.id}
+                        aria-pressed={uiDensity === d.id}
                         variant={uiDensity === d.id ? 'primary' : 'secondary'}
                         onClick={() => handleSetDensity(d.id)}
                       >
@@ -606,32 +624,45 @@ export function SettingsPage({
                   <div className="divide-y divide-[var(--line)] pt-2">
                     {[
                       {
+                        id: 'reduce-motion',
                         label: 'Reduce motion',
                         desc: 'Minimize transitions and animations across pages.',
                         checked: uiReduceMotion,
                         onToggle: handleToggleReduceMotion
                       },
                       {
+                        id: 'high-focus',
                         label: 'High-visibility focus rings',
                         desc: 'Strengthen keyboard focus outlines on buttons and inputs.',
                         checked: uiHighFocus,
                         onToggle: handleToggleHighFocus
                       },
                       {
+                        id: 'privacy-mask',
                         label: 'Privacy mask',
                         desc: 'Hide account balances until hovered.',
                         checked: uiPrivacyMask,
                         onToggle: handleTogglePrivacyMask
                       }
                     ].map((item) => (
-                      <div key={item.label} className="py-3 flex items-center justify-between gap-4">
-                        <div>
+                      <div key={item.id} className="py-3 flex items-center justify-between gap-4">
+                        <div className="min-w-0">
                           <p className="text-[15px] font-medium text-[var(--ink)]">{item.label}</p>
-                          <p className="text-[13px] font-medium text-[var(--muted)]">{item.desc}</p>
+                          <p className="text-[13px] font-medium text-[var(--muted)]">
+                            {item.desc}
+                            {item.id === 'privacy-mask' && uiPrivacyMask && (
+                              <span className="ml-2 inline-flex items-center gap-1">
+                                Preview:{' '}
+                                <span className="privacy-sensitive font-semibold text-[var(--ink)]">$1,234.56</span>
+                              </span>
+                            )}
+                          </p>
                         </div>
                         <Button
+                          aria-pressed={item.checked}
                           variant={item.checked ? 'primary' : 'secondary'}
                           size="sm"
+                          className="shrink-0 min-w-[68px]"
                           onClick={item.onToggle}
                         >
                           {item.checked ? 'On' : 'Off'}
@@ -659,10 +690,12 @@ export function SettingsPage({
                       const enabled = featureFlags[sec.flag] !== false;
                       return (
                         <div key={sec.flag} className="py-3 flex items-center justify-between gap-3">
-                          <span className="text-[15px] font-medium text-[var(--ink)]">{sec.label}</span>
+                          <span className="text-[15px] font-medium text-[var(--ink)] min-w-0">{sec.label}</span>
                           <Button
+                            aria-pressed={enabled}
                             variant={enabled ? 'primary' : 'secondary'}
                             size="sm"
+                            className="shrink-0 min-w-[82px]"
                             onClick={() => handleUpdateFeatureFlags({ [sec.flag]: !enabled })}
                           >
                             {enabled ? 'Shown' : 'Hidden'}

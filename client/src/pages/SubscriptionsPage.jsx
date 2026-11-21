@@ -81,7 +81,7 @@ export function SubscriptionsPage({
           <div className="flex items-center gap-2.5">
             <Zap className="w-4 h-4 shrink-0" />
             <span>
-              Annual subscription spend is <span className="font-semibold">{fmtMoney(filteredTotalSubscriptions * 12)}/yr</span> across {filteredSubscriptions.length} active services.
+              Annual subscription spend is <span className="privacy-sensitive font-semibold">{fmtMoney(filteredTotalSubscriptions * 12)}/yr</span> across {filteredSubscriptions.length} active services.
             </span>
           </div>
         </div>
@@ -180,7 +180,7 @@ export function SubscriptionsPage({
                   </p>
                 </div>
                 <div className="flex items-center gap-3 self-end sm:self-center">
-                  <span className="text-[15px] font-semibold text-[var(--ink)]">{fmtMoney(sub.amount)}/mo</span>
+                  <span className="privacy-sensitive text-[15px] font-semibold text-[var(--ink)]">{fmtMoney(sub.amount)}/mo</span>
                   <button
                     type="button"
                     aria-label={`Delete subscription ${sub.name}`}
@@ -197,7 +197,7 @@ export function SubscriptionsPage({
 
         <div className="-mx-5 -mb-5 px-5 py-3.5 bg-[var(--surface-subtle)] border-t border-[var(--line)] flex items-center justify-between text-[13px] mt-4">
           <span className="text-[var(--muted)] font-medium">Total monthly subscriptions ({filteredSubscriptions.length} active)</span>
-          <span className="font-semibold text-[var(--ink)] text-[15px]">{fmtMoney(filteredTotalSubscriptions)}/mo</span>
+          <span className="privacy-sensitive font-semibold text-[var(--ink)] text-[15px]">{fmtMoney(filteredTotalSubscriptions)}/mo</span>
         </div>
       </Card>
 

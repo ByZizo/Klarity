@@ -764,17 +764,77 @@ function KlarityApp() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsActiveTab, setSettingsActiveTab] = useState('profile'); // 'profile' | 'ui' | 'sidebar' | 'ai' | 'plaid' | 'security' | 'about'
 
-  // UI & Accessibility states: font scale, density, reduce motion, high focus, privacy mask
+  // UI & Accessibility states: theme, font scale, density, reduce motion, high focus, privacy mask
+  const parseFontScalePercent = (scale) => {
+    if (scale === 'normal' || scale === '100' || scale === 100) return 100;
+    if (scale === '110') return 110;
+    if (scale === 'large' || scale === '125') return 125;
+    if (scale === 'xlarge' || scale === '150') return 150;
+    if (scale === 'huge' || scale === '175') return 175;
+    if (scale === 'maximum' || scale === 'max' || scale === '200' || scale === 200) return 200;
+    const num = Number(scale);
+    if (!Number.isNaN(num) && num >= 100 && num <= 200) return num;
+    return 100;
+  };
+
+  const [themeMode, setThemeMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_theme');
+      if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
+      return 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  const applyThemeMode = (mode) => {
+    try {
+      const root = document.documentElement;
+      const prefersDark =
+        typeof window !== 'undefined' &&
+        window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = mode === 'dark' || (mode === 'system' && prefersDark);
+      root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+      root.classList.toggle('dark', isDark);
+      if (typeof window !== 'undefined' && window.klarityDesktop?.setThemeSource) {
+        window.klarityDesktop.setThemeSource(mode).catch(() => {});
+      }
+    } catch {}
+  };
+
+  const handleThemeChange = (mode) => {
+    if (mode !== 'light' && mode !== 'dark' && mode !== 'system') return;
+    setThemeMode(mode);
+    try {
+      localStorage.setItem('klarity_theme', mode);
+    } catch {}
+    applyThemeMode(mode);
+    const label = mode === 'dark' ? 'Dark' : mode === 'system' ? 'System default' : 'Light';
+    showToast(`Theme set to ${label}`);
+  };
+
+  useEffect(() => {
+    applyThemeMode(themeMode);
+    if (themeMode !== 'system' || typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleOsThemeChange = () => applyThemeMode('system');
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', handleOsThemeChange);
+      return () => media.removeEventListener('change', handleOsThemeChange);
+    }
+    if (typeof media.addListener === 'function') {
+      media.addListener(handleOsThemeChange);
+      return () => media.removeListener(handleOsThemeChange);
+    }
+    return undefined;
+  }, [themeMode]);
+
   const [uiFontScale, setUiFontScale] = useState(() => {
     try {
       const saved = localStorage.getItem('klarity_ui_font_scale');
-      if (saved === 'normal') return '100';
       if (saved === 'large') return '125';
-      if (saved === 'xlarge') return '150';
-      if (saved === 'huge') return '175';
-      if (saved === 'maximum' || saved === 'max') return '200';
-      if (saved && !isNaN(Number(saved))) return saved;
-      return '100';
+      return String(parseFontScalePercent(saved));
     } catch (e) {
       return '100';
     }
@@ -795,26 +855,13 @@ function KlarityApp() {
   const applyUiPreferences = (scale, dens, motion, focus, mask) => {
     try {
       const root = document.documentElement;
-      root.classList.remove('font-scale-large', 'font-scale-xlarge', 'ui-density-compact', 'reduce-motion', 'high-focus', 'privacy-mask', 'dark', 'high-contrast', 'high-contrast-light');
+      root.classList.remove('font-scale-large', 'font-scale-xlarge', 'ui-density-compact', 'reduce-motion', 'high-focus', 'privacy-mask', 'high-contrast', 'high-contrast-light');
       
       // Clear root-level zoom & font-size so viewport, sidebar options, and advisor controls remain unbloated and never force scrolling
       root.style.zoom = '';
       root.style.fontSize = '';
 
-      let percent = 100;
-      if (scale === 'normal' || scale === '100' || scale === 100) percent = 100;
-      else if (scale === 'large' || scale === '110') percent = 110;
-      else if (scale === '125') percent = 125;
-      else if (scale === 'xlarge' || scale === '150') percent = 150;
-      else if (scale === 'huge' || scale === '175') percent = 175;
-      else if (scale === 'maximum' || scale === 'max' || scale === '200' || scale === 200) percent = 200;
-      else {
-        const num = Number(scale);
-        if (!isNaN(num) && num >= 100 && num <= 200) {
-          percent = num;
-        }
-      }
-
+      const percent = parseFontScalePercent(scale);
       const zoomFactor = percent / 100;
       root.style.setProperty('--ui-content-zoom', `${zoomFactor}`);
 
@@ -828,20 +875,7 @@ function KlarityApp() {
   // Scoped zoom factor applied directly to the scrollable main content page,
   // leaving the left sidebar navigation and right AI advisor controls at crisp standard scale
   const contentZoomFactor = useMemo(() => {
-    let percent = 100;
-    if (uiFontScale === 'normal' || uiFontScale === '100' || uiFontScale === 100) percent = 100;
-    else if (uiFontScale === 'large' || uiFontScale === '110') percent = 110;
-    else if (uiFontScale === '125') percent = 125;
-    else if (uiFontScale === 'xlarge' || uiFontScale === '150') percent = 150;
-    else if (uiFontScale === 'huge' || uiFontScale === '175') percent = 175;
-    else if (uiFontScale === 'maximum' || uiFontScale === 'max' || uiFontScale === '200' || uiFontScale === 200) percent = 200;
-    else {
-      const num = Number(uiFontScale);
-      if (!isNaN(num) && num >= 100 && num <= 200) {
-        percent = num;
-      }
-    }
-    return percent / 100;
+    return parseFontScalePercent(uiFontScale) / 100;
   }, [uiFontScale]);
 
   const handleSetFontScale = (scale) => {
@@ -880,12 +914,6 @@ function KlarityApp() {
   useEffect(() => {
     try {
       localStorage.removeItem('klarity_vault_pin');
-      const savedTheme = localStorage.getItem('klarity_theme');
-      if (savedTheme === 'dark' || savedTheme === 'light') {
-        document.documentElement.setAttribute('data-theme', savedTheme);
-      } else {
-        document.documentElement.removeAttribute('data-theme');
-      }
     } catch (e) {}
     applyUiPreferences(uiFontScale, uiDensity, uiReduceMotion, uiHighFocus, uiPrivacyMask);
   }, []);
@@ -5613,7 +5641,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             </main>
           ) : (
             <main
-              className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-6 pb-24 min-[760px]:pb-12 overflow-x-hidden"
+              className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-6 pb-24 min-[760px]:pb-12 overflow-x-auto"
               style={{ zoom: contentZoomFactor !== 1 ? contentZoomFactor : undefined }}
             >
               <div className="max-w-[1140px] mx-auto flex flex-col gap-6">
@@ -5904,12 +5932,14 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[
-                      { id: 'subscriptions', label: 'Subscriptions', desc: 'Recurring monthly and annual charges', icon: Zap },
-                      { id: 'budgets', label: 'Budgets and goals', desc: 'Monthly spending limits and savings targets', icon: PieChart },
-                      { id: 'retirement', label: 'Retirement', desc: 'Pensions, 401(k), IRAs, and Social Security', icon: Landmark },
-                      { id: 'household', label: 'Household', desc: 'Home, utilities, vehicles, and providers', icon: Home },
-                      { id: 'vault', label: 'Password vault', desc: 'Encrypted logins and account numbers', icon: KeyRound }
-                    ].map((item) => {
+                      { id: 'subscriptions', label: 'Subscriptions', desc: 'Recurring monthly and annual charges', icon: Zap, flag: null },
+                      { id: 'budgets', label: 'Budgets and goals', desc: 'Monthly spending limits and savings targets', icon: PieChart, flag: 'budgets' },
+                      { id: 'retirement', label: 'Retirement', desc: 'Pensions, 401(k), IRAs, and Social Security', icon: Landmark, flag: 'retirement' },
+                      { id: 'household', label: 'Household', desc: 'Home, utilities, vehicles, and providers', icon: Home, flag: 'household' },
+                      { id: 'vault', label: 'Password vault', desc: 'Encrypted logins and account numbers', icon: KeyRound, flag: 'vault' }
+                    ]
+                      .filter((item) => !item.flag || featureFlags[item.flag] !== false)
+                      .map((item) => {
                       const IconComp = item.icon;
                       return (
                         <Card
@@ -6393,6 +6423,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         settingsDisplayName={settingsDisplayName}
         setSettingsDisplayName={setSettingsDisplayName}
         handleSaveProfile={handleSaveProfile}
+        themeMode={themeMode}
+        handleThemeChange={handleThemeChange}
         uiFontScale={uiFontScale}
         handleSetFontScale={handleSetFontScale}
         uiDensity={uiDensity}

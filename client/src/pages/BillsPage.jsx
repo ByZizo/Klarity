@@ -153,7 +153,7 @@ export function BillsPage({
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 self-end sm:self-center">
-                  <span className="text-[15px] font-semibold text-[var(--ink)]">{fmtMoney(bill.expectedAmount)}</span>
+                  <span className="privacy-sensitive text-[15px] font-semibold text-[var(--ink)]">{fmtMoney(bill.expectedAmount)}</span>
                   <Button
                     variant={bill.status === 'paid' ? 'secondary' : 'primary'}
                     size="sm"
@@ -179,7 +179,7 @@ export function BillsPage({
 
         <div className="-mx-5 -mb-5 px-5 py-3.5 bg-[var(--surface-subtle)] border-t border-[var(--line)] flex items-center justify-between text-[13px] mt-4">
           <span className="text-[var(--muted)] font-medium">Total monthly bills ({filteredBills.length} active)</span>
-          <span className="font-semibold text-[var(--ink)] text-[15px]">{fmtMoney(filteredTotalMonthlyBills)}</span>
+          <span className="privacy-sensitive font-semibold text-[var(--ink)] text-[15px]">{fmtMoney(filteredTotalMonthlyBills)}</span>
         </div>
       </Card>
 

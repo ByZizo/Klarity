@@ -210,11 +210,11 @@ export function BudgetsPage({
         <Card className="p-5 grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[var(--line)] gap-4 sm:gap-0">
           <div className="pb-3 sm:pb-0 sm:pr-6">
             <span className="text-[13px] text-[var(--muted)] font-medium">Spent in {activeBudget.category}</span>
-            <p className="font-serif text-[24px] font-semibold text-[var(--ink)] mt-1">
+            <p className="privacy-sensitive font-serif text-[24px] font-semibold text-[var(--ink)] mt-1">
               {fmtMoney(activeBudget.spent)}
             </p>
             <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
-              Bills: {fmtMoney(assignedBillsSum)} · Purchases: {fmtMoney(txSpent)}
+              Bills: <span className="privacy-sensitive">{fmtMoney(assignedBillsSum)}</span> · Purchases: <span className="privacy-sensitive">{fmtMoney(txSpent)}</span>
             </p>
           </div>
 
@@ -252,7 +252,7 @@ export function BudgetsPage({
               </div>
             ) : (
               <div className="flex items-center gap-2 mt-1">
-                <p className="font-serif text-[24px] font-semibold text-[var(--ink)]">
+                <p className="privacy-sensitive font-serif text-[24px] font-semibold text-[var(--ink)]">
                   {fmtMoney(activeBudget.limit, 0)}
                 </p>
                 <button
@@ -270,14 +270,14 @@ export function BudgetsPage({
               </div>
             )}
             <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
-              Last month: {fmtMoney(activeBudget.lastMonth, 0)}
+              Last month: <span className="privacy-sensitive">{fmtMoney(activeBudget.lastMonth, 0)}</span>
             </p>
           </div>
 
           <div className="pt-3 sm:pt-0 sm:pl-6">
             <span className="text-[13px] text-[var(--muted)] font-medium">Remaining budget</span>
             <p
-              className={`font-serif text-[24px] font-semibold mt-1 ${
+              className={`privacy-sensitive font-serif text-[24px] font-semibold mt-1 ${
                 activeBudget.limit - activeBudget.spent < 0 ? 'text-[#B91C1C]' : 'text-[#15803D]'
               }`}
             >
@@ -393,7 +393,7 @@ export function BudgetsPage({
                     </div>
 
                     <div className="text-right shrink-0">
-                      <span className="text-[15px] font-semibold text-[var(--ink)]">
+                      <span className="privacy-sensitive text-[15px] font-semibold text-[var(--ink)]">
                         {fmtMoney(Number(bill.expectedAmount || 0))}
                       </span>
                       <span className="block text-[13px] font-medium text-[var(--muted)]">/mo</span>
@@ -413,7 +413,7 @@ export function BudgetsPage({
                 Purchases in {activeBudget.category}
               </h2>
               <p className="text-[13px] font-medium text-[var(--muted)]">
-                Transactions automatically counted toward this category ({matchingTxs.length} purchases · {fmtMoney(txSpent)})
+                Transactions automatically counted toward this category ({matchingTxs.length} purchases · <span className="privacy-sensitive">{fmtMoney(txSpent)}</span>)
               </p>
             </div>
           </div>
@@ -432,7 +432,7 @@ export function BudgetsPage({
                       {tx.date || 'Recent'} {tx.account ? `· ${tx.account}` : ''}
                     </p>
                   </div>
-                  <span className="text-[15px] font-semibold text-[var(--ink)] shrink-0">
+                  <span className="privacy-sensitive text-[15px] font-semibold text-[var(--ink)] shrink-0">
                     {fmtMoney(Math.abs(Number(tx.amount || 0)))}
                   </span>
                 </div>
@@ -512,12 +512,12 @@ export function BudgetsPage({
       <Card className="p-5 grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[var(--line)] gap-4 sm:gap-0">
         <div className="pb-3 sm:pb-0 sm:pr-6">
           <span className="text-[13px] text-[var(--muted)] font-medium">Total monthly budget</span>
-          <p className="font-serif text-[24px] font-semibold text-[var(--ink)] mt-1">{fmtMoney(totalBudgetLimit, 0)}</p>
+          <p className="privacy-sensitive font-serif text-[24px] font-semibold text-[var(--ink)] mt-1">{fmtMoney(totalBudgetLimit, 0)}</p>
           <p className="text-[13px] font-medium text-[var(--muted)] mt-1">{computedBudgets.length} active categories</p>
         </div>
         <div className="py-3 sm:py-0 sm:px-6">
           <span className="text-[13px] text-[var(--muted)] font-medium">Spent this month</span>
-          <p className="font-serif text-[24px] font-semibold text-[var(--ink)] mt-1">{fmtMoney(totalBudgetSpent)}</p>
+          <p className="privacy-sensitive font-serif text-[24px] font-semibold text-[var(--ink)] mt-1">{fmtMoney(totalBudgetSpent)}</p>
           <div className="h-[20px] flex items-center mt-1">
             <div className="w-full h-2 bg-[var(--surface-subtle)] rounded-full overflow-hidden">
               <div
@@ -535,7 +535,7 @@ export function BudgetsPage({
         </div>
         <div className="pt-3 sm:pt-0 sm:pl-6">
           <span className="text-[13px] text-[var(--muted)] font-medium">Remaining budget</span>
-          <p className={`font-serif text-[24px] font-semibold mt-1 ${totalBudgetLimit - totalBudgetSpent < 0 ? 'text-[#B91C1C]' : 'text-[#15803D]'}`}>
+          <p className={`privacy-sensitive font-serif text-[24px] font-semibold mt-1 ${totalBudgetLimit - totalBudgetSpent < 0 ? 'text-[#B91C1C]' : 'text-[#15803D]'}`}>
             {fmtMoney(Math.max(0, totalBudgetLimit - totalBudgetSpent))}
           </p>
           <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
@@ -590,9 +590,11 @@ export function BudgetsPage({
                         {b.isWarning && <Pill variant="warning">Near limit ({b.pct}%)</Pill>}
                       </div>
                       <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
-                        {b.diffFromLastMonth > 0
-                          ? `+$${Math.abs(b.diffFromLastMonth).toFixed(0)} vs. last month ($${b.lastMonth})`
-                          : `-$${Math.abs(b.diffFromLastMonth).toFixed(0)} vs. last month ($${b.lastMonth})`}
+                        <span className="privacy-sensitive">
+                          {b.diffFromLastMonth > 0
+                            ? `+$${Math.abs(b.diffFromLastMonth).toFixed(0)} vs. last month ($${b.lastMonth})`
+                            : `-$${Math.abs(b.diffFromLastMonth).toFixed(0)} vs. last month ($${b.lastMonth})`}
+                        </span>
                         {billCount > 0 ? ` · ${billCount} bill${billCount === 1 ? '' : 's'} linked` : ''}
                       </p>
                     </div>
@@ -631,7 +633,7 @@ export function BudgetsPage({
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-[15px] font-semibold text-[var(--ink)]">
+                        <span className="privacy-sensitive text-[15px] font-semibold text-[var(--ink)]">
                           {fmtMoney(b.spent)}{' '}
                           <span className="text-[var(--muted)] font-medium">/ {fmtMoney(b.limit, 0)}</span>
                         </span>
@@ -664,9 +666,11 @@ export function BudgetsPage({
                     <div className="flex items-center justify-between text-[13px] font-medium text-[var(--muted)] mt-2">
                       <span>
                         {b.pct}% used ·{' '}
-                        {b.limit - b.spent >= 0
-                          ? `${fmtMoney(b.limit - b.spent)} left`
-                          : `${fmtMoney(b.spent - b.limit)} over`}
+                        <span className="privacy-sensitive">
+                          {b.limit - b.spent >= 0
+                            ? `${fmtMoney(b.limit - b.spent)} left`
+                            : `${fmtMoney(b.spent - b.limit)} over`}
+                        </span>
                       </span>
                       <span className="inline-flex items-center gap-1 text-[#1B4B91] font-semibold group-hover:underline">
                         <Receipt className="w-3.5 h-3.5" />
@@ -698,8 +702,8 @@ export function BudgetsPage({
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-semibold text-[var(--ink)]">{b.category} ({sharePct}%)</span>
                       <div className="flex items-center gap-3">
-                        <span className="text-[var(--muted)] font-medium">Last mo: {fmtMoney(b.lastMonth, 0)}</span>
-                        <span className="font-semibold text-[var(--ink)]">{fmtMoney(b.spent)}</span>
+                        <span className="text-[var(--muted)] font-medium">Last mo: <span className="privacy-sensitive">{fmtMoney(b.lastMonth, 0)}</span></span>
+                        <span className="privacy-sensitive font-semibold text-[var(--ink)]">{fmtMoney(b.spent)}</span>
                       </div>
                     </div>
                     <div className="w-full h-2 bg-[var(--surface-subtle)] rounded-full overflow-hidden">
@@ -756,7 +760,7 @@ export function BudgetsPage({
                         <p className="text-[15px] font-semibold text-[var(--ink)]">{goal.name}</p>
                         <p className="text-[13px] text-[#15803D] font-medium mt-0.5">{projectedDateStr}</p>
                       </div>
-                      <span className="text-[15px] font-semibold text-[var(--ink)]">
+                      <span className="privacy-sensitive text-[15px] font-semibold text-[var(--ink)]">
                         {fmtMoney(goal.currentAmount, 0)} / {fmtMoney(goal.targetAmount, 0)}
                       </span>
                     </div>
@@ -769,7 +773,7 @@ export function BudgetsPage({
                         />
                       </div>
                       <div className="flex items-center justify-between text-[13px] font-medium text-[var(--muted)] mt-2.5">
-                        <span>{pct}% saved · +{fmtMoney(goal.monthlyContribution, 0)}/mo</span>
+                        <span>{pct}% saved · +<span className="privacy-sensitive">{fmtMoney(goal.monthlyContribution, 0)}</span>/mo</span>
                         <div className="flex items-center gap-2">
                           <Button
                             variant="secondary"

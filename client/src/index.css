@@ -270,35 +270,86 @@ html.ui-density-compact .p-6 {
 html.ui-density-compact .p-5 {
   padding: 0.85rem !important;
 }
+html.ui-density-compact .p-4 {
+  padding: 0.75rem !important;
+}
 html.ui-density-compact .gap-6 {
   gap: 1.15rem !important;
+}
+html.ui-density-compact .gap-5 {
+  gap: 0.875rem !important;
 }
 html.ui-density-compact .py-3 {
   padding-top: 0.5rem !important;
   padding-bottom: 0.5rem !important;
+}
+html.ui-density-compact .py-3\.5 {
+  padding-top: 0.6rem !important;
+  padding-bottom: 0.6rem !important;
+}
+html.ui-density-compact .py-4 {
+  padding-top: 0.65rem !important;
+  padding-bottom: 0.65rem !important;
+}
+html.ui-density-compact .-mx-5 {
+  margin-left: -0.85rem !important;
+  margin-right: -0.85rem !important;
+}
+html.ui-density-compact .-mb-5 {
+  margin-bottom: -0.85rem !important;
+}
+html.ui-density-compact .px-5 {
+  padding-left: 0.85rem !important;
+  padding-right: 0.85rem !important;
+}
+html.ui-density-compact .-mx-6 {
+  margin-left: -1rem !important;
+  margin-right: -1rem !important;
+}
+html.ui-density-compact .-mb-6 {
+  margin-bottom: -1rem !important;
+}
+html.ui-density-compact .px-6 {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
 }
 
 html.reduce-motion *,
 html.reduce-motion *::before,
 html.reduce-motion *::after {
   animation-duration: 0.001ms !important;
+  animation-delay: 0ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.001ms !important;
+  transition-delay: 0ms !important;
   scroll-behavior: auto !important;
 }
 
-html.high-focus *:focus-visible:not(.no-focus-outline) {
-  outline: 3px solid var(--brand) !important;
-  outline-offset: 2px !important;
+html.high-focus :is(button, a, input, select, textarea, [role="button"], [tabindex]):focus-visible:not(.no-focus-outline),
+html.high-focus :is(input, select, textarea):focus:not(.no-focus-outline) {
+  outline: 3px solid #D97706 !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.3) !important;
+}
+html.high-focus[data-theme="dark"] :is(button, a, input, select, textarea, [role="button"], [tabindex]):focus-visible:not(.no-focus-outline),
+html.high-focus[data-theme="dark"] :is(input, select, textarea):focus:not(.no-focus-outline),
+html.high-focus.dark :is(button, a, input, select, textarea, [role="button"], [tabindex]):focus-visible:not(.no-focus-outline),
+html.high-focus.dark :is(input, select, textarea):focus:not(.no-focus-outline) {
+  outline-color: #FBBF24 !important;
+  box-shadow: 0 0 0 6px rgba(251, 191, 36, 0.35) !important;
 }
 
 html.privacy-mask .privacy-sensitive {
-  opacity: 0.12;
+  filter: blur(8px);
   user-select: none;
-  transition: opacity 0.15s ease;
+  transition: filter 0.18s ease;
+  border-radius: 4px;
 }
-html.privacy-mask .privacy-sensitive:hover {
-  opacity: 1;
+html.privacy-mask .privacy-sensitive:hover,
+html.privacy-mask .privacy-sensitive:focus-visible,
+html.privacy-mask button:hover .privacy-sensitive,
+html.privacy-mask [role="button"]:hover .privacy-sensitive {
+  filter: blur(0);
 }
 
 /* Markdown Chat Formatting */

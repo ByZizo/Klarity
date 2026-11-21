@@ -27,7 +27,7 @@ app.setPath('userData', userDataDir);
 process.env.KLARITY_USER_DATA_DIR = userDataDir;
 process.env.KLARITY_DESKTOP_APP = 'true';
 process.env.KLARITY_DESKTOP_IPC_SECRET = DESKTOP_IPC_SECRET;
-try { if (nativeTheme) nativeTheme.themeSource = 'light'; } catch (e) {}
+try { if (nativeTheme) nativeTheme.themeSource = 'system'; } catch (e) {}
 const http = require('http');
 const { exec } = require('child_process');
 
@@ -1326,6 +1326,19 @@ ipcMain.handle('klarity:browser-clear-downloads', () => {
   saveBrowserDownloads();
   broadcastBrowserDownloads();
   return getSerializedBrowserDownloads();
+});
+
+ipcMain.handle('klarity:set-theme-source', (_e, mode) => {
+  const validModes = ['light', 'dark', 'system'];
+  if (!validModes.includes(mode)) {
+    return { ok: false, error: 'Invalid theme mode' };
+  }
+  try {
+    if (nativeTheme) nativeTheme.themeSource = mode;
+    return { ok: true, themeSource: mode };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });
 
 // Ensure embedded <webview> instances use a clean Chrome UA and open target=_blank links inside the webview
