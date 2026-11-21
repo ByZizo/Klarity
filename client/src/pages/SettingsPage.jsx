@@ -183,6 +183,7 @@ export function SettingsPage({
   const [newSettingsBmFolder, setNewSettingsBmFolder] = useState('');
   const [newSettingsFolderName, setNewSettingsFolderName] = useState('');
   const [isClearingBrowserData, setIsClearingBrowserData] = useState(false);
+  const [confirmClearBrowserData, setConfirmClearBrowserData] = useState(false);
   const [newStartupPageInput, setNewStartupPageInput] = useState('');
   const [electronBrowserPrefs, setElectronBrowserPrefs] = useState({
     doNotTrack: Boolean(browserSettings?.doNotTrack),
@@ -217,6 +218,22 @@ export function SettingsPage({
         const saved = await window.klarityDesktop.updateBrowserPrefs(patch);
         if (saved) setElectronBrowserPrefs(saved);
       } catch {}
+    }
+  };
+
+  const handleConfirmClearBrowserData = async () => {
+    setConfirmClearBrowserData(false);
+    setIsClearingBrowserData(true);
+    try {
+      clearBrowserSessionState();
+      if (window.klarityDesktop?.clearBrowserData) {
+        await window.klarityDesktop.clearBrowserData();
+      }
+      if (onShowToast) onShowToast('Browsing data cleared', 'success');
+    } catch {
+      if (onShowToast) onShowToast('Could not clear browsing data', 'error');
+    } finally {
+      setIsClearingBrowserData(false);
     }
   };
 
@@ -1483,8 +1500,8 @@ export function SettingsPage({
                   <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
                     <span className="text-[14px] font-medium text-[var(--ink)]">Theme</span>
                     <select
-                      value={themeMode}
-                      onChange={(e) => handleThemeChange(e.target.value)}
+                      value={activeThemeMode}
+                      onChange={(e) => activeHandleThemeChange(e.target.value)}
                       className="bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-1.5 text-[13px] font-medium text-[var(--ink)] cursor-pointer"
                     >
                       <option value="light">Light</option>
@@ -1638,36 +1655,126 @@ export function SettingsPage({
                   </div>
                 </Card>
 
-                {/* 4. Privacy & Security */}
+                {/* 4. Downloads */}
                 <Card className="p-5 flex flex-col gap-3.5">
-                  <h4 className="text-[15px] font-semibold text-[var(--ink)]">Privacy &amp; security</h4>
+                  <h4 className="text-[15px] font-semibold text-[var(--ink)]">Downloads</h4>
 
                   <div className="flex items-center justify-between gap-4 py-1">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">Clear browsing data</span>
+                    <div className="min-w-0">
+                      <div className="text-[14px] font-medium text-[var(--ink)]">Location</div>
+                      <div className="text-[12px] text-[var(--muted)] truncate max-w-[360px]">
+                        {electronBrowserPrefs.downloadPath || 'Default Downloads folder'}
+                      </div>
+                    </div>
                     <Button
                       size="sm"
-                      variant="danger"
-                      disabled={isClearingBrowserData}
+                      variant="secondary"
                       onClick={async () => {
-                        setIsClearingBrowserData(true);
-                        try {
-                          clearBrowserSessionState();
-                          if (window.klarityDesktop?.clearBrowserData) {
-                            await window.klarityDesktop.clearBrowserData();
+                        if (window.klarityDesktop?.selectBrowserDownloadDir) {
+                          const res = await window.klarityDesktop.selectBrowserDownloadDir();
+                          if (res && !res.canceled && res.downloadPath) {
+                            setElectronBrowserPrefs((prev) => ({ ...prev, downloadPath: res.downloadPath }));
+                            if (onUpdateBrowserSettings) {
+                              onUpdateBrowserSettings({ ...browserSettings, downloadPath: res.downloadPath });
+                            }
                           }
-                          if (onShowToast) onShowToast('Browsing data cleared', 'success');
-                        } catch {
-                          if (onShowToast) onShowToast('Could not clear browsing data', 'error');
-                        } finally {
-                          setIsClearingBrowserData(false);
                         }
                       }}
                     >
-                      {isClearingBrowserData ? 'Clearing...' : 'Clear data'}
+                      Change
                     </Button>
                   </div>
 
                   <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
+                    <span className="text-[14px] font-medium text-[var(--ink)]">
+                      Ask where to save each file before downloading
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(electronBrowserPrefs.askWhereToSave)}
+                      onChange={(e) => updateDesktopBrowserPrefs({ askWhereToSave: e.target.checked })}
+                      className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
+                    />
+                  </div>
+                </Card>
+
+                {/* 5. Bookmarks & Folders */}
+                <Card className="p-5 flex flex-col gap-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-[15px] font-semibold text-[var(--ink)]">Bookmarks</h4>
+                    {browserBookmarks.length > 0 && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          if (onUpdateBrowserBookmarks) onUpdateBrowserBookmarks([]);
+                          if (onShowToast) onShowToast('All bookmarks cleared', 'success');
+                        }}
+                      >
+                        Clear all
+                      </Button>
+                    )}
+                  </div>
+
+                  {browserBookmarks.length === 0 ? (
+                    <div className="text-[13px] text-[var(--muted)] py-1">No bookmarks saved.</div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+                      {browserBookmarks.map((item) => {
+                        const parentFolder = item.folderId
+                          ? browserBookmarks.find((f) => f.id === item.folderId)
+                          : null;
+                        return (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between gap-2 px-3 py-2 rounded-[8px] border border-[var(--line)] bg-[var(--surface-subtle)]"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {item.type === 'folder' ? (
+                                <Folder className="w-4 h-4 text-amber-500 shrink-0" />
+                              ) : (
+                                <Bookmark className="w-4 h-4 text-[#1B4B91] shrink-0" />
+                              )}
+                              <div className="min-w-0">
+                                <div className="text-[13px] font-semibold text-[var(--ink)] truncate">
+                                  {item.title}
+                                  {parentFolder && (
+                                    <span className="ml-2 text-[11px] font-medium text-[var(--muted)]">
+                                      ({parentFolder.title})
+                                    </span>
+                                  )}
+                                </div>
+                                {item.url && (
+                                  <div className="text-[11px] text-[var(--muted)] truncate">{item.url}</div>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onUpdateBrowserBookmarks) {
+                                  onUpdateBrowserBookmarks(
+                                    browserBookmarks.filter((b) => b.id !== item.id && b.folderId !== item.id)
+                                  );
+                                }
+                              }}
+                              className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+                              aria-label={`Delete ${item.title}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
+
+                {/* 6. Privacy & Security */}
+                <Card className="p-5 flex flex-col gap-3.5">
+                  <h4 className="text-[15px] font-semibold text-[var(--ink)]">Privacy &amp; security</h4>
+
+                  <div className="flex items-center justify-between gap-4 py-1">
                     <span className="text-[14px] font-medium text-[var(--ink)]">
                       Send a &ldquo;Do Not Track&rdquo; request
                     </span>
@@ -1780,121 +1887,18 @@ export function SettingsPage({
                       className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
                     />
                   </div>
-                </Card>
-
-                {/* 5. Downloads */}
-                <Card className="p-5 flex flex-col gap-3.5">
-                  <h4 className="text-[15px] font-semibold text-[var(--ink)]">Downloads</h4>
-
-                  <div className="flex items-center justify-between gap-4 py-1">
-                    <div className="min-w-0">
-                      <div className="text-[14px] font-medium text-[var(--ink)]">Location</div>
-                      <div className="text-[12px] text-[var(--muted)] truncate max-w-[360px]">
-                        {electronBrowserPrefs.downloadPath || 'Default Downloads folder'}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={async () => {
-                        if (window.klarityDesktop?.selectBrowserDownloadDir) {
-                          const res = await window.klarityDesktop.selectBrowserDownloadDir();
-                          if (res && !res.canceled && res.downloadPath) {
-                            setElectronBrowserPrefs((prev) => ({ ...prev, downloadPath: res.downloadPath }));
-                            if (onUpdateBrowserSettings) {
-                              onUpdateBrowserSettings({ ...browserSettings, downloadPath: res.downloadPath });
-                            }
-                          }
-                        }
-                      }}
-                    >
-                      Change
-                    </Button>
-                  </div>
 
                   <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">
-                      Ask where to save each file before downloading
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(electronBrowserPrefs.askWhereToSave)}
-                      onChange={(e) => updateDesktopBrowserPrefs({ askWhereToSave: e.target.checked })}
-                      className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
-                    />
+                    <span className="text-[14px] font-medium text-[var(--ink)]">Clear browsing data</span>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      disabled={isClearingBrowserData}
+                      onClick={() => setConfirmClearBrowserData(true)}
+                    >
+                      {isClearingBrowserData ? 'Clearing...' : 'Clear data'}
+                    </Button>
                   </div>
-                </Card>
-
-                {/* 6. Bookmarks & Folders */}
-                <Card className="p-5 flex flex-col gap-3.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-[15px] font-semibold text-[var(--ink)]">Bookmarks</h4>
-                    {browserBookmarks.length > 0 && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          if (onUpdateBrowserBookmarks) onUpdateBrowserBookmarks([]);
-                          if (onShowToast) onShowToast('All bookmarks cleared', 'success');
-                        }}
-                      >
-                        Clear all
-                      </Button>
-                    )}
-                  </div>
-
-                  {browserBookmarks.length === 0 ? (
-                    <div className="text-[13px] text-[var(--muted)] py-1">No bookmarks saved.</div>
-                  ) : (
-                    <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
-                      {browserBookmarks.map((item) => {
-                        const parentFolder = item.folderId
-                          ? browserBookmarks.find((f) => f.id === item.folderId)
-                          : null;
-                        return (
-                          <div
-                            key={item.id}
-                            className="flex items-center justify-between gap-2 px-3 py-2 rounded-[8px] border border-[var(--line)] bg-[var(--surface-subtle)]"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              {item.type === 'folder' ? (
-                                <Folder className="w-4 h-4 text-amber-500 shrink-0" />
-                              ) : (
-                                <Bookmark className="w-4 h-4 text-[#1B4B91] shrink-0" />
-                              )}
-                              <div className="min-w-0">
-                                <div className="text-[13px] font-semibold text-[var(--ink)] truncate">
-                                  {item.title}
-                                  {parentFolder && (
-                                    <span className="ml-2 text-[11px] font-medium text-[var(--muted)]">
-                                      ({parentFolder.title})
-                                    </span>
-                                  )}
-                                </div>
-                                {item.url && (
-                                  <div className="text-[11px] text-[var(--muted)] truncate">{item.url}</div>
-                                )}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (onUpdateBrowserBookmarks) {
-                                  onUpdateBrowserBookmarks(
-                                    browserBookmarks.filter((b) => b.id !== item.id && b.folderId !== item.id)
-                                  );
-                                }
-                              }}
-                              className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
-                              aria-label={`Delete ${item.title}`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
                 </Card>
               </div>
             )}
@@ -2203,6 +2207,17 @@ export function SettingsPage({
           if (handleClearAllMemory) handleClearAllMemory();
           setConfirmClearMemory(false);
         }}
+      />
+
+      {/* Confirm Clear Browsing Data */}
+      <ConfirmDialog
+        open={confirmClearBrowserData}
+        title="Clear browsing data?"
+        message="Are you sure you want to clear your browser cache, cookies, storage, and saved session tabs? This cannot be undone."
+        confirmLabel="Clear data"
+        variant="danger"
+        onCancel={() => setConfirmClearBrowserData(false)}
+        onConfirm={handleConfirmClearBrowserData}
       />
     </div>
   );
