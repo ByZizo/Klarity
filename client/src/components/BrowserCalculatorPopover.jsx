@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Copy, Check, Delete, RotateCcw } from 'lucide-react';
+import { Copy, Check, Delete, RotateCcw, GripHorizontal, X } from 'lucide-react';
 import { evaluateExpression } from '../utils/calculatorParser.js';
 
 const STORAGE_KEY = 'klarity_browser_calc_history';
@@ -15,14 +15,26 @@ function loadCalcHistory() {
   }
 }
 
-export function BrowserCalculatorPopover({ onClose }) {
+export function BrowserCalculatorPopover({
+  onClose,
+  floating = false,
+  position = null,
+  isDragging = false,
+  onDragStart,
+  cardRef
+}) {
   const [expression, setExpression] = useState('');
   const [displayResult, setDisplayResult] = useState('0');
   const [errorMsg, setErrorMsg] = useState('');
   const [justEvaluated, setJustEvaluated] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState(loadCalcHistory);
-  const containerRef = useRef(null);
+  const localRef = useRef(null);
+  const setContainerRef = (el) => {
+    localRef.current = el;
+    if (cardRef) cardRef.current = el;
+  };
+  const containerRef = localRef;
 
   useEffect(() => {
     containerRef.current?.focus();
@@ -121,10 +133,18 @@ export function BrowserCalculatorPopover({ onClose }) {
     });
   };
 
-  // Global keyboard handler while calculator popover is open
+  // Global keyboard handler while calculator is open (ignores typing inside inputs/textareas)
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const activeEl = document.activeElement;
+      const activeTag = activeEl?.tagName;
+      const isEditingOtherField =
+        activeTag === 'INPUT' ||
+        activeTag === 'TEXTAREA' ||
+        activeTag === 'SELECT' ||
+        activeEl?.isContentEditable;
 
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -133,14 +153,14 @@ export function BrowserCalculatorPopover({ onClose }) {
         return;
       }
 
-      // Let focused keypad button trigger on Space, otherwise intercept calculator keys
-      const activeTag = document.activeElement?.tagName;
-      const insideKeypadBtn = activeTag === 'BUTTON' && containerRef.current?.contains(document.activeElement);
+      if (isEditingOtherField) return;
+
+      const insideKeypadBtn = activeTag === 'BUTTON' && containerRef.current?.contains(activeEl);
 
       if (e.key === 'Enter' || e.key === '=') {
         e.preventDefault();
         if (insideKeypadBtn && e.key === 'Enter') {
-          const btnAction = document.activeElement.getAttribute('data-calc-key');
+          const btnAction = activeEl.getAttribute('data-calc-key');
           if (btnAction === '=') {
             handleEvaluate();
             return;
@@ -182,14 +202,52 @@ export function BrowserCalculatorPopover({ onClose }) {
   const keypadBtnClass =
     'h-10 rounded-lg text-sm font-semibold border border-[var(--line)] transition-colors cursor-pointer flex items-center justify-center focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2';
 
+  const wrapperClass = floating
+    ? `absolute z-40 w-80 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-2xl shadow-2xl overflow-hidden flex flex-col outline-none select-none transition-shadow ${
+        isDragging ? 'ring-2 ring-[var(--brand)]/50' : ''
+      }`
+    : 'absolute right-0 top-full mt-2 w-80 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col outline-none select-none';
+
+  const floatingStyle = floating
+    ? position
+      ? { left: `${position.x}px`, top: `${position.y}px` }
+      : { right: '16px', top: '16px' }
+    : undefined;
+
   return (
-    <div
-      ref={containerRef}
+    <aside
+      ref={setContainerRef}
       tabIndex={-1}
       role="dialog"
       aria-label="Calculator"
-      className="absolute right-0 top-full mt-2 w-80 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-2xl shadow-2xl z-50 p-3.5 flex flex-col gap-3 outline-none"
+      style={floatingStyle}
+      className={wrapperClass}
     >
+      {/* Draggable Header Bar */}
+      <div
+        onMouseDown={floating ? onDragStart : undefined}
+        title={floating ? 'Click and drag to move calculator anywhere' : undefined}
+        className={`flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--line)] bg-[var(--surface-subtle)]/70 select-none shrink-0 ${
+          floating ? 'cursor-grab active:cursor-grabbing' : ''
+        }`}
+      >
+        <div className="flex items-center gap-1.5">
+          {floating && <GripHorizontal className="w-4 h-4 text-[var(--muted)]" />}
+          <span className="text-xs font-semibold text-[var(--ink)]">Calculator</span>
+        </div>
+        <button
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={onClose}
+          title="Close calculator (Esc)"
+          aria-label="Close calculator"
+          className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)]"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div className="p-3.5 flex flex-col gap-3">
       {/* Display */}
       <div className="p-3 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] flex flex-col gap-1">
         <div
@@ -411,6 +469,7 @@ export function BrowserCalculatorPopover({ onClose }) {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </aside>
   );
 }

@@ -228,13 +228,29 @@ export function BrowserPage({
   const isDownloadsPopoverOpenRef = useRef(false);
   const knownCompletedIdsRef = useRef(new Set());
 
-  // Built-in Local Calculator & Overflow Toolbar State
+  // Built-in Local Movable Calculator & Overflow Toolbar State
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const calculatorPopoverRef = useRef(null);
+  const floatingCalcRef = useRef(null);
+  const [floatingCalcPos, setFloatingCalcPos] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_floating_calc_pos');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  });
+  const [isDraggingCalc, setIsDraggingCalc] = useState(false);
+  const calcDragStartRef = useRef({ mouseX: 0, mouseY: 0, cardX: 0, cardY: 0, parentW: 0, parentH: 0, cardW: 0, cardH: 0 });
+
   const [isOverflowMenuOpen, setIsOverflowMenuOpen] = useState(false);
   const overflowMenuRef = useRef(null);
   const isAnyToolbarPopoverOpen =
-    isCalculatorOpen || isAdBlockPopoverOpen || isDownloadsPopoverOpen || isOverflowMenuOpen;
+    isAdBlockPopoverOpen || isDownloadsPopoverOpen || isOverflowMenuOpen;
 
   // Dedicated In-Browser AI Sidebar State (Self-contained, doesn't open global app advisor)
   const [isBrowserAiSidebarOpen, setIsBrowserAiSidebarOpen] = useState(false);
@@ -507,6 +523,63 @@ export function BrowserPage({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
+  const handleFloatingCalcDragStart = (e) => {
+    if (e.button !== 0) return;
+    const currentCard = floatingCalcRef.current;
+    if (!currentCard) return;
+
+    const parentRect = currentCard.offsetParent?.getBoundingClientRect() || {
+      left: 0,
+      top: 0,
+      width: window.innerWidth || 1024,
+      height: window.innerHeight || 768
+    };
+    const cardRect = currentCard.getBoundingClientRect();
+    const currentLeft = cardRect.left - parentRect.left;
+    const currentTop = cardRect.top - parentRect.top;
+
+    calcDragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      cardX: currentLeft,
+      cardY: currentTop,
+      parentW: parentRect.width,
+      parentH: parentRect.height,
+      cardW: cardRect.width,
+      cardH: cardRect.height
+    };
+
+    setIsDraggingCalc(true);
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - calcDragStartRef.current.mouseX;
+      const deltaY = moveEvent.clientY - calcDragStartRef.current.mouseY;
+
+      const minX = 12;
+      const maxX = Math.max(12, calcDragStartRef.current.parentW - calcDragStartRef.current.cardW - 12);
+      const minY = 12;
+      const maxY = Math.max(12, calcDragStartRef.current.parentH - calcDragStartRef.current.cardH - 12);
+
+      const boundedX = Math.round(Math.min(maxX, Math.max(minX, calcDragStartRef.current.cardX + deltaX)));
+      const boundedY = Math.round(Math.min(maxY, Math.max(minY, calcDragStartRef.current.cardY + deltaY)));
+
+      const nextPos = { x: boundedX, y: boundedY };
+      setFloatingCalcPos(nextPos);
+      try {
+        localStorage.setItem('klarity_floating_calc_pos', JSON.stringify(nextPos));
+      } catch {}
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      setIsDraggingCalc(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
   const handleFloatingResizeStart = (e) => {
     if (e.button !== 0) return;
     e.stopPropagation();
@@ -696,7 +769,6 @@ export function BrowserPage({
   };
 
   const closeToolbarPopovers = () => {
-    setIsCalculatorOpen(false);
     setIsAdBlockPopoverOpen(false);
     setIsDownloadsPopoverOpen(false);
     setIsOverflowMenuOpen(false);
@@ -706,7 +778,6 @@ export function BrowserPage({
     const nextOpen = !isDownloadsPopoverOpen;
     setIsDownloadsPopoverOpen(nextOpen);
     if (nextOpen) {
-      setIsCalculatorOpen(false);
       setIsAdBlockPopoverOpen(false);
       setIsOverflowMenuOpen(false);
       setHasUnseenDownload(false);
@@ -765,9 +836,6 @@ export function BrowserPage({
     const handleClickOutside = (e) => {
       if (adBlockPopoverRef.current && !adBlockPopoverRef.current.contains(e.target)) {
         setIsAdBlockPopoverOpen(false);
-      }
-      if (calculatorPopoverRef.current && !calculatorPopoverRef.current.contains(e.target)) {
-        setIsCalculatorOpen(false);
       }
       if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target)) {
         setIsOverflowMenuOpen(false);
@@ -2110,6 +2178,7 @@ export function BrowserPage({
                 aria-label="Calculator"
                 title="Calculator"
                 aria-expanded={isCalculatorOpen}
+                aria-pressed={isCalculatorOpen}
                 className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
                   isCalculatorOpen
                     ? 'bg-[var(--brand)] text-[var(--brand-ink)]'
@@ -2118,10 +2187,6 @@ export function BrowserPage({
               >
                 <Calculator className="w-[18px] h-[18px]" />
               </button>
-
-              {isCalculatorOpen && (
-                <BrowserCalculatorPopover onClose={() => setIsCalculatorOpen(false)} />
-              )}
             </div>
 
             <button
@@ -2777,11 +2842,7 @@ export function BrowserPage({
       {/* 3. MULTI-TAB BROWSER CONTENT CANVAS + INTEGRATED BROWSER AI SIDEBAR */}
       <div className="flex-1 w-full relative bg-[var(--surface)] min-h-0 h-full overflow-hidden flex flex-row">
         {/* Webviews and New Tab Pages */}
-        <div
-          className={`flex-1 min-w-0 h-full relative overflow-hidden transition-all ${
-            isCalculatorOpen ? 'md:pr-[344px]' : ''
-          }`}
-        >
+        <div className="flex-1 min-w-0 h-full relative overflow-hidden">
           {isAnyToolbarPopoverOpen && (
             <div
               onClick={closeToolbarPopovers}
@@ -2793,7 +2854,8 @@ export function BrowserPage({
             tabs.map((tab) => {
               const isTabActive = tab.id === activeTabId;
               const showNewTab = isNewTabUrl(tab.url);
-              const hideNativeForPopover = isAnyToolbarPopoverOpen && !isNewTabUrl(tab.url);
+              const disableWebviewPointer =
+                isAnyToolbarPopoverOpen || isDraggingCalc || isDraggingNotes || isResizingNotes;
               return (
                 <React.Fragment key={tab.id}>
                   <webview
@@ -2805,14 +2867,12 @@ export function BrowserPage({
                     }}
                     src={isNewTabUrl(tab.initialUrl) ? 'about:blank' : tab.initialUrl}
                     partition="persist:klarity_browser"
-                    className={`w-full h-full border-0 absolute inset-0 ${
-                      isCalculatorOpen ? 'max-md:hidden' : ''
-                    }`}
+                    className="w-full h-full border-0 absolute inset-0"
                     style={{
                       position: 'absolute',
                       top: 0,
                       left: 0,
-                      width: isCalculatorOpen ? 'calc(100% - 344px)' : '100%',
+                      width: '100%',
                       height: '100%',
                       display: 'flex',
                       border: 'none',
@@ -2821,10 +2881,10 @@ export function BrowserPage({
                       opacity: isTabActive && !showNewTab ? 1 : 0,
                       visibility:
                         isTabActive && !showNewTab
-                          ? (isAdBlockPopoverOpen || isDownloadsPopoverOpen || isOverflowMenuOpen ? 'hidden' : 'visible')
+                          ? (isAnyToolbarPopoverOpen ? 'hidden' : 'visible')
                           : 'hidden',
                       pointerEvents:
-                        isTabActive && !showNewTab && !hideNativeForPopover ? 'auto' : 'none'
+                        isTabActive && !showNewTab && !disableWebviewPointer ? 'auto' : 'none'
                     }}
                     allowpopups="true"
                     webpreferences="contextIsolation=true, sandbox=true"
@@ -2882,6 +2942,18 @@ export function BrowserPage({
                 </div>
               </Card>
             </div>
+          )}
+
+          {/* Draggable Floating Calculator Window (Over any webpage / New Tab) */}
+          {isCalculatorOpen && (
+            <BrowserCalculatorPopover
+              floating={true}
+              position={floatingCalcPos}
+              isDragging={isDraggingCalc}
+              onDragStart={handleFloatingCalcDragStart}
+              cardRef={floatingCalcRef}
+              onClose={() => setIsCalculatorOpen(false)}
+            />
           )}
 
           {/* Draggable & Resizable Floating Quick Notes Window (Over any webpage / New Tab) */}

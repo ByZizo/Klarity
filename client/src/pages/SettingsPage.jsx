@@ -688,40 +688,6 @@ export function SettingsPage({
                     ))}
                   </div>
                 </Card>
-
-                {/* Navigation Section Toggles */}
-                <Card className="p-5 flex flex-col gap-3">
-                  <div>
-                    <h4 className="text-[16px] font-semibold text-[var(--ink)]">Optional navigation sections</h4>
-                    <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
-                      Show or hide optional pages in the sidebar without deleting your data.
-                    </p>
-                  </div>
-                  <div className="divide-y divide-[var(--line)]">
-                    {[
-                      { flag: 'budgets', label: 'Budgets and savings goals' },
-                      { flag: 'retirement', label: 'Retirement and pensions' },
-                      { flag: 'household', label: 'Household and providers' },
-                      { flag: 'vault', label: 'Password vault' }
-                    ].map((sec) => {
-                      const enabled = featureFlags[sec.flag] !== false;
-                      return (
-                        <div key={sec.flag} className="py-3 flex items-center justify-between gap-3">
-                          <span className="text-[15px] font-medium text-[var(--ink)] min-w-0">{sec.label}</span>
-                          <Button
-                            aria-pressed={enabled}
-                            variant={enabled ? 'primary' : 'secondary'}
-                            size="sm"
-                            className="shrink-0 min-w-[82px]"
-                            onClick={() => handleUpdateFeatureFlags({ [sec.flag]: !enabled })}
-                          >
-                            {enabled ? 'Shown' : 'Hidden'}
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
               </div>
             )}
 
