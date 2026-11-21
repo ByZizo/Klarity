@@ -332,8 +332,8 @@ export function SettingsPage({
     { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' && settingsAiProvider !== 'local' },
     { id: 'bank', label: 'Bank', dot: settingsPlaidStatus !== 'connected' },
     { id: 'security', label: 'Security' },
-    { id: 'about', label: 'About' },
-    { id: 'support', label: 'Support', dividerBefore: true }
+    { id: 'support', label: 'Support', dividerBefore: true },
+    { id: 'about', label: 'About' }
   ];
 
   const DEFAULT_CONFIG = {
