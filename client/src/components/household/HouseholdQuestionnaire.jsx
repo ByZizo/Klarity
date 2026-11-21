@@ -173,21 +173,14 @@ function OptionRadioGroup({
               tabIndex={focusable ? 0 : -1}
               onClick={() => onChange(isSelected ? null : opt.value)}
               onKeyDown={(e) => handleKeyDown(e, idx)}
-              style={
-                isSelected
-                  ? {
-                      borderWidth: '2px',
-                      borderColor: 'var(--brand)',
-                      backgroundColor: 'color-mix(in srgb, var(--brand) 12%, var(--surface))'
-                    }
-                  : undefined
-              }
               className={`min-h-[44px] px-3.5 py-2.5 rounded-[8px] text-left flex items-center justify-between gap-2.5 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
+                isSecondary ? 'bg-[var(--surface-subtle)]' : 'bg-[var(--surface)]'
+              } ${
                 isSelected
-                  ? 'text-[var(--ink)] font-semibold'
+                  ? 'border-2 border-[var(--brand)] dark:border-[#60A5FA] shadow-[0_0_0_1px_rgba(59,118,204,0.35)] dark:shadow-[0_0_0_1px_rgba(96,165,250,0.45)] text-[var(--ink)] font-semibold'
                   : isSecondary
-                    ? 'bg-[var(--surface-subtle)] border border-dashed border-[var(--line)] hover:bg-[var(--surface-hover)] text-[var(--ink)] font-medium'
-                    : 'bg-[var(--surface)] border border-[var(--line)] hover:bg-[var(--surface-hover)] text-[var(--ink)] font-medium'
+                    ? 'border border-dashed border-[var(--line)] hover:bg-[var(--surface-hover)] text-[var(--ink)] font-medium'
+                    : 'border border-[var(--line)] hover:bg-[var(--surface-hover)] text-[var(--ink)] font-medium'
               }`}
             >
               <div className="flex flex-col min-w-0">
@@ -199,10 +192,10 @@ function OptionRadioGroup({
                 )}
               </div>
               <span
-                className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center border ${
+                className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center bg-transparent ${
                   isSelected
-                    ? 'bg-[var(--brand)] border-[var(--brand)] text-[var(--brand-ink)]'
-                    : 'border-[var(--line)] bg-[var(--surface)]'
+                    ? 'border-2 border-[var(--brand)] dark:border-[#60A5FA] text-[var(--brand)] dark:text-[#60A5FA]'
+                    : 'border border-[var(--line)]'
                 }`}
               >
                 {isSelected && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
@@ -367,22 +360,13 @@ function MultiSelectChips({ fieldId, label, helpText, values = [], options = [],
               type="button"
               aria-pressed={active}
               onClick={() => toggle(opt.value)}
-              style={
+              className={`min-h-[44px] px-3.5 py-2 rounded-[8px] text-[15px] bg-[var(--surface)] flex items-center gap-2 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
                 active
-                  ? {
-                      borderWidth: '2px',
-                      borderColor: 'var(--brand)',
-                      backgroundColor: 'color-mix(in srgb, var(--brand) 12%, var(--surface))'
-                    }
-                  : undefined
-              }
-              className={`min-h-[44px] px-3.5 py-2 rounded-[8px] text-[15px] flex items-center gap-2 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
-                active
-                  ? 'text-[var(--ink)] font-semibold'
-                  : 'bg-[var(--surface)] border border-[var(--line)] hover:bg-[var(--surface-hover)] text-[var(--ink)] font-medium'
+                  ? 'border-2 border-[var(--brand)] dark:border-[#60A5FA] shadow-[0_0_0_1px_rgba(59,118,204,0.35)] dark:shadow-[0_0_0_1px_rgba(96,165,250,0.45)] text-[var(--ink)] font-semibold'
+                  : 'border border-[var(--line)] hover:bg-[var(--surface-hover)] text-[var(--ink)] font-medium'
               }`}
             >
-              {active && <Check className="w-4 h-4 text-[var(--brand)] dark:text-[#7BB1FF] shrink-0" />}
+              {active && <Check className="w-4 h-4 text-[var(--brand)] dark:text-[#60A5FA] shrink-0" />}
               <span>{opt.label}</span>
             </button>
           );
@@ -399,26 +383,17 @@ function NoServiceToggle({ label, checked, onChange }) {
       role="checkbox"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      style={
+      className={`min-h-[44px] px-3.5 py-2 rounded-[8px] text-[14px] font-semibold bg-[var(--surface-subtle)] flex items-center gap-2 cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
         checked
-          ? {
-              borderWidth: '2px',
-              borderColor: 'var(--brand)',
-              backgroundColor: 'color-mix(in srgb, var(--brand) 12%, var(--surface))'
-            }
-          : undefined
-      }
-      className={`min-h-[44px] px-3.5 py-2 rounded-[8px] text-[14px] font-semibold flex items-center gap-2 cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
-        checked
-          ? 'text-[var(--ink)]'
-          : 'bg-[var(--surface-subtle)] border border-[var(--line)] text-[var(--ink)] hover:bg-[var(--surface-hover)]'
+          ? 'border-2 border-[var(--brand)] dark:border-[#60A5FA] shadow-[0_0_0_1px_rgba(59,118,204,0.35)] dark:shadow-[0_0_0_1px_rgba(96,165,250,0.45)] text-[var(--ink)]'
+          : 'border border-[var(--line)] text-[var(--ink)] hover:bg-[var(--surface-hover)]'
       }`}
     >
       <span
-        className={`w-4 h-4 rounded-[4px] border flex items-center justify-center ${
+        className={`w-4 h-4 rounded-[4px] flex items-center justify-center bg-transparent ${
           checked
-            ? 'bg-[var(--brand)] border-[var(--brand)] text-[var(--brand-ink)]'
-            : 'bg-[var(--surface)] border-[var(--line)]'
+            ? 'border-2 border-[var(--brand)] dark:border-[#60A5FA] text-[var(--brand)] dark:text-[#60A5FA]'
+            : 'border border-[var(--line)] bg-[var(--surface)]'
         }`}
       >
         {checked && <Check className="w-3 h-3 stroke-[3]" />}
@@ -509,22 +484,13 @@ function OutdoorServicesEditor({ services = [], onChange }) {
                 type="button"
                 aria-pressed={active}
                 onClick={() => toggleChip(chip)}
-                style={
+                className={`min-h-[44px] px-3.5 py-2 rounded-[8px] text-[15px] bg-[var(--surface)] flex items-center gap-2 cursor-pointer transition-colors ${
                   active
-                    ? {
-                        borderWidth: '2px',
-                        borderColor: 'var(--brand)',
-                        backgroundColor: 'color-mix(in srgb, var(--brand) 12%, var(--surface))'
-                      }
-                    : undefined
-                }
-                className={`min-h-[44px] px-3.5 py-2 rounded-[8px] text-[15px] flex items-center gap-2 cursor-pointer transition-colors ${
-                  active
-                    ? 'font-semibold text-[var(--ink)]'
-                    : 'bg-[var(--surface)] border border-[var(--line)] hover:bg-[var(--surface-hover)] text-[var(--ink)] font-medium'
+                    ? 'border-2 border-[var(--brand)] dark:border-[#60A5FA] shadow-[0_0_0_1px_rgba(59,118,204,0.35)] dark:shadow-[0_0_0_1px_rgba(96,165,250,0.45)] font-semibold text-[var(--ink)]'
+                    : 'border border-[var(--line)] hover:bg-[var(--surface-hover)] text-[var(--ink)] font-medium'
                 }`}
               >
-                {active ? <Check className="w-4 h-4 text-[var(--brand)] dark:text-[#7BB1FF]" /> : <Plus className="w-4 h-4 text-[var(--muted)]" />}
+                {active ? <Check className="w-4 h-4 text-[var(--brand)] dark:text-[#60A5FA]" /> : <Plus className="w-4 h-4 text-[var(--muted)]" />}
                 <span>{chip}</span>
               </button>
             );
