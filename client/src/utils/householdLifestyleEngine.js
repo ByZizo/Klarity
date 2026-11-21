@@ -1,12 +1,27 @@
 /**
- * Household, Utility (PG&E / Water / Gas) & Vehicle Fleet Intelligence Engine
+ * Household, Utility & Vehicle Fleet Intelligence Engine (100% local, zero network calls)
  *
- * Provides institutional-grade real-world estimation and advisory models for:
- * 1. Dwelling & Household Utility Modeling (PG&E Electric & Gas, Municipal Water/Trash)
+ * Provides real-world estimation and advisory models for:
+ * 1. Dwelling & Household Utility Modeling (regional ZIP rates, Gas/Propane, Water/Trash)
  * 2. Vehicle Fleet Fuel & Maintenance Costing (Gas ICE, Hybrid, PHEV, Battery EV)
  * 3. Free & Low-Cost EV Charging Network Directory by Region
  * 4. 0% APR New Electric Vehicle Acquisition & Rebate Stacking Advisor
  */
+
+import { lookupLocalUtilityData } from '../data/usUtilityData.js';
+import {
+  createEmptyV2Profile,
+  migrateHouseholdProfile,
+  formatHouseholdLabel,
+  hasAnyGasOrPropaneUsage,
+  isOwner,
+  isRenter,
+  needsHoaSection,
+  toMonthlyEquivalent,
+  generateHouseholdReminders,
+  calculateProfileCompleteness,
+  buildSyncableBills
+} from './householdSchema.js';
 
 export const DWELLING_TYPES = [
   {
@@ -492,350 +507,673 @@ export const HOME_QUESTIONNAIRE_OPTIONS = {
   ]
 };
 
-export const DEFAULT_HOUSEHOLD_PROFILE = {
-  // Property details
-  address: '',
-  street: '',
-  city: '',
-  state: 'CA',
-  zip: '',
-  cityOrZip: 'Bay Area / Northern CA',
-  zillowUrl: '',
-  zillowImportedAt: null,
-  dwellingType: '',
-  ownership: 'own',
-  householdSize: 1,
-  sqFt: 0,
-  bedrooms: 0,
-  bathrooms: 0,
-  yearBuilt: null,
-  lotSize: '',
-  estimatedValue: '',
-  county: '',
-  garage: '',
-  utilityRegionId: 'pge_norcal',
-  hasCareDiscount: false, // CARE/FERA low-income or senior discount
-
-  // Questionnaire: Heating, Cooling, Water, EV, Pool
-  heatingType: 'natural_gas_furnace', // 'natural_gas_furnace' | 'heat_pump' | 'electric_baseboard' | 'propane_other'
-  coolingType: 'central_ac', // 'central_ac' | 'heat_pump' | 'evaporative_cooler' | 'window_units' | 'none'
-  waterHeaterType: 'natural_gas_tank', // 'natural_gas_tank' | 'tankless_gas' | 'electric_tank' | 'hybrid_heat_pump'
-  hasEvAtHome: true,
-  evChargerType: 'level2_240v', // 'level2_240v' | 'level1_120v' | 'no_charger'
-  evHomeChargingFrequency: 'daily', // 'daily' | 'several_times_week' | 'rarely' | 'never'
-  evChargingSchedule: 'overnight_offpeak', // 'overnight_offpeak' | 'daytime_solar' | 'evening_peak' | 'anytime'
-  evDailyHomeMiles: 35,
-  evFreeWorkplaceCharging: 'no', // 'no' | 'yes_sometimes' | 'yes_often'
-  poolOrSpa: 'none', // 'none' | 'pool_only' | 'spa_only' | 'pool_and_spa'
-  poolPumpType: 'variable_speed', // 'variable_speed' | 'single_speed'
-  poolHeating: 'none', // 'none' | 'solar' | 'gas' | 'electric_heat_pump'
-
-  // Household Providers & Exact Plan Names
-  internetProvider: 'Xfinity',
-  internetPlan: 'Gigabit Extra (1200 Mbps)',
-  internetPlanType: 'gigabit_fiber',
-  phoneProvider: 'T-Mobile',
-  phonePlan: 'Go5G Plus',
-  phonePlanType: 'unlimited_premium',
-  phoneLines: 3,
-  electricGasProvider: 'PG&E',
-  electricGasPlan: 'EV2-A (Home Charging & Solar TOU)',
-  electricGasPlanType: 'tou_ev',
-  trashProvider: 'City Municipal Utilities',
-  trashPlan: '64-Gallon Standard Household Cart',
-  trashPlanType: 'standard_64',
-  securityProvider: 'Ring',
-  securityPlan: 'Ring Protect Pro ($20/mo or $200/yr)',
-  securityPlanType: 'cloud_video',
-  homeWarrantyProvider: 'American Home Shield',
-  homeWarrantyPlan: 'ShieldGold (Systems & Appliances)',
-  homeWarrantyPlanType: 'combo_plan',
-  homeWarrantyAccount: '',
-  homeWarrantyMonthlyCost: 65,
-  homeWarrantyNotes: '',
-  extraProviders: [],
-
-  // Solar & Storage suite
-  hasSolar: false,
-  solarPanelCount: 20,
-  solarWattsPerPanel: 400,
-  solarOwnership: 'owned', // 'owned' | 'leased' | 'ppa'
-  solarMonthlyPayment: 165,
-  solarBillingPlan: 'nem_2', // 'nem_2' | 'nem_3' | 'nem_1' | 'other'
-  solarYearInstalled: 2021,
-  hasSolarBattery: false,
-  solarBatteryModel: 'Tesla Powerwall 2',
-  solarBatteryKwh: 13.5,
-  solarBatteryMode: 'self_consumption', // 'self_consumption' | 'backup_only' | 'tou_arbitrage'
-  solarPeakSunHours: 5.5,
-
-  // User-customized monthly home costs { [costKey]: { provider, amount, source: 'user' | 'estimate' | 'bills' } }
-  monthlyCosts: {},
-
-  climateSeason: 'average', // 'average' | 'summer_ac' | 'winter_heat'
-  foodMonthly: 650,
-  health: {
-    provider: '',
-    planName: '',
-    memberId: '',
-    groupNumber: '',
-    network: '',
-    rxBin: '',
-    monthlyPremium: 0,
-    deductible: null,
-    outOfPocketMax: null,
-    copays: {
-      primaryCare: null,
-      specialist: null,
-      urgentCare: null,
-      er: null,
-      rxGeneric: null
-    },
-    doctors: [],
-    cards: []
-  },
-  vehicles: []
-};
+export const DEFAULT_HOUSEHOLD_PROFILE = createEmptyV2Profile();
 
 /**
- * Calculates comprehensive monthly utility bills (PG&E Electric, Natural Gas, Water/Sewer/Trash)
- * and Fleet Fuel/Charging expenses based on the household profile.
+ * Helper to suggest utility, telecom, and home finance providers from bundled local ZIP data.
  */
-
-/**
- * Helper to suggest utility, telecom, and home finance providers based on ZIP code & region.
- */
-export function getSuggestedProviders(profile = {}) {
-  const regId = profile.utilityRegionId || 'pge_norcal';
-  const city = (profile.city || profile.cityOrZip || 'Fresno').split(',')[0].trim();
-  const county = profile.county || 'Fresno County';
-
-  let electric = 'Pacific Gas & Electric (PG&E)';
-  let gas = 'Pacific Gas & Electric (PG&E)';
-
-  if (regId === 'smud_sac') {
-    electric = 'SMUD (Sacramento Municipal Utility)';
-    gas = 'Pacific Gas & Electric (PG&E)';
-  } else if (regId === 'sce_socal') {
-    electric = 'Southern California Edison (SCE)';
-    gas = 'SoCalGas';
-  } else if (regId === 'sdge_sandiego') {
-    electric = 'San Diego Gas & Electric (SDG&E)';
-    gas = 'San Diego Gas & Electric (SDG&E)';
-  } else if (regId === 'ladwp_la') {
-    electric = 'Los Angeles Dept of Water & Power (LADWP)';
-    gas = 'SoCalGas';
-  } else if (regId === 'national_avg') {
-    electric = 'Local Electric Utility';
-    gas = 'Local Natural Gas Utility';
-  }
-
-  const waterTrash = profile.trashProvider || `City of ${city || 'Municipal'} Utilities`;
-  const internet = profile.internetProvider || 'Xfinity / AT&T Fiber';
-  const phone = profile.phoneProvider || 'T-Mobile Family Plan';
-  const security = profile.securityProvider || 'Ring / Smart Home';
-  const mortgageRent = profile.ownership === 'rent' ? 'Property Landlord / Management' : 'Mortgage Servicer';
-  const propertyTax = `${county} Tax Collector`;
-  const hoa = 'HOA Community Association';
-  const homeInsurance = profile.ownership === 'rent' ? 'Lemonade / State Farm Renters' : 'State Farm / Travelers Homeowners';
-  const homeWarranty = profile.homeWarrantyProvider || 'American Home Shield / Choice';
+export function getSuggestedProviders(rawProfile = {}) {
+  const profile = migrateHouseholdProfile(rawProfile);
+  const local = lookupLocalUtilityData(profile.zip, profile.state, profile.electricUtility);
+  const city = (profile.city || 'Municipal').split(',')[0].trim();
 
   return {
-    electricity: electric,
-    gas,
-    waterTrash,
-    internet,
-    phone,
-    security,
-    homeWarranty,
-    mortgageRent,
-    propertyTax,
-    hoa,
-    homeInsurance
+    electricity: profile.electricUtility || local.primaryElectricUtility,
+    gas: profile.gasOrPropaneProvider || local.gasUtilities?.[0] || 'Local Natural Gas Utility',
+    waterTrash: profile.waterProvider || profile.trashProvider || `${city} Water & Trash`,
+    internet: profile.internetProvider || 'Local Fiber / Cable Internet',
+    phone: profile.mobileCarrier || 'Mobile Carrier',
+    security: profile.homeSecurityProvider || 'Home Security',
+    homeWarranty: profile.homeWarrantyProvider || 'Home Warranty',
+    mortgageRent: isRenter(profile) ? 'Landlord / Property Manager' : 'Mortgage Servicer',
+    propertyTax: 'County Tax Collector',
+    hoa: 'HOA Community Association',
+    homeInsurance: isRenter(profile) ? 'Renters Insurance' : 'Homeowners Insurance'
   };
 }
 
+function matchUserBill(bills, terms = []) {
+  return bills.find((b) => {
+    const bName = String(b?.name || '').toLowerCase();
+    const bCat = String(b?.category || '').toLowerCase();
+    const bId = String(b?.id || '').toLowerCase();
+    if (b?.isSimulated || b?.isMock || bId.startsWith('mock-') || bId.startsWith('demo-')) return false;
+    return terms.some((t) => bName.includes(t) || bCat.includes(t));
+  });
+}
+
 /**
- * Computes standard monthly cost items matching bills, user inputs, and calculated engine estimates.
+ * Computes itemized monthly home cost items with explicit source attribution:
+ *   - 'verified'     (matched to a connected/synced bill in userBills)
+ *   - 'user_entered' (explicitly entered in the Household questionnaire or cost editor)
+ *   - 'estimate'     (calculated by the local engine)
+ *
+ * Strictly enforces renter/owner branching and avoids double-counting escrow taxes/insurance.
  */
-export function calculateHomeCostBreakdown(profile = {}, metrics = null, userBills = []) {
+export function calculateHomeCostBreakdown(rawProfile = {}, metrics = null, userBills = []) {
+  const profile = migrateHouseholdProfile(rawProfile);
+  const computedMetrics = metrics || calculateHouseholdAndFleetMetrics(profile);
   const suggestedProviders = getSuggestedProviders(profile);
   const userCosts = profile.monthlyCosts || {};
   const bills = Array.isArray(userBills) ? userBills : [];
 
+  const rentMode = isRenter(profile);
+  const ownerMode = isOwner(profile);
+  const inEscrow = profile.ownership === 'own_with_mortgage' && profile.mortgageEscrowTaxesInsurance === 'yes';
+
   const rawVal = Number(String(profile.estimatedValue || '425000').replace(/[^0-9]/g, '')) || 425000;
-  const isRent = profile.ownership === 'rent';
-  const sqFt = Number(profile.sqFt) || 2100;
+  const sqFt = Number(profile.sqFt) || computedMetrics.sqFt || 1850;
 
-  // Baseline estimates
-  const estElectric = metrics?.utilities?.homeElectricCost != null
-    ? metrics.utilities.homeElectricCost + (metrics.utilities.evHomeChargingCost || 0)
-    : 378;
-  const estGas = metrics?.utilities?.naturalGasCost != null ? metrics.utilities.naturalGasCost : 119;
-  const estWaterTrash = metrics?.utilities?.waterTrashTotalCost != null ? metrics.utilities.waterTrashTotalCost : 216;
-  const estInternet = 65;
-  const estMortgageRent = isRent ? Math.round(sqFt * 1.35) : Math.round(rawVal * 0.0052);
-  const estPropertyTax = isRent ? 0 : Math.round((rawVal * 0.0115) / 12);
-  const estHoa = profile.dwellingType === 'apartment' || profile.dwellingType === 'townhouse' ? 245 : 0;
-  const estHomeInsurance = isRent ? 22 : Math.round((rawVal * 0.0035) / 12);
+  const estElectric =
+    computedMetrics?.utilities?.homeElectricCost != null
+      ? computedMetrics.utilities.homeElectricCost + (computedMetrics.utilities.evHomeChargingCost || 0)
+      : 165;
+  const estGas = computedMetrics?.utilities?.naturalGasCost != null ? computedMetrics.utilities.naturalGasCost : 65;
+  const estWaterTrash =
+    computedMetrics?.utilities?.waterTrashTotalCost != null ? computedMetrics.utilities.waterTrashTotalCost : 110;
 
-  const categories = [
-    { id: 'electricity', label: 'Electricity', defaultProvider: suggestedProviders.electricity, estAmount: estElectric, billTerms: ['electric', 'pg&e', 'pge', 'smud', 'edison', 'sdge', 'ladwp'] },
-    { id: 'gas', label: 'Natural Gas', defaultProvider: suggestedProviders.gas, estAmount: estGas, billTerms: ['gas', 'socalgas', 'natural gas'] },
-    { id: 'waterTrash', label: 'Water & Trash', defaultProvider: suggestedProviders.waterTrash, estAmount: estWaterTrash, billTerms: ['water', 'trash', 'sewer', 'waste', 'city utilities', 'republic services', 'waste management'] },
-    { id: 'internet', label: 'Internet', defaultProvider: suggestedProviders.internet, estAmount: estInternet, billTerms: ['internet', 'wifi', 'xfinity', 'comcast', 'at&t', 'spectrum', 'verizon fios', 'frontier', 'sonic'] },
-    { id: 'phone', label: 'Mobile & Phone', defaultProvider: suggestedProviders.phone, estAmount: profile.phoneLines ? Number(profile.phoneLines) * 35 : 105, billTerms: ['phone', 'cell', 'mobile', 'wireless', 't-mobile', 'tmobile', 'verizon', 'att wireless', 'at&t wireless', 'mint mobile', 'google fi'] },
-    { id: 'mortgageRent', label: isRent ? 'Rent' : 'Mortgage or Rent', defaultProvider: suggestedProviders.mortgageRent, estAmount: estMortgageRent, billTerms: ['mortgage', 'rent', 'housing', 'lease'] },
-    { id: 'propertyTax', label: 'Property Tax', defaultProvider: suggestedProviders.propertyTax, estAmount: estPropertyTax, billTerms: ['property tax', 'county tax', 'tax collector'] },
-    { id: 'hoa', label: 'HOA', defaultProvider: suggestedProviders.hoa, estAmount: estHoa, billTerms: ['hoa', 'homeowners association', 'condo fee'] },
-    { id: 'homeInsurance', label: isRent ? 'Renters Insurance' : 'Home Insurance', defaultProvider: suggestedProviders.homeInsurance, estAmount: estHomeInsurance, billTerms: ['home insurance', 'hazard insurance', 'renters insurance', 'homeowners insurance'] }
-  ];
+  const rows = [];
 
-  return categories.map(cat => {
-    // 1. User manual entry takes top precedence
-    if (userCosts[cat.id] && userCosts[cat.id].amount !== undefined) {
+  const resolveCostRow = ({
+    id,
+    label,
+    provider,
+    directAmount = null,
+    directFrequency = 'monthly',
+    legacyCostKey = null,
+    estAmount = null,
+    billTerms = [],
+    detail = '',
+    disabled = false,
+    disabledNote = ''
+  }) => {
+    if (disabled) {
       return {
-        id: cat.id,
-        label: cat.label,
-        provider: userCosts[cat.id].provider || cat.defaultProvider,
-        amount: Number(userCosts[cat.id].amount) || 0,
-        source: userCosts[cat.id].source || 'user'
+        id,
+        label,
+        provider: provider || 'None',
+        amount: 0,
+        source: 'user_entered',
+        detail: disabledNote || 'Not applicable',
+        excluded: true
       };
     }
 
-    // 2. Check user bills
-    const matchedBill = bills.find(b => {
-      const bName = (b.name || '').toLowerCase();
-      const bCat = (b.category || '').toLowerCase();
-      return cat.billTerms.some(term => bName.includes(term) || bCat.includes(term));
-    });
-
+    // 1. Verified real/synced bill takes top priority if present
+    const matchedBill = billTerms.length > 0 ? matchUserBill(bills, billTerms) : null;
     if (matchedBill && Number(matchedBill.expectedAmount) > 0) {
       return {
-        id: cat.id,
-        label: cat.label,
-        provider: matchedBill.name || cat.defaultProvider,
-        amount: Math.round(Number(matchedBill.expectedAmount)),
-        source: 'bills'
+        id,
+        label,
+        provider: provider || matchedBill.name || label,
+        amount: Math.round(Number(matchedBill.expectedAmount) * 100) / 100,
+        source: 'verified',
+        detail: detail || `Matched bill: ${matchedBill.name}`,
+        billId: matchedBill.id
       };
     }
 
-    // 3. Fallback to model estimate
-    return {
-      id: cat.id,
-      label: cat.label,
-      provider: cat.defaultProvider,
-      amount: Math.round(cat.estAmount),
-      source: 'estimate'
-    };
+    // 2. Direct amount entered in Household questionnaire/editor
+    if (directAmount !== null && directAmount !== undefined && directAmount !== '' && Number(directAmount) >= 0) {
+      const monthly = Math.round(toMonthlyEquivalent(Number(directAmount), directFrequency) * 100) / 100;
+      return {
+        id,
+        label,
+        provider: provider || label,
+        amount: monthly,
+        source: 'user_entered',
+        detail:
+          directFrequency && directFrequency !== 'monthly'
+            ? `${formatHouseholdLabel('billingFrequency', directFrequency)} · converted to monthly`
+            : detail
+      };
+    }
+
+    // 3. Legacy monthlyCosts override
+    if (legacyCostKey && userCosts[legacyCostKey] && userCosts[legacyCostKey].amount != null) {
+      return {
+        id,
+        label,
+        provider: provider || userCosts[legacyCostKey].provider || label,
+        amount: Math.round(Number(userCosts[legacyCostKey].amount) * 100) / 100,
+        source: 'user_entered',
+        detail
+      };
+    }
+
+    // 4. Local estimate fallback
+    if (estAmount !== null && estAmount !== undefined) {
+      return {
+        id,
+        label,
+        provider: provider || label,
+        amount: Math.round(Number(estAmount) * 100) / 100,
+        source: 'estimate',
+        detail
+      };
+    }
+
+    return null;
+  };
+
+  // Electricity
+  const avgUserElectric =
+    profile.electricMonthlyBillSummer != null && profile.electricMonthlyBillWinter != null
+      ? (Number(profile.electricMonthlyBillSummer) + Number(profile.electricMonthlyBillWinter)) / 2
+      : profile.electricMonthlyBillSummer ?? profile.electricMonthlyBillWinter ?? null;
+
+  rows.push(
+    resolveCostRow({
+      id: 'electricity',
+      label: 'Electricity',
+      provider: profile.electricUtility || suggestedProviders.electricity,
+      directAmount: avgUserElectric,
+      directFrequency: profile.electricBillingFrequency || 'monthly',
+      legacyCostKey: 'electricity',
+      estAmount: profile.noElectricService ? 0 : estElectric,
+      billTerms: ['electric', 'pg&e', 'pge', 'smud', 'edison', 'sdg&e', 'con ed', 'ladwp', 'fpl', 'comed'],
+      detail: profile.electricRatePlan || '',
+      disabled: Boolean(profile.noElectricService),
+      disabledNote: 'No electric service'
+    })
+  );
+
+  // Natural Gas or Propane (only when gas/propane is used and not marked "I don't have this")
+  if (!profile.noGasOrPropane && hasAnyGasOrPropaneUsage(profile)) {
+    rows.push(
+      resolveCostRow({
+        id: 'gas',
+        label: profile.heating === 'propane' ? 'Propane / Gas' : 'Natural gas',
+        provider: profile.gasOrPropaneProvider || suggestedProviders.gas,
+        directAmount: profile.gasMonthlyBill,
+        directFrequency: profile.gasBillingFrequency || 'monthly',
+        legacyCostKey: 'gas',
+        estAmount: estGas,
+        billTerms: ['natural gas', 'socalgas', 'atmos', 'nicor', 'propane', 'gas']
+      })
+    );
+  }
+
+  // Water & Sewer
+  if (!profile.noWaterSewer && profile.hasWell !== 'yes') {
+    rows.push(
+      resolveCostRow({
+        id: 'water',
+        label: 'Water & sewer',
+        provider: profile.waterProvider || 'Municipal Water',
+        directAmount: profile.waterMonthlyBill,
+        directFrequency: profile.waterBillingFrequency || 'monthly',
+        estAmount: Math.round(estWaterTrash * 0.6),
+        billTerms: ['water', 'sewer']
+      })
+    );
+  }
+
+  // Trash & Recycling
+  if (!profile.noTrashRecycling && profile.trashBillingFrequency !== 'on_property_tax') {
+    rows.push(
+      resolveCostRow({
+        id: 'trash',
+        label: 'Trash & recycling',
+        provider: profile.trashProvider || 'Waste & Recycling',
+        directAmount: profile.trashMonthlyBill,
+        directFrequency: profile.trashBillingFrequency || 'monthly',
+        estAmount: Math.round(estWaterTrash * 0.4),
+        billTerms: ['trash', 'waste', 'republic services', 'recology']
+      })
+    );
+  }
+
+  // Internet
+  if (!profile.noInternet) {
+    const netTotal =
+      profile.internetMonthlyCost != null
+        ? Number(profile.internetMonthlyCost) + (Number(profile.internetEquipmentRentalFee) || 0)
+        : null;
+    rows.push(
+      resolveCostRow({
+        id: 'internet',
+        label: 'Internet',
+        provider: profile.internetProvider || suggestedProviders.internet,
+        directAmount: netTotal,
+        directFrequency: 'monthly',
+        legacyCostKey: 'internet',
+        estAmount: 70,
+        billTerms: ['internet', 'wifi', 'xfinity', 'comcast', 'at&t fiber', 'spectrum', 'verizon fios', 'frontier', 'starlink'],
+        detail: profile.internetPlan || ''
+      })
+    );
+  }
+
+  // Cable / Streaming Bundle
+  if (profile.cableOrStreamingProvider || profile.cableOrStreamingMonthlyCost != null) {
+    rows.push(
+      resolveCostRow({
+        id: 'cable_streaming',
+        label: 'TV / Streaming bundle',
+        provider: profile.cableOrStreamingProvider || 'TV / Streaming',
+        directAmount: profile.cableOrStreamingMonthlyCost ?? 0,
+        directFrequency: 'monthly',
+        billTerms: ['youtube tv', 'hulu', 'directv', 'cable', 'streaming']
+      })
+    );
+  }
+
+  // Mobile Phone
+  if (!profile.noMobilePhone) {
+    rows.push(
+      resolveCostRow({
+        id: 'mobile',
+        label: 'Mobile phone',
+        provider: profile.mobileCarrier || suggestedProviders.phone,
+        directAmount: profile.mobileMonthlyCost,
+        directFrequency: 'monthly',
+        legacyCostKey: 'phone',
+        estAmount: profile.mobileLines ? Number(profile.mobileLines) * 38 : 95,
+        billTerms: ['mobile', 'wireless', 't-mobile', 'tmobile', 'verizon', 'mint mobile', 'google fi'],
+        detail: profile.mobileLines ? `${profile.mobileLines} line(s)` : ''
+      })
+    );
+  }
+
+  // Landline
+  if (profile.hasLandline === 'yes') {
+    rows.push(
+      resolveCostRow({
+        id: 'landline',
+        label: 'Home landline',
+        provider: 'Home Landline',
+        directAmount: profile.landlineMonthlyCost ?? 0,
+        directFrequency: 'monthly',
+        billTerms: ['landline', 'home phone']
+      })
+    );
+  }
+
+  // Solar lease / PPA / loan payment
+  if (profile.hasSolar === 'yes' && ['loan', 'leased', 'ppa'].includes(profile.solarOwnership)) {
+    rows.push(
+      resolveCostRow({
+        id: 'solar_payment',
+        label: `Solar (${formatHouseholdLabel('solarOwnership', profile.solarOwnership)})`,
+        provider: 'Solar Financing / Lease',
+        directAmount: profile.solarMonthlyPayment ?? 0,
+        directFrequency: 'monthly',
+        billTerms: ['solar', 'sunrun', 'sunnova', 'mosaic']
+      })
+    );
+  }
+
+  // Housing cost: strictly branch owner vs renter
+  if (rentMode) {
+    rows.push(
+      resolveCostRow({
+        id: 'housing_rent',
+        label: 'Monthly rent',
+        provider: 'Landlord / Property Manager',
+        directAmount: profile.monthlyRent,
+        directFrequency: 'monthly',
+        legacyCostKey: 'mortgageRent',
+        estAmount: Math.round(sqFt * 1.35),
+        billTerms: ['rent', 'lease', 'apartment']
+      })
+    );
+  } else if (profile.ownership === 'own_with_mortgage') {
+    rows.push(
+      resolveCostRow({
+        id: 'housing_mortgage',
+        label: 'Mortgage payment',
+        provider: 'Mortgage Servicer',
+        directAmount: profile.mortgageMonthlyPI,
+        directFrequency: 'monthly',
+        legacyCostKey: 'mortgageRent',
+        estAmount: Math.round(rawVal * 0.0052),
+        billTerms: ['mortgage', 'home loan'],
+        detail: inEscrow ? 'Includes property tax & homeowners insurance (escrow)' : 'Principal & interest'
+      })
+    );
+  }
+
+  // Second mortgage / HELOC (owners only)
+  if (ownerMode && profile.hasSecondMortgageHeloc === 'yes') {
+    rows.push(
+      resolveCostRow({
+        id: 'second_mortgage',
+        label: 'Second mortgage / HELOC',
+        provider: 'HELOC / 2nd Lien',
+        directAmount: profile.secondMortgagePayment ?? 0,
+        directFrequency: 'monthly',
+        billTerms: ['heloc', 'second mortgage']
+      })
+    );
+  }
+
+  // Property Tax (owners only; excluded from incremental sum if in mortgage escrow)
+  if (ownerMode) {
+    rows.push(
+      resolveCostRow({
+        id: 'property_tax',
+        label: 'Property tax',
+        provider: 'County Tax Collector',
+        directAmount: profile.propertyTaxAmount,
+        directFrequency: profile.propertyTaxFrequency || 'per_year',
+        legacyCostKey: 'propertyTax',
+        estAmount: Math.round((rawVal * 0.0115) / 12),
+        billTerms: ['property tax', 'tax collector'],
+        disabled: inEscrow,
+        disabledNote: 'Included in mortgage escrow (not counted twice)'
+      })
+    );
+  }
+
+  // Special District Taxes (owners only)
+  if (ownerMode && profile.hasSpecialDistrictTax === 'yes' && profile.specialDistrictTaxAmount > 0) {
+    rows.push(
+      resolveCostRow({
+        id: 'special_district',
+        label: 'Special district taxes',
+        provider: 'Local District Assessment',
+        directAmount: profile.specialDistrictTaxAmount,
+        directFrequency: 'annual',
+        billTerms: ['special district', 'mello-roos']
+      })
+    );
+  }
+
+  // HOA dues
+  if (needsHoaSection(profile)) {
+    rows.push(
+      resolveCostRow({
+        id: 'hoa',
+        label: 'HOA dues',
+        provider: 'HOA Association',
+        directAmount: profile.hoaDues,
+        directFrequency: profile.hoaFrequency || 'monthly',
+        legacyCostKey: 'hoa',
+        estAmount: profile.homeType === 'condo' ? 290 : 120,
+        billTerms: ['hoa', 'association']
+      })
+    );
+  }
+
+  // Homeowners vs Renters Insurance (excluded from incremental sum if in escrow)
+  rows.push(
+    resolveCostRow({
+      id: 'home_insurance',
+      label: rentMode ? 'Renters insurance' : 'Homeowners insurance',
+      provider: profile.homeInsuranceCarrier || suggestedProviders.homeInsurance,
+      directAmount: profile.homeInsurancePremium,
+      directFrequency: profile.homeInsuranceFrequency || 'annual',
+      legacyCostKey: 'homeInsurance',
+      estAmount: rentMode ? 22 : Math.round((rawVal * 0.0035) / 12),
+      billTerms: ['homeowners', 'renters insurance', 'hazard insurance'],
+      disabled: !rentMode && inEscrow,
+      disabledNote: 'Included in mortgage escrow (not counted twice)'
+    })
+  );
+
+  // Home Warranty
+  if (profile.homeWarrantyProvider || profile.homeWarrantyCost > 0) {
+    rows.push(
+      resolveCostRow({
+        id: 'home_warranty',
+        label: 'Home warranty',
+        provider: profile.homeWarrantyProvider || 'Home Warranty',
+        directAmount: profile.homeWarrantyCost ?? 0,
+        directFrequency: 'monthly',
+        billTerms: ['home warranty', 'american home shield', 'choice home warranty']
+      })
+    );
+  }
+
+  // Home Security
+  if (profile.homeSecurityProvider || profile.homeSecurityMonthlyFee > 0) {
+    rows.push(
+      resolveCostRow({
+        id: 'home_security',
+        label: 'Home security',
+        provider: profile.homeSecurityProvider || 'Home Security',
+        directAmount: profile.homeSecurityMonthlyFee ?? 0,
+        directFrequency: 'monthly',
+        billTerms: ['ring', 'adt', 'simplisafe', 'vivint', 'home security']
+      })
+    );
+  }
+
+  // Paid Pool Service
+  if (profile.poolOrSpa && profile.poolOrSpa !== 'none' && profile.poolService === 'paid' && profile.poolServiceMonthlyCost > 0) {
+    rows.push(
+      resolveCostRow({
+        id: 'pool_service',
+        label: 'Pool service',
+        provider: 'Pool Service',
+        directAmount: profile.poolServiceMonthlyCost,
+        directFrequency: 'monthly',
+        billTerms: ['pool service']
+      })
+    );
+  }
+
+  // Outdoor & custom services
+  (profile.outdoorServices || []).forEach((svc) => {
+    if (svc?.provider && svc?.cost > 0) {
+      rows.push(
+        resolveCostRow({
+          id: `outdoor_${svc.id}`,
+          label: svc.typeLabel || 'Home service',
+          provider: svc.provider,
+          directAmount: svc.cost,
+          directFrequency: svc.frequency || 'monthly',
+          billTerms: [svc.provider]
+        })
+      );
+    }
   });
+
+  // Maintenance reserve (owners with explicit entry)
+  if (ownerMode && profile.monthlyMaintenanceReserve > 0) {
+    rows.push(
+      resolveCostRow({
+        id: 'maintenance_reserve',
+        label: 'Maintenance reserve',
+        provider: 'Self-budgeted upkeep reserve',
+        directAmount: profile.monthlyMaintenanceReserve,
+        directFrequency: 'monthly'
+      })
+    );
+  }
+
+  return rows.filter(Boolean);
 }
 
-export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PROFILE) {
-  const dwelling = DWELLING_TYPES.find(d => d.id === profile.dwellingType) || DWELLING_TYPES[2];
-  const region = UTILITY_REGIONS.find(r => r.id === profile.utilityRegionId) || UTILITY_REGIONS[0];
-  const people = Math.max(1, Number(profile.householdSize) || 1);
-  const sqFt = Math.max(300, Number(profile.sqFt) || dwelling.defaultSqFt);
+/**
+ * Summarizes total monthly home cost and totals by source ('verified' | 'user_entered' | 'estimate').
+ */
+export function summarizeHomeCosts(breakdown = []) {
+  return breakdown.reduce(
+    (acc, item) => {
+      if (item.excluded) return acc;
+      const amt = Number(item.amount) || 0;
+      acc.totalMonthly += amt;
+      if (item.source === 'verified') acc.verified += amt;
+      else if (item.source === 'user_entered') acc.userEntered += amt;
+      else acc.estimated += amt;
+      return acc;
+    },
+    { totalMonthly: 0, verified: 0, userEntered: 0, estimated: 0 }
+  );
+}
+
+export function calculateHouseholdAndFleetMetrics(rawProfile = DEFAULT_HOUSEHOLD_PROFILE) {
+  const profile = migrateHouseholdProfile(rawProfile);
+  const local = lookupLocalUtilityData(profile.zip, profile.state, profile.electricUtility);
+
+  const dwellingMap = {
+    apartment: DWELLING_TYPES[0],
+    condo: DWELLING_TYPES[0],
+    townhome: DWELLING_TYPES[1],
+    townhouse: DWELLING_TYPES[1],
+    single_family: DWELLING_TYPES[2],
+    multi_unit: DWELLING_TYPES[3],
+    mobile_home: DWELLING_TYPES[1]
+  };
+  const dwelling = dwellingMap[profile.homeType] || DWELLING_TYPES[2];
+
+  const peopleCount =
+    (Number(profile.adultsCount) || 0) + (Number(profile.childrenCount) || 0) ||
+    Number(profile.householdSize) ||
+    2;
+  const people = Math.max(1, peopleCount);
+  const sqFt = Math.max(200, Number(profile.sqFt) || dwelling.defaultSqFt);
   const sqFtRatio = sqFt / dwelling.defaultSqFt;
 
-  // Season multiplier
+  // Climate & WFH occupancy modifiers
   const electricSeasonMult = profile.climateSeason === 'summer_ac' ? 1.35 : profile.climateSeason === 'winter_heat' ? 0.92 : 1.0;
   const gasSeasonMult = profile.climateSeason === 'winter_heat' ? 1.65 : profile.climateSeason === 'summer_ac' ? 0.65 : 1.0;
+  const wfhMult = profile.workFromHomeDaysPerWeek != null ? 1 + (Number(profile.workFromHomeDaysPerWeek) * 0.025) : 1.0;
+  const envelopeMult =
+    profile.insulation === 'poor'
+      ? 1.18
+      : profile.insulation === 'good'
+        ? 0.88
+        : 1.0;
 
   // Heating & Cooling equipment adjustments
+  const heatType = profile.heating || profile.heatingType || 'gas_furnace';
   let heatingElectricDelta = 0;
   let heatingGasDelta = 0;
-  if (profile.heatingType === 'heat_pump') {
+  if (heatType === 'heat_pump') {
     heatingElectricDelta = 110 * (profile.climateSeason === 'winter_heat' ? 1.8 : 0.6);
     heatingGasDelta = -18;
-  } else if (profile.heatingType === 'electric_baseboard') {
+  } else if (heatType === 'electric' || heatType === 'electric_baseboard') {
     heatingElectricDelta = 220 * (profile.climateSeason === 'winter_heat' ? 2.1 : 0.5);
     heatingGasDelta = -25;
-  } else if (profile.heatingType === 'propane_other') {
-    heatingGasDelta = -20;
+  } else if (heatType === 'propane' || heatType === 'wood' || heatType === 'none') {
+    heatingGasDelta = -22;
   }
 
+  const coolType = profile.cooling || profile.coolingType || 'central_ac';
   let coolingElectricMult = 1.0;
-  if (profile.coolingType === 'heat_pump') {
-    coolingElectricMult = 0.88;
-  } else if (profile.coolingType === 'evaporative_cooler') {
-    coolingElectricMult = 0.65;
-  } else if (profile.coolingType === 'window_units') {
-    coolingElectricMult = 0.82;
-  } else if (profile.coolingType === 'none') {
-    coolingElectricMult = 0.60;
-  }
+  if (coolType === 'heat_pump') coolingElectricMult = 0.88;
+  else if (coolType === 'evaporative' || coolType === 'evaporative_cooler') coolingElectricMult = 0.65;
+  else if (coolType === 'window_units') coolingElectricMult = 0.82;
+  else if (coolType === 'none') coolingElectricMult = 0.60;
+
+  const thermostatMult = profile.thermostat === 'smart' ? 0.92 : profile.thermostat === 'programmable' ? 0.96 : 1.0;
 
   // Water heater equipment adjustments
+  const whType = profile.waterHeater || profile.waterHeaterType || 'gas_tank';
   let waterElectricDelta = 0;
   let waterGasDelta = 0;
-  if (profile.waterHeaterType === 'electric_tank') {
-    waterElectricDelta = 190;
+  if (whType === 'electric_tank' || whType === 'tankless_electric') {
+    waterElectricDelta = whType === 'tankless_electric' ? 165 : 190;
     waterGasDelta = -12;
-  } else if (profile.waterHeaterType === 'hybrid_heat_pump') {
+  } else if (whType === 'heat_pump' || whType === 'hybrid_heat_pump') {
     waterElectricDelta = 65;
     waterGasDelta = -12;
-  } else if (profile.waterHeaterType === 'tankless_gas') {
+  } else if (whType === 'tankless_gas') {
     waterGasDelta = -6;
+  }
+
+  // Appliance delta
+  let applianceElectricDelta = 0;
+  let applianceGasDelta = 0;
+  if (profile.cookingFuel === 'electric' || profile.cookingFuel === 'induction') {
+    applianceElectricDelta += 35;
+    applianceGasDelta -= 4;
+  }
+  if (profile.dryer === 'electric') {
+    applianceElectricDelta += 45;
+    applianceGasDelta -= 3;
+  } else if (profile.dryer === 'heat_pump') {
+    applianceElectricDelta += 22;
+    applianceGasDelta -= 3;
   }
 
   // Pool & Spa load adjustments
   let poolElectricDelta = 0;
   let poolGasDelta = 0;
-  if (profile.poolOrSpa === 'pool_only' || profile.poolOrSpa === 'pool_and_spa') {
-    poolElectricDelta += profile.poolPumpType === 'single_speed' ? 160 : 75;
+  const poolState = profile.poolOrSpa;
+  if (poolState === 'pool' || poolState === 'pool_only' || poolState === 'both' || poolState === 'pool_and_spa') {
+    const hrsMult = profile.poolPumpHoursPerDay ? Math.min(2, Math.max(0.4, Number(profile.poolPumpHoursPerDay) / 6)) : 1;
+    poolElectricDelta += 85 * hrsMult;
     if (profile.poolHeating === 'gas') poolGasDelta += 24;
-    else if (profile.poolHeating === 'electric_heat_pump') poolElectricDelta += 115;
+    else if (profile.poolHeating === 'electric' || profile.poolHeating === 'heat_pump' || profile.poolHeating === 'electric_heat_pump') {
+      poolElectricDelta += 110;
+    }
   }
-  if (profile.poolOrSpa === 'spa_only' || profile.poolOrSpa === 'pool_and_spa') {
-    poolElectricDelta += 85;
+  if (poolState === 'spa' || poolState === 'spa_only' || poolState === 'both' || poolState === 'pool_and_spa') {
+    poolElectricDelta += 75;
     if (profile.poolHeating === 'gas') poolGasDelta += 12;
   }
 
   // Solar system computed parameters
-  const solarPanelCount = Math.max(1, Number(profile.solarPanelCount) || 20);
-  const solarWattsPerPanel = Math.max(100, Number(profile.solarWattsPerPanel) || 400);
-  const solarSystemKw = Number(((solarPanelCount * solarWattsPerPanel) / 1000).toFixed(2));
-  const solarPeakSunHours = Math.max(1, Number(profile.solarPeakSunHours) || 5.5);
-  // Monthly solar kWh with 20% system losses stated (inverter, wiring, dust, heat)
-  const solarMonthlyKwh = Math.round(solarSystemKw * solarPeakSunHours * 30 * 0.80);
+  const hasSolar = profile.hasSolar === 'yes' || profile.hasSolar === true;
+  const solarPanelCount = hasSolar ? Math.max(1, Number(profile.solarPanelCount) || 18) : 0;
+  const solarWattsPerPanel = hasSolar ? Math.max(100, Number(profile.solarWattsPerPanel) || 400) : 400;
+  const solarSystemKw = hasSolar ? Number(((solarPanelCount * solarWattsPerPanel) / 1000).toFixed(2)) : 0;
+  const solarPeakSunHours = Math.max(1, Number(profile.solarPeakSunHours) || local.defaultPeakSunHours);
+  const solarMonthlyKwh = hasSolar
+    ? profile.solarKnownYearlyKwh > 0
+      ? Math.round(Number(profile.solarKnownYearlyKwh) / 12)
+      : Math.round(solarSystemKw * solarPeakSunHours * 30 * 0.80)
+    : 0;
 
   // 1. Home Electricity (excluding EV charging)
-  // Base dwelling kWh scaled by sqFt + 115 kWh per person, modified by HVAC, water heater, and pool
-  let grossHomeKwh = Math.round((dwelling.baseKwh * sqFtRatio * coolingElectricMult + (people * 115) + heatingElectricDelta + waterElectricDelta + poolElectricDelta) * electricSeasonMult);
+  let grossHomeKwh = Math.round(
+    (dwelling.baseKwh * sqFtRatio * coolingElectricMult * envelopeMult * thermostatMult * wfhMult +
+      people * 110 +
+      heatingElectricDelta +
+      waterElectricDelta +
+      applianceElectricDelta +
+      poolElectricDelta) *
+      electricSeasonMult
+  );
+  if (profile.noElectricService) grossHomeKwh = 0;
 
   let homeKwh = grossHomeKwh;
-  if (profile.hasSolar) {
-    const offsetFactor = profile.solarBillingPlan === 'nem_3' ? 0.70 : 0.85;
+  if (hasSolar && !profile.noElectricService) {
+    const offsetFactor = profile.solarBillingPlan === 'net_billing' || profile.solarBillingPlan === 'nem_3' ? 0.72 : 0.85;
     const solarOffset = Math.round(solarMonthlyKwh * offsetFactor);
-    homeKwh = Math.max(85, grossHomeKwh - solarOffset);
+    homeKwh = Math.max(65, grossHomeKwh - solarOffset);
   }
 
-  const effectiveElectricRate = profile.hasCareDiscount
-    ? region.standardRateKwh * (1 - region.careDiscountPercent / 100)
-    : region.standardRateKwh;
+  const hasDiscount = profile.electricLowIncomeDiscount === 'yes';
+  const effectiveElectricRate = hasDiscount
+    ? local.standardRateKwh * (1 - local.electricDiscountPct / 100)
+    : local.standardRateKwh;
+  const effectiveEvRate = hasDiscount
+    ? local.evOffPeakRateKwh * (1 - local.electricDiscountPct / 100)
+    : local.evOffPeakRateKwh;
 
-  const effectiveEvRate = profile.hasCareDiscount
-    ? region.evOffPeakRateKwh * (1 - region.careDiscountPercent / 100)
-    : region.evOffPeakRateKwh;
+  const homeElectricCost = profile.noElectricService ? 0 : Math.round(homeKwh * effectiveElectricRate);
 
-  const homeElectricCost = Math.round(homeKwh * effectiveElectricRate);
-
-  // 2. Natural Gas (Water heating, stove, furnace, pool)
-  const grossTherms = (dwelling.baseTherms * Math.sqrt(sqFtRatio) + (people * 6) + heatingGasDelta + waterGasDelta + poolGasDelta) * gasSeasonMult;
-  const monthlyTherms = Math.max(4, Math.round(grossTherms));
-  const effectiveThermRate = profile.hasCareDiscount
-    ? region.thermRate * 0.80 // 20% CARE gas discount
-    : region.thermRate;
-  const naturalGasCost = Math.round(monthlyTherms * effectiveThermRate);
+  // 2. Natural Gas / Propane
+  const usesGas = hasAnyGasOrPropaneUsage(profile) && !profile.noGasOrPropane;
+  const grossTherms = usesGas
+    ? (dwelling.baseTherms * Math.sqrt(sqFtRatio) * envelopeMult + people * 5 + heatingGasDelta + waterGasDelta + applianceGasDelta + poolGasDelta) * gasSeasonMult
+    : 0;
+  const monthlyTherms = usesGas ? Math.max(4, Math.round(grossTherms)) : 0;
+  const effectiveThermRate = hasDiscount
+    ? local.thermRate * (1 - local.gasDiscountPct / 100)
+    : local.thermRate;
+  const naturalGasCost = usesGas ? Math.round(monthlyTherms * effectiveThermRate) : 0;
 
   // 3. Water, Sewer & Trash
-  // Avg ~70 gallons per person per day indoor + dwelling base irrigation
-  const monthlyWaterGallons = Math.round((dwelling.baseWaterGalPerDay + (people * 68)) * 30);
-  const waterUsageCost = (monthlyWaterGallons / 1000) * region.waterRatePer1000Gal;
-  const waterTrashTotalCost = Math.round(waterUsageCost + dwelling.baseTrashSewer);
+  const irrigationExtraGal =
+    profile.irrigationType === 'sprinklers'
+      ? (Number(profile.wateringDaysPerWeek) || 3) * 45
+      : profile.irrigationType === 'drip'
+        ? (Number(profile.wateringDaysPerWeek) || 3) * 18
+        : 0;
+  const monthlyWaterGallons = profile.noWaterSewer || profile.hasWell === 'yes'
+    ? 0
+    : Math.round((dwelling.baseWaterGalPerDay + people * 65 + irrigationExtraGal) * 30);
+  const waterUsageCost = (monthlyWaterGallons / 1000) * local.waterRatePer1000Gal;
+  const trashCost = profile.noTrashRecycling ? 0 : dwelling.baseTrashSewer;
+  const waterTrashTotalCost = Math.round(waterUsageCost + trashCost);
 
-  // 4. Vehicle Fleet Calculations (Gasoline + EV Home Charging + Free Public Charging)
+  // 4. Vehicle Fleet Calculations (uses existing vehicles without duplicating vehicle prompts)
   const vehicles = Array.isArray(profile.vehicles) ? profile.vehicles : [];
   let totalMonthlyGasCost = 0;
   let totalMonthlyEvHomeKwh = 0;
@@ -844,7 +1182,13 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
   let totalMonthlyCarPayments = 0;
   let totalMonthlyMaintenance = 0;
 
-  const vehicleBreakdowns = vehicles.map(v => {
+  const evHomeDisabled =
+    profile.evCount === '0' ||
+    profile.evHomeCharger === 'none_at_home' ||
+    profile.evHomeCharger === 'public_only' ||
+    profile.evChargingLocation === 'public_free';
+
+  const vehicleBreakdowns = vehicles.map((v) => {
     const miles = Math.max(0, Number(v.monthlyMiles) || 0);
     const ins = Math.max(0, Number(v.insuranceMonthly) || 110);
     const payment = v.ownership === 'owned' ? 0 : Math.max(0, Number(v.monthlyPayment) || 0);
@@ -852,17 +1196,14 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
     totalMonthlyCarPayments += payment;
 
     if (v.type === 'ev') {
-      // EV efficiency in kWh per 100 miles (default 28 kWh / 100 mi, ~3.5 mi/kWh)
       const kwhPer100 = Number(v.mpgOrEfficiency) > 10 && Number(v.mpgOrEfficiency) < 60 ? Number(v.mpgOrEfficiency) : 28;
       const totalKwhNeeded = (miles / 100) * kwhPer100;
       const freeShare = Math.min(100, Math.max(0, Number(v.freeChargingSharePercent) || 0)) / 100;
-      const paidHomeKwh = Math.round(totalKwhNeeded * (1 - freeShare));
+      const paidHomeKwh = evHomeDisabled ? 0 : Math.round(totalKwhNeeded * (1 - freeShare));
       const freeKwh = Math.round(totalKwhNeeded * freeShare);
       const chargingCost = Math.round(paidHomeKwh * effectiveEvRate);
-      const maintenance = Math.round(miles * 0.03); // Tire rotation, cabin filter, wiper fluid (~$28/mo, no oil changes)
-
-      // Compare what a 30 MPG gas car would cost for the same miles
-      const equivalentGasCost = Math.round((miles / 30) * region.avgGasPricePerGal);
+      const maintenance = Math.round(miles * 0.03);
+      const equivalentGasCost = Math.round((miles / 30) * local.avgGasPricePerGal);
       const monthlyFuelSavings = Math.max(0, equivalentGasCost - chargingCost);
 
       totalMonthlyEvHomeKwh += paidHomeKwh;
@@ -881,19 +1222,21 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
         monthlyFuelSavings,
         totalMonthlyVehicleCost: chargingCost + ins + payment + maintenance
       };
-    } else if (v.type === 'phev') {
-      // Plug-in hybrid: ~50% electric, ~50% gas
+    }
+
+    if (v.type === 'phev') {
       const mpg = Math.max(20, Number(v.mpgOrEfficiency) || 42);
       const gasMiles = miles * 0.5;
       const evMiles = miles * 0.5;
       const gallons = gasMiles / mpg;
-      const gasPrice = v.fuelGrade === 'premium'
-        ? region.avgGasPricePerGal + 0.50
-        : v.fuelGrade === 'diesel'
-          ? region.avgGasPricePerGal + 0.35
-          : region.avgGasPricePerGal;
+      const gasPrice =
+        v.fuelGrade === 'premium'
+          ? local.avgGasPricePerGal + 0.5
+          : v.fuelGrade === 'diesel'
+            ? local.avgGasPricePerGal + 0.35
+            : local.avgGasPricePerGal;
       const gasCost = Math.round(gallons * gasPrice);
-      const homeKwh = Math.round((evMiles / 100) * 30);
+      const homeKwh = evHomeDisabled ? 0 : Math.round((evMiles / 100) * 30);
       const evCost = Math.round(homeKwh * effectiveEvRate);
       const maintenance = Math.round(miles * 0.055);
 
@@ -912,76 +1255,94 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
         maintenance,
         totalMonthlyVehicleCost: gasCost + evCost + ins + payment + maintenance
       };
-    } else {
-      // Gas ICE or Standard Hybrid
-      const defaultMpg = v.type === 'hybrid' ? 48 : 28;
-      const mpg = Math.max(10, Number(v.mpgOrEfficiency) || defaultMpg);
-      const gallons = miles / mpg;
-      const gasPrice = v.fuelGrade === 'premium'
-        ? region.avgGasPricePerGal + 0.50
-        : v.fuelGrade === 'diesel'
-          ? region.avgGasPricePerGal + 0.35
-          : region.avgGasPricePerGal;
-      const gasCost = Math.round(gallons * gasPrice);
-      const maintenance = Math.round(miles * (v.type === 'hybrid' ? 0.05 : 0.075)); // Oil changes, brakes, belts, smog
-
-      // Calculate how much they would save switching this car to an EV (with 35% free charging + off-peak home rate)
-      const projectedEvKwh = (miles / 100) * 27 * 0.65;
-      const projectedEvCost = Math.round(projectedEvKwh * effectiveEvRate);
-      const potentialEvSwitchSavings = Math.max(0, (gasCost + maintenance) - (projectedEvCost + Math.round(miles * 0.03)));
-
-      totalMonthlyGasCost += gasCost;
-      totalMonthlyMaintenance += maintenance;
-
-      return {
-        ...v,
-        fuelGrade: v.fuelGrade || (v.type === 'hybrid' ? 'regular' : 'regular'),
-        ownership: v.ownership || (payment > 0 ? 'financed' : 'owned'),
-        monthlyFuelOrChargeCost: gasCost,
-        gallonsUsed: Math.round(gallons * 10) / 10,
-        maintenance,
-        potentialEvSwitchSavings,
-        totalMonthlyVehicleCost: gasCost + ins + payment + maintenance
-      };
     }
+
+    const defaultMpg = v.type === 'hybrid' ? 48 : 28;
+    const mpg = Math.max(10, Number(v.mpgOrEfficiency) || defaultMpg);
+    const gallons = miles / mpg;
+    const gasPrice =
+      v.fuelGrade === 'premium'
+        ? local.avgGasPricePerGal + 0.5
+        : v.fuelGrade === 'diesel'
+          ? local.avgGasPricePerGal + 0.35
+          : local.avgGasPricePerGal;
+    const gasCost = Math.round(gallons * gasPrice);
+    const maintenance = Math.round(miles * (v.type === 'hybrid' ? 0.05 : 0.075));
+    const projectedEvKwh = (miles / 100) * 27 * 0.65;
+    const projectedEvCost = Math.round(projectedEvKwh * effectiveEvRate);
+    const potentialEvSwitchSavings = Math.max(0, gasCost + maintenance - (projectedEvCost + Math.round(miles * 0.03)));
+
+    totalMonthlyGasCost += gasCost;
+    totalMonthlyMaintenance += maintenance;
+
+    return {
+      ...v,
+      fuelGrade: v.fuelGrade || 'regular',
+      ownership: v.ownership || (payment > 0 ? 'financed' : 'owned'),
+      monthlyFuelOrChargeCost: gasCost,
+      gallonsUsed: Math.round(gallons * 10) / 10,
+      maintenance,
+      potentialEvSwitchSavings,
+      totalMonthlyVehicleCost: gasCost + ins + payment + maintenance
+    };
   });
 
-  // If user selected 'never' for home charging, force home EV charging kWh and cost to 0
-  if (profile.hasEvAtHome === false || profile.evHomeChargingFrequency === 'never' || profile.evChargerType === 'no_charger') {
-    totalMonthlyEvHomeKwh = 0;
-    totalMonthlyEvHomeCost = 0;
+  // If user reported EV(s) in Household questionnaire but hasn't added vehicle cards yet
+  if (
+    !evHomeDisabled &&
+    (profile.evCount === '1' || profile.evCount === '2_plus') &&
+    totalMonthlyEvHomeKwh === 0
+  ) {
+    const countMult = profile.evCount === '2_plus' ? 2 : 1;
+    const locMult = profile.evChargingLocation === 'work' ? 0.35 : 0.9;
+    totalMonthlyEvHomeKwh = Math.round(280 * countMult * locMult);
+    totalMonthlyEvHomeCost = Math.round(totalMonthlyEvHomeKwh * effectiveEvRate);
   }
 
-  const totalPgeCombinedBill = homeElectricCost + naturalGasCost + totalMonthlyEvHomeCost;
-  const totalUtilitiesMonthly = totalPgeCombinedBill + waterTrashTotalCost;
-  const totalFleetMonthly = totalMonthlyGasCost + totalMonthlyEvHomeCost + totalMonthlyInsurance + totalMonthlyCarPayments + totalMonthlyMaintenance;
+  const totalCombinedEnergyBill = homeElectricCost + naturalGasCost + totalMonthlyEvHomeCost;
+  const totalUtilitiesMonthly = totalCombinedEnergyBill + waterTrashTotalCost;
+  const totalFleetMonthly =
+    totalMonthlyGasCost + totalMonthlyEvHomeCost + totalMonthlyInsurance + totalMonthlyCarPayments + totalMonthlyMaintenance;
 
-  // Potential CARE discount savings if not yet enrolled
-  const careMonthlySavingsPotential = !profile.hasCareDiscount
-    ? Math.round((homeElectricCost + totalMonthlyEvHomeCost) * (region.careDiscountPercent / 100) + naturalGasCost * 0.20)
-    : Math.round(((homeElectricCost + totalMonthlyEvHomeCost) / (1 - region.careDiscountPercent / 100)) * (region.careDiscountPercent / 100));
+  const discountMonthlySavingsPotential = !hasDiscount
+    ? Math.round((homeElectricCost + totalMonthlyEvHomeCost) * (local.electricDiscountPct / 100) + naturalGasCost * (local.gasDiscountPct / 100))
+    : Math.round(((homeElectricCost + totalMonthlyEvHomeCost) / (1 - local.electricDiscountPct / 100)) * (local.electricDiscountPct / 100));
 
-  // Solar suite details
   const solar = {
-    hasSolar: Boolean(profile.hasSolar),
+    hasSolar,
     panelCount: solarPanelCount,
     wattsPerPanel: solarWattsPerPanel,
     systemSizeKw: solarSystemKw,
     peakSunHours: solarPeakSunHours,
     monthlyKwhEstimate: solarMonthlyKwh,
-    ownership: profile.solarOwnership || 'owned',
-    monthlyPayment: profile.solarOwnership !== 'owned' ? (Number(profile.solarMonthlyPayment) || 0) : 0,
-    billingPlan: profile.solarBillingPlan || 'nem_2',
-    yearInstalled: profile.solarYearInstalled || 2021,
-    hasBattery: Boolean(profile.hasSolarBattery),
-    batteryModel: profile.solarBatteryModel || 'Tesla Powerwall 2',
-    batteryKwh: Number(profile.solarBatteryKwh) || 13.5,
-    batteryMode: profile.solarBatteryMode || 'self_consumption'
+    ownership: profile.solarOwnership || null,
+    monthlyPayment:
+      hasSolar && ['loan', 'leased', 'ppa'].includes(profile.solarOwnership)
+        ? Number(profile.solarMonthlyPayment) || 0
+        : 0,
+    billingPlan: profile.solarBillingPlan || null,
+    yearInstalled: profile.solarYearInstalled || null,
+    hasBattery: profile.hasSolarBattery === 'yes',
+    batteryKwh: profile.solarBatteryKwh != null ? Number(profile.solarBatteryKwh) : null,
+    batteryUse: profile.solarBatteryUse || null
+  };
+
+  const region = {
+    id: local.regionId,
+    name: local.regionName,
+    electricProvider: local.primaryElectricUtility,
+    standardRateKwh: local.standardRateKwh,
+    evOffPeakRateKwh: local.evOffPeakRateKwh,
+    thermRate: local.thermRate,
+    waterRatePer1000Gal: local.waterRatePer1000Gal,
+    avgGasPricePerGal: local.avgGasPricePerGal,
+    discountProgram: local.discountProgram
   };
 
   return {
     dwelling,
     region,
+    localUtility: local,
     people,
     sqFt,
     solar,
@@ -996,11 +1357,12 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
       evHomeChargingCost: totalMonthlyEvHomeCost,
       monthlyTherms,
       naturalGasCost,
-      totalPgeCombinedBill,
+      totalPgeCombinedBill: totalCombinedEnergyBill,
       monthlyWaterGallons,
       waterTrashTotalCost,
       totalUtilitiesMonthly,
-      careMonthlySavingsPotential
+      careMonthlySavingsPotential: discountMonthlySavingsPotential,
+      discountProgramName: local.discountProgram
     },
     fleet: {
       vehicles: vehicleBreakdowns,
@@ -1012,6 +1374,49 @@ export function calculateHouseholdAndFleetMetrics(profile = DEFAULT_HOUSEHOLD_PR
       totalFleetMonthly,
       totalPotentialEvSwitchSavings: vehicleBreakdowns.reduce((sum, v) => sum + (v.potentialEvSwitchSavings || 0), 0)
     }
+  };
+}
+
+/**
+ * Builds an anonymized, summary-only snapshot for the AI Advisor.
+ * Should only be called/attached when the user enables Household AI permission.
+ */
+export function buildHouseholdAiSummary(rawProfile = {}, metrics = null, userBills = []) {
+  const p = migrateHouseholdProfile(rawProfile);
+  const m = metrics || calculateHouseholdAndFleetMetrics(p);
+  const breakdown = calculateHomeCostBreakdown(p, m, userBills);
+  const costTotals = summarizeHomeCosts(breakdown);
+  const completeness = calculateProfileCompleteness(p);
+  const reminders = generateHouseholdReminders(p);
+  const syncable = buildSyncableBills(p, userBills);
+
+  return {
+    location: [p.city, p.state].filter(Boolean).join(', ') || 'Location not set',
+    ownership: formatHouseholdLabel('ownership', p.ownership),
+    homeType: formatHouseholdLabel('homeType', p.homeType),
+    specs: {
+      bedrooms: p.bedrooms,
+      bathrooms: p.bathrooms,
+      sqFt: p.sqFt,
+      yearBuilt: p.yearBuilt
+    },
+    systems: {
+      heating: formatHouseholdLabel('heating', p.heating),
+      cooling: formatHouseholdLabel('cooling', p.cooling),
+      waterHeater: formatHouseholdLabel('waterHeater', p.waterHeater),
+      solar: p.hasSolar === 'yes' ? `${m.solar.systemSizeKw} kW (${formatHouseholdLabel('solarOwnership', p.solarOwnership)})` : formatHouseholdLabel('yesNoNotSure', p.hasSolar),
+      evCount: formatHouseholdLabel('evCount', p.evCount),
+      poolOrSpa: formatHouseholdLabel('poolOrSpa', p.poolOrSpa)
+    },
+    estimatedMonthlyHomeCost: Math.round(costTotals.totalMonthly),
+    costSources: {
+      verified: Math.round(costTotals.verified),
+      userEntered: Math.round(costTotals.userEntered),
+      estimated: Math.round(costTotals.estimated)
+    },
+    completenessPercent: completeness.percent,
+    syncedBillsCount: syncable.filter((b) => b.alreadySynced).length,
+    upcomingReminders: reminders.slice(0, 5).map((r) => ({ title: r.title, detail: r.detail, urgency: r.urgency }))
   };
 }
 

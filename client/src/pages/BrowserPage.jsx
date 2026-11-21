@@ -36,10 +36,13 @@ import {
   Download,
   FolderOpen,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Calculator,
+  MoreVertical
 } from 'lucide-react';
 import { Button, Card } from '../components/ui';
 import { NewTabPage } from '../components/NewTabPage';
+import { BrowserCalculatorPopover } from '../components/BrowserCalculatorPopover';
 import {
   buildYouTubeAdShieldScript,
   buildSponsorBlockScript,
@@ -224,6 +227,14 @@ export function BrowserPage({
   const downloadsPopoverRef = useRef(null);
   const isDownloadsPopoverOpenRef = useRef(false);
   const knownCompletedIdsRef = useRef(new Set());
+
+  // Built-in Local Calculator & Overflow Toolbar State
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
+  const calculatorPopoverRef = useRef(null);
+  const [isOverflowMenuOpen, setIsOverflowMenuOpen] = useState(false);
+  const overflowMenuRef = useRef(null);
+  const isAnyToolbarPopoverOpen =
+    isCalculatorOpen || isAdBlockPopoverOpen || isDownloadsPopoverOpen || isOverflowMenuOpen;
 
   // Dedicated In-Browser AI Sidebar State (Self-contained, doesn't open global app advisor)
   const [isBrowserAiSidebarOpen, setIsBrowserAiSidebarOpen] = useState(false);
@@ -684,10 +695,20 @@ export function BrowserPage({
     } catch {}
   };
 
+  const closeToolbarPopovers = () => {
+    setIsCalculatorOpen(false);
+    setIsAdBlockPopoverOpen(false);
+    setIsDownloadsPopoverOpen(false);
+    setIsOverflowMenuOpen(false);
+  };
+
   const handleToggleDownloadsPopover = () => {
     const nextOpen = !isDownloadsPopoverOpen;
     setIsDownloadsPopoverOpen(nextOpen);
     if (nextOpen) {
+      setIsCalculatorOpen(false);
+      setIsAdBlockPopoverOpen(false);
+      setIsOverflowMenuOpen(false);
       setHasUnseenDownload(false);
       refreshBrowserDownloads();
     }
@@ -745,6 +766,12 @@ export function BrowserPage({
       if (adBlockPopoverRef.current && !adBlockPopoverRef.current.contains(e.target)) {
         setIsAdBlockPopoverOpen(false);
       }
+      if (calculatorPopoverRef.current && !calculatorPopoverRef.current.contains(e.target)) {
+        setIsCalculatorOpen(false);
+      }
+      if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target)) {
+        setIsOverflowMenuOpen(false);
+      }
       if (downloadsPopoverRef.current && !downloadsPopoverRef.current.contains(e.target)) {
         setIsDownloadsPopoverOpen(false);
       }
@@ -769,7 +796,10 @@ export function BrowserPage({
         setTabContextMenu(null);
         setEditingGroupId(null);
         setIsAiPopoverOpen(false);
+        setIsCalculatorOpen(false);
+        setIsAdBlockPopoverOpen(false);
         setIsDownloadsPopoverOpen(false);
+        setIsOverflowMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -1910,23 +1940,23 @@ export function BrowserPage({
       )}
 
       {/* 1. TOP BROWSER CONTROLS & SMART ADDRESS BAR */}
-      <div className="shrink-0 bg-[var(--surface)] border-b border-[var(--line)] px-4 py-2 flex flex-col gap-2 shadow-2xs relative z-30">
-        <div className="flex items-center gap-2">
-          {/* Navigation Buttons: Back, Forward, Reload, Home (optional) */}
-          <div className="flex items-center gap-1">
+      <div className="shrink-0 bg-[var(--surface)] border-b border-[var(--line)] px-3 sm:px-4 py-2 flex flex-col gap-2 shadow-2xs relative z-50">
+        <div className="flex items-center gap-1.5">
+          {/* Navigation Buttons: Back, Forward, Reload, Home */}
+          <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
               onClick={handleBack}
               disabled={!activeTab?.canGoBack}
               aria-label="Back"
               title="Back"
-              className={`p-1.5 rounded-lg border border-[var(--line)] transition-colors ${
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
                 activeTab?.canGoBack
                   ? 'hover:bg-[var(--surface-subtle)] text-[var(--ink)] cursor-pointer'
                   : 'opacity-40 cursor-not-allowed text-[var(--muted)]'
               }`}
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-[18px] h-[18px]" />
             </button>
             <button
               type="button"
@@ -1934,22 +1964,22 @@ export function BrowserPage({
               disabled={!activeTab?.canGoForward}
               aria-label="Forward"
               title="Forward"
-              className={`p-1.5 rounded-lg border border-[var(--line)] transition-colors ${
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
                 activeTab?.canGoForward
                   ? 'hover:bg-[var(--surface-subtle)] text-[var(--ink)] cursor-pointer'
                   : 'opacity-40 cursor-not-allowed text-[var(--muted)]'
               }`}
             >
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-[18px] h-[18px]" />
             </button>
             <button
               type="button"
               onClick={() => handleReload(activeTabId)}
               aria-label={activeTab?.isLoading ? 'Stop loading' : 'Reload page'}
               title={activeTab?.isLoading ? 'Stop loading' : 'Reload page'}
-              className="p-1.5 rounded-lg border border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--ink)] transition-colors cursor-pointer"
+              className="w-9 h-9 rounded-lg flex items-center justify-center hover:bg-[var(--surface-subtle)] text-[var(--ink)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2"
             >
-              <RotateCw className={`w-4 h-4 ${activeTab?.isLoading ? 'animate-spin text-[var(--brand)]' : ''}`} />
+              <RotateCw className={`w-[18px] h-[18px] ${activeTab?.isLoading ? 'animate-spin text-[var(--brand)]' : ''}`} />
             </button>
             {browserSettings?.showHomeButton !== false && (
               <button
@@ -1957,21 +1987,88 @@ export function BrowserPage({
                 onClick={handleHome}
                 aria-label="Browser Home"
                 title="Home"
-                className="p-1.5 rounded-lg border border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--ink)] transition-colors cursor-pointer"
+                className="w-9 h-9 rounded-lg flex items-center justify-center hover:bg-[var(--surface-subtle)] text-[var(--ink)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2"
               >
-                <Home className="w-4 h-4" />
+                <Home className="w-[18px] h-[18px]" />
               </button>
             )}
           </div>
 
-          {/* Smart Address & Search Input */}
+          {/* Smart Address & Search Input with Protection Shield inside left edge */}
           <form onSubmit={handleUrlSubmit} className="flex-1 flex items-center min-w-0">
-            <div className="flex-1 flex items-center gap-2.5 px-4 py-2 rounded-full bg-[var(--surface-subtle)] border border-[var(--line)] focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/20 transition-all min-h-[38px]">
+            <div className="flex-1 flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full bg-[var(--surface-subtle)] border border-[var(--line)] focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/20 transition-all min-h-[38px] min-w-0">
+              {/* Protection Shield Inside Left Edge */}
+              <div className="relative shrink-0" ref={adBlockPopoverRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !isAdBlockPopoverOpen;
+                    closeToolbarPopovers();
+                    setIsAdBlockPopoverOpen(next);
+                  }}
+                  aria-label={adBlockEnabled ? `Ad & Tracker Protection on (${adsBlockedCount} blocked)` : 'Ad & Tracker Protection off'}
+                  title={adBlockEnabled ? `Protection on (${adsBlockedCount} blocked)` : 'Protection off'}
+                  aria-expanded={isAdBlockPopoverOpen}
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-[var(--surface-hover)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2"
+                >
+                  {adBlockEnabled ? (
+                    <ShieldCheck className="w-[18px] h-[18px] text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <ShieldAlert className="w-[18px] h-[18px] text-[var(--muted)]" />
+                  )}
+                </button>
+
+                {isAdBlockPopoverOpen && (
+                  <div className="absolute left-0 top-full mt-2 w-72 p-3.5 bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-xl z-50 flex flex-col gap-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-[var(--line)]">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className={`w-4 h-4 ${adBlockEnabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--muted)]'}`} />
+                        <span className="text-xs font-bold text-[var(--ink)]">Klarity Ad Blocker</span>
+                      </div>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                          adBlockEnabled
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                        }`}
+                      >
+                        {adBlockEnabled ? 'ACTIVE' : 'PAUSED'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between bg-[var(--surface-subtle)] p-2.5 rounded-xl border border-[var(--line)]">
+                      <span className="text-xs font-medium text-[var(--ink)]">Blocked</span>
+                      <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{adsBlockedCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleToggleAdBlock}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                          adBlockEnabled
+                            ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950/30 dark:border-rose-800 dark:text-rose-300'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        }`}
+                      >
+                        {adBlockEnabled ? 'Pause' : 'Enable'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleResetAdBlockCount}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)] cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {(activeTab?.url || '').startsWith('https://') ? (
-                <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" title="Secure connection (HTTPS)" />
+                <Lock className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" title="Secure connection (HTTPS)" />
               ) : (
-                <Globe className="w-4 h-4 text-[var(--muted)] shrink-0" />
+                <Globe className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
               )}
+
               <input
                 ref={urlInputRef}
                 type="text"
@@ -1979,7 +2076,8 @@ export function BrowserPage({
                 onChange={(e) => setUrlInput(e.target.value)}
                 onFocus={(e) => e.target.select()}
                 placeholder="Search or enter web address"
-                className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-sm text-[var(--ink)] placeholder-[var(--muted)] min-w-0 font-medium px-2 py-0.5 leading-normal rounded-full"
+                aria-label="Address bar"
+                className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-sm text-[var(--ink)] placeholder-[var(--muted)] min-w-0 font-medium px-1.5 py-0.5 leading-normal rounded-full"
                 style={{ outline: 'none', boxShadow: 'none', border: 'none', background: 'transparent' }}
               />
               {urlInput && (
@@ -1987,6 +2085,7 @@ export function BrowserPage({
                   type="button"
                   onClick={() => setUrlInput('')}
                   aria-label="Clear URL"
+                  title="Clear address"
                   className="p-1 rounded-full hover:bg-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -1995,76 +2094,40 @@ export function BrowserPage({
             </div>
           </form>
 
-          {/* Ad Blocker Status & Popover */}
-          <div className="relative shrink-0" ref={adBlockPopoverRef}>
-            <button
-              type="button"
-              onClick={() => setIsAdBlockPopoverOpen((prev) => !prev)}
-              aria-label={adBlockEnabled ? `Ad & Tracker Blocker (${adsBlockedCount} blocked)` : 'Ad & Tracker Blocker (Paused)'}
-              title={adBlockEnabled ? `Ad & Tracker Blocker (${adsBlockedCount} blocked)` : 'Ad & Tracker Blocker (Paused)'}
-              className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-center ${
-                adBlockEnabled
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/60'
-                  : 'border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)]'
-              }`}
-            >
-              {adBlockEnabled ? (
-                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              ) : (
-                <ShieldAlert className="w-4 h-4 text-amber-600" />
+          {/* Divider after address bar */}
+          <div className="w-px h-5 bg-[var(--line)] mx-0.5 shrink-0" aria-hidden="true" />
+
+          {/* Group 1: Calculator & Notes */}
+          <div className="flex items-center gap-1 shrink-0">
+            <div className="relative shrink-0" ref={calculatorPopoverRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !isCalculatorOpen;
+                  closeToolbarPopovers();
+                  setIsCalculatorOpen(next);
+                }}
+                aria-label="Calculator"
+                title="Calculator"
+                aria-expanded={isCalculatorOpen}
+                className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
+                  isCalculatorOpen
+                    ? 'bg-[var(--brand)] text-[var(--brand-ink)]'
+                    : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                }`}
+              >
+                <Calculator className="w-[18px] h-[18px]" />
+              </button>
+
+              {isCalculatorOpen && (
+                <BrowserCalculatorPopover onClose={() => setIsCalculatorOpen(false)} />
               )}
-            </button>
+            </div>
 
-            {isAdBlockPopoverOpen && (
-              <div className="absolute right-0 top-full mt-2 w-72 p-3.5 bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-xl z-50 flex flex-col gap-3">
-                <div className="flex items-center justify-between pb-2 border-b border-[var(--line)]">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    <span className="text-xs font-bold text-[var(--ink)]">Klarity Ad Blocker</span>
-                  </div>
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                      adBlockEnabled
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
-                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                    }`}
-                  >
-                    {adBlockEnabled ? 'ACTIVE' : 'PAUSED'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between bg-[var(--surface-subtle)] p-2.5 rounded-xl border border-[var(--line)]">
-                  <span className="text-xs font-medium text-[var(--ink)]">Blocked</span>
-                  <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{adsBlockedCount}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleToggleAdBlock}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                      adBlockEnabled
-                        ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950/30 dark:border-rose-800 dark:text-rose-300'
-                        : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                    }`}
-                  >
-                    {adBlockEnabled ? 'Pause' : 'Enable'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleResetAdBlockCount}
-                    className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)] cursor-pointer"
-                  >
-                    Reset
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Quick Notes Button (Clicking anywhere opens directly to last saved layout) */}
-          <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => {
+                closeToolbarPopovers();
                 if (isNotesVisible) {
                   handleCloseNotes();
                 } else {
@@ -2076,23 +2139,269 @@ export function BrowserPage({
                   setTimeout(() => browserNotesRef.current?.focus(), 50);
                 }
               }}
-              className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-center shrink-0 ${
+              aria-label="Notes"
+              title="Notes"
+              aria-pressed={isNotesVisible}
+              className={`hidden md:flex w-9 h-9 rounded-lg items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
                 isNotesVisible
-                  ? 'bg-amber-500 text-white border-amber-500'
-                  : 'border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)]'
+                  ? 'bg-[var(--brand)] text-[var(--brand-ink)]'
+                  : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
               }`}
-              title={isNotesVisible ? 'Close Quick Notes' : 'Open Quick Notes'}
-              aria-label="Quick Notes"
             >
-              <StickyNote className={`w-4 h-4 ${isNotesVisible ? 'text-white' : 'text-amber-500'}`} />
+              <StickyNote className="w-[18px] h-[18px]" />
             </button>
           </div>
 
-          {/* In-Browser AI Copilot Sidebar Toggle Button */}
-          <div className="relative shrink-0">
+          {/* Divider before Downloads & Advisor (hidden on narrow windows where Notes/Downloads collapse) */}
+          <div className="hidden md:block w-px h-5 bg-[var(--line)] mx-0.5 shrink-0" aria-hidden="true" />
+
+          {/* Group 2: Downloads & AI Advisor */}
+          <div className="flex items-center gap-1 shrink-0">
+            <div className="relative shrink-0" ref={downloadsPopoverRef}>
+              <button
+                type="button"
+                onClick={handleToggleDownloadsPopover}
+                aria-label={activeDownloads.length > 0 ? `Downloads (${activeDownloads.length} active)` : 'Downloads'}
+                title={activeDownloads.length > 0 ? `Downloads (${activeDownloads.length} active)` : 'Downloads'}
+                aria-expanded={isDownloadsPopoverOpen}
+                className={`hidden md:flex relative w-9 h-9 rounded-lg items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
+                  isDownloadsPopoverOpen
+                    ? 'bg-[var(--brand)] text-[var(--brand-ink)]'
+                    : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                }`}
+              >
+                <Download className="w-[18px] h-[18px]" />
+                {activeDownloads.length > 0 && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[var(--brand)] ring-2 ring-[var(--surface)]"
+                  />
+                )}
+              </button>
+
+              {isDownloadsPopoverOpen && (
+                <div className="absolute right-[-68px] md:right-0 top-full mt-2 w-80 sm:w-96 max-w-[calc(100vw-24px)] bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-xl z-50 overflow-hidden flex flex-col">
+                  <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-[var(--line)] bg-[var(--surface-subtle)]/50">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Download className="w-4 h-4 text-[var(--brand)] shrink-0" />
+                      <span className="text-xs font-bold text-[var(--ink)]">Downloads</span>
+                      {browserDownloads.length > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-[var(--surface-subtle)] border border-[var(--line)] text-[var(--muted)]">
+                          {browserDownloads.length}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {isDesktop && (
+                        <button
+                          type="button"
+                          onClick={handleOpenDownloadsFolder}
+                          title="Open downloads folder"
+                          aria-label="Open downloads folder"
+                          className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
+                        >
+                          <FolderOpen className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {hasFinishedDownloads && (
+                        <button
+                          type="button"
+                          onClick={handleClearDownloads}
+                          className="px-2 py-1 rounded-lg text-[11px] font-medium hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {!isDesktop ? (
+                    <div className="p-5 text-center text-xs text-[var(--muted)]">
+                      Browser downloads are saved and managed inside the Klarity desktop app.
+                    </div>
+                  ) : browserDownloads.length === 0 ? (
+                    <div className="p-6 flex flex-col items-center text-center gap-2">
+                      <div className="w-9 h-9 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] flex items-center justify-center text-[var(--muted)]">
+                        <Download className="w-4 h-4" />
+                      </div>
+                      <div className="text-xs font-semibold text-[var(--ink)]">No downloads yet</div>
+                      <p className="text-[11px] text-[var(--muted)] leading-relaxed">
+                        Files you download while browsing will appear here for quick access.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleOpenDownloadsFolder}
+                        className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--ink)] transition-colors cursor-pointer"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5 text-[var(--brand)]" />
+                        <span>Open Downloads Folder</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="max-h-80 overflow-y-auto divide-y divide-[var(--line)]">
+                      {browserDownloads.map((item) => {
+                        const isActiveItem = item.state === 'progressing' || item.state === 'paused';
+                        const isCompletedItem = item.state === 'completed';
+                        const isMissingFile = isCompletedItem && item.exists === false;
+                        const isFailedItem = item.state === 'interrupted' || item.state === 'cancelled';
+                        const itemPct =
+                          item.totalBytes > 0
+                            ? Math.min(100, Math.round(((item.receivedBytes || 0) / item.totalBytes) * 100))
+                            : null;
+
+                        const subtitleText = isActiveItem
+                          ? `${formatDownloadBytes(item.receivedBytes)}${
+                              item.totalBytes > 0
+                                ? ` / ${formatDownloadBytes(item.totalBytes)}${itemPct != null ? ` (${itemPct}%)` : ''}`
+                                : ''
+                            }${item.state === 'paused' ? ' • Paused' : ''}`
+                          : isMissingFile
+                          ? ['File moved or deleted', formatDownloadTime(item.completedAt || item.startedAt)]
+                              .filter(Boolean)
+                              .join(' • ')
+                          : isFailedItem
+                          ? [
+                              item.state === 'cancelled' ? 'Cancelled' : 'Download interrupted',
+                              item.totalBytes > 0
+                                ? `${formatDownloadBytes(item.receivedBytes)} / ${formatDownloadBytes(item.totalBytes)}`
+                                : null
+                            ]
+                              .filter(Boolean)
+                              .join(' • ')
+                          : [
+                              item.totalBytes > 0 || item.receivedBytes > 0
+                                ? formatDownloadBytes(item.totalBytes || item.receivedBytes)
+                                : null,
+                              formatDownloadHost(item.url),
+                              formatDownloadTime(item.completedAt || item.startedAt)
+                            ]
+                              .filter(Boolean)
+                              .join(' • ');
+
+                        return (
+                          <div
+                            key={item.id}
+                            className="group px-3.5 py-2.5 flex items-start gap-2.5 hover:bg-[var(--surface-subtle)]/50 transition-colors"
+                          >
+                            <div
+                              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                                isActiveItem
+                                  ? 'bg-[var(--brand-soft)] border-[var(--brand)]/30 text-[var(--brand)]'
+                                  : isCompletedItem && !isMissingFile
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-600 dark:text-emerald-400'
+                                  : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60 text-rose-500'
+                              }`}
+                            >
+                              {isActiveItem ? (
+                                <Download className="w-4 h-4 animate-pulse" />
+                              ) : isCompletedItem && !isMissingFile ? (
+                                <FileText className="w-4 h-4" />
+                              ) : (
+                                <AlertCircle className="w-4 h-4" />
+                              )}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              {isCompletedItem && !isMissingFile ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenDownloadItem(item)}
+                                  title={`Open ${item.filename}`}
+                                  className="block w-full text-left text-xs font-semibold text-[var(--ink)] hover:text-[var(--brand)] truncate cursor-pointer"
+                                >
+                                  {item.filename}
+                                </button>
+                              ) : (
+                                <div
+                                  title={item.filename}
+                                  className={`text-xs font-semibold truncate ${
+                                    isMissingFile || isFailedItem
+                                      ? 'text-[var(--muted)] line-through'
+                                      : 'text-[var(--ink)]'
+                                  }`}
+                                >
+                                  {item.filename}
+                                </div>
+                              )}
+
+                              {subtitleText && (
+                                <div className="text-[11px] text-[var(--muted)] truncate mt-0.5">
+                                  {subtitleText}
+                                </div>
+                              )}
+
+                              {isActiveItem && (
+                                <div className="mt-1.5 h-1.5 w-full rounded-full bg-[var(--surface-subtle)] overflow-hidden">
+                                  <div
+                                    className={`h-full bg-[var(--brand)] transition-all duration-150 ${
+                                      itemPct == null ? 'w-1/2 animate-pulse' : ''
+                                    }`}
+                                    style={itemPct != null ? { width: `${itemPct}%` } : undefined}
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
+                              {isActiveItem ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelDownloadItem(item.id)}
+                                  title="Cancel download"
+                                  aria-label={`Cancel ${item.filename}`}
+                                  className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 text-[var(--muted)] hover:text-rose-600 transition-colors cursor-pointer"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                <>
+                                  {isCompletedItem && !isMissingFile && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenDownloadItem(item)}
+                                        title="Open file"
+                                        aria-label={`Open ${item.filename}`}
+                                        className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--brand)] transition-colors cursor-pointer"
+                                      >
+                                        <ExternalLink className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleShowDownloadInFolder(item)}
+                                        title="Show in folder"
+                                        aria-label={`Show ${item.filename} in folder`}
+                                        className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
+                                      >
+                                        <FolderOpen className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveDownloadItem(item.id)}
+                                    title="Remove from list"
+                                    aria-label={`Remove ${item.filename} from downloads list`}
+                                    className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 text-[var(--muted)] hover:text-rose-600 transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={() => {
+                closeToolbarPopovers();
                 const nextState = !isBrowserAiSidebarOpen;
                 setIsBrowserAiSidebarOpen(nextState);
                 if (nextState) {
@@ -2104,275 +2413,133 @@ export function BrowserPage({
                   }
                 }
               }}
-              className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-center shrink-0 ${
+              aria-label="Browser AI Advisor"
+              title="Browser AI Advisor"
+              aria-pressed={isBrowserAiSidebarOpen}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
                 isBrowserAiSidebarOpen
-                  ? 'bg-[var(--brand)] text-white border-[var(--brand)]'
-                  : 'border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)]'
+                  ? 'bg-[var(--brand)] text-[var(--brand-ink)]'
+                  : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
               }`}
-              title={isBrowserAiSidebarOpen ? 'Close AI Sidebar' : 'Open Browser AI Copilot'}
-              aria-label="Browser AI"
             >
-              <Sparkles className={`w-4 h-4 ${isBrowserAiSidebarOpen ? 'text-white' : 'text-[var(--brand)]'}`} />
+              <Sparkles className="w-[18px] h-[18px]" />
             </button>
           </div>
 
-          {/* Browser Downloads Button & Popover */}
-          <div className="relative shrink-0" ref={downloadsPopoverRef}>
+          {/* Divider before Browser Settings */}
+          {typeof onOpenBrowserSettings === 'function' && (
+            <div className="hidden md:block w-px h-5 bg-[var(--line)] mx-0.5 shrink-0" aria-hidden="true" />
+          )}
+
+          {/* Browser Settings (Desktop >= md) */}
+          {typeof onOpenBrowserSettings === 'function' && (
             <button
               type="button"
-              onClick={handleToggleDownloadsPopover}
-              aria-label={activeDownloads.length > 0 ? `Downloads (${activeDownloads.length} in progress)` : 'Downloads'}
-              title={activeDownloads.length > 0 ? `Downloading (${activeDownloads.length})...` : 'Downloads'}
-              className={`relative p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                isDownloadsPopoverOpen
-                  ? 'bg-[var(--brand)] text-white border-[var(--brand)]'
-                  : activeDownloads.length > 0
-                  ? 'bg-[var(--brand-soft)] border-[var(--brand)]/40 text-[var(--brand)] hover:bg-[var(--surface-hover)]'
-                  : 'border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)]'
+              onClick={() => {
+                closeToolbarPopovers();
+                onOpenBrowserSettings();
+              }}
+              aria-label="Browser settings"
+              title="Browser settings"
+              className="hidden md:flex w-9 h-9 rounded-lg items-center justify-center hover:bg-[var(--surface-subtle)] text-[var(--ink)] transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2"
+            >
+              <SettingsIcon className="w-[18px] h-[18px]" />
+            </button>
+          )}
+
+          {/* Overflow Menu for Narrow Windows (< md) keeping Calculator & Advisor visible longest */}
+          <div className="relative shrink-0 md:hidden" ref={overflowMenuRef}>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !isOverflowMenuOpen;
+                closeToolbarPopovers();
+                setIsOverflowMenuOpen(next);
+              }}
+              aria-label="More browser actions"
+              title="More options"
+              aria-expanded={isOverflowMenuOpen}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
+                isOverflowMenuOpen
+                  ? 'bg-[var(--brand)] text-[var(--brand-ink)]'
+                  : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
               }`}
             >
-              <Download className={`w-4 h-4 ${activeDownloads.length > 0 ? 'animate-pulse' : ''}`} />
-              {activeProgressPct != null && (
-                <span className="absolute inset-x-1 bottom-0.5 h-0.5 rounded-full bg-black/10 dark:bg-white/15 overflow-hidden">
-                  <span className="block h-full bg-current transition-all duration-150" style={{ width: `${activeProgressPct}%` }} />
-                </span>
-              )}
-              {hasUnseenDownload && activeDownloads.length === 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--surface)]" />
+              <MoreVertical className="w-[18px] h-[18px]" />
+              {activeDownloads.length > 0 && !isOverflowMenuOpen && (
+                <span
+                  aria-hidden="true"
+                  className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[var(--brand)] ring-2 ring-[var(--surface)]"
+                />
               )}
             </button>
 
-            {isDownloadsPopoverOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-xl z-50 overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-[var(--line)] bg-[var(--surface-subtle)]/50">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Download className="w-4 h-4 text-[var(--brand)] shrink-0" />
-                    <span className="text-xs font-bold text-[var(--ink)]">Downloads</span>
-                    {browserDownloads.length > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-[var(--surface-subtle)] border border-[var(--line)] text-[var(--muted)]">
-                        {browserDownloads.length}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {isDesktop && (
-                      <button
-                        type="button"
-                        onClick={handleOpenDownloadsFolder}
-                        title="Open downloads folder"
-                        aria-label="Open downloads folder"
-                        className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
-                      >
-                        <FolderOpen className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    {hasFinishedDownloads && (
-                      <button
-                        type="button"
-                        onClick={handleClearDownloads}
-                        className="px-2 py-1 rounded-lg text-[11px] font-medium hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                </div>
+            {isOverflowMenuOpen && (
+              <div
+                role="menu"
+                aria-label="More browser actions"
+                className="absolute right-0 top-full mt-2 w-52 bg-[var(--surface)] border border-[var(--line)] rounded-xl shadow-xl z-50 py-1.5 flex flex-col"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsOverflowMenuOpen(false);
+                    if (isNotesVisible) {
+                      handleCloseNotes();
+                    } else {
+                      setIsNotesOpen(true);
+                      setHomepageNotesDismissed(false);
+                      if (notesDisplayMode === 'sidebar') setIsBrowserAiSidebarOpen(false);
+                      setTimeout(() => browserNotesRef.current?.focus(), 50);
+                    }
+                  }}
+                  className="px-3.5 py-2 text-left text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <StickyNote className="w-[18px] h-[18px] text-[var(--muted)]" />
+                    <span>Notes</span>
+                  </span>
+                  {isNotesVisible && <Check className="w-3.5 h-3.5 text-[var(--brand)]" />}
+                </button>
 
-                {!isDesktop ? (
-                  <div className="p-5 text-center text-xs text-[var(--muted)]">
-                    Browser downloads are saved and managed inside the Klarity desktop app.
-                  </div>
-                ) : browserDownloads.length === 0 ? (
-                  <div className="p-6 flex flex-col items-center text-center gap-2">
-                    <div className="w-9 h-9 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] flex items-center justify-center text-[var(--muted)]">
-                      <Download className="w-4 h-4" />
-                    </div>
-                    <div className="text-xs font-semibold text-[var(--ink)]">No downloads yet</div>
-                    <p className="text-[11px] text-[var(--muted)] leading-relaxed">
-                      Files you download while browsing will appear here for quick access.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleOpenDownloadsFolder}
-                      className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--ink)] transition-colors cursor-pointer"
-                    >
-                      <FolderOpen className="w-3.5 h-3.5 text-[var(--brand)]" />
-                      <span>Open Downloads Folder</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="max-h-80 overflow-y-auto divide-y divide-[var(--line)]">
-                    {browserDownloads.map((item) => {
-                      const isActiveItem = item.state === 'progressing' || item.state === 'paused';
-                      const isCompletedItem = item.state === 'completed';
-                      const isMissingFile = isCompletedItem && item.exists === false;
-                      const isFailedItem = item.state === 'interrupted' || item.state === 'cancelled';
-                      const itemPct =
-                        item.totalBytes > 0
-                          ? Math.min(100, Math.round(((item.receivedBytes || 0) / item.totalBytes) * 100))
-                          : null;
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsOverflowMenuOpen(false);
+                    setIsDownloadsPopoverOpen(true);
+                    setHasUnseenDownload(false);
+                    refreshBrowserDownloads();
+                  }}
+                  className="px-3.5 py-2 text-left text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Download className="w-[18px] h-[18px] text-[var(--muted)]" />
+                    <span>Downloads</span>
+                  </span>
+                  {activeDownloads.length > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-[var(--brand)]" />
+                  )}
+                </button>
 
-                      const subtitleText = isActiveItem
-                        ? `${formatDownloadBytes(item.receivedBytes)}${
-                            item.totalBytes > 0
-                              ? ` / ${formatDownloadBytes(item.totalBytes)}${itemPct != null ? ` (${itemPct}%)` : ''}`
-                              : ''
-                          }${item.state === 'paused' ? ' • Paused' : ''}`
-                        : isMissingFile
-                        ? ['File moved or deleted', formatDownloadTime(item.completedAt || item.startedAt)]
-                            .filter(Boolean)
-                            .join(' • ')
-                        : isFailedItem
-                        ? [
-                            item.state === 'cancelled' ? 'Cancelled' : 'Download interrupted',
-                            item.totalBytes > 0
-                              ? `${formatDownloadBytes(item.receivedBytes)} / ${formatDownloadBytes(item.totalBytes)}`
-                              : null
-                          ]
-                            .filter(Boolean)
-                            .join(' • ')
-                        : [
-                            item.totalBytes > 0 || item.receivedBytes > 0
-                              ? formatDownloadBytes(item.totalBytes || item.receivedBytes)
-                              : null,
-                            formatDownloadHost(item.url),
-                            formatDownloadTime(item.completedAt || item.startedAt)
-                          ]
-                            .filter(Boolean)
-                            .join(' • ');
-
-                      return (
-                        <div
-                          key={item.id}
-                          className="group px-3.5 py-2.5 flex items-start gap-2.5 hover:bg-[var(--surface-subtle)]/50 transition-colors"
-                        >
-                          <div
-                            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
-                              isActiveItem
-                                ? 'bg-[var(--brand-soft)] border-[var(--brand)]/30 text-[var(--brand)]'
-                                : isCompletedItem && !isMissingFile
-                                ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-600 dark:text-emerald-400'
-                                : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60 text-rose-500'
-                            }`}
-                          >
-                            {isActiveItem ? (
-                              <Download className="w-4 h-4 animate-pulse" />
-                            ) : isCompletedItem && !isMissingFile ? (
-                              <FileText className="w-4 h-4" />
-                            ) : (
-                              <AlertCircle className="w-4 h-4" />
-                            )}
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            {isCompletedItem && !isMissingFile ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenDownloadItem(item)}
-                                title={`Open ${item.filename}`}
-                                className="block w-full text-left text-xs font-semibold text-[var(--ink)] hover:text-[var(--brand)] truncate cursor-pointer"
-                              >
-                                {item.filename}
-                              </button>
-                            ) : (
-                              <div
-                                title={item.filename}
-                                className={`text-xs font-semibold truncate ${
-                                  isMissingFile || isFailedItem
-                                    ? 'text-[var(--muted)] line-through'
-                                    : 'text-[var(--ink)]'
-                                }`}
-                              >
-                                {item.filename}
-                              </div>
-                            )}
-
-                            {subtitleText && (
-                              <div className="text-[11px] text-[var(--muted)] truncate mt-0.5">
-                                {subtitleText}
-                              </div>
-                            )}
-
-                            {isActiveItem && (
-                              <div className="mt-1.5 h-1.5 w-full rounded-full bg-[var(--surface-subtle)] overflow-hidden">
-                                <div
-                                  className={`h-full bg-[var(--brand)] transition-all duration-150 ${
-                                    itemPct == null ? 'w-1/2 animate-pulse' : ''
-                                  }`}
-                                  style={itemPct != null ? { width: `${itemPct}%` } : undefined}
-                                />
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
-                            {isActiveItem ? (
-                              <button
-                                type="button"
-                                onClick={() => handleCancelDownloadItem(item.id)}
-                                title="Cancel download"
-                                aria-label={`Cancel ${item.filename}`}
-                                className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 text-[var(--muted)] hover:text-rose-600 transition-colors cursor-pointer"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            ) : (
-                              <>
-                                {isCompletedItem && !isMissingFile && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenDownloadItem(item)}
-                                      title="Open file"
-                                      aria-label={`Open ${item.filename}`}
-                                      className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--brand)] transition-colors cursor-pointer"
-                                    >
-                                      <ExternalLink className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleShowDownloadInFolder(item)}
-                                      title="Show in folder"
-                                      aria-label={`Show ${item.filename} in folder`}
-                                      className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
-                                    >
-                                      <FolderOpen className="w-3.5 h-3.5" />
-                                    </button>
-                                  </>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveDownloadItem(item.id)}
-                                  title="Remove from list"
-                                  aria-label={`Remove ${item.filename} from downloads list`}
-                                  className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 text-[var(--muted)] hover:text-rose-600 transition-colors cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                {typeof onOpenBrowserSettings === 'function' && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsOverflowMenuOpen(false);
+                      onOpenBrowserSettings();
+                    }}
+                    className="px-3.5 py-2 text-left text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer border-t border-[var(--line)] mt-1 pt-2.5"
+                  >
+                    <SettingsIcon className="w-[18px] h-[18px] text-[var(--muted)]" />
+                    <span>Browser settings</span>
+                  </button>
                 )}
               </div>
             )}
           </div>
-
-          {/* Browser Settings Shortcut */}
-          {typeof onOpenBrowserSettings === 'function' && (
-            <button
-              type="button"
-              onClick={onOpenBrowserSettings}
-              aria-label="Browser settings"
-              title="Browser settings"
-              className="p-1.5 rounded-lg border border-[var(--line)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer shrink-0"
-            >
-              <SettingsIcon className="w-4 h-4" />
-            </button>
-          )}
         </div>
 
         {/* 2. BOOKMARKS BAR */}
@@ -2610,11 +2777,23 @@ export function BrowserPage({
       {/* 3. MULTI-TAB BROWSER CONTENT CANVAS + INTEGRATED BROWSER AI SIDEBAR */}
       <div className="flex-1 w-full relative bg-[var(--surface)] min-h-0 h-full overflow-hidden flex flex-row">
         {/* Webviews and New Tab Pages */}
-        <div className="flex-1 min-w-0 h-full relative overflow-hidden">
+        <div
+          className={`flex-1 min-w-0 h-full relative overflow-hidden transition-all ${
+            isCalculatorOpen ? 'md:pr-[344px]' : ''
+          }`}
+        >
+          {isAnyToolbarPopoverOpen && (
+            <div
+              onClick={closeToolbarPopovers}
+              aria-hidden="true"
+              className="absolute inset-0 z-30 bg-transparent"
+            />
+          )}
           {isDesktop ? (
             tabs.map((tab) => {
               const isTabActive = tab.id === activeTabId;
               const showNewTab = isNewTabUrl(tab.url);
+              const hideNativeForPopover = isAnyToolbarPopoverOpen && !isNewTabUrl(tab.url);
               return (
                 <React.Fragment key={tab.id}>
                   <webview
@@ -2626,19 +2805,26 @@ export function BrowserPage({
                     }}
                     src={isNewTabUrl(tab.initialUrl) ? 'about:blank' : tab.initialUrl}
                     partition="persist:klarity_browser"
-                    className="w-full h-full border-0 absolute inset-0"
+                    className={`w-full h-full border-0 absolute inset-0 ${
+                      isCalculatorOpen ? 'max-md:hidden' : ''
+                    }`}
                     style={{
                       position: 'absolute',
                       top: 0,
                       left: 0,
-                      width: '100%',
+                      width: isCalculatorOpen ? 'calc(100% - 344px)' : '100%',
                       height: '100%',
                       display: 'flex',
                       border: 'none',
                       outline: 'none',
                       zIndex: isTabActive && !showNewTab ? 10 : 0,
                       opacity: isTabActive && !showNewTab ? 1 : 0,
-                      pointerEvents: isTabActive && !showNewTab ? 'auto' : 'none'
+                      visibility:
+                        isTabActive && !showNewTab
+                          ? (isAdBlockPopoverOpen || isDownloadsPopoverOpen || isOverflowMenuOpen ? 'hidden' : 'visible')
+                          : 'hidden',
+                      pointerEvents:
+                        isTabActive && !showNewTab && !hideNativeForPopover ? 'auto' : 'none'
                     }}
                     allowpopups="true"
                     webpreferences="contextIsolation=true, sandbox=true"

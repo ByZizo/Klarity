@@ -6,9 +6,12 @@ export function HouseholdPage({
   householdProfile,
   onUpdateProfile,
   onSyncUtilitiesToBills,
+  onSyncUtilityBills,
   onAskAiAdvisor,
   onShowToast
 }) {
+  const syncHandler = onSyncUtilitiesToBills || onSyncUtilityBills;
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -24,7 +27,7 @@ export function HouseholdPage({
         bills={bills}
         householdProfile={householdProfile}
         onUpdateProfile={onUpdateProfile}
-        onSyncUtilitiesToBills={onSyncUtilitiesToBills}
+        onSyncUtilitiesToBills={syncHandler}
         onAskAiAdvisor={onAskAiAdvisor}
         onShowToast={onShowToast}
         isOverview={false}

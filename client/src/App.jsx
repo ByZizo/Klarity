@@ -82,7 +82,7 @@ import { DEFAULT_INCOME_STREAMS, calculateJudgmentProofRatio } from './utils/sta
 import HouseholdLifestyleHub from './components/HouseholdLifestyleHub';
 import PasswordVaultPage, { DEFAULT_VAULT_ITEMS } from './components/PasswordVaultPage';
 import RetirementPage from './components/RetirementPage';
-import { DEFAULT_HOUSEHOLD_PROFILE, calculateHouseholdAndFleetMetrics } from './utils/householdLifestyleEngine';
+import { DEFAULT_HOUSEHOLD_PROFILE, calculateHouseholdAndFleetMetrics, buildHouseholdAiSummary } from './utils/householdLifestyleEngine';
 import {
   secureStorage,
   enforceStorageEncryptionAudit,
@@ -1297,33 +1297,36 @@ function KlarityApp() {
 
 
   // Household, Utility (PG&E / Water / Gas) & Vehicle Fleet Profile
+  const isValidHouseholdProfile = (p) =>
+    Boolean(p && typeof p === 'object' && (p.schemaVersion >= 2 || p.dwellingType || p.homeType || p.ownership || p.zillowUrl || p.address));
+
   const [householdProfile, setHouseholdProfile] = useState(() => {
     try {
-      // 1. Check plaintext backup key first (never corrupted or broken by encryption audit)
+      // 1. Check plaintext backup key first
       const plain = localStorage.getItem('klarity_household_profile_plain');
       if (plain) {
         const p = JSON.parse(plain);
-        if (p && typeof p === 'object' && (p.dwellingType || p.zillowUrl || p.address)) return p;
+        if (isValidHouseholdProfile(p)) return p;
       }
       // 2. Check main key if it's valid unencrypted JSON
       const saved = localStorage.getItem('klarity_household_profile');
       if (saved && !saved.startsWith('ENCv3:') && !saved.startsWith('ENCv2:')) {
         const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object' && (parsed.dwellingType || parsed.zillowUrl || parsed.address)) return parsed;
+        if (isValidHouseholdProfile(parsed)) return parsed;
       }
     } catch (e) {}
     return DEFAULT_HOUSEHOLD_PROFILE;
   });
 
-  // Decrypt and sync householdProfile from secureStorage and backend on mount
+  // Decrypt householdProfile from local secureStorage on mount (100% local, zero network calls)
   useEffect(() => {
     let active = true;
     async function loadHouseholdProfile() {
       try {
         const stored = await secureStorage.getItem('klarity_household_profile', null);
-        if (active && stored && typeof stored === 'object' && (stored.dwellingType || stored.zillowUrl || stored.address)) {
+        if (active && isValidHouseholdProfile(stored)) {
           setHouseholdProfile(prev => {
-            if (stored.zillowUrl || stored.address || !prev.zillowUrl) {
+            if (stored.schemaVersion >= 2 || stored.zillowUrl || stored.address || !prev.zillowUrl) {
               try {
                 localStorage.setItem('klarity_household_profile_plain', JSON.stringify(stored));
               } catch {}
@@ -1333,32 +1336,12 @@ function KlarityApp() {
           });
         }
       } catch (e) {}
-
-      try {
-        const res = await fetch('/api/household');
-        if (res.ok) {
-          const json = await res.json();
-          if (active && json.householdProfile && typeof json.householdProfile === 'object' && (json.householdProfile.dwellingType || json.householdProfile.zillowUrl || json.householdProfile.address)) {
-            setHouseholdProfile(prev => {
-              if (json.householdProfile.zillowUrl || json.householdProfile.address || !prev.zillowUrl) {
-                try {
-                  localStorage.setItem('klarity_household_profile_plain', JSON.stringify(json.householdProfile));
-                  localStorage.setItem('klarity_household_profile', JSON.stringify(json.householdProfile));
-                  secureStorage.setItem('klarity_household_profile', json.householdProfile).catch(() => {});
-                } catch {}
-                return { ...prev, ...json.householdProfile };
-              }
-              return prev;
-            });
-          }
-        }
-      } catch (e) {}
     }
     loadHouseholdProfile();
     return () => { active = false; };
   }, []);
 
-  // Persist householdProfile changes to localStorage, plaintext backup, secureStorage, and server
+  // Persist householdProfile changes locally to localStorage and encrypted secureStorage (zero network calls)
   useEffect(() => {
     if (!householdProfile) return;
     try {
@@ -1366,17 +1349,6 @@ function KlarityApp() {
       localStorage.setItem('klarity_household_profile', JSON.stringify(householdProfile));
       secureStorage.setItem('klarity_household_profile', householdProfile).catch(() => {});
     } catch (e) {}
-
-    // Debounced persist to server database
-    const timer = setTimeout(() => {
-      fetch('/api/household', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(householdProfile)
-      }).catch(err => console.warn('Could not persist household profile to server:', err.message));
-    }, 600);
-
-    return () => clearTimeout(timer);
   }, [householdProfile]);
 
   // Password & Account Vault state (resilient async persistence to localStorage, secureStorage, and server)
@@ -1471,9 +1443,36 @@ function KlarityApp() {
     return () => clearTimeout(timer);
   }, [vaultItems]);
 
-  const handleSyncUtilitiesToBills = (calcMetrics) => {
-    // Strictly actual bills from connected accounts/payments appear in bills
-    return;
+  const handleSyncUtilitiesToBills = (syncItems = []) => {
+    const incoming = Array.isArray(syncItems) ? syncItems.filter(it => it && Number(it.expectedAmount) > 0) : [];
+    if (incoming.length === 0) return;
+
+    setData(prev => {
+      const existing = Array.isArray(prev.bills) ? [...prev.bills] : [];
+      incoming.forEach(item => {
+        const idx = existing.findIndex(
+          b => b.id === item.id || String(b.name || '').toLowerCase() === String(item.name || '').toLowerCase()
+        );
+        if (idx >= 0) {
+          existing[idx] = { ...existing[idx], ...item };
+        } else {
+          existing.unshift(item);
+        }
+      });
+      const nextState = {
+        ...prev,
+        bills: existing,
+        metrics: {
+          ...(prev.metrics || {}),
+          totalMonthlyBills: existing.reduce((s, b) => s + Number(b.expectedAmount || 0), 0)
+        }
+      };
+      try {
+        localStorage.setItem('klarity_bills', JSON.stringify(existing));
+        localStorage.setItem('klarity_finance_data', JSON.stringify(nextState));
+      } catch (e) {}
+      return nextState;
+    });
   };
 
   // Modals & Editors for Budgets, Goals, Manual Accounts, Notes, Debt Planner
@@ -3792,8 +3791,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           manualAssets: manualAssets,
           retirementPlans: featureFlags.retirement ? retirementPlans : [],
           netWorth: totalNetWorth || 0,
-          householdProfile: householdProfile,
-          householdMetrics: calculateHouseholdAndFleetMetrics(householdProfile),
+          ...(householdProfile?.shareSummaryWithAi === true || settingsAiPermissions?.household === true
+            ? {
+                householdSummary: buildHouseholdAiSummary(
+                  householdProfile,
+                  calculateHouseholdAndFleetMetrics(householdProfile),
+                  sourceBillsList
+                )
+              }
+            : {}),
           browserContext: browserContextOverride || activeBrowserContext
         })
       });
@@ -5166,8 +5172,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             manualAssets: manualAssets,
             retirementPlans: featureFlags.retirement ? retirementPlans : [],
             netWorth: totalNetWorth || 0,
-            householdProfile: householdProfile,
-            householdMetrics: calculateHouseholdAndFleetMetrics(householdProfile)
+            ...(householdProfile?.shareSummaryWithAi === true || settingsAiPermissions?.household === true
+              ? {
+                  householdSummary: buildHouseholdAiSummary(
+                    householdProfile,
+                    calculateHouseholdAndFleetMetrics(householdProfile),
+                    sourceBillsList
+                  )
+                }
+              : {})
           })
         });
         const json = await res.json();
@@ -5617,6 +5630,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             <main className="flex-1 min-w-0 h-full flex flex-col overflow-hidden p-0 m-0 pb-14 min-[760px]:pb-0">
               <BrowserPage
                 onAskAdvisor={(prompt, contextOverride) => {
+                  setActiveTab('advisor');
                   setIsAdvisorCollapsed(false);
                   handleSendChatMessage(prompt, null, contextOverride);
                 }}
@@ -5876,7 +5890,11 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 <HouseholdPage
                   householdProfile={householdProfile}
                   onUpdateProfile={setHouseholdProfile}
-                  onSyncUtilityBills={handleSyncUtilitiesToBills}
+                  onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
+                  onShowToast={(msg) => {
+                    setNotificationToast(msg);
+                    setTimeout(() => setNotificationToast(''), 4000);
+                  }}
                   bills={data?.bills || []}
                   subscriptions={data?.subscriptions || []}
                   transactions={sourceTxsList}
@@ -5992,7 +6010,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           {/* ================================================================= */}
           {/* RIGHT PERSISTENT ADVISOR SIDEBAR (Old AI Advisor Chat UI)         */}
           {/* ================================================================= */}
-          {normalizedActiveTab !== 'advisor' && (
+          {normalizedActiveTab !== 'advisor' && normalizedActiveTab !== 'browser' && (
             <>
               {isAdvisorCollapsed ? (
                 <div
