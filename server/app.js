@@ -128,7 +128,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', process.env.KLARITY_DESKTOP_APP ? 'SAMEORIGIN' : 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
   res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
   if (isProductionEnv) {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
@@ -136,7 +136,7 @@ app.use((req, res, next) => {
   if (!process.env.KLARITY_DESKTOP_APP) {
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client https://cdn.plaid.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://accounts.google.com https://*.plaid.com https://generativelanguage.googleapis.com https://api.openai.com https://api.anthropic.com https://ai-gateway.vercel.sh; frame-src https://accounts.google.com https://cdn.plaid.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self';"
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://accounts.google.com/gsi/client https://cdn.plaid.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://accounts.google.com https://*.plaid.com https://generativelanguage.googleapis.com https://api.openai.com https://api.anthropic.com https://ai-gateway.vercel.sh; frame-src https://accounts.google.com https://cdn.plaid.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self';"
     );
   }
   if (req.body && typeof req.body === 'object') {

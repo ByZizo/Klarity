@@ -5942,6 +5942,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   vaultItems={vaultItems}
                   onUpdateVaultItems={setVaultItems}
                   onShowToast={showToast}
+                  localProfile={{
+                    name: currentUser?.name || '',
+                    email: currentUser?.email || '',
+                    phone: householdProfile?.phone || '',
+                    address: [householdProfile?.address, householdProfile?.city, householdProfile?.state, householdProfile?.zip]
+                      .filter(Boolean)
+                      .join(', ')
+                  }}
+                  isLocalOnlyMode={!aiWebSearchEnabled}
                 />
               )}
 

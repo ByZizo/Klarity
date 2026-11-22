@@ -41,7 +41,9 @@ export default function DocumentVaultPage({
   onDocumentsCountChange,
   activeVaultSection = 'documents',
   onSelectVaultSection,
-  passwordsCount = 0
+  passwordsCount = 0,
+  localProfile = {},
+  isLocalOnlyMode = false
 }) {
   const [documents, setDocuments] = useState([]);
   const [folders, setFolders] = useState(() => loadDocumentFolders());
@@ -1832,6 +1834,8 @@ export default function DocumentVaultPage({
           initialDocument={editingPdfDoc}
           onSaveToVault={handleSavePdfToVault}
           onShowToast={notify}
+          localProfile={localProfile}
+          isLocalOnlyMode={isLocalOnlyMode}
         />
       )}
     </div>

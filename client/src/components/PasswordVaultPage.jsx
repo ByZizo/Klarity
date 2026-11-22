@@ -38,7 +38,9 @@ export const DEFAULT_VAULT_ITEMS = [];
 export default function PasswordVaultPage({
   vaultItems = [],
   onUpdateVaultItems,
-  onShowToast
+  onShowToast,
+  localProfile = {},
+  isLocalOnlyMode = false
 }) {
   const [activeVaultSection, setActiveVaultSection] = useState(() => {
     try {
@@ -854,6 +856,8 @@ export default function PasswordVaultPage({
           activeVaultSection={activeVaultSection}
           onSelectVaultSection={handleSelectVaultSection}
           passwordsCount={(vaultItems || []).length}
+          localProfile={localProfile}
+          isLocalOnlyMode={isLocalOnlyMode}
         />
       ) : (
         <>
