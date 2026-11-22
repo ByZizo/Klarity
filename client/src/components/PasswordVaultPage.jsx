@@ -1060,7 +1060,7 @@ export default function PasswordVaultPage({
                       const count = getSectionItemCount(sec);
                       const isSelected = selectedCategory.toLowerCase() === sec.toLowerCase();
                       const isBuiltInFavorites = sec.toLowerCase() === 'favorites';
-                      const canDeleteSection = count === 0 && !isBuiltInFavorites;
+                      const isCustomSection = !isBuiltInFavorites;
                       return (
                         <div
                           key={sec}
@@ -1077,11 +1077,11 @@ export default function PasswordVaultPage({
                         >
                           <div className="flex items-center gap-2 min-w-0 pr-2">
                             <span className="w-5 h-5 flex items-center justify-center shrink-0">
-                              {canDeleteSection ? (
+                              {isCustomSection ? (
                                 <button
                                   type="button"
                                   aria-label={`Delete section ${sec}`}
-                                  title="Delete section"
+                                  title={`Delete section ${sec}`}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setIsCategoryDropdownOpen(false);
@@ -1583,7 +1583,13 @@ export default function PasswordVaultPage({
       <ConfirmDialog
         open={Boolean(sectionToDelete)}
         title="Delete section?"
-        message={sectionToDelete ? `Are you sure you want to delete the "${sectionToDelete}" section?` : ''}
+        message={
+          sectionToDelete
+            ? getSectionItemCount(sectionToDelete) > 0
+              ? `Are you sure you want to delete the "${sectionToDelete}" section? ${getSectionItemCount(sectionToDelete)} account(s) will become uncategorized.`
+              : `Are you sure you want to delete the "${sectionToDelete}" section?`
+            : ''
+        }
         confirmLabel="Delete section"
         variant="danger"
         onCancel={() => setSectionToDelete(null)}
