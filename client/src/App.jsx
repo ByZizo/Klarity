@@ -5641,6 +5641,38 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 currentUser={currentUser}
                 settingsAiProvider={settingsAiProvider}
                 settingsAiModel={settingsAiModel}
+                advisorContext={{
+                  responseLength: aiResponseLength,
+                  webSearchEnabled: aiWebSearchEnabled,
+                  statutoryShield: {
+                    ...calculateJudgmentProofRatio(incomeStreams),
+                    incomeStreams
+                  },
+                  cards: displayCards,
+                  checkingAccounts,
+                  availableCash: displayCash,
+                  projectedCashAfterBills,
+                  bills: sourceBillsList,
+                  subscriptions: sourceSubsList,
+                  transactions: sourceTxsList.slice(0, 60),
+                  budgets: featureFlags.budgets ? computedBudgets : [],
+                  debtStrategy,
+                  extraDebtPayment,
+                  debtPayoffComparison,
+                  savingsGoals: (featureFlags.budgets && featureFlags.savingsGoals) ? savingsGoals : [],
+                  manualAssets,
+                  retirementPlans: featureFlags.retirement ? retirementPlans : [],
+                  netWorth: totalNetWorth || 0,
+                  ...(householdProfile?.shareSummaryWithAi === true || settingsAiPermissions?.household === true
+                    ? {
+                        householdSummary: buildHouseholdAiSummary(
+                          householdProfile,
+                          calculateHouseholdAndFleetMetrics(householdProfile),
+                          sourceBillsList
+                        )
+                      }
+                    : {})
+                }}
                 browserSettings={browserSettings}
                 browserBookmarks={browserBookmarks}
                 onUpdateBookmarks={handleUpdateBrowserBookmarks}

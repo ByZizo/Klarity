@@ -3485,7 +3485,8 @@ app.post('/api/ai/chat', async (req, res) => {
     householdMetrics,
     responseLength,
     webSearchEnabled,
-    browserContext
+    browserContext,
+    browserMode = false
   } = req.body;
   const data = await readData(req.userId);
   const userSettings = getUserSettings(data, userId);
@@ -3803,7 +3804,7 @@ Rules:
   Acknowledge it warmly in 1 or 2 friendly sentences and output the action tag: [ACTION:ADD_MEMORY:{"fact":"User is 23 years old"}]. Do NOT dump unrequested financial accounts.
 ${responseLength === 'concise' ? '- RESPONSE LENGTH: Keep your answer short, concise, and under 150 words. Focus strictly on bullet points and key numbers.' : responseLength === 'detailed' ? '- RESPONSE LENGTH: Provide an in-depth, thorough analysis (~600-800 words) with detailed arithmetic, comparisons, and step-by-step guidance.' : '- RESPONSE LENGTH: Provide a balanced, clear response (~250-400 words) with practical numbers and actionable advice.'}
 ${webSearchEnabled === false ? '- INTERNET ACCESS: Strictly offline/local mode. Do NOT search external web data; base advice strictly on user accounts and bills.' : '- INTERNET ACCESS: Live web search is active. Reference live card promotions and rate benchmarks where helpful.'}
-2. LIVE INTERNET & WEB KNOWLEDGE: Incorporate real-time web facts to recommend specific credit card promotions (e.g. Citi Simplicity, Wells Fargo Reflect, Chase Freedom), balance transfer fees, current HYSA yields, vehicle/EV deals, and ways to save money. Whenever the user asks you to search something up or look up external offers/products/websites, include relevant direct URLs in Markdown format ([Label](https://...)) if known, and conclude by asking if they would like to open it in Klarity's in-app browser or copy the link.
+2. LIVE INTERNET & WEB KNOWLEDGE: Incorporate real-time web facts to recommend specific credit card promotions (e.g. Citi Simplicity, Wells Fargo Reflect, Chase Freedom), balance transfer fees, current HYSA yields, vehicle/EV deals, and ways to save money. Whenever the user asks you to search something up or look up external offers/products/websites, include relevant direct URLs in Markdown format ([Label](https://...)) if known, and conclude by asking if they would like to open it in Klarity's in-app browser or copy the link.${browserMode ? '\n- IN-APP BROWSER SIDEBAR MODE: The user is chatting directly inside Klarity\'s in-app browser sidebar. Answer any general, web, or personal finance question directly (only focus on the open webpage in <untrusted_webpage_data> if the user asks about the page they are viewing). Whenever recommending websites, products, tools, articles, or search results, include direct clickable Markdown links ([Label](https://...)) so the user can click to open them right inside the browser. Do NOT ask "would you like to open it in Klarity\'s in-app browser" since clickable links already open directly in the browser.' : ''}
 3. FULL AUTONOMOUS CONTROL & ACTION EXECUTION:
    You have FULL ACCESS to view and autonomously modify all user finances on Klarity.
    Whenever the user asks you to add, modify, or delete anything, or whenever a statement/bill/receipt is submitted, you can output ACTION tags that Klarity executes in real-time:
