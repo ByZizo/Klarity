@@ -234,6 +234,10 @@ export default function PdfEditorModal({
   // Fill & Sign: AcroForm + Custom Fields + In-Person Multi-Signer
   const [acroFormFields, setAcroFormFields] = useState([]);
   const [acroFormValues, setAcroFormValues] = useState({});
+  const initialAcroFormValuesRef = useRef({});
+  const [autofillConfirmOpen, setAutofillConfirmOpen] = useState(false);
+  const [passwordPromptState, setPasswordPromptState] = useState(null); // { sourceData, docTitle, preserveEdits, error }
+  const [passwordPromptInput, setPasswordPromptInput] = useState('');
   const [customFields, setCustomFields] = useState([]);
   const [selectedFieldId, setSelectedFieldId] = useState(null);
   const [flattenOnExport, setFlattenOnExport] = useState(false);
@@ -284,13 +288,21 @@ export default function PdfEditorModal({
   const dragModeRef = useRef(null); // 'draw' | 'box' | 'move' | 'resize' | 'rotate' | 'moveField' | 'resizeField'
   const dragStartRef = useRef({ x: 0, y: 0, origMap: new Map() });
   const [activeStrokePoints, setActiveStrokePoints] = useState([]);
+  const activeStrokePointsRef = useRef([]);
   const [activeBoxPreview, setActiveBoxPreview] = useState(null);
-  const [inlineTextEdit, setInlineTextEdit] = useState(null); // { id? , x, y, width, height, text, isCoverReplace, coverColor, fontSize }
+  const activeBoxPreviewRef = useRef(null);
+  const [inlineTextEdit, setInlineTextEdit] = useState(null); // { editingId?, kind: 'text'|'coverText'|'comment'|'callout', x, y, anchorX?, anchorY?, width, height, text, isCoverReplace, coverColor, fontSize }
   const inlineTextAreaRef = useRef(null);
+  const latestDragHandlersRef = useRef({ move: null, up: null });
   const [, setFontTick] = useState(0);
 
   const activePageDesc = pageOrder[currentPage - 1] || null;
   const activePageKey = activePageDesc?.uid || currentPage;
+  const activePageUid = activePageDesc?.uid || '';
+  const activePageSourceType = activePageDesc?.sourceType || 'original';
+  const activePageSourceNum = activePageDesc?.sourcePageNumber || currentPage;
+  const activePageRotation = activePageDesc?.rotationOffset || 0;
+  const activePageCropKey = activePageDesc?.cropBox ? JSON.stringify(activePageDesc.cropBox) : '';
 
   const notify = useCallback(
     (msg, type = 'info') => {
@@ -330,16 +342,20 @@ export default function PdfEditorModal({
           loaded = await loadPdfForViewing(sourceData, password);
         } catch (err) {
           if (err?.name === 'PasswordException') {
-            const entered = window.prompt('This PDF is password-protected. Enter password:');
-            if (entered == null) {
-              setIsLoading(false);
-              return;
-            }
-            loaded = await loadPdfForViewing(sourceData, entered);
-          } else {
-            throw err;
+            setPasswordPromptState({
+              sourceData,
+              docTitle,
+              preserveEdits,
+              error: password ? 'Incorrect password. Please try again.' : ''
+            });
+            setPasswordPromptInput('');
+            setIsLoading(false);
+            return;
           }
+          throw err;
         }
+        setPasswordPromptState(null);
+        setPasswordPromptInput('');
 
         const initialOrder = Array.from({ length: loaded.numPages }, (_, idx) => ({
           uid: `p_${idx + 1}`,
@@ -384,6 +400,7 @@ export default function PdfEditorModal({
           setHasUnsavedChanges(false);
           setReadOnlyLocked(false);
           setAcroFormFields(detectedFields);
+          initialAcroFormValuesRef.current = { ...initVals };
           setAcroFormValues(initVals);
         }
 
@@ -418,13 +435,13 @@ export default function PdfEditorModal({
     }
   }, [isOpen, initialDocument, loadPdfDocumentSource, recordRecentFile]);
 
-  // Render active page + text layer whenever loading finishes or page/zoom/rotation/crop changes
+  // Render active page + text layer whenever loading finishes or page identity/zoom/rotation/crop changes
   useEffect(() => {
-    if (!isOpen || isLoading || !pdfJsDoc || !pdfCanvasRef.current || !activePageDesc) return;
+    if (!isOpen || isLoading || !pdfJsDoc || !pdfCanvasRef.current || !activePageUid) return;
     let active = true;
 
     async function renderPage() {
-      if (activePageDesc.sourceType === 'blank') {
+      if (activePageSourceType === 'blank') {
         const w = Math.floor(612 * zoom);
         const h = Math.floor(792 * zoom);
         const canvas = pdfCanvasRef.current;
@@ -442,14 +459,15 @@ export default function PdfEditorModal({
         return;
       }
 
+      const cropObj = activePageCropKey ? JSON.parse(activePageCropKey) : null;
       try {
         const res = await renderPdfPageToCanvas(
           pdfJsDoc,
-          activePageDesc.sourcePageNumber || 1,
+          activePageSourceNum || 1,
           pdfCanvasRef.current,
           zoom,
-          activePageDesc.rotationOffset || 0,
-          activePageDesc.cropBox
+          activePageRotation || 0,
+          cropObj
         );
         if (!active || !res) return;
         setCanvasDims({ width: Math.floor(res.viewportWidth), height: Math.floor(res.viewportHeight) });
@@ -457,9 +475,9 @@ export default function PdfEditorModal({
         try {
           const tl = await getPageTextLayer(
             pdfJsDoc,
-            activePageDesc.sourcePageNumber || 1,
+            activePageSourceNum || 1,
             zoom,
-            activePageDesc.rotationOffset || 0
+            activePageRotation || 0
           );
           if (active) setTextLayerSpans(tl.spans || []);
         } catch (tlErr) {
@@ -477,7 +495,17 @@ export default function PdfEditorModal({
     return () => {
       active = false;
     };
-  }, [isOpen, isLoading, pdfJsDoc, activePageDesc, zoom]);
+  }, [
+    isOpen,
+    isLoading,
+    pdfJsDoc,
+    zoom,
+    activePageUid,
+    activePageSourceType,
+    activePageSourceNum,
+    activePageRotation,
+    activePageCropKey
+  ]);
 
   // History management
   const commitHistory = useCallback(
@@ -565,18 +593,28 @@ export default function PdfEditorModal({
     setSelectedAnnotationIds([]);
   }, [readOnlyLocked, selectedFieldId, customFields, commitHistory, annotations, pageOrder, selectedAnnotationIds, mutatePageAnnotations]);
 
+  const shiftAnnotationByDelta = (ann, dx, dy) => {
+    const next = { ...ann, x: Math.max(0, (ann.x || 0) + dx), y: Math.max(0, (ann.y || 0) + dy) };
+    if (next.type === 'shape' && (next.shapeKind === 'line' || next.shapeKind === 'arrow')) {
+      next.x1 = (ann.x1 ?? ann.x ?? 0) + dx;
+      next.y1 = (ann.y1 ?? ann.y ?? 0) + dy;
+      next.x2 = (ann.x2 ?? (ann.x || 0) + (ann.width || 60)) + dx;
+      next.y2 = (ann.y2 ?? (ann.y || 0) + (ann.height || 30)) + dy;
+    }
+    if (next.type === 'draw' && Array.isArray(ann.points)) {
+      next.points = ann.points.map((pt) => ({ ...pt, x: pt.x + dx, y: pt.y + dy }));
+    }
+    return next;
+  };
+
   const handleDuplicateSelected = useCallback(() => {
     if (readOnlyLocked || selectedAnnotationIds.length === 0) return;
     const copies = [];
     mutatePageAnnotations((list) => {
       const target = list.filter((a) => selectedAnnotationIds.includes(a.id));
       const cloned = target.map((a) => {
-        const c = {
-          ...JSON.parse(JSON.stringify(a)),
-          id: `${a.type}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          x: (a.x || 0) + 18,
-          y: (a.y || 0) + 18
-        };
+        const c = shiftAnnotationByDelta(JSON.parse(JSON.stringify(a)), 18, 18);
+        c.id = `${a.type}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
         copies.push(c.id);
         return c;
       });
@@ -721,7 +759,8 @@ export default function PdfEditorModal({
             const pasted = clipboardAnns.map((a) => {
               const id = `${a.type}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
               newIds.push(id);
-              return { ...a, id, x: (a.x || 0) + 20, y: (a.y || 0) + 20 };
+              const moved = shiftAnnotationByDelta(JSON.parse(JSON.stringify(a)), 20, 20);
+              return { ...moved, id };
             });
             return [...list, ...pasted];
           });
@@ -736,7 +775,7 @@ export default function PdfEditorModal({
         const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
         const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
         mutatePageAnnotations((list) =>
-          list.map((a) => (selectedAnnotationIds.includes(a.id) && !a.locked ? { ...a, x: (a.x || 0) + dx, y: (a.y || 0) + dy } : a))
+          list.map((a) => (selectedAnnotationIds.includes(a.id) && !a.locked ? shiftAnnotationByDelta(a, dx, dy) : a))
         );
       } else if (!e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'v') {
         setActiveTool('select');
@@ -771,9 +810,15 @@ export default function PdfEditorModal({
   const getOverlayPos = (e) => {
     const rect = overlayRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0, width: canvasDims.width, height: canvasDims.height };
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: cx - rect.left, y: cy - rect.top, width: rect.width, height: rect.height };
+    const pt = e.touches?.[0] || e.changedTouches?.[0] || e;
+    const cx = pt.clientX ?? 0;
+    const cy = pt.clientY ?? 0;
+    return {
+      x: Math.max(0, Math.min(rect.width, cx - rect.left)),
+      y: Math.max(0, Math.min(rect.height, cy - rect.top)),
+      width: rect.width,
+      height: rect.height
+    };
   };
 
   // Overlay Pointer Down
@@ -784,9 +829,10 @@ export default function PdfEditorModal({
 
     const { x, y, width, height } = getOverlayPos(e);
 
-    // Inline text edit active? Commit it before handling click elsewhere
+    // Clicking outside the inline editor commits it and stops (prevents opening a second empty box)
     if (inlineTextEdit) {
       commitInlineText();
+      return;
     }
 
     if (activeTool === 'select') {
@@ -799,8 +845,9 @@ export default function PdfEditorModal({
 
     if (activeTool === 'text') {
       setInlineTextEdit({
-        x,
-        y,
+        kind: 'text',
+        x: Math.max(4, Math.min(width - 220, x)),
+        y: Math.max(4, Math.min(height - 60, y)),
         width: 220,
         height: 36,
         text: '',
@@ -825,12 +872,13 @@ export default function PdfEditorModal({
         }
         const sampledBg = sampleCanvasBackgroundColor(pdfCanvasRef.current, hitSpan.x, hitSpan.y, hitSpan.width, hitSpan.height);
         setInlineTextEdit({
+          kind: 'coverText',
           x: hitSpan.x,
           y: hitSpan.y,
           width: Math.max(80, hitSpan.width + 20),
           height: Math.max(24, hitSpan.height),
           text: hitSpan.str,
-          fontSize: Math.round(hitSpan.fontSize * zoom),
+          fontSize: Math.max(10, Math.round(hitSpan.fontSize * zoom)),
           fontFamily: 'Inter',
           color: '#000000',
           isCoverReplace: true,
@@ -861,6 +909,7 @@ export default function PdfEditorModal({
         };
         mutatePageAnnotations((list) => [...list, ann]);
         setSelectedAnnotationIds([ann.id]);
+        setShowPropertiesPanel(true);
         setActiveTool('select');
       } else {
         setSignatureModalKind(activeTool === 'initials' ? 'initials' : 'signature');
@@ -870,58 +919,40 @@ export default function PdfEditorModal({
     }
 
     if (activeTool === 'comment') {
-      const msg = window.prompt('Add sticky-note comment:', '');
-      if (msg && msg.trim()) {
-        const now = new Date();
-        const ann = {
-          id: `comment_${Date.now()}`,
-          type: 'comment',
-          x,
-          y,
-          width: 24,
-          height: 24,
-          text: msg.trim(),
-          author: localProfile.name || 'Local User',
-          createdAtIso: now.toISOString(),
-          timestampLabel: `${now.toLocaleString()} (device clock time)`,
-          replies: [],
-          color: '#f59e0b',
-          canvasWidth: width,
-          canvasHeight: height
-        };
-        mutatePageAnnotations((list) => [...list, ann]);
-        setSelectedAnnotationIds([ann.id]);
-        setShowLeftSidebar(true);
-        setLeftSidebarTab('comments');
-      }
-      setActiveTool('select');
+      setInlineTextEdit({
+        kind: 'comment',
+        x: Math.max(4, Math.min(width - 230, x)),
+        y: Math.max(4, Math.min(height - 80, y)),
+        anchorX: x,
+        anchorY: y,
+        width: 220,
+        height: 44,
+        text: '',
+        fontSize: 13,
+        color: '#111827',
+        isCoverReplace: false,
+        coverColor: '#fef3c7'
+      });
+      setTimeout(() => inlineTextAreaRef.current?.focus(), 20);
       return;
     }
 
     if (activeTool === 'callout') {
-      const msg = window.prompt('Callout box text:', 'Note');
-      if (msg && msg.trim()) {
-        const ann = {
-          id: `callout_${Date.now()}`,
-          type: 'callout',
-          x: Math.min(width - 180, x + 36),
-          y: Math.max(10, y - 36),
-          width: 170,
-          height: 52,
-          anchorX: x,
-          anchorY: y,
-          text: msg.trim(),
-          fontSize: 13,
-          color: '#111827',
-          bgColor: '#fef3c7',
-          borderColor: '#d97706',
-          canvasWidth: width,
-          canvasHeight: height
-        };
-        mutatePageAnnotations((list) => [...list, ann]);
-        setSelectedAnnotationIds([ann.id]);
-      }
-      setActiveTool('select');
+      setInlineTextEdit({
+        kind: 'callout',
+        x: Math.max(4, Math.min(width - 220, x + 24)),
+        y: Math.max(4, Math.min(height - 80, Math.max(10, y - 36))),
+        anchorX: x,
+        anchorY: y,
+        width: 200,
+        height: 52,
+        text: '',
+        fontSize: 13,
+        color: '#111827',
+        isCoverReplace: false,
+        coverColor: '#fef3c7'
+      });
+      setTimeout(() => inlineTextAreaRef.current?.focus(), 20);
       return;
     }
 
@@ -952,7 +983,7 @@ export default function PdfEditorModal({
         required: false,
         readOnly: false,
         defaultValue: '',
-        value: activeFieldType === 'checkbox' ? false : activeFieldType === 'date' ? new Date().toLocaleDateString() : '',
+        value: activeFieldType === 'checkbox' ? false : activeFieldType === 'date' ? new Date().toISOString().slice(0, 10) : '',
         options: ['Option A', 'Option B'],
         dateFormat: 'MM/DD/YYYY',
         fontFamily: 'Inter',
@@ -963,6 +994,7 @@ export default function PdfEditorModal({
       setCustomFields(nextFields);
       commitHistory(annotations, pageOrder, nextFields);
       setSelectedFieldId(newField.id);
+      setSelectedAnnotationIds([]);
       setShowPropertiesPanel(true);
       setActiveTool('select');
       return;
@@ -970,7 +1002,6 @@ export default function PdfEditorModal({
 
     if (activeTool === 'draw') {
       if (activeDrawSubtype === 'eraser') {
-        // Erase any stroke touching cursor
         mutatePageAnnotations((list) =>
           list.filter((a) => {
             if (a.type !== 'draw' || !Array.isArray(a.points)) return true;
@@ -983,7 +1014,9 @@ export default function PdfEditorModal({
       }
       isDrawingRef.current = true;
       dragModeRef.current = 'draw';
-      setActiveStrokePoints([{ x, y, pressure: e.pressure || 0.5 }]);
+      const initPts = [{ x, y, pressure: e.pressure || 0.5 }];
+      activeStrokePointsRef.current = initPts;
+      setActiveStrokePoints(initPts);
       return;
     }
 
@@ -991,7 +1024,9 @@ export default function PdfEditorModal({
       isDrawingRef.current = true;
       dragModeRef.current = 'box';
       dragStartRef.current = { x, y };
-      setActiveBoxPreview({ x, y, width: 0, height: 0, startX: x, startY: y });
+      const initBox = { x, y, width: 0, height: 0, startX: x, startY: y, endX: x, endY: y };
+      activeBoxPreviewRef.current = initBox;
+      setActiveBoxPreview(initBox);
     }
   };
 
@@ -1000,7 +1035,13 @@ export default function PdfEditorModal({
     const { x, y } = getOverlayPos(e);
 
     if (dragModeRef.current === 'draw') {
-      setActiveStrokePoints((prev) => [...prev, { x, y, pressure: e.pressure || 0.5 }]);
+      const prevPts = activeStrokePointsRef.current;
+      const last = prevPts[prevPts.length - 1];
+      if (!last || Math.hypot(last.x - x, last.y - y) >= 1.5) {
+        const nextPts = [...prevPts, { x, y, pressure: e.pressure || 0.5 }];
+        activeStrokePointsRef.current = nextPts;
+        setActiveStrokePoints(nextPts);
+      }
     } else if (dragModeRef.current === 'erase') {
       mutatePageAnnotations(
         (list) =>
@@ -1013,7 +1054,7 @@ export default function PdfEditorModal({
     } else if (dragModeRef.current === 'box') {
       const sx = dragStartRef.current.x;
       const sy = dragStartRef.current.y;
-      setActiveBoxPreview({
+      const nextBox = {
         startX: sx,
         startY: sy,
         x: Math.min(sx, x),
@@ -1022,7 +1063,9 @@ export default function PdfEditorModal({
         height: Math.abs(y - sy),
         endX: x,
         endY: y
-      });
+      };
+      activeBoxPreviewRef.current = nextBox;
+      setActiveBoxPreview(nextBox);
     } else if (dragModeRef.current === 'move') {
       const dx = x - dragStartRef.current.x;
       const dy = y - dragStartRef.current.y;
@@ -1032,7 +1075,30 @@ export default function PdfEditorModal({
           list.map((a) => {
             if (!origMap.has(a.id)) return a;
             const o = origMap.get(a.id);
-            return { ...a, x: Math.max(0, o.x + dx), y: Math.max(0, o.y + dy) };
+            const nx = Math.max(0, o.x + dx);
+            const ny = Math.max(0, o.y + dy);
+            const actualDx = nx - o.x;
+            const actualDy = ny - o.y;
+            if (a.type === 'shape' && (a.shapeKind === 'line' || a.shapeKind === 'arrow')) {
+              return {
+                ...a,
+                x: nx,
+                y: ny,
+                x1: (o.x1 ?? o.x) + actualDx,
+                y1: (o.y1 ?? o.y) + actualDy,
+                x2: (o.x2 ?? o.x + o.width) + actualDx,
+                y2: (o.y2 ?? o.y + o.height) + actualDy
+              };
+            }
+            if (a.type === 'draw' && Array.isArray(o.points)) {
+              return {
+                ...a,
+                x: nx,
+                y: ny,
+                points: o.points.map((pt) => ({ ...pt, x: pt.x + actualDx, y: pt.y + actualDy }))
+              };
+            }
+            return { ...a, x: nx, y: ny };
           }),
         false
       );
@@ -1050,7 +1116,22 @@ export default function PdfEditorModal({
               const nw = Math.max(40, o.width + dx);
               return { ...a, width: nw, height: Math.round(nw / aspect) };
             }
-            return { ...a, width: Math.max(24, o.width + dx), height: Math.max(18, o.height + dy) };
+            const nw = Math.max(24, o.width + dx);
+            const nh = Math.max(18, o.height + dy);
+            if (a.type === 'shape' && (a.shapeKind === 'line' || a.shapeKind === 'arrow')) {
+              const sxFactor = nw / Math.max(1, o.width);
+              const syFactor = nh / Math.max(1, o.height);
+              return {
+                ...a,
+                width: nw,
+                height: nh,
+                x1: o.x + ((o.x1 ?? o.x) - o.x) * sxFactor,
+                y1: o.y + ((o.y1 ?? o.y) - o.y) * syFactor,
+                x2: o.x + ((o.x2 ?? o.x + o.width) - o.x) * sxFactor,
+                y2: o.y + ((o.y2 ?? o.y + o.height) - o.y) * syFactor
+              };
+            }
+            return { ...a, width: nw, height: nh };
           }),
         false
       );
@@ -1064,8 +1145,25 @@ export default function PdfEditorModal({
             f.id === selectedFieldId
               ? {
                   ...f,
-                  xNorm: Math.max(0, Math.min(1 - f.wNorm, orig.xNorm + dx / canvasDims.width)),
-                  yNorm: Math.max(0, Math.min(1 - f.hNorm, orig.yNorm + dy / canvasDims.height))
+                  xNorm: Math.max(0, Math.min(1 - f.wNorm, orig.xNorm + dx / Math.max(1, canvasDims.width))),
+                  yNorm: Math.max(0, Math.min(1 - f.hNorm, orig.yNorm + dy / Math.max(1, canvasDims.height)))
+                }
+              : f
+          )
+        );
+      }
+    } else if (dragModeRef.current === 'resizeField' && selectedFieldId) {
+      const dx = x - dragStartRef.current.x;
+      const dy = y - dragStartRef.current.y;
+      const orig = dragStartRef.current.origField;
+      if (orig) {
+        setCustomFields((prev) =>
+          prev.map((f) =>
+            f.id === selectedFieldId
+              ? {
+                  ...f,
+                  wNorm: Math.max(0.03, Math.min(1 - f.xNorm, orig.wNorm + dx / Math.max(1, canvasDims.width))),
+                  hNorm: Math.max(0.025, Math.min(1 - f.yNorm, orig.hNorm + dy / Math.max(1, canvasDims.height)))
                 }
               : f
           )
@@ -1081,13 +1179,25 @@ export default function PdfEditorModal({
     isDrawingRef.current = false;
 
     const { x, y, width, height } = getOverlayPos(e);
+    const strokePts = activeStrokePointsRef.current;
+    const boxPrev = activeBoxPreviewRef.current;
 
     if (mode === 'draw') {
-      if (activeStrokePoints.length > 1) {
+      if (strokePts.length > 1) {
+        const xs = strokePts.map((p) => p.x);
+        const ys = strokePts.map((p) => p.y);
+        const minX = Math.min(...xs);
+        const minY = Math.min(...ys);
+        const maxX = Math.max(...xs);
+        const maxY = Math.max(...ys);
         const ann = {
           id: `draw_${Date.now()}`,
           type: 'draw',
-          points: activeStrokePoints,
+          x: minX,
+          y: minY,
+          width: Math.max(12, maxX - minX),
+          height: Math.max(12, maxY - minY),
+          points: strokePts,
           color: activeDrawSubtype === 'marker' ? '#fde047' : penColor,
           thickness: activeDrawSubtype === 'marker' ? Math.max(12, penThickness * 4) : penThickness,
           isMarker: activeDrawSubtype === 'marker',
@@ -1097,45 +1207,67 @@ export default function PdfEditorModal({
         };
         mutatePageAnnotations((list) => [...list, ann]);
       }
+      activeStrokePointsRef.current = [];
       setActiveStrokePoints([]);
+    } else if (mode === 'erase') {
+      commitHistory(annotations, pageOrder, customFields);
     } else if (mode === 'move' || mode === 'resize') {
       commitHistory(annotations, pageOrder, customFields);
-    } else if (mode === 'moveField') {
+    } else if (mode === 'moveField' || mode === 'resizeField') {
       commitHistory(annotations, pageOrder, customFields);
-    } else if (mode === 'box' && activeBoxPreview) {
-      const bx = activeBoxPreview.x;
-      const by = activeBoxPreview.y;
-      let bw = activeBoxPreview.width;
-      let bh = activeBoxPreview.height;
+    } else if (mode === 'box' && boxPrev) {
+      const bx = boxPrev.x;
+      const by = boxPrev.y;
+      const bw = boxPrev.width;
+      const bh = boxPrev.height;
+      const boxStartX = boxPrev.startX;
+      const boxStartY = boxPrev.startY;
+      activeBoxPreviewRef.current = null;
 
       // Text-aware snapping for Highlight / Underline / Strikethrough / Squiggly
       if (activeTool === 'markup') {
+        const isSingleClick = bw < 6 && bh < 6;
+        const pad = isSingleClick ? 4 : 1;
         const overlappingSpans = textLayerSpans.filter(
           (sp) =>
-            sp.x + sp.width >= bx &&
-            sp.x <= bx + Math.max(bw, 4) &&
-            sp.y + sp.height >= by &&
-            sp.y <= by + Math.max(bh, 4)
+            sp.x + sp.width >= bx - pad &&
+            sp.x <= bx + Math.max(bw, 4) + pad &&
+            sp.y + sp.height >= by - pad &&
+            sp.y <= by + Math.max(bh, 4) + pad
         );
         if (overlappingSpans.length > 0) {
-          const sx1 = Math.min(...overlappingSpans.map((s) => s.x));
-          const sy1 = Math.min(...overlappingSpans.map((s) => s.y));
-          const sx2 = Math.max(...overlappingSpans.map((s) => s.x + s.width));
-          const sy2 = Math.max(...overlappingSpans.map((s) => s.y + s.height));
-          const snapped = {
-            id: `${activeMarkupSubtype}_${Date.now()}`,
-            type: activeMarkupSubtype,
-            x: sx1,
-            y: sy1,
-            width: sx2 - sx1,
-            height: sy2 - sy1,
-            color: markupColor,
-            opacity: activeMarkupSubtype === 'highlight' ? markupOpacity : 1,
-            canvasWidth: width,
-            canvasHeight: height
-          };
-          mutatePageAnnotations((list) => [...list, snapped]);
-          setSelectedAnnotationIds([snapped.id]);
+          // Group spans into horizontal lines so multi-line highlights stay neat
+          const rows = [];
+          const sorted = [...overlappingSpans].sort((a, b) => a.y - b.y || a.x - b.x);
+          for (const sp of sorted) {
+            const row = rows.find((r) => Math.abs(r.avgY - sp.y) < Math.max(8, sp.height * 0.6));
+            if (row) {
+              row.spans.push(sp);
+            } else {
+              rows.push({ avgY: sp.y, spans: [sp] });
+            }
+          }
+          const created = rows.map((row, idx) => {
+            const sx1 = Math.min(...row.spans.map((s) => s.x));
+            const sy1 = Math.min(...row.spans.map((s) => s.y));
+            const sx2 = Math.max(...row.spans.map((s) => s.x + s.width));
+            const sy2 = Math.max(...row.spans.map((s) => s.y + s.height));
+            return {
+              id: `${activeMarkupSubtype}_${Date.now()}_${idx}`,
+              type: activeMarkupSubtype,
+              x: sx1,
+              y: sy1,
+              width: Math.max(8, sx2 - sx1),
+              height: Math.max(10, sy2 - sy1),
+              color: markupColor,
+              opacity: activeMarkupSubtype === 'highlight' ? markupOpacity : 1,
+              canvasWidth: width,
+              canvasHeight: height
+            };
+          });
+          mutatePageAnnotations((list) => [...list, ...created]);
+          setSelectedAnnotationIds(created.map((c) => c.id));
+          setShowPropertiesPanel(true);
           setActiveBoxPreview(null);
           return;
         }
@@ -1147,27 +1279,33 @@ export default function PdfEditorModal({
       }
 
       if (activeTool === 'shape') {
-        const finalW = Math.max(24, bw);
-        const finalH = Math.max(24, bh);
+        const defaultW = bw < 8 && bh < 8 ? 110 : Math.max(24, bw);
+        const defaultH = bw < 8 && bh < 8 ? (activeShapeKind === 'line' || activeShapeKind === 'arrow' ? 24 : 70) : Math.max(24, bh);
+        const sx = boxStartX ?? bx;
+        const sy = boxStartY ?? by;
+        const ex = bw < 8 && bh < 8 ? sx + defaultW : x;
+        const ey = bw < 8 && bh < 8 ? (activeShapeKind === 'line' || activeShapeKind === 'arrow' ? sy : sy + defaultH) : y;
+        const boxX = bw < 8 && bh < 8 ? sx : Math.min(sx, ex);
+        const boxY = bw < 8 && bh < 8 ? sy : Math.min(sy, ey);
         const shapeAnn = {
           id: `shape_${Date.now()}`,
           type: 'shape',
           shapeKind: activeShapeKind,
-          x: bx,
-          y: by,
-          width: finalW,
-          height: finalH,
-          x1: activeBoxPreview.startX,
-          y1: activeBoxPreview.startY,
-          x2: x,
-          y2: y,
+          x: boxX,
+          y: boxY,
+          width: defaultW,
+          height: defaultH,
+          x1: sx,
+          y1: sy,
+          x2: ex,
+          y2: ey,
           points:
             activeShapeKind === 'polygon'
               ? [
-                  { x: bx, y: by + finalH },
-                  { x: bx + finalW / 2, y: by },
-                  { x: bx + finalW, y: by + finalH },
-                  { x: bx, y: by + finalH }
+                  { x: boxX, y: boxY + defaultH },
+                  { x: boxX + defaultW / 2, y: boxY },
+                  { x: boxX + defaultW, y: boxY + defaultH },
+                  { x: boxX, y: boxY + defaultH }
                 ]
               : undefined,
           strokeColor: penColor,
@@ -1180,6 +1318,7 @@ export default function PdfEditorModal({
         };
         mutatePageAnnotations((list) => [...list, shapeAnn]);
         setSelectedAnnotationIds([shapeAnn.id]);
+        setShowPropertiesPanel(true);
         setActiveTool('select');
       } else if (activeTool === 'markup') {
         const ann = {
@@ -1188,7 +1327,7 @@ export default function PdfEditorModal({
           x: bx,
           y: by,
           width: bw,
-          height: bh,
+          height: Math.max(12, bh),
           color: markupColor,
           opacity: activeMarkupSubtype === 'highlight' ? markupOpacity : 1,
           canvasWidth: width,
@@ -1196,6 +1335,7 @@ export default function PdfEditorModal({
         };
         mutatePageAnnotations((list) => [...list, ann]);
         setSelectedAnnotationIds([ann.id]);
+        setShowPropertiesPanel(true);
       } else if (activeTool === 'whiteout') {
         const ann = {
           id: `whiteout_${Date.now()}`,
@@ -1225,62 +1365,131 @@ export default function PdfEditorModal({
         };
         mutatePageAnnotations((list) => [...list, ann]);
         setSelectedAnnotationIds([ann.id]);
+        setShowPropertiesPanel(true);
       } else if (activeTool === 'link') {
-        const urlInput = window.prompt('Enter external URL (https://...) or leave blank to link to a page:', 'https://');
-        let targetPage = 1;
-        let linkKind = 'url';
-        if (!urlInput || urlInput === 'https://') {
-          const pStr = window.prompt(`Jump to page number (1–${pageOrder.length}):`, String(currentPage));
-          if (!pStr) {
-            setActiveBoxPreview(null);
-            return;
-          }
-          linkKind = 'page';
-          targetPage = Math.max(1, Math.min(pageOrder.length, parseInt(pStr, 10) || 1));
-        }
         const linkAnn = {
           id: `link_${Date.now()}`,
           type: 'link',
-          linkKind,
-          url: linkKind === 'url' ? urlInput : '',
-          targetPage,
+          linkKind: 'url',
+          url: 'https://',
+          targetPage: Math.min(pageOrder.length, currentPage + 1) || 1,
           x: bx,
           y: by,
-          width: bw,
-          height: bh,
+          width: Math.max(40, bw),
+          height: Math.max(22, bh),
           canvasWidth: width,
           canvasHeight: height
         };
         mutatePageAnnotations((list) => [...list, linkAnn]);
         setSelectedAnnotationIds([linkAnn.id]);
+        setShowPropertiesPanel(true);
         setActiveTool('select');
+        notify('Link box created — set its URL or target page in the Properties panel on the right.', 'info');
       }
       setActiveBoxPreview(null);
     }
   };
 
+  // Global mousemove/mouseup fallback so releasing pointer outside canvas finishes active drags cleanly
+  useEffect(() => {
+    latestDragHandlersRef.current = { move: handleOverlayMouseMove, up: handleOverlayMouseUp };
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onWinMove = (ev) => {
+      if (dragModeRef.current) latestDragHandlersRef.current.move?.(ev);
+    };
+    const onWinUp = (ev) => {
+      if (dragModeRef.current) latestDragHandlersRef.current.up?.(ev);
+    };
+    window.addEventListener('mousemove', onWinMove);
+    window.addEventListener('mouseup', onWinUp);
+    window.addEventListener('touchmove', onWinMove);
+    window.addEventListener('touchend', onWinUp);
+    return () => {
+      window.removeEventListener('mousemove', onWinMove);
+      window.removeEventListener('mouseup', onWinUp);
+      window.removeEventListener('touchmove', onWinMove);
+      window.removeEventListener('touchend', onWinUp);
+    };
+  }, [isOpen]);
+
   const commitInlineText = () => {
     if (!inlineTextEdit) return;
-    if (inlineTextEdit.text.trim()) {
-      const ann = {
-        id: `${inlineTextEdit.isCoverReplace ? 'coverText' : 'text'}_${Date.now()}`,
-        type: inlineTextEdit.isCoverReplace ? 'coverText' : 'text',
-        x: inlineTextEdit.x,
-        y: inlineTextEdit.y,
-        width: inlineTextEdit.width,
-        height: inlineTextEdit.height,
-        text: inlineTextEdit.text.trim(),
-        fontSize: inlineTextEdit.fontSize || 16,
-        fontFamily: inlineTextEdit.fontFamily || 'Inter',
-        color: inlineTextEdit.color || '#000000',
-        bgColor: inlineTextEdit.bgColor || 'transparent',
-        coverColor: inlineTextEdit.coverColor || '#ffffff',
-        canvasWidth: canvasDims.width,
-        canvasHeight: canvasDims.height
-      };
-      mutatePageAnnotations((list) => [...list, ann]);
-      setSelectedAnnotationIds([ann.id]);
-      setShowPropertiesPanel(true);
+    const trimmed = inlineTextEdit.text.trim();
+    if (trimmed) {
+      if (inlineTextEdit.editingId) {
+        mutatePageAnnotations((list) =>
+          list.map((a) => (a.id === inlineTextEdit.editingId ? { ...a, text: trimmed } : a))
+        );
+        setSelectedAnnotationIds([inlineTextEdit.editingId]);
+        setShowPropertiesPanel(true);
+      } else if (inlineTextEdit.kind === 'comment') {
+        const now = new Date();
+        const ann = {
+          id: `comment_${Date.now()}`,
+          type: 'comment',
+          x: inlineTextEdit.anchorX ?? inlineTextEdit.x,
+          y: inlineTextEdit.anchorY ?? inlineTextEdit.y,
+          width: 28,
+          height: 28,
+          text: trimmed,
+          author: localProfile.name || 'Local User',
+          createdAtIso: now.toISOString(),
+          timestampLabel: `${now.toLocaleString()} (device clock time)`,
+          replies: [],
+          color: '#f59e0b',
+          canvasWidth: canvasDims.width,
+          canvasHeight: canvasDims.height
+        };
+        mutatePageAnnotations((list) => [...list, ann]);
+        setSelectedAnnotationIds([ann.id]);
+        setShowLeftSidebar(true);
+        setLeftSidebarTab('comments');
+      } else if (inlineTextEdit.kind === 'callout') {
+        const ann = {
+          id: `callout_${Date.now()}`,
+          type: 'callout',
+          x: inlineTextEdit.x,
+          y: inlineTextEdit.y,
+          width: 170,
+          height: 52,
+          anchorX: inlineTextEdit.anchorX ?? inlineTextEdit.x,
+          anchorY: inlineTextEdit.anchorY ?? inlineTextEdit.y,
+          text: trimmed,
+          fontSize: 13,
+          color: '#111827',
+          bgColor: '#fef3c7',
+          borderColor: '#d97706',
+          canvasWidth: canvasDims.width,
+          canvasHeight: canvasDims.height
+        };
+        mutatePageAnnotations((list) => [...list, ann]);
+        setSelectedAnnotationIds([ann.id]);
+        setShowPropertiesPanel(true);
+      } else {
+        const isCover = inlineTextEdit.isCoverReplace || inlineTextEdit.kind === 'coverText';
+        const ann = {
+          id: `${isCover ? 'coverText' : 'text'}_${Date.now()}`,
+          type: isCover ? 'coverText' : 'text',
+          x: inlineTextEdit.x,
+          y: inlineTextEdit.y,
+          width: inlineTextEdit.width,
+          height: inlineTextEdit.height,
+          text: trimmed,
+          fontSize: inlineTextEdit.fontSize || 16,
+          fontFamily: inlineTextEdit.fontFamily || 'Inter',
+          color: inlineTextEdit.color || '#000000',
+          bgColor: inlineTextEdit.bgColor || 'transparent',
+          coverColor: inlineTextEdit.coverColor || '#ffffff',
+          canvasWidth: canvasDims.width,
+          canvasHeight: canvasDims.height
+        };
+        mutatePageAnnotations((list) => [...list, ann]);
+        setSelectedAnnotationIds([ann.id]);
+        setShowPropertiesPanel(true);
+      }
     }
     setInlineTextEdit(null);
     setActiveTool('select');
@@ -1506,20 +1715,10 @@ export default function PdfEditorModal({
   };
 
   // Fill & Sign Helpers
-  const handleAutofillFromProfile = () => {
-    let isOptedIn = false;
+  const executeAutofillFromProfile = () => {
     try {
-      isOptedIn = localStorage.getItem(AUTOFILL_OPTIN_KEY) === 'true';
+      localStorage.setItem(AUTOFILL_OPTIN_KEY, 'true');
     } catch {}
-    if (!isOptedIn) {
-      const ok = window.confirm(
-        'Enable local Profile Autofill? Your Klarity name, email, phone, and address will stay 100% on this device and never be sent anywhere.'
-      );
-      if (!ok) return;
-      try {
-        localStorage.setItem(AUTOFILL_OPTIN_KEY, 'true');
-      } catch {}
-    }
 
     const matchValue = (labelStr = '') => {
       const l = labelStr.toLowerCase();
@@ -1554,6 +1753,18 @@ export default function PdfEditorModal({
     setCustomFields(nextCustom);
     setHasUnsavedChanges(true);
     notify(filledCount > 0 ? `Autofilled ${filledCount} matching profile field(s).` : 'No matching Name, Email, Phone, or Address fields detected.', 'info');
+  };
+
+  const handleAutofillFromProfile = () => {
+    let isOptedIn = false;
+    try {
+      isOptedIn = localStorage.getItem(AUTOFILL_OPTIN_KEY) === 'true';
+    } catch {}
+    if (!isOptedIn) {
+      setAutofillConfirmOpen(true);
+      return;
+    }
+    executeAutofillFromProfile();
   };
 
   const requiredFieldsList = useMemo(() => {
@@ -1954,14 +2165,17 @@ export default function PdfEditorModal({
           )}
         </div>
 
-        {/* Mode-Specific Single Row Toolbar (with grouped dropdowns) */}
-        <div className="min-h-[48px] py-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        {/* Mode-Specific Single Row Toolbar (with unclipped grouped dropdowns) */}
+        <div className="min-h-[48px] py-1.5 flex flex-wrap items-center gap-1.5 overflow-visible relative z-30">
           {/* EDIT MODE TOOLBAR */}
           {modeTab === 'edit' && (
             <>
               <button
                 type="button"
-                onClick={() => setActiveTool('select')}
+                onClick={() => {
+                  setActiveTool('select');
+                  setOpenMenuDropdown(null);
+                }}
                 title="Select / Move / Multi-Select (V)"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTool === 'select' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
@@ -1974,7 +2188,10 @@ export default function PdfEditorModal({
               <button
                 type="button"
                 disabled={readOnlyLocked}
-                onClick={() => setActiveTool('text')}
+                onClick={() => {
+                  setActiveTool('text');
+                  setOpenMenuDropdown(null);
+                }}
                 title="Add Text Box (T)"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
                   activeTool === 'text' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
@@ -1987,7 +2204,10 @@ export default function PdfEditorModal({
               <button
                 type="button"
                 disabled={readOnlyLocked}
-                onClick={() => setActiveTool('editText')}
+                onClick={() => {
+                  setActiveTool('editText');
+                  setOpenMenuDropdown(null);
+                }}
                 title="Cover & Replace Existing PDF Text"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
                   activeTool === 'editText' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
@@ -2018,7 +2238,7 @@ export default function PdfEditorModal({
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {openMenuDropdown === 'markup' && (
-                  <div className="fixed sm:absolute left-auto top-auto mt-1 w-56 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-2">
+                  <div className="absolute left-0 top-full mt-1 w-56 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-2">
                     <div className="grid grid-cols-2 gap-1">
                       {['highlight', 'underline', 'strikethrough', 'squiggly'].map((m) => (
                         <button
@@ -2085,7 +2305,7 @@ export default function PdfEditorModal({
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {openMenuDropdown === 'draw' && (
-                  <div className="fixed sm:absolute mt-1 w-56 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-2">
+                  <div className="absolute left-0 top-full mt-1 w-56 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-2">
                     <div className="flex gap-1">
                       {[
                         ['pen', 'Pen'],
@@ -2138,11 +2358,11 @@ export default function PdfEditorModal({
                   }`}
                 >
                   <Square className="w-4 h-4" />
-                  <span>Shapes</span>
+                  <span>{SHAPE_OPTIONS.find((s) => s.id === activeShapeKind)?.label || 'Shapes'}</span>
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {openMenuDropdown === 'shapes' && (
-                  <div className="fixed sm:absolute mt-1 w-60 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2 z-50 grid grid-cols-2 gap-1">
+                  <div className="absolute left-0 top-full mt-1 w-60 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2 z-50 grid grid-cols-2 gap-1">
                     {SHAPE_OPTIONS.map((sh) => {
                       const Icon = sh.icon;
                       return (
@@ -2170,7 +2390,10 @@ export default function PdfEditorModal({
               <button
                 type="button"
                 disabled={readOnlyLocked}
-                onClick={() => setActiveTool('whiteout')}
+                onClick={() => {
+                  setActiveTool('whiteout');
+                  setOpenMenuDropdown(null);
+                }}
                 title="Whiteout (Cover-only — not secure removal; use Redact to permanently remove)"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
                   activeTool === 'whiteout'
@@ -2185,7 +2408,10 @@ export default function PdfEditorModal({
               <button
                 type="button"
                 disabled={readOnlyLocked}
-                onClick={() => insertImageInputRef.current?.click()}
+                onClick={() => {
+                  setOpenMenuDropdown(null);
+                  insertImageInputRef.current?.click();
+                }}
                 title="Insert Image (PNG, JPG, WebP, SVG) or Ctrl+V paste"
                 className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40"
               >
@@ -2198,7 +2424,10 @@ export default function PdfEditorModal({
                 <button
                   type="button"
                   disabled={readOnlyLocked}
-                  onClick={() => setOpenMenuDropdown(openMenuDropdown === 'notes' ? null : 'notes')}
+                  onClick={() => {
+                    if (activeTool !== 'comment' && activeTool !== 'callout') setActiveTool('comment');
+                    setOpenMenuDropdown(openMenuDropdown === 'notes' ? null : 'notes');
+                  }}
                   title="Sticky Comments & Callouts"
                   className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 ${
                     activeTool === 'comment' || activeTool === 'callout'
@@ -2207,15 +2436,15 @@ export default function PdfEditorModal({
                   }`}
                 >
                   <MessageSquare className="w-4 h-4 text-amber-500 dark:text-amber-400" />
-                  <span>Comment</span>
+                  <span>{activeTool === 'callout' ? 'Callout' : 'Comment'}</span>
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {openMenuDropdown === 'notes' && (
-                  <div className="fixed sm:absolute mt-1 w-48 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-1.5 z-50 flex flex-col gap-1">
-                    <button type="button" onClick={() => { setActiveTool('comment'); setOpenMenuDropdown(null); }} className="px-2.5 py-2 rounded-lg hover:bg-[var(--surface-subtle)] text-[13px] font-medium text-left cursor-pointer">
+                  <div className="absolute left-0 top-full mt-1 w-48 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-1.5 z-50 flex flex-col gap-1">
+                    <button type="button" onClick={() => { setActiveTool('comment'); setOpenMenuDropdown(null); }} className={`px-2.5 py-2 rounded-lg text-[13px] font-medium text-left cursor-pointer ${activeTool === 'comment' ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'}`}>
                       Sticky Note Comment
                     </button>
-                    <button type="button" onClick={() => { setActiveTool('callout'); setOpenMenuDropdown(null); }} className="px-2.5 py-2 rounded-lg hover:bg-[var(--surface-subtle)] text-[13px] font-medium text-left cursor-pointer">
+                    <button type="button" onClick={() => { setActiveTool('callout'); setOpenMenuDropdown(null); }} className={`px-2.5 py-2 rounded-lg text-[13px] font-medium text-left cursor-pointer ${activeTool === 'callout' ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'}`}>
                       Callout Box
                     </button>
                   </div>
@@ -2225,7 +2454,10 @@ export default function PdfEditorModal({
               <button
                 type="button"
                 disabled={readOnlyLocked}
-                onClick={() => setActiveTool('link')}
+                onClick={() => {
+                  setActiveTool('link');
+                  setOpenMenuDropdown(null);
+                }}
                 title="Insert URL Link or Page Jump"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
                   activeTool === 'link' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
@@ -2238,7 +2470,10 @@ export default function PdfEditorModal({
               <button
                 type="button"
                 disabled={readOnlyLocked}
-                onClick={() => setActiveTool('redact')}
+                onClick={() => {
+                  setActiveTool('redact');
+                  setOpenMenuDropdown(null);
+                }}
                 title="Mark Secure Redaction Area"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
                   activeTool === 'redact'
@@ -2253,7 +2488,10 @@ export default function PdfEditorModal({
               <button
                 type="button"
                 disabled={readOnlyLocked}
-                onClick={() => setIsPageSetupOpen(true)}
+                onClick={() => {
+                  setOpenMenuDropdown(null);
+                  setIsPageSetupOpen(true);
+                }}
                 title="Page Numbers, Headers/Footers, Bates & Watermark"
                 className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40"
               >
@@ -2270,6 +2508,7 @@ export default function PdfEditorModal({
                 type="button"
                 disabled={readOnlyLocked}
                 onClick={() => {
+                  setOpenMenuDropdown(null);
                   setSignatureModalKind('signature');
                   setIsSignatureModalOpen(true);
                   setActiveTool('signature');
@@ -2279,7 +2518,7 @@ export default function PdfEditorModal({
                   activeTool === 'signature' ? 'bg-emerald-600 text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
-                <FileCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <FileCheck className={`w-4 h-4 ${activeTool === 'signature' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
                 <span>Signature</span>
               </button>
 
@@ -2287,6 +2526,7 @@ export default function PdfEditorModal({
                 type="button"
                 disabled={readOnlyLocked}
                 onClick={() => {
+                  setOpenMenuDropdown(null);
                   setSignatureModalKind('initials');
                   setIsSignatureModalOpen(true);
                   setActiveTool('initials');
@@ -2296,7 +2536,7 @@ export default function PdfEditorModal({
                   activeTool === 'initials' ? 'bg-emerald-600 text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
-                <Pen className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <Pen className={`w-4 h-4 ${activeTool === 'initials' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
                 <span>Initials</span>
               </button>
 
@@ -2305,18 +2545,21 @@ export default function PdfEditorModal({
                 <button
                   type="button"
                   disabled={readOnlyLocked}
-                  onClick={() => setOpenMenuDropdown(openMenuDropdown === 'fields' ? null : 'fields')}
+                  onClick={() => {
+                    setActiveTool('field');
+                    setOpenMenuDropdown(openMenuDropdown === 'fields' ? null : 'fields');
+                  }}
                   title="Add Form or Signing Field"
                   className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 ${
                     activeTool === 'field' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                   }`}
                 >
-                  <Plus className="w-4 h-4 text-[var(--brand)]" />
-                  <span>Add Field</span>
+                  <Plus className={`w-4 h-4 ${activeTool === 'field' ? 'text-white' : 'text-[var(--brand)]'}`} />
+                  <span>{activeTool === 'field' ? FIELD_TYPES.find((ft) => ft.id === activeFieldType)?.label || 'Add Field' : 'Add Field'}</span>
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {openMenuDropdown === 'fields' && (
-                  <div className="fixed sm:absolute mt-1 w-64 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2 z-50 grid grid-cols-2 gap-1">
+                  <div className="absolute left-0 top-full mt-1 w-64 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2 z-50 grid grid-cols-2 gap-1">
                     {FIELD_TYPES.map((ft) => {
                       const Icon = ft.icon;
                       return (
@@ -2328,9 +2571,11 @@ export default function PdfEditorModal({
                             setActiveTool('field');
                             setOpenMenuDropdown(null);
                           }}
-                          className="px-2 py-2 rounded-lg text-[12px] font-medium hover:bg-[var(--surface-subtle)] flex items-center gap-1.5 text-left cursor-pointer"
+                          className={`px-2 py-2 rounded-lg text-[12px] font-medium flex items-center gap-1.5 text-left cursor-pointer ${
+                            activeTool === 'field' && activeFieldType === ft.id ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'
+                          }`}
                         >
-                          <Icon className="w-3.5 h-3.5 text-[var(--brand)] shrink-0" />
+                          <Icon className={`w-3.5 h-3.5 shrink-0 ${activeTool === 'field' && activeFieldType === ft.id ? 'text-white' : 'text-[var(--brand)]'}`} />
                           <span className="truncate">{ft.label}</span>
                         </button>
                       );
@@ -2692,23 +2937,45 @@ export default function PdfEditorModal({
             </div>
           )}
 
-          {isLoading ? (
-            <div className="self-center flex flex-col items-center gap-3 text-[var(--ink)]">
-              <Loader2 className="w-8 h-8 animate-spin text-[var(--brand)]" />
-              <p className="text-[15px] font-medium">Loading PDF locally...</p>
-            </div>
-          ) : !rawPdfBytes ? (
-            <div className="self-center p-8 rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)] text-center max-w-md text-[var(--ink)] shadow-sm">
-              <FileText className="w-10 h-10 mx-auto mb-3 text-[var(--brand)]" />
-              <p className="text-[15px] font-semibold mb-1">No PDF Loaded</p>
-              <p className="text-[13px] text-[var(--muted)] mb-4">Open a PDF file or drag and drop one anywhere here.</p>
-              <Button variant="primary" onClick={() => openDiskInputRef.current?.click()}>
-                Open PDF File
-              </Button>
-            </div>
+          {!rawPdfBytes ? (
+            isLoading ? (
+              <div className="self-center flex flex-col items-center gap-3 text-[var(--ink)]">
+                <Loader2 className="w-8 h-8 animate-spin text-[var(--brand)]" />
+                <p className="text-[15px] font-medium">Loading PDF locally...</p>
+              </div>
+            ) : (
+              <div className="self-center p-8 rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)] text-center max-w-md text-[var(--ink)] shadow-sm">
+                <FileText className="w-10 h-10 mx-auto mb-3 text-[var(--brand)]" />
+                <p className="text-[15px] font-semibold mb-1">No PDF Loaded</p>
+                <p className="text-[13px] text-[var(--muted)] mb-4">Open a PDF file or drag and drop one anywhere here.</p>
+                <Button variant="primary" onClick={() => openDiskInputRef.current?.click()}>
+                  Open PDF File
+                </Button>
+              </div>
+            )
           ) : (
-            <div className="relative shadow-2xl rounded-sm inline-block my-auto" onClick={(e) => e.stopPropagation()}>
-              <canvas ref={pdfCanvasRef} className="block bg-white rounded-sm" />
+            <div
+              style={{
+                minWidth: `${canvasDims.width || Math.floor(612 * zoom)}px`,
+                minHeight: `${canvasDims.height || Math.floor(792 * zoom)}px`
+              }}
+              className="relative shadow-2xl rounded-sm inline-block my-auto bg-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <canvas
+                ref={pdfCanvasRef}
+                style={{
+                  width: `${canvasDims.width || Math.floor(612 * zoom)}px`,
+                  height: `${canvasDims.height || Math.floor(792 * zoom)}px`
+                }}
+                className="block bg-white rounded-sm"
+              />
+              {isLoading && (
+                <div className="absolute inset-0 z-40 bg-white/80 flex flex-col items-center justify-center gap-2 text-slate-800">
+                  <Loader2 className="w-7 h-7 animate-spin text-[var(--brand)]" />
+                  <span className="text-[13px] font-medium">Rendering page...</span>
+                </div>
+              )}
 
               {/* Interactive Overlay Layer */}
               <div
@@ -2733,12 +3000,19 @@ export default function PdfEditorModal({
                   .map((f) => {
                     const val = acroFormValues[f.fieldName] ?? '';
                     const errMsg = validateFieldValue(val, f.validationFormat);
+                    const allowFormInteraction = activeTool === 'select' || activeTool === 'signature' || activeTool === 'initials';
+                    const formPointerCls = allowFormInteraction ? '' : 'pointer-events-none';
+                    const stopDown = (e) => {
+                      e.stopPropagation();
+                      setOpenMenuDropdown(null);
+                    };
                     const style = {
                       left: `${f.xNorm * 100}%`,
                       top: `${f.yNorm * 100}%`,
                       width: `${f.wNorm * 100}%`,
                       height: `${f.hNorm * 100}%`
                     };
+
                     if (f.type === 'checkbox') {
                       return (
                         <input
@@ -2748,12 +3022,36 @@ export default function PdfEditorModal({
                           checked={Boolean(val)}
                           disabled={f.readOnly || readOnlyLocked}
                           aria-label={f.label}
+                          onMouseDown={stopDown}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={(e) => {
                             setAcroFormValues((p) => ({ ...p, [f.fieldName]: e.target.checked }));
                             setHasUnsavedChanges(true);
                           }}
                           style={style}
-                          className="absolute accent-[#1B4B91] cursor-pointer"
+                          className={`absolute accent-[#1B4B91] cursor-pointer ${formPointerCls}`}
+                        />
+                      );
+                    }
+                    if (f.type === 'radio') {
+                      const optVal = f.exportValue || f.id;
+                      return (
+                        <input
+                          key={f.id}
+                          type="radio"
+                          name={`acro_radio_${f.fieldName}`}
+                          tabIndex={f.tabOrder}
+                          checked={String(val) === String(optVal)}
+                          disabled={f.readOnly || readOnlyLocked}
+                          aria-label={`${f.label} (${optVal})`}
+                          onMouseDown={stopDown}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => {
+                            setAcroFormValues((p) => ({ ...p, [f.fieldName]: optVal }));
+                            setHasUnsavedChanges(true);
+                          }}
+                          style={style}
+                          className={`absolute accent-[#1B4B91] cursor-pointer ${formPointerCls}`}
                         />
                       );
                     }
@@ -2765,20 +3063,125 @@ export default function PdfEditorModal({
                           value={val}
                           disabled={f.readOnly || readOnlyLocked}
                           aria-label={f.label}
+                          onMouseDown={stopDown}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={(e) => {
                             setAcroFormValues((p) => ({ ...p, [f.fieldName]: e.target.value }));
                             setHasUnsavedChanges(true);
                           }}
                           style={style}
-                          className={`absolute bg-blue-50/90 text-slate-900 text-xs px-1 border rounded ${
+                          className={`pdf-paper-input absolute bg-blue-50/90 text-slate-900 text-xs px-1 border rounded outline-none ${
                             f.required && !val ? 'border-amber-500 ring-1 ring-amber-400' : 'border-blue-400/70'
-                          }`}
+                          } ${formPointerCls}`}
                         >
                           <option value="">-- Select --</option>
                           {(f.options || []).map((opt) => (
                             <option key={opt} value={opt}>{opt}</option>
                           ))}
                         </select>
+                      );
+                    }
+                    if (f.type === 'listbox') {
+                      const selectedArr = Array.isArray(val) ? val : val ? [val] : [];
+                      return (
+                        <select
+                          key={f.id}
+                          multiple
+                          tabIndex={f.tabOrder}
+                          value={selectedArr}
+                          disabled={f.readOnly || readOnlyLocked}
+                          aria-label={f.label}
+                          onMouseDown={stopDown}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            const nextSelected = Array.from(e.target.selectedOptions).map((o) => o.value);
+                            setAcroFormValues((p) => ({ ...p, [f.fieldName]: nextSelected }));
+                            setHasUnsavedChanges(true);
+                          }}
+                          style={style}
+                          className={`pdf-paper-input absolute bg-blue-50/90 text-slate-900 text-xs px-1 border rounded outline-none ${
+                            f.required && selectedArr.length === 0 ? 'border-amber-500 ring-1 ring-amber-400' : 'border-blue-400/70'
+                          } ${formPointerCls}`}
+                        >
+                          {(f.options || []).map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      );
+                    }
+                    if (f.type === 'paragraph') {
+                      return (
+                        <textarea
+                          key={f.id}
+                          tabIndex={f.tabOrder}
+                          value={val}
+                          maxLength={f.maxLength || undefined}
+                          readOnly={f.readOnly || readOnlyLocked}
+                          aria-label={f.label}
+                          title={errMsg || f.label}
+                          onMouseDown={stopDown}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            setAcroFormValues((p) => ({ ...p, [f.fieldName]: e.target.value }));
+                            setHasUnsavedChanges(true);
+                          }}
+                          style={style}
+                          className={`pdf-paper-input absolute bg-blue-50/85 text-slate-900 text-xs p-1.5 border rounded outline-none resize-none focus:bg-white ${
+                            errMsg
+                              ? 'border-rose-500 ring-1 ring-rose-500'
+                              : f.required && !val
+                              ? 'border-amber-500 ring-1 ring-amber-400'
+                              : 'border-blue-400/70 focus:border-[#1B4B91]'
+                          } ${formPointerCls}`}
+                        />
+                      );
+                    }
+                    if (f.type === 'signature') {
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          tabIndex={f.tabOrder}
+                          disabled={f.readOnly || readOnlyLocked}
+                          aria-label={f.label}
+                          onMouseDown={stopDown}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (readOnlyLocked || f.readOnly) return;
+                            setPendingSignatureTargetFieldId(`acro::${f.id}`);
+                            setSignatureModalKind('signature');
+                            setIsSignatureModalOpen(true);
+                          }}
+                          style={style}
+                          className={`pdf-paper-input absolute bg-emerald-50/80 hover:bg-emerald-100/90 text-emerald-800 border border-dashed border-emerald-500/80 rounded text-[11px] font-semibold flex items-center justify-center cursor-pointer ${formPointerCls}`}
+                        >
+                          Click to Sign
+                        </button>
+                      );
+                    }
+                    if (f.type === 'button') {
+                      const isResetBtn = `${f.fieldName} ${f.label}`.toLowerCase().includes('reset');
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          tabIndex={f.tabOrder}
+                          aria-label={f.label}
+                          title={isResetBtn ? 'Reset form fields to defaults' : `${f.label} (interactive scripts disabled offline)`}
+                          onMouseDown={stopDown}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isResetBtn && !readOnlyLocked) {
+                              setAcroFormValues({ ...initialAcroFormValuesRef.current });
+                              setHasUnsavedChanges(true);
+                              notify('Form fields reset to default values.', 'info');
+                            } else {
+                              notify('Interactive button scripts are disabled in offline mode for security.', 'info');
+                            }
+                          }}
+                          style={style}
+                          className={`absolute bg-transparent hover:bg-blue-500/15 border border-transparent hover:border-blue-500/60 rounded cursor-pointer transition-colors ${formPointerCls}`}
+                        />
                       );
                     }
                     return (
@@ -2791,18 +3194,20 @@ export default function PdfEditorModal({
                         readOnly={f.readOnly || readOnlyLocked}
                         aria-label={f.label}
                         title={errMsg || f.label}
+                        onMouseDown={stopDown}
+                        onClick={(e) => e.stopPropagation()}
                         onChange={(e) => {
                           setAcroFormValues((p) => ({ ...p, [f.fieldName]: e.target.value }));
                           setHasUnsavedChanges(true);
                         }}
                         style={style}
-                        className={`absolute bg-blue-50/85 text-slate-900 text-xs px-1.5 border rounded outline-none focus:bg-white ${
+                        className={`pdf-paper-input no-focus-outline absolute bg-blue-50/85 text-slate-900 text-xs px-1.5 border rounded outline-none focus:bg-white ${
                           errMsg
                             ? 'border-rose-500 ring-1 ring-rose-500'
                             : f.required && !val
                             ? 'border-amber-500 ring-1 ring-amber-400'
                             : 'border-blue-400/70 focus:border-[#1B4B91]'
-                        }`}
+                        } ${formPointerCls}`}
                       />
                     );
                   })}
@@ -2815,15 +3220,19 @@ export default function PdfEditorModal({
                     const signerObj = signers.find((s) => s.id === f.signerId) || signers[0];
                     const errMsg = validateFieldValue(f.value, f.validationFormat);
                     const isOtherSignerLocked = guidedSigningActive && signers[activeSignerIdx]?.id !== f.signerId;
+                    const stopAndSelect = (e) => {
+                      e.stopPropagation();
+                      setOpenMenuDropdown(null);
+                      setSelectedFieldId(f.id);
+                      setSelectedAnnotationIds([]);
+                      setShowPropertiesPanel(true);
+                    };
 
                     return (
                       <div
                         key={f.id}
                         onMouseDown={(e) => {
-                          e.stopPropagation();
-                          setSelectedFieldId(f.id);
-                          setSelectedAnnotationIds([]);
-                          setShowPropertiesPanel(true);
+                          stopAndSelect(e);
                           if (!readOnlyLocked && activeTool === 'select') {
                             const { x, y } = getOverlayPos(e);
                             dragModeRef.current = 'moveField';
@@ -2837,7 +3246,7 @@ export default function PdfEditorModal({
                           height: `${f.hNorm * 100}%`,
                           borderColor: isSel ? '#1B4B91' : signerObj?.color || '#2563eb'
                         }}
-                        className={`absolute border-2 rounded-md flex items-center justify-center bg-white/90 text-slate-900 shadow-xs ${
+                        className={`pdf-paper-input absolute border-2 rounded-md flex items-center justify-center bg-white/95 text-slate-900 shadow-xs cursor-move ${
                           isSel ? 'ring-2 ring-blue-500/40 z-20' : 'z-10'
                         } ${f.required && !f.value ? 'ring-1 ring-amber-500' : ''} ${
                           isOtherSignerLocked ? 'opacity-45 pointer-events-none' : ''
@@ -2851,6 +3260,7 @@ export default function PdfEditorModal({
                           ) : (
                             <button
                               type="button"
+                              onMouseDown={stopAndSelect}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (readOnlyLocked) return;
@@ -2891,6 +3301,7 @@ export default function PdfEditorModal({
                             type="checkbox"
                             checked={Boolean(f.value)}
                             disabled={f.readOnly || readOnlyLocked}
+                            onMouseDown={stopAndSelect}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => {
                               setCustomFields((prev) =>
@@ -2904,10 +3315,11 @@ export default function PdfEditorModal({
                             }}
                             className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
                           />
-                        ) : f.type === 'dropdown' ? (
+                        ) : f.type === 'dropdown' || f.type === 'radio' ? (
                           <select
                             value={f.value || ''}
                             disabled={f.readOnly || readOnlyLocked}
+                            onMouseDown={stopAndSelect}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => {
                               setCustomFields((prev) =>
@@ -2919,21 +3331,21 @@ export default function PdfEditorModal({
                               );
                               setHasUnsavedChanges(true);
                             }}
-                            className="w-full h-full bg-transparent text-xs px-1 outline-none"
+                            className="pdf-paper-input w-full h-full bg-transparent text-slate-900 text-xs px-1 outline-none"
                           >
                             <option value="">-- Select --</option>
                             {(f.options || []).map((o) => (
                               <option key={o} value={o}>{o}</option>
                             ))}
                           </select>
-                        ) : (
-                          <input
-                            type="text"
+                        ) : f.type === 'paragraph' ? (
+                          <textarea
                             value={f.value || ''}
                             maxLength={f.maxLength || undefined}
                             readOnly={f.readOnly || readOnlyLocked}
                             placeholder={f.label}
                             title={errMsg || f.label}
+                            onMouseDown={stopAndSelect}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => {
                               setCustomFields((prev) =>
@@ -2945,7 +3357,70 @@ export default function PdfEditorModal({
                               );
                               setHasUnsavedChanges(true);
                             }}
-                            className={`w-full h-full bg-transparent px-1.5 text-xs outline-none ${errMsg ? 'text-rose-600 font-semibold' : ''}`}
+                            className={`pdf-paper-input w-full h-full bg-transparent text-slate-900 p-1 text-xs outline-none resize-none ${errMsg ? 'text-rose-600 font-semibold' : ''}`}
+                          />
+                        ) : f.type === 'attachment' ? (
+                          <button
+                            type="button"
+                            onMouseDown={stopAndSelect}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (readOnlyLocked) return;
+                              const inp = document.createElement('input');
+                              inp.type = 'file';
+                              inp.onchange = (ev) => {
+                                const file = ev.target.files?.[0];
+                                if (!file) return;
+                                setCustomFields((prev) =>
+                                  prev.map((x) =>
+                                    x.id === f.id
+                                      ? { ...x, value: file.name, completedAtIso: new Date().toISOString(), completedAtLabel: `${new Date().toLocaleString()} (device clock time)` }
+                                      : x
+                                  )
+                                );
+                                setHasUnsavedChanges(true);
+                              };
+                              inp.click();
+                            }}
+                            className="w-full h-full text-[11px] font-medium text-blue-700 hover:bg-blue-50 px-1 truncate cursor-pointer flex items-center justify-center gap-1"
+                          >
+                            <Paperclip className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{f.value || 'Attach file...'}</span>
+                          </button>
+                        ) : (
+                          <input
+                            type={f.type === 'date' ? 'date' : 'text'}
+                            value={f.value || ''}
+                            maxLength={f.maxLength || undefined}
+                            readOnly={f.readOnly || readOnlyLocked}
+                            placeholder={f.label}
+                            title={errMsg || f.label}
+                            onMouseDown={stopAndSelect}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              setCustomFields((prev) =>
+                                prev.map((x) =>
+                                  x.id === f.id
+                                    ? { ...x, value: e.target.value, completedAtIso: new Date().toISOString(), completedAtLabel: `${new Date().toLocaleString()} (device clock time)` }
+                                    : x
+                                )
+                              );
+                              setHasUnsavedChanges(true);
+                            }}
+                            className={`pdf-paper-input no-focus-outline w-full h-full bg-transparent text-slate-900 px-1.5 text-xs outline-none ${errMsg ? 'text-rose-600 font-semibold' : ''}`}
+                          />
+                        )}
+
+                        {isSel && !readOnlyLocked && (
+                          <div
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              const { x, y } = getOverlayPos(e);
+                              dragModeRef.current = 'resizeField';
+                              dragStartRef.current = { x, y, origField: { ...f } };
+                            }}
+                            className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-600 border-2 border-white rounded-sm cursor-se-resize shadow"
+                            title="Drag to resize field"
                           />
                         )}
                       </div>
@@ -2956,24 +3431,9 @@ export default function PdfEditorModal({
                 {currentPageAnns.map((ann) => {
                   const isSel = selectedAnnotationIds.includes(ann.id);
 
-                  if (ann.type === 'draw') {
-                    return (
-                      <svg key={ann.id} className="absolute inset-0 w-full h-full pointer-events-none">
-                        <polyline
-                          points={(ann.points || []).map((p) => `${p.x},${p.y}`).join(' ')}
-                          fill="none"
-                          stroke={ann.color || '#1B4B91'}
-                          strokeWidth={ann.thickness || 2.5}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeOpacity={ann.opacity ?? 1}
-                        />
-                      </svg>
-                    );
-                  }
-
                   const selectThis = (e) => {
                     e.stopPropagation();
+                    setOpenMenuDropdown(null);
                     setSelectedFieldId(null);
                     setShowPropertiesPanel(true);
                     if (e.shiftKey) {
@@ -2990,12 +3450,60 @@ export default function PdfEditorModal({
                       const activeGroup = e.shiftKey || selectedAnnotationIds.includes(ann.id) ? selectedAnnotationIds : [ann.id];
                       currentPageAnns.forEach((item) => {
                         if (activeGroup.includes(item.id) || item.id === ann.id) {
-                          origMap.set(item.id, { x: item.x || 0, y: item.y || 0, width: item.width || 60, height: item.height || 30 });
+                          origMap.set(item.id, {
+                            x: item.x || 0,
+                            y: item.y || 0,
+                            width: item.width || 60,
+                            height: item.height || 30,
+                            x1: item.x1,
+                            y1: item.y1,
+                            x2: item.x2,
+                            y2: item.y2,
+                            points: item.points ? item.points.map((pt) => ({ ...pt })) : undefined
+                          });
                         }
                       });
                       dragStartRef.current = { x, y, origMap };
                     }
                   };
+
+                  if (ann.type === 'draw') {
+                    return (
+                      <svg key={ann.id} className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
+                        <polyline
+                          points={(ann.points || []).map((p) => `${p.x},${p.y}`).join(' ')}
+                          fill="none"
+                          stroke="transparent"
+                          strokeWidth={Math.max(14, (ann.thickness || 2.5) + 10)}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          style={{ pointerEvents: activeTool === 'select' ? 'stroke' : 'none', cursor: 'move' }}
+                          onMouseDown={selectThis}
+                        />
+                        <polyline
+                          points={(ann.points || []).map((p) => `${p.x},${p.y}`).join(' ')}
+                          fill="none"
+                          stroke={ann.color || '#1B4B91'}
+                          strokeWidth={ann.thickness || 2.5}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeOpacity={ann.opacity ?? 1}
+                        />
+                        {isSel && ann.width && ann.height && (
+                          <rect
+                            x={(ann.x || 0) - 3}
+                            y={(ann.y || 0) - 3}
+                            width={(ann.width || 20) + 6}
+                            height={(ann.height || 20) + 6}
+                            fill="none"
+                            stroke="#3b82f6"
+                            strokeWidth={1.5}
+                            strokeDasharray="4 3"
+                          />
+                        )}
+                      </svg>
+                    );
+                  }
 
                   const renderHandles = () =>
                     isSel && !ann.locked && !readOnlyLocked ? (
@@ -3006,7 +3514,16 @@ export default function PdfEditorModal({
                             const { x, y } = getOverlayPos(e);
                             dragModeRef.current = 'resize';
                             const origMap = new Map();
-                            origMap.set(ann.id, { x: ann.x || 0, y: ann.y || 0, width: ann.width || 80, height: ann.height || 30 });
+                            origMap.set(ann.id, {
+                              x: ann.x || 0,
+                              y: ann.y || 0,
+                              width: ann.width || 80,
+                              height: ann.height || 30,
+                              x1: ann.x1,
+                              y1: ann.y1,
+                              x2: ann.x2,
+                              y2: ann.y2
+                            });
                             dragStartRef.current = { x, y, origMap };
                           }}
                           className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-600 border-2 border-white rounded-sm cursor-se-resize shadow"
@@ -3075,6 +3592,25 @@ export default function PdfEditorModal({
                       <div
                         key={ann.id}
                         onMouseDown={selectThis}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          if (ann.locked || readOnlyLocked) return;
+                          setInlineTextEdit({
+                            editingId: ann.id,
+                            kind: ann.type,
+                            x: ann.x,
+                            y: ann.y,
+                            width: Math.max(180, ann.width || 200),
+                            height: Math.max(36, ann.height || 36),
+                            text: ann.text || '',
+                            fontSize: ann.fontSize || 16,
+                            fontFamily: ann.fontFamily || 'Inter',
+                            color: ann.color || '#000000',
+                            isCoverReplace: ann.type === 'coverText',
+                            coverColor: ann.coverColor || ann.bgColor || '#ffffff'
+                          });
+                          setTimeout(() => inlineTextAreaRef.current?.focus(), 20);
+                        }}
                         style={{
                           left: `${ann.x}px`,
                           top: `${ann.y}px`,
@@ -3091,6 +3627,7 @@ export default function PdfEditorModal({
                           lineHeight: ann.lineSpacing || 1.3,
                           opacity: ann.opacity ?? 1
                         }}
+                        title="Double-click to edit text"
                         className={`absolute px-1 py-0.5 rounded whitespace-pre-wrap cursor-move ${
                           isSel ? 'ring-2 ring-blue-500' : 'hover:ring-1 hover:ring-blue-400/60'
                         }`}
@@ -3103,6 +3640,13 @@ export default function PdfEditorModal({
 
                   if (ann.type === 'shape') {
                     const sk = ann.shapeKind || 'rectangle';
+                    const lx1 = (ann.x1 ?? ann.x) - ann.x;
+                    const ly1 = (ann.y1 ?? ann.y) - ann.y;
+                    const lx2 = (ann.x2 ?? ann.x + ann.width) - ann.x;
+                    const ly2 = (ann.y2 ?? ann.y + ann.height) - ann.y;
+                    const ang = Math.atan2(ly2 - ly1, lx2 - lx1);
+                    const headLen = Math.max(10, (ann.strokeWidth || 2) * 3.5);
+                    const arrowPts = `${lx2},${ly2} ${lx2 - headLen * Math.cos(ang - Math.PI / 6)},${ly2 - headLen * Math.sin(ang - Math.PI / 6)} ${lx2 - headLen * Math.cos(ang + Math.PI / 6)},${ly2 - headLen * Math.sin(ang + Math.PI / 6)}`;
                     return (
                       <div
                         key={ann.id}
@@ -3139,18 +3683,25 @@ export default function PdfEditorModal({
                               stroke={ann.strokeColor || '#1B4B91'}
                               strokeWidth={ann.strokeWidth || 2}
                               fill={ann.fillColor && ann.fillColor !== 'transparent' ? ann.fillColor : 'none'}
+                              strokeDasharray={ann.dashStyle === 'dashed' ? '6 4' : ann.dashStyle === 'dotted' ? '2 3' : undefined}
                             />
                           )}
                           {(sk === 'line' || sk === 'arrow') && (
-                            <line
-                              x1={(ann.x1 ?? ann.x) - ann.x}
-                              y1={(ann.y1 ?? ann.y) - ann.y}
-                              x2={(ann.x2 ?? ann.x + ann.width) - ann.x}
-                              y2={(ann.y2 ?? ann.y + ann.height) - ann.y}
-                              stroke={ann.strokeColor || '#1B4B91'}
-                              strokeWidth={ann.strokeWidth || 2}
-                              strokeLinecap="round"
-                            />
+                            <>
+                              <line
+                                x1={lx1}
+                                y1={ly1}
+                                x2={lx2}
+                                y2={ly2}
+                                stroke={ann.strokeColor || '#1B4B91'}
+                                strokeWidth={ann.strokeWidth || 2}
+                                strokeLinecap="round"
+                                strokeDasharray={ann.dashStyle === 'dashed' ? '6 4' : ann.dashStyle === 'dotted' ? '2 3' : undefined}
+                              />
+                              {sk === 'arrow' && (
+                                <polygon points={arrowPts} fill={ann.strokeColor || '#1B4B91'} />
+                              )}
+                            </>
                           )}
                           {sk === 'checkmark' && (
                             <polyline
@@ -3170,8 +3721,23 @@ export default function PdfEditorModal({
                           {sk === 'dot' && (
                             <circle cx={ann.width / 2} cy={ann.height / 2} r={Math.min(ann.width, ann.height) / 3} fill={ann.fillColor || ann.strokeColor || '#1B4B91'} />
                           )}
-                          {(sk === 'polygon' || sk === 'cloud') && (
-                            <rect x={2} y={2} width={Math.max(4, ann.width - 4)} height={Math.max(4, ann.height - 4)} rx={sk === 'cloud' ? 16 : 0} stroke={ann.strokeColor || '#1B4B91'} strokeWidth={ann.strokeWidth || 2} fill={ann.fillColor !== 'transparent' ? ann.fillColor : 'none'} strokeDasharray={sk === 'cloud' ? '8 3' : undefined} />
+                          {sk === 'polygon' && (
+                            <polygon
+                              points={`0,${ann.height} ${ann.width / 2},0 ${ann.width},${ann.height}`}
+                              stroke={ann.strokeColor || '#1B4B91'}
+                              strokeWidth={ann.strokeWidth || 2}
+                              strokeLinejoin="round"
+                              fill={ann.fillColor && ann.fillColor !== 'transparent' ? ann.fillColor : 'none'}
+                              strokeDasharray={ann.dashStyle === 'dashed' ? '6 4' : ann.dashStyle === 'dotted' ? '2 3' : undefined}
+                            />
+                          )}
+                          {sk === 'cloud' && (
+                            <path
+                              d={`M ${ann.width * 0.25} ${ann.height * 0.78} C ${ann.width * 0.08} ${ann.height * 0.78}, ${ann.width * 0.04} ${ann.height * 0.52}, ${ann.width * 0.18} ${ann.height * 0.44} C ${ann.width * 0.16} ${ann.height * 0.22}, ${ann.width * 0.42} ${ann.height * 0.12}, ${ann.width * 0.55} ${ann.height * 0.28} C ${ann.width * 0.68} ${ann.height * 0.14}, ${ann.width * 0.92} ${ann.height * 0.26}, ${ann.width * 0.86} ${ann.height * 0.48} C ${ann.width * 0.96} ${ann.height * 0.58}, ${ann.width * 0.9} ${ann.height * 0.78}, ${ann.width * 0.75} ${ann.height * 0.78} Z`}
+                              stroke={ann.strokeColor || '#1B4B91'}
+                              strokeWidth={ann.strokeWidth || 2}
+                              fill={ann.fillColor && ann.fillColor !== 'transparent' ? ann.fillColor : 'none'}
+                            />
                           )}
                         </svg>
                         {renderHandles()}
@@ -3221,8 +3787,26 @@ export default function PdfEditorModal({
                         key={ann.id}
                         type="button"
                         onMouseDown={selectThis}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          if (ann.locked || readOnlyLocked) return;
+                          setInlineTextEdit({
+                            editingId: ann.id,
+                            kind: 'comment',
+                            x: ann.x,
+                            y: ann.y,
+                            width: 220,
+                            height: 44,
+                            text: ann.text || '',
+                            fontSize: 13,
+                            color: '#111827',
+                            isCoverReplace: false,
+                            coverColor: '#fef3c7'
+                          });
+                          setTimeout(() => inlineTextAreaRef.current?.focus(), 20);
+                        }}
                         style={{ left: `${ann.x}px`, top: `${ann.y}px` }}
-                        title={`${ann.author}: ${ann.text}`}
+                        title={`${ann.author}: ${ann.text} (double-click to edit)`}
                         className={`absolute w-7 h-7 rounded-lg bg-amber-400 text-slate-900 shadow-md flex items-center justify-center cursor-pointer ${
                           isSel ? 'ring-2 ring-blue-500' : ''
                         }`}
@@ -3293,37 +3877,78 @@ export default function PdfEditorModal({
                   />
                 )}
 
-                {/* Inline Multi-Line Auto-Grow Textarea */}
+                {/* Inline Multi-Line Auto-Grow Textarea (Text, Edit Text, Comment, Callout) */}
                 {inlineTextEdit && (
                   <div
                     style={{
                       left: `${inlineTextEdit.x}px`,
                       top: `${inlineTextEdit.y}px`,
-                      backgroundColor: inlineTextEdit.isCoverReplace ? inlineTextEdit.coverColor : '#ffffff'
+                      backgroundColor:
+                        inlineTextEdit.kind === 'comment' || inlineTextEdit.kind === 'callout'
+                          ? '#fef3c7'
+                          : inlineTextEdit.isCoverReplace
+                          ? inlineTextEdit.coverColor
+                          : '#ffffff'
                     }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute z-30 border-2 border-blue-600 rounded-md shadow-xl p-1 flex flex-col gap-1 min-w-[200px]"
+                    className="absolute z-30 border-2 border-blue-600 rounded-md shadow-xl p-1.5 flex flex-col gap-1 min-w-[220px]"
                   >
+                    <div className="text-[11px] font-semibold text-slate-600 px-0.5 flex items-center justify-between">
+                      <span>
+                        {inlineTextEdit.kind === 'comment'
+                          ? 'Sticky-Note Comment'
+                          : inlineTextEdit.kind === 'callout'
+                          ? 'Callout Box Note'
+                          : inlineTextEdit.isCoverReplace
+                          ? 'Edit Text'
+                          : 'Add Text'}
+                      </span>
+                      <span className="text-[10px] text-slate-400">Ctrl+Enter to Apply</span>
+                    </div>
                     <textarea
                       ref={inlineTextAreaRef}
                       rows={2}
                       value={inlineTextEdit.text}
+                      onMouseDown={(e) => e.stopPropagation()}
                       onChange={(e) => {
                         e.target.style.height = 'auto';
                         e.target.style.height = `${e.target.scrollHeight}px`;
                         setInlineTextEdit((p) => ({ ...p, text: e.target.value }));
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === 'Escape') setInlineTextEdit(null);
+                        if (e.key === 'Escape') {
+                          e.stopPropagation();
+                          setInlineTextEdit(null);
+                        } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          commitInlineText();
+                        }
                       }}
-                      placeholder="Type text (multi-line)..."
-                      className="text-sm text-slate-900 bg-transparent outline-none resize-none min-w-[200px]"
+                      placeholder={
+                        inlineTextEdit.kind === 'comment'
+                          ? 'Write sticky-note comment...'
+                          : inlineTextEdit.kind === 'callout'
+                          ? 'Write callout note...'
+                          : 'Type text (multi-line)...'
+                      }
+                      className="pdf-paper-input text-sm text-slate-900 bg-transparent outline-none resize-none min-w-[210px] p-1"
                     />
                     <div className="flex justify-end gap-1">
-                      <button type="button" onClick={() => setInlineTextEdit(null)} className="px-2 py-0.5 text-xs text-slate-600 hover:text-slate-900 cursor-pointer">
+                      <button
+                        type="button"
+                        onClick={() => setInlineTextEdit(null)}
+                        className="px-2 py-0.5 text-xs text-slate-600 hover:text-slate-900 cursor-pointer"
+                      >
                         Cancel
                       </button>
-                      <button type="button" onClick={commitInlineText} className="px-2.5 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer">
+                      <button
+                        type="button"
+                        onClick={commitInlineText}
+                        className="px-2.5 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer"
+                      >
                         Apply
                       </button>
                     </div>
@@ -3477,7 +4102,30 @@ export default function PdfEditorModal({
             }}
             onAdoptSignature={(payload) => {
               const sigObj = typeof payload === 'string' ? { dataUrl: payload, captionText: '', kind: 'signature' } : payload;
-              if (pendingSignatureTargetFieldId) {
+              if (pendingSignatureTargetFieldId && pendingSignatureTargetFieldId.startsWith('acro::')) {
+                const targetId = pendingSignatureTargetFieldId.slice(6);
+                const acroWidget = acroFormFields.find((af) => af.id === targetId);
+                if (acroWidget) {
+                  const ann = {
+                    id: `sig_${Date.now()}`,
+                    type: 'signature',
+                    dataUrl: sigObj.dataUrl,
+                    captionText: sigObj.captionText || '',
+                    x: acroWidget.xNorm * canvasDims.width,
+                    y: acroWidget.yNorm * canvasDims.height,
+                    width: Math.max(80, acroWidget.wNorm * canvasDims.width),
+                    height: Math.max(32, acroWidget.hNorm * canvasDims.height),
+                    canvasWidth: canvasDims.width,
+                    canvasHeight: canvasDims.height
+                  };
+                  mutatePageAnnotations((list) => [...list, ann]);
+                  setSelectedAnnotationIds([ann.id]);
+                  setShowPropertiesPanel(true);
+                  notify('Signature placed over form signature field.', 'success');
+                }
+                setPendingSignatureTargetFieldId(null);
+                setActiveTool('select');
+              } else if (pendingSignatureTargetFieldId) {
                 setCustomFields((prev) =>
                   prev.map((f) =>
                     f.id === pendingSignatureTargetFieldId
@@ -3624,6 +4272,90 @@ export default function PdfEditorModal({
       />
 
       <LinkConfirmModal url={externalLinkConfirmUrl} onClose={() => setExternalLinkConfirmUrl('')} />
+
+      {/* Password-protected PDF unlock modal */}
+      {passwordPromptState && (
+        <div className="fixed inset-0 z-[145] flex items-center justify-center bg-black/75 backdrop-blur-xs p-4" role="dialog" aria-modal="true" aria-label="Enter PDF Password">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              loadPdfDocumentSource(
+                passwordPromptState.sourceData,
+                passwordPromptState.docTitle,
+                passwordPromptInput,
+                passwordPromptState.preserveEdits
+              );
+            }}
+            className="bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-2xl max-w-md w-full p-5 shadow-2xl flex flex-col gap-3.5"
+          >
+            <div className="flex items-center gap-2.5">
+              <Lock className="w-5 h-5 text-[var(--brand)]" />
+              <h3 className="text-[16px] font-semibold">Password-Protected PDF</h3>
+            </div>
+            <p className="text-[13px] text-[var(--muted)]">
+              Enter the password for <strong>{passwordPromptState.docTitle || 'this document'}</strong> to open it locally.
+            </p>
+            <input
+              type="password"
+              autoFocus
+              value={passwordPromptInput}
+              onChange={(e) => setPasswordPromptInput(e.target.value)}
+              placeholder="Document password"
+              className="w-full px-3 py-2 rounded-lg border border-[var(--line)] bg-[var(--surface-subtle)] text-[14px] outline-none focus:border-[var(--brand)]"
+            />
+            {passwordPromptState.error && (
+              <p className="text-[12px] text-rose-500 font-medium">{passwordPromptState.error}</p>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setPasswordPromptState(null);
+                  setPasswordPromptInput('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" size="sm">
+                Unlock PDF
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Local Profile Autofill Confirmation Modal */}
+      {autofillConfirmOpen && (
+        <div className="fixed inset-0 z-[145] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4" role="dialog" aria-modal="true" aria-label="Enable Profile Autofill">
+          <div className="bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-2xl max-w-md w-full p-5 shadow-2xl flex flex-col gap-3.5">
+            <div className="flex items-center gap-2.5">
+              <Wand2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              <h3 className="text-[16px] font-semibold">Enable Local Profile Autofill?</h3>
+            </div>
+            <p className="text-[13px] text-[var(--muted)] leading-relaxed">
+              Klarity can match form fields with your saved Name, Email, Phone, and Address 100% locally on this device. Nothing ever leaves your computer.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setAutofillConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setAutofillConfirmOpen(false);
+                  executeAutofillFromProfile();
+                }}
+              >
+                Enable &amp; Autofill
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

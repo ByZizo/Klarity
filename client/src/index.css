@@ -224,12 +224,12 @@ textarea:focus-visible:not(.no-focus-outline),
   color: #FFFFFF !important;
 }
 
-[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.no-focus-outline),
-.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.no-focus-outline),
-[data-theme="dark"] select,
-.dark select,
-[data-theme="dark"] textarea,
-.dark textarea {
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.no-focus-outline):not(.pdf-paper-input),
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.no-focus-outline):not(.pdf-paper-input),
+[data-theme="dark"] select:not(.pdf-paper-input),
+.dark select:not(.pdf-paper-input),
+[data-theme="dark"] textarea:not(.pdf-paper-input),
+.dark textarea:not(.pdf-paper-input) {
   background-color: var(--surface-subtle) !important;
   color: var(--ink) !important;
   border-color: var(--line) !important;

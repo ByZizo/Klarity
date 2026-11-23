@@ -518,7 +518,7 @@ export async function inspectAcroFormFields(rawBytes, pdfJsDoc, rotationOffsets 
       } else if (ctorName.includes('OptionList')) {
         type = 'listbox';
         const sel = f.getSelected?.();
-        value = Array.isArray(sel) ? (sel[0] || '') : (sel || '');
+        value = Array.isArray(sel) ? sel : sel ? [sel] : [];
         options = f.getOptions?.() || [];
       } else if (ctorName.includes('Signature')) {
         type = 'signature';
@@ -578,6 +578,7 @@ export async function inspectAcroFormFields(rawBytes, pdfJsDoc, rotationOffsets 
         let currentVal = meta.value;
         if (currentVal === undefined) {
           if (inferredType === 'checkbox') currentVal = Boolean(a.fieldValue && a.fieldValue !== 'Off');
+          else if (inferredType === 'listbox') currentVal = Array.isArray(a.fieldValue) ? a.fieldValue : a.fieldValue ? [a.fieldValue] : [];
           else currentVal = a.fieldValue || '';
         }
 
@@ -592,7 +593,7 @@ export async function inspectAcroFormFields(rawBytes, pdfJsDoc, rotationOffsets 
           id: `acro_${a.id || widgets.length}`,
           isExistingAcroForm: true,
           fieldName: name,
-          exportValue: a.buttonValue || '',
+          exportValue: a.buttonValue || a.exportValue || (inferredType === 'radio' ? `opt_${widgets.length}` : ''),
           label: a.alternativeText || name,
           type: inferredType,
           page: p,
@@ -1193,8 +1194,14 @@ export async function burnAndExportPdf({
         else field.uncheck();
       } else if (ctor.includes('RadioGroup')) {
         if (val) field.select(String(val));
-      } else if (ctor.includes('Dropdown') || ctor.includes('OptionList')) {
+      } else if (ctor.includes('Dropdown')) {
         if (val) field.select(String(val));
+      } else if (ctor.includes('OptionList')) {
+        if (Array.isArray(val)) {
+          if (val.length > 0) field.select(val.map(String));
+        } else if (val) {
+          field.select(String(val));
+        }
       } else if (field.setText) {
         field.setText(val == null ? '' : String(val));
       }

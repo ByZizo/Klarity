@@ -347,6 +347,9 @@ export function DigitalSignaturesModal({
   const [signPassphrase, setSignPassphrase] = useState('');
   const [signReason, setSignReason] = useState('Approved and signed locally in Klarity');
   const [verifyResult, setVerifyResult] = useState(null);
+  const [pendingP12Import, setPendingP12Import] = useState(null);
+  const [p12ImportPassphrase, setP12ImportPassphrase] = useState('');
+  const [p12ImportError, setP12ImportError] = useState('');
   const p12ImportRef = useRef(null);
   const receiptVerifyRef = useRef(null);
 
@@ -370,6 +373,30 @@ export function DigitalSignaturesModal({
     setPassphrase('');
   };
 
+  const finalizeP12Import = async (p12Base64, pass) => {
+    try {
+      const info = inspectP12Certificate(p12Base64, pass);
+      const next = await saveCertificateRecord({
+        id: `cert_${Date.now()}`,
+        commonName: info.commonName,
+        organization: info.organization,
+        email: info.email,
+        isSelfSigned: info.isSelfSigned,
+        hasPassphrase: Boolean(pass),
+        validFrom: info.validFrom,
+        validTo: info.validTo,
+        fingerprintSha256: info.fingerprintSha256,
+        p12Base64
+      });
+      onRefreshCertificates(next);
+      setPendingP12Import(null);
+      setP12ImportPassphrase('');
+      setP12ImportError('');
+    } catch (err) {
+      setP12ImportError(err.message || 'Unable to parse PKCS#12 file with that passphrase.');
+    }
+  };
+
   const handleImportP12 = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -379,25 +406,9 @@ export function DigitalSignaturesModal({
       let b64 = '';
       for (let i = 0; i < bytes.length; i++) b64 += String.fromCharCode(bytes[i]);
       const p12Base64 = btoa(b64);
-      const pass = window.prompt('Enter certificate passphrase (leave blank if none):', '') || '';
-      try {
-        const info = inspectP12Certificate(p12Base64, pass);
-        const next = await saveCertificateRecord({
-          id: `cert_${Date.now()}`,
-          commonName: info.commonName,
-          organization: info.organization,
-          email: info.email,
-          isSelfSigned: info.isSelfSigned,
-          hasPassphrase: Boolean(pass),
-          validFrom: info.validFrom,
-          validTo: info.validTo,
-          fingerprintSha256: info.fingerprintSha256,
-          p12Base64
-        });
-        onRefreshCertificates(next);
-      } catch (err) {
-        alert(err.message || 'Unable to parse PKCS#12 file with that passphrase.');
-      }
+      setP12ImportError('');
+      setP12ImportPassphrase('');
+      setPendingP12Import({ fileName: file.name, p12Base64 });
     };
     reader.readAsArrayBuffer(file);
     e.target.value = '';
@@ -478,6 +489,41 @@ export function DigitalSignaturesModal({
               </Button>
               <input ref={p12ImportRef} type="file" accept=".p12,.pfx" onChange={handleImportP12} className="hidden" />
             </div>
+
+            {pendingP12Import && (
+              <div className="p-3 rounded-xl border border-[var(--brand)]/40 bg-[var(--surface)] flex flex-col gap-2">
+                <div className="text-[12px] font-semibold">
+                  Import Certificate: <span className="text-[var(--brand)]">{pendingP12Import.fileName}</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={p12ImportPassphrase}
+                    onChange={(e) => setP12ImportPassphrase(e.target.value)}
+                    placeholder="Certificate passphrase (leave blank if none)"
+                    className="flex-1 px-3 py-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface-subtle)]"
+                  />
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => finalizeP12Import(pendingP12Import.p12Base64, p12ImportPassphrase)}
+                  >
+                    Import
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setPendingP12Import(null);
+                      setP12ImportError('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+                {p12ImportError && <p className="text-[12px] text-rose-500">{p12ImportError}</p>}
+              </div>
+            )}
 
             {certificates.length > 0 && (
               <div className="flex flex-col gap-2">
