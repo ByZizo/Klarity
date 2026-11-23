@@ -12,8 +12,6 @@ import '@fontsource/great-vibes/400.css';
 
 import {
   X,
-  Download,
-  Save,
   ZoomIn,
   ZoomOut,
   ChevronLeft,
@@ -53,8 +51,6 @@ import {
   ScanText,
   Lock,
   KeyRound,
-  FolderOpen,
-  Clock,
   Sliders,
   CheckSquare,
   List,
@@ -67,6 +63,7 @@ import {
 import { Button } from './ui';
 import { formatFileSize } from '../utils/documentVaultStorage';
 import {
+  EDITOR_FONTS,
   loadPdfForViewing,
   renderPdfPageToCanvas,
   getPageTextLayer,
@@ -186,7 +183,7 @@ export default function PdfEditorModal({
       return [];
     }
   });
-  const [openMenuDropdown, setOpenMenuDropdown] = useState(null); // 'recent' | 'markup' | 'draw' | 'shapes' | 'notes' | 'fields'
+  const [openMenuDropdown, setOpenMenuDropdown] = useState(null); // 'file' | 'text' | 'editText' | 'markup' | 'draw' | 'shapes' | 'whiteout' | 'notes' | 'link' | 'redact' | 'fields'
 
   // Layout & View
   const [modeTab, setModeTab] = useState('edit'); // 'edit' | 'fill' | 'pages' | 'protect'
@@ -206,16 +203,43 @@ export default function PdfEditorModal({
   const [textLayerSpans, setTextLayerSpans] = useState([]);
   const [canvasDims, setCanvasDims] = useState({ width: 612, height: 792 });
 
-  // Active Tools
+  // Active Tools & Configurable Dropdown Defaults
   const [activeTool, setActiveTool] = useState('select');
+  const [textFontFamily, setTextFontFamily] = useState('Inter');
+  const [textFontSize, setTextFontSize] = useState(16);
+  const [textColor, setTextColor] = useState('#000000');
+  const [textBgColor, setTextBgColor] = useState('transparent');
+  const [textBold, setTextBold] = useState(false);
+  const [textItalic, setTextItalic] = useState(false);
+  const [textUnderline, setTextUnderline] = useState(false);
+  const [textAlign, setTextAlign] = useState('left');
+
   const [activeMarkupSubtype, setActiveMarkupSubtype] = useState('highlight');
   const [markupColor, setMarkupColor] = useState('#fef08a');
   const [markupOpacity, setMarkupOpacity] = useState(0.4);
+
   const [activeDrawSubtype, setActiveDrawSubtype] = useState('pen'); // 'pen' | 'marker' | 'eraser'
   const [penColor, setPenColor] = useState('#1B4B91');
   const [penThickness, setPenThickness] = useState(2.5);
+  const [penOpacity, setPenOpacity] = useState(1);
+
   const [activeShapeKind, setActiveShapeKind] = useState('rectangle');
+  const [shapeStrokeColor, setShapeStrokeColor] = useState('#1B4B91');
+  const [shapeFillColor, setShapeFillColor] = useState('transparent');
+  const [shapeStrokeWidth, setShapeStrokeWidth] = useState(2.5);
+  const [shapeDashStyle, setShapeDashStyle] = useState('solid');
+  const [shapeOpacity, setShapeOpacity] = useState(1);
+
+  const [whiteoutColor, setWhiteoutColor] = useState('#ffffff');
+  const [commentColor, setCommentColor] = useState('#f59e0b');
+  const [calloutBgColor, setCalloutBgColor] = useState('#fef3c7');
+  const [calloutBorderColor, setCalloutBorderColor] = useState('#d97706');
+  const [defaultLinkKind, setDefaultLinkKind] = useState('url');
+  const [defaultLinkUrl, setDefaultLinkUrl] = useState('https://');
+  const [defaultLinkPage, setDefaultLinkPage] = useState(1);
+
   const [activeFieldType, setActiveFieldType] = useState('text');
+  const [newFieldRequired, setNewFieldRequired] = useState(false);
 
   // One-time cover-and-replace info notice
   const [showEditTextNote, setShowEditTextNote] = useState(false);
@@ -846,14 +870,19 @@ export default function PdfEditorModal({
     if (activeTool === 'text') {
       setInlineTextEdit({
         kind: 'text',
-        x: Math.max(4, Math.min(width - 220, x)),
-        y: Math.max(4, Math.min(height - 60, y)),
-        width: 220,
-        height: 36,
+        x: Math.max(2, Math.min(width - 40, x)),
+        y: Math.max(2, Math.min(height - 24, y)),
+        width: 180,
+        height: 32,
         text: '',
-        fontSize: 16,
-        fontFamily: 'Inter',
-        color: '#000000',
+        fontSize: textFontSize,
+        fontFamily: textFontFamily,
+        color: textColor,
+        bgColor: textBgColor,
+        isBold: textBold,
+        isItalic: textItalic,
+        isUnderline: textUnderline,
+        align: textAlign,
         isCoverReplace: false,
         coverColor: 'transparent'
       });
@@ -879,8 +908,12 @@ export default function PdfEditorModal({
           height: Math.max(24, hitSpan.height),
           text: hitSpan.str,
           fontSize: Math.max(10, Math.round(hitSpan.fontSize * zoom)),
-          fontFamily: 'Inter',
-          color: '#000000',
+          fontFamily: textFontFamily,
+          color: textColor,
+          isBold: textBold,
+          isItalic: textItalic,
+          isUnderline: textUnderline,
+          align: textAlign,
           isCoverReplace: true,
           coverColor: sampledBg
         });
@@ -921,17 +954,18 @@ export default function PdfEditorModal({
     if (activeTool === 'comment') {
       setInlineTextEdit({
         kind: 'comment',
-        x: Math.max(4, Math.min(width - 230, x)),
-        y: Math.max(4, Math.min(height - 80, y)),
+        x: Math.max(2, Math.min(width - 40, x)),
+        y: Math.max(2, Math.min(height - 24, y)),
         anchorX: x,
         anchorY: y,
-        width: 220,
+        width: 210,
         height: 44,
         text: '',
         fontSize: 13,
         color: '#111827',
+        noteColor: commentColor,
         isCoverReplace: false,
-        coverColor: '#fef3c7'
+        coverColor: calloutBgColor
       });
       setTimeout(() => inlineTextAreaRef.current?.focus(), 20);
       return;
@@ -940,17 +974,19 @@ export default function PdfEditorModal({
     if (activeTool === 'callout') {
       setInlineTextEdit({
         kind: 'callout',
-        x: Math.max(4, Math.min(width - 220, x + 24)),
-        y: Math.max(4, Math.min(height - 80, Math.max(10, y - 36))),
+        x: Math.max(2, Math.min(width - 40, x + 20)),
+        y: Math.max(2, Math.min(height - 24, Math.max(8, y - 28))),
         anchorX: x,
         anchorY: y,
-        width: 200,
-        height: 52,
+        width: 190,
+        height: 48,
         text: '',
         fontSize: 13,
         color: '#111827',
+        bgColor: calloutBgColor,
+        borderColor: calloutBorderColor,
         isCoverReplace: false,
-        coverColor: '#fef3c7'
+        coverColor: calloutBgColor
       });
       setTimeout(() => inlineTextAreaRef.current?.focus(), 20);
       return;
@@ -980,7 +1016,7 @@ export default function PdfEditorModal({
         yNorm: Math.min(1 - defaults[1], Math.max(0, y / height)),
         wNorm: defaults[0],
         hNorm: defaults[1],
-        required: false,
+        required: newFieldRequired,
         readOnly: false,
         defaultValue: '',
         value: activeFieldType === 'checkbox' ? false : activeFieldType === 'date' ? new Date().toISOString().slice(0, 10) : '',
@@ -1102,9 +1138,11 @@ export default function PdfEditorModal({
           }),
         false
       );
-    } else if (dragModeRef.current === 'resize') {
-      const dx = x - dragStartRef.current.x;
-      const dy = y - dragStartRef.current.y;
+    } else if (dragModeRef.current === 'resize' || dragModeRef.current === 'resizeX' || dragModeRef.current === 'resizeY') {
+      const rawDx = x - dragStartRef.current.x;
+      const rawDy = y - dragStartRef.current.y;
+      const dx = dragModeRef.current === 'resizeY' ? 0 : rawDx;
+      const dy = dragModeRef.current === 'resizeX' ? 0 : rawDy;
       const origMap = dragStartRef.current.origMap;
       mutatePageAnnotations(
         (list) =>
@@ -1201,7 +1239,7 @@ export default function PdfEditorModal({
           color: activeDrawSubtype === 'marker' ? '#fde047' : penColor,
           thickness: activeDrawSubtype === 'marker' ? Math.max(12, penThickness * 4) : penThickness,
           isMarker: activeDrawSubtype === 'marker',
-          opacity: activeDrawSubtype === 'marker' ? 0.38 : 1,
+          opacity: activeDrawSubtype === 'marker' ? 0.38 : penOpacity,
           canvasWidth: width,
           canvasHeight: height
         };
@@ -1211,7 +1249,7 @@ export default function PdfEditorModal({
       setActiveStrokePoints([]);
     } else if (mode === 'erase') {
       commitHistory(annotations, pageOrder, customFields);
-    } else if (mode === 'move' || mode === 'resize') {
+    } else if (mode === 'move' || mode === 'resize' || mode === 'resizeX' || mode === 'resizeY') {
       commitHistory(annotations, pageOrder, customFields);
     } else if (mode === 'moveField' || mode === 'resizeField') {
       commitHistory(annotations, pageOrder, customFields);
@@ -1308,11 +1346,11 @@ export default function PdfEditorModal({
                   { x: boxX, y: boxY + defaultH }
                 ]
               : undefined,
-          strokeColor: penColor,
-          fillColor: activeShapeKind === 'dot' ? penColor : 'transparent',
-          strokeWidth: penThickness,
-          dashStyle: 'solid',
-          opacity: 1,
+          strokeColor: shapeStrokeColor,
+          fillColor: activeShapeKind === 'dot' && shapeFillColor === 'transparent' ? shapeStrokeColor : shapeFillColor,
+          strokeWidth: shapeStrokeWidth,
+          dashStyle: shapeDashStyle,
+          opacity: shapeOpacity,
           canvasWidth: width,
           canvasHeight: height
         };
@@ -1344,7 +1382,7 @@ export default function PdfEditorModal({
           y: by,
           width: bw,
           height: bh,
-          color: '#ffffff',
+          color: whiteoutColor,
           canvasWidth: width,
           canvasHeight: height
         };
@@ -1370,9 +1408,9 @@ export default function PdfEditorModal({
         const linkAnn = {
           id: `link_${Date.now()}`,
           type: 'link',
-          linkKind: 'url',
-          url: 'https://',
-          targetPage: Math.min(pageOrder.length, currentPage + 1) || 1,
+          linkKind: defaultLinkKind,
+          url: defaultLinkKind === 'url' ? (defaultLinkUrl || 'https://') : '',
+          targetPage: Math.max(1, Math.min(pageOrder.length || 1, Number(defaultLinkPage) || 1)),
           x: bx,
           y: by,
           width: Math.max(40, bw),
@@ -1384,7 +1422,6 @@ export default function PdfEditorModal({
         setSelectedAnnotationIds([linkAnn.id]);
         setShowPropertiesPanel(true);
         setActiveTool('select');
-        notify('Link box created — set its URL or target page in the Properties panel on the right.', 'info');
       }
       setActiveBoxPreview(null);
     }
@@ -1418,10 +1455,21 @@ export default function PdfEditorModal({
   const commitInlineText = () => {
     if (!inlineTextEdit) return;
     const trimmed = inlineTextEdit.text.trim();
+    const measuredW = Math.max(60, inlineTextAreaRef.current?.offsetWidth || inlineTextEdit.width || 160);
+    const measuredH = Math.max(24, inlineTextAreaRef.current?.offsetHeight || inlineTextEdit.height || 30);
     if (trimmed) {
       if (inlineTextEdit.editingId) {
         mutatePageAnnotations((list) =>
-          list.map((a) => (a.id === inlineTextEdit.editingId ? { ...a, text: trimmed } : a))
+          list.map((a) =>
+            a.id === inlineTextEdit.editingId
+              ? {
+                  ...a,
+                  text: trimmed,
+                  width: measuredW,
+                  height: measuredH
+                }
+              : a
+          )
         );
         setSelectedAnnotationIds([inlineTextEdit.editingId]);
         setShowPropertiesPanel(true);
@@ -1439,7 +1487,7 @@ export default function PdfEditorModal({
           createdAtIso: now.toISOString(),
           timestampLabel: `${now.toLocaleString()} (device clock time)`,
           replies: [],
-          color: '#f59e0b',
+          color: inlineTextEdit.noteColor || commentColor,
           canvasWidth: canvasDims.width,
           canvasHeight: canvasDims.height
         };
@@ -1453,15 +1501,15 @@ export default function PdfEditorModal({
           type: 'callout',
           x: inlineTextEdit.x,
           y: inlineTextEdit.y,
-          width: 170,
-          height: 52,
+          width: Math.max(120, measuredW),
+          height: Math.max(36, measuredH),
           anchorX: inlineTextEdit.anchorX ?? inlineTextEdit.x,
           anchorY: inlineTextEdit.anchorY ?? inlineTextEdit.y,
           text: trimmed,
-          fontSize: 13,
-          color: '#111827',
-          bgColor: '#fef3c7',
-          borderColor: '#d97706',
+          fontSize: inlineTextEdit.fontSize || 13,
+          color: inlineTextEdit.color || '#111827',
+          bgColor: inlineTextEdit.bgColor || calloutBgColor,
+          borderColor: inlineTextEdit.borderColor || calloutBorderColor,
           canvasWidth: canvasDims.width,
           canvasHeight: canvasDims.height
         };
@@ -1475,13 +1523,17 @@ export default function PdfEditorModal({
           type: isCover ? 'coverText' : 'text',
           x: inlineTextEdit.x,
           y: inlineTextEdit.y,
-          width: inlineTextEdit.width,
-          height: inlineTextEdit.height,
+          width: measuredW,
+          height: measuredH,
           text: trimmed,
           fontSize: inlineTextEdit.fontSize || 16,
           fontFamily: inlineTextEdit.fontFamily || 'Inter',
           color: inlineTextEdit.color || '#000000',
           bgColor: inlineTextEdit.bgColor || 'transparent',
+          isBold: Boolean(inlineTextEdit.isBold),
+          isItalic: Boolean(inlineTextEdit.isItalic),
+          isUnderline: Boolean(inlineTextEdit.isUnderline),
+          align: inlineTextEdit.align || 'left',
           coverColor: inlineTextEdit.coverColor || '#ffffff',
           canvasWidth: canvasDims.width,
           canvasHeight: canvasDims.height
@@ -1973,56 +2025,155 @@ export default function PdfEditorModal({
       />
       <input ref={mergePdfInputRef} type="file" accept="application/pdf" onChange={handleMergePdfFile} className="hidden" />
 
-      {/* 1. TOP BAR */}
-      <header className="h-14 border-b border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-1.5 min-w-0">
+      {/* 1. TOP BAR (Top-Left Microsoft Word-style File Menu & Controls) */}
+      <header className="h-14 border-b border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0 relative z-40">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-wrap">
           <button
             type="button"
             onClick={() => setShowLeftSidebar((p) => !p)}
             aria-label={showLeftSidebar ? 'Hide sidebar' : 'Show sidebar'}
             title={showLeftSidebar ? 'Hide sidebar' : 'Show sidebar'}
-            className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] rounded-lg cursor-pointer"
+            className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] rounded-lg cursor-pointer"
           >
             {showLeftSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
           </button>
 
-          <button
-            type="button"
-            onClick={() => openDiskInputRef.current?.click()}
-            title="Open PDF from computer"
-            aria-label="Open PDF file"
-            className="px-2.5 py-1.5 min-h-[38px] rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--ink)] text-[13px] font-medium flex items-center gap-1.5 cursor-pointer"
-          >
-            <FolderOpen className="w-4 h-4 text-[var(--brand)]" />
-            <span className="hidden sm:inline">Open</span>
-          </button>
-
-          {/* Recent files dropdown */}
+          {/* Microsoft Word-style File Dropdown */}
           <div className="relative">
             <button
               type="button"
-              onClick={() => setOpenMenuDropdown(openMenuDropdown === 'recent' ? null : 'recent')}
-              title="Recent PDF files"
-              aria-label="Recent PDF files"
-              className="p-2 min-h-[38px] rounded-lg hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+              onClick={() => setOpenMenuDropdown(openMenuDropdown === 'file' ? null : 'file')}
+              aria-haspopup="menu"
+              aria-expanded={openMenuDropdown === 'file'}
+              className="px-3.5 py-1.5 min-h-[36px] rounded-lg bg-[var(--brand)] hover:opacity-95 text-white text-[13px] font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
-              <Clock className="w-4 h-4" />
+              <span>File</span>
+              <ChevronDown className="w-3.5 h-3.5" />
             </button>
-            {openMenuDropdown === 'recent' && (
-              <div className="absolute left-0 top-full mt-1 w-64 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-xl p-2 z-50">
-                <div className="px-2 py-1 text-[12px] font-semibold text-[var(--muted)] border-b border-[var(--line)] mb-1">
-                  Recent PDFs (Names only)
-                </div>
-                {recentFiles.length === 0 ? (
-                  <p className="text-[13px] text-[var(--muted)] p-2">No recent files.</p>
-                ) : (
-                  recentFiles.map((rf) => (
-                    <div key={rf.id} className="px-2 py-1.5 rounded-lg hover:bg-[var(--surface-subtle)] text-[13px] flex items-center justify-between gap-2">
-                      <span className="truncate font-medium">{rf.fileName}</span>
-                      <span className="text-[11px] text-[var(--muted)] shrink-0">{rf.openedAt}</span>
-                    </div>
-                  ))
+            {openMenuDropdown === 'file' && (
+              <div
+                role="menu"
+                aria-label="File menu"
+                className="absolute left-0 top-full mt-1 w-64 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl py-1.5 z-50 text-[13px] flex flex-col"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpenMenuDropdown(null);
+                    openDiskInputRef.current?.click();
+                  }}
+                  className="px-3.5 py-2 text-left hover:bg-[var(--surface-subtle)] font-medium cursor-pointer"
+                >
+                  Open PDF...
+                </button>
+                {onSaveToVault && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={isExporting || isLoading}
+                    onClick={() => {
+                      setOpenMenuDropdown(null);
+                      handleExport({ saveToVault: true });
+                    }}
+                    className="px-3.5 py-2 text-left hover:bg-[var(--surface-subtle)] font-medium cursor-pointer disabled:opacity-40"
+                  >
+                    {isExporting ? 'Saving to Vault...' : 'Save to Vault'}
+                  </button>
                 )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={isExporting || isLoading}
+                  onClick={() => {
+                    setOpenMenuDropdown(null);
+                    handleExport({ saveToVault: false });
+                  }}
+                  className="px-3.5 py-2 text-left hover:bg-[var(--surface-subtle)] font-medium cursor-pointer disabled:opacity-40"
+                >
+                  Download PDF
+                </button>
+
+                <div className="my-1 border-t border-[var(--line)]" />
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpenMenuDropdown(null);
+                    const next = !showAiDrawer;
+                    setShowAiDrawer(next);
+                    if (next && !aiSummary && !isLocalOnlyMode) handleAiAction('summary');
+                  }}
+                  className="px-3.5 py-2 text-left hover:bg-[var(--surface-subtle)] font-medium cursor-pointer flex items-center justify-between"
+                >
+                  <span>AI Analysis</span>
+                  {isLocalOnlyMode && <span className="text-[11px] text-[var(--muted)]">Local-only</span>}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={readOnlyLocked}
+                  onClick={() => {
+                    setOpenMenuDropdown(null);
+                    setIsPageSetupOpen(true);
+                  }}
+                  className="px-3.5 py-2 text-left hover:bg-[var(--surface-subtle)] font-medium cursor-pointer disabled:opacity-40"
+                >
+                  Page Setup &amp; Watermark...
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpenMenuDropdown(null);
+                    setIsSecurityModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 text-left hover:bg-[var(--surface-subtle)] font-medium cursor-pointer"
+                >
+                  Encrypt &amp; Optimize...
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpenMenuDropdown(null);
+                    setIsDigitalSigModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 text-left hover:bg-[var(--surface-subtle)] font-medium cursor-pointer"
+                >
+                  Digital Signatures ({embeddedSignatures.length})
+                </button>
+
+                <div className="my-1 border-t border-[var(--line)]" />
+
+                <div className="px-3.5 py-1 text-[11px] font-semibold text-[var(--muted)]">Recent Files</div>
+                {recentFiles.length === 0 ? (
+                  <div className="px-3.5 py-1.5 text-[12px] text-[var(--muted)]">No recent files</div>
+                ) : (
+                  <div className="max-h-36 overflow-y-auto">
+                    {recentFiles.slice(0, 5).map((rf) => (
+                      <div key={rf.id} className="px-3.5 py-1.5 text-[12px] flex items-center justify-between gap-2 text-[var(--muted)]">
+                        <span className="truncate text-[var(--ink)]">{rf.fileName}</span>
+                        <span className="text-[11px] shrink-0">{rf.openedAt}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="my-1 border-t border-[var(--line)]" />
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpenMenuDropdown(null);
+                    onClose();
+                  }}
+                  className="px-3.5 py-2 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 font-medium cursor-pointer"
+                >
+                  Close Editor
+                </button>
               </div>
             )}
           </div>
@@ -2037,26 +2188,23 @@ export default function PdfEditorModal({
             }}
             aria-label="Document file name"
             title="Rename document"
-            className="font-medium text-[14px] text-[var(--ink)] bg-transparent border border-transparent hover:border-[var(--line)] focus:border-[var(--brand)] px-2 py-1 rounded max-w-[190px] truncate outline-none"
+            className="font-medium text-[14px] text-[var(--ink)] bg-transparent border border-transparent hover:border-[var(--line)] focus:border-[var(--brand)] px-2 py-1 rounded max-w-[170px] truncate outline-none"
           />
           {readOnlyLocked && (
             <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold shrink-0">
               Locked
             </span>
           )}
-        </div>
 
-        {/* Center Zoom, Page Nav, Undo/Redo */}
-        <div className="flex items-center gap-1.5">
-          <div className="hidden md:flex items-center bg-[var(--surface-subtle)] rounded-lg p-0.5 border border-[var(--line)]">
-            <button type="button" onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.15).toFixed(2))))} aria-label="Zoom out" title="Zoom out" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] rounded cursor-pointer">
-              <ZoomOut className="w-4 h-4" />
+          {/* Undo/Redo, Page Nav, Zoom & AI Quick Toggle grouped on top-left */}
+          <div className="h-5 w-px bg-[var(--line)] mx-1 hidden sm:block" />
+
+          <div className="flex items-center bg-[var(--surface-subtle)] rounded-lg p-0.5 border border-[var(--line)]">
+            <button type="button" onClick={handleUndo} disabled={historyIndex <= 0 || readOnlyLocked} aria-label="Undo" title="Undo (Ctrl+Z)" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-30 cursor-pointer">
+              <Undo2 className="w-4 h-4" />
             </button>
-            <span className="text-[13px] px-2 text-[var(--ink)] font-mono min-w-[50px] text-center">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button type="button" onClick={() => setZoom((z) => Math.min(2.8, Number((z + 0.15).toFixed(2))))} aria-label="Zoom in" title="Zoom in" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] rounded cursor-pointer">
-              <ZoomIn className="w-4 h-4" />
+            <button type="button" onClick={handleRedo} disabled={historyIndex >= history.length - 1 || readOnlyLocked} aria-label="Redo" title="Redo (Ctrl+Shift+Z)" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-30 cursor-pointer">
+              <Redo2 className="w-4 h-4" />
             </button>
           </div>
 
@@ -2072,18 +2220,18 @@ export default function PdfEditorModal({
             </button>
           </div>
 
-          <div className="flex items-center bg-[var(--surface-subtle)] rounded-lg p-0.5 border border-[var(--line)]">
-            <button type="button" onClick={handleUndo} disabled={historyIndex <= 0 || readOnlyLocked} aria-label="Undo" title="Undo (Ctrl+Z)" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-30 cursor-pointer">
-              <Undo2 className="w-4 h-4" />
+          <div className="hidden md:flex items-center bg-[var(--surface-subtle)] rounded-lg p-0.5 border border-[var(--line)]">
+            <button type="button" onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.15).toFixed(2))))} aria-label="Zoom out" title="Zoom out" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] rounded cursor-pointer">
+              <ZoomOut className="w-4 h-4" />
             </button>
-            <button type="button" onClick={handleRedo} disabled={historyIndex >= history.length - 1 || readOnlyLocked} aria-label="Redo" title="Redo (Ctrl+Shift+Z)" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-30 cursor-pointer">
-              <Redo2 className="w-4 h-4" />
+            <span className="text-[13px] px-2 text-[var(--ink)] font-mono min-w-[48px] text-center">
+              {Math.round(zoom * 100)}%
+            </span>
+            <button type="button" onClick={() => setZoom((z) => Math.min(2.8, Number((z + 0.15).toFixed(2))))} aria-label="Zoom in" title="Zoom in" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] rounded cursor-pointer">
+              <ZoomIn className="w-4 h-4" />
             </button>
           </div>
-        </div>
 
-        {/* Right Actions: AI Analysis, Save to Vault, Download, Close */}
-        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
             onClick={() => {
@@ -2093,32 +2241,20 @@ export default function PdfEditorModal({
             }}
             title={isLocalOnlyMode ? 'AI Analysis (Local-only mode active)' : 'AI Analysis'}
             aria-label="AI Analysis"
-            className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 border cursor-pointer ${
+            className={`px-2.5 py-1.5 min-h-[36px] rounded-lg text-[13px] font-medium hidden sm:flex items-center gap-1.5 border cursor-pointer ${
               showAiDrawer
                 ? 'bg-purple-500/15 border-purple-500/40 text-purple-700 dark:text-purple-300'
                 : 'bg-[var(--surface-subtle)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--surface-hover)]'
             }`}
           >
-            <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            <span className="hidden lg:inline">AI Analysis</span>
-          </button>
-
-          {onSaveToVault && (
-            <Button variant="primary" size="sm" onClick={() => handleExport({ saveToVault: true })} disabled={isExporting || isLoading}>
-              {isExporting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
-              <span className="hidden sm:inline">Save to Vault</span>
-            </Button>
-          )}
-
-          <Button variant="secondary" size="sm" onClick={() => handleExport({ saveToVault: false })} disabled={isExporting || isLoading}>
-            <Download className="w-4 h-4 mr-1" />
-            <span className="hidden sm:inline">Download</span>
-          </Button>
-
-          <button type="button" onClick={onClose} aria-label="Close editor" title="Close editor" className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] rounded-lg cursor-pointer">
-            <X className="w-5 h-5" />
+            <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+            <span>AI Analysis</span>
           </button>
         </div>
+
+        <button type="button" onClick={onClose} aria-label="Close editor" title="Close editor" className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] rounded-lg cursor-pointer shrink-0">
+          <X className="w-5 h-5" />
+        </button>
       </header>
 
       {/* 2. MODE TABS + SINGLE-ROW TOOLBAR */}
@@ -2185,37 +2321,132 @@ export default function PdfEditorModal({
                 <span>Select</span>
               </button>
 
-              <button
-                type="button"
-                disabled={readOnlyLocked}
-                onClick={() => {
-                  setActiveTool('text');
-                  setOpenMenuDropdown(null);
-                }}
-                title="Add Text Box (T)"
-                className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'text' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
-                }`}
-              >
-                <Type className="w-4 h-4" />
-                <span>Add Text</span>
-              </button>
+              {/* Add Text Dropdown */}
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  disabled={readOnlyLocked}
+                  onClick={() => {
+                    setActiveTool('text');
+                    setOpenMenuDropdown(openMenuDropdown === 'text' ? null : 'text');
+                  }}
+                  title="Add Text Box (T)"
+                  className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 ${
+                    activeTool === 'text' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                  }`}
+                >
+                  <Type className="w-4 h-4" />
+                  <span>Add Text</span>
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {openMenuDropdown === 'text' && (
+                  <div className="absolute left-0 top-full mt-1 w-64 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-3 z-50 flex flex-col gap-2.5 text-[12px]">
+                    <div>
+                      <div className="text-[11px] font-semibold text-[var(--muted)] mb-1">Font Family &amp; Size</div>
+                      <div className="flex gap-1.5">
+                        <select
+                          value={textFontFamily}
+                          onChange={(e) => setTextFontFamily(e.target.value)}
+                          className="flex-1 px-2 py-1 rounded-lg border border-[var(--line)] bg-[var(--surface-subtle)] text-[12px]"
+                        >
+                          {EDITOR_FONTS.map((f) => (
+                            <option key={f.id} value={f.id}>{f.label}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          min={8}
+                          max={72}
+                          value={textFontSize}
+                          onChange={(e) => setTextFontSize(Math.max(8, Math.min(72, Number(e.target.value) || 16)))}
+                          className="w-16 px-2 py-1 rounded-lg border border-[var(--line)] bg-[var(--surface-subtle)] text-[12px]"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex gap-1">
+                        <button type="button" onClick={() => setTextBold((b) => !b)} className={`px-2 py-1 rounded font-bold border border-[var(--line)] cursor-pointer ${textBold ? 'bg-[var(--brand)] text-white' : 'bg-[var(--surface-subtle)]'}`}>B</button>
+                        <button type="button" onClick={() => setTextItalic((b) => !b)} className={`px-2 py-1 rounded italic border border-[var(--line)] cursor-pointer ${textItalic ? 'bg-[var(--brand)] text-white' : 'bg-[var(--surface-subtle)]'}`}>I</button>
+                        <button type="button" onClick={() => setTextUnderline((b) => !b)} className={`px-2 py-1 rounded underline border border-[var(--line)] cursor-pointer ${textUnderline ? 'bg-[var(--brand)] text-white' : 'bg-[var(--surface-subtle)]'}`}>U</button>
+                      </div>
+                      <div className="flex gap-1">
+                        {['left', 'center', 'right'].map((al) => (
+                          <button key={al} type="button" onClick={() => setTextAlign(al)} className={`px-1.5 py-1 rounded capitalize border border-[var(--line)] text-[11px] cursor-pointer ${textAlign === al ? 'bg-[var(--brand)] text-white' : 'bg-[var(--surface-subtle)]'}`}>
+                            {al}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-[var(--line)]">
+                      <span className="text-[11px] font-semibold text-[var(--muted)]">Text Color</span>
+                      <div className="flex items-center gap-1.5">
+                        {['#000000', '#1B4B91', '#dc2626', '#059669', '#475569'].map((hex) => (
+                          <button key={hex} type="button" onClick={() => setTextColor(hex)} style={{ backgroundColor: hex }} className={`w-4 h-4 rounded-full border cursor-pointer ${textColor === hex ? 'border-amber-400 scale-125' : 'border-slate-300'}`} />
+                        ))}
+                        <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} className="w-6 h-5 rounded border border-[var(--line)] cursor-pointer" title="Custom text color" />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-[var(--muted)]">Background</span>
+                      <div className="flex items-center gap-1.5">
+                        <button type="button" onClick={() => setTextBgColor('transparent')} className={`px-1.5 py-0.5 rounded border text-[10px] cursor-pointer ${textBgColor === 'transparent' ? 'bg-[var(--brand)] text-white border-[var(--brand)]' : 'border-[var(--line)]'}`}>None</button>
+                        {['#ffffff', '#fef08a', '#e0f2fe'].map((hex) => (
+                          <button key={hex} type="button" onClick={() => setTextBgColor(hex)} style={{ backgroundColor: hex }} className={`w-4 h-4 rounded-full border cursor-pointer ${textBgColor === hex ? 'border-[var(--brand)] scale-125' : 'border-slate-300'}`} />
+                        ))}
+                        <input type="color" value={textBgColor === 'transparent' ? '#ffffff' : textBgColor} onChange={(e) => setTextBgColor(e.target.value)} className="w-6 h-5 rounded border border-[var(--line)] cursor-pointer" title="Custom fill color" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-              <button
-                type="button"
-                disabled={readOnlyLocked}
-                onClick={() => {
-                  setActiveTool('editText');
-                  setOpenMenuDropdown(null);
-                }}
-                title="Cover & Replace Existing PDF Text"
-                className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'editText' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
-                }`}
-              >
-                <Edit3 className="w-4 h-4" />
-                <span>Edit Text</span>
-              </button>
+              {/* Edit Text Dropdown */}
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  disabled={readOnlyLocked}
+                  onClick={() => {
+                    setActiveTool('editText');
+                    setOpenMenuDropdown(openMenuDropdown === 'editText' ? null : 'editText');
+                  }}
+                  title="Cover & Replace Existing PDF Text"
+                  className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 ${
+                    activeTool === 'editText' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                  }`}
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>Edit Text</span>
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {openMenuDropdown === 'editText' && (
+                  <div className="absolute left-0 top-full mt-1 w-60 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-3 z-50 flex flex-col gap-2 text-[12px]">
+                    <div className="text-[11px] text-[var(--muted)]">
+                      Click any existing text on the PDF to cover its sampled background and type replacement text.
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold text-[var(--muted)] mb-1">Replacement Font</div>
+                      <select
+                        value={textFontFamily}
+                        onChange={(e) => setTextFontFamily(e.target.value)}
+                        className="w-full px-2 py-1 rounded-lg border border-[var(--line)] bg-[var(--surface-subtle)] text-[12px]"
+                      >
+                        {EDITOR_FONTS.map((f) => (
+                          <option key={f.id} value={f.id}>{f.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[11px] font-semibold text-[var(--muted)]">Replacement Color</span>
+                      <div className="flex items-center gap-1.5">
+                        {['#000000', '#1B4B91', '#dc2626'].map((hex) => (
+                          <button key={hex} type="button" onClick={() => setTextColor(hex)} style={{ backgroundColor: hex }} className={`w-4 h-4 rounded-full border cursor-pointer ${textColor === hex ? 'border-amber-400 scale-125' : 'border-slate-300'}`} />
+                        ))}
+                        <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} className="w-6 h-5 rounded border border-[var(--line)] cursor-pointer" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Markup Dropdown (Highlight / Underline / Strikethrough / Squiggly) */}
               <div className="relative shrink-0">
@@ -2238,7 +2469,7 @@ export default function PdfEditorModal({
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {openMenuDropdown === 'markup' && (
-                  <div className="absolute left-0 top-full mt-1 w-56 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-2">
+                  <div className="absolute left-0 top-full mt-1 w-60 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-2">
                     <div className="grid grid-cols-2 gap-1">
                       {['highlight', 'underline', 'strikethrough', 'squiggly'].map((m) => (
                         <button
@@ -2247,7 +2478,6 @@ export default function PdfEditorModal({
                           onClick={() => {
                             setActiveMarkupSubtype(m);
                             setActiveTool('markup');
-                            setOpenMenuDropdown(null);
                           }}
                           className={`px-2 py-1.5 rounded-lg text-[12px] font-medium capitalize text-left cursor-pointer ${
                             activeMarkupSubtype === m ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'
@@ -2267,13 +2497,14 @@ export default function PdfEditorModal({
                           className={`w-5 h-5 rounded-full border-2 cursor-pointer ${markupColor === hex ? 'border-[var(--brand)] scale-110' : 'border-slate-300'}`}
                         />
                       ))}
+                      <input type="color" value={markupColor} onChange={(e) => setMarkupColor(e.target.value)} className="w-6 h-5 rounded border border-[var(--line)] cursor-pointer" title="Custom color" />
                     </div>
                     <label className="flex items-center gap-2 text-[11px] text-[var(--muted)] pt-1">
                       <span>Opacity ({Math.round(markupOpacity * 100)}%)</span>
                       <input
                         type="range"
                         min={0.15}
-                        max={0.9}
+                        max={0.95}
                         step={0.05}
                         value={markupOpacity}
                         onChange={(e) => setMarkupOpacity(Number(e.target.value))}
@@ -2305,7 +2536,7 @@ export default function PdfEditorModal({
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {openMenuDropdown === 'draw' && (
-                  <div className="absolute left-0 top-full mt-1 w-56 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-2">
+                  <div className="absolute left-0 top-full mt-1 w-60 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-2.5">
                     <div className="flex gap-1">
                       {[
                         ['pen', 'Pen'],
@@ -2318,7 +2549,6 @@ export default function PdfEditorModal({
                           onClick={() => {
                             setActiveDrawSubtype(id);
                             setActiveTool('draw');
-                            setOpenMenuDropdown(null);
                           }}
                           className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer ${
                             activeDrawSubtype === id ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'
@@ -2332,18 +2562,21 @@ export default function PdfEditorModal({
                       {STROKE_COLORS.map((hex) => (
                         <button key={hex} type="button" onClick={() => setPenColor(hex)} style={{ backgroundColor: hex }} className={`w-5 h-5 rounded-full border-2 cursor-pointer ${penColor === hex ? 'border-amber-400 scale-110' : 'border-slate-300'}`} />
                       ))}
-                      <select value={penThickness} onChange={(e) => setPenThickness(Number(e.target.value))} className="text-[12px] border border-[var(--line)] bg-[var(--surface-subtle)] rounded px-1 py-0.5">
-                        <option value={1.5}>1.5px</option>
-                        <option value={2.5}>2.5px</option>
-                        <option value={5}>5px</option>
-                        <option value={8}>8px</option>
-                      </select>
+                      <input type="color" value={penColor} onChange={(e) => setPenColor(e.target.value)} className="w-6 h-5 rounded border border-[var(--line)] cursor-pointer" title="Custom stroke color" />
                     </div>
+                    <label className="flex items-center gap-2 text-[11px] text-[var(--muted)]">
+                      <span>Size ({penThickness}px)</span>
+                      <input type="range" min={1} max={14} step={0.5} value={penThickness} onChange={(e) => setPenThickness(Number(e.target.value))} className="flex-1" />
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-[var(--muted)]">
+                      <span>Opacity ({Math.round(penOpacity * 100)}%)</span>
+                      <input type="range" min={0.15} max={1} step={0.05} value={penOpacity} onChange={(e) => setPenOpacity(Number(e.target.value))} className="flex-1" />
+                    </label>
                   </div>
                 )}
               </div>
 
-              {/* Shapes Dropdown */}
+              {/* Shapes Dropdown (Type, Outline Color, Inner Fill Color, Thickness, Dash, Opacity) */}
               <div className="relative shrink-0">
                 <button
                   type="button"
@@ -2362,48 +2595,123 @@ export default function PdfEditorModal({
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {openMenuDropdown === 'shapes' && (
-                  <div className="absolute left-0 top-full mt-1 w-60 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2 z-50 grid grid-cols-2 gap-1">
-                    {SHAPE_OPTIONS.map((sh) => {
-                      const Icon = sh.icon;
-                      return (
-                        <button
-                          key={sh.id}
-                          type="button"
-                          onClick={() => {
-                            setActiveShapeKind(sh.id);
-                            setActiveTool('shape');
-                            setOpenMenuDropdown(null);
-                          }}
-                          className={`px-2 py-1.5 rounded-lg text-[12px] font-medium flex items-center gap-1.5 text-left cursor-pointer ${
-                            activeShapeKind === sh.id ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'
-                          }`}
-                        >
-                          <Icon className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">{sh.label}</span>
-                        </button>
-                      );
-                    })}
+                  <div className="absolute left-0 top-full mt-1 w-72 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-3 z-50 flex flex-col gap-2.5">
+                    <div className="grid grid-cols-2 gap-1">
+                      {SHAPE_OPTIONS.map((sh) => {
+                        const Icon = sh.icon;
+                        return (
+                          <button
+                            key={sh.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveShapeKind(sh.id);
+                              setActiveTool('shape');
+                            }}
+                            className={`px-2 py-1.5 rounded-lg text-[12px] font-medium flex items-center gap-1.5 text-left cursor-pointer ${
+                              activeShapeKind === sh.id ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'
+                            }`}
+                          >
+                            <Icon className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">{sh.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="pt-2 border-t border-[var(--line)] flex flex-col gap-2 text-[11px]">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-[var(--muted)]">Outline Color</span>
+                        <div className="flex items-center gap-1.5">
+                          {STROKE_COLORS.map((hex) => (
+                            <button key={hex} type="button" onClick={() => setShapeStrokeColor(hex)} style={{ backgroundColor: hex }} className={`w-4 h-4 rounded-full border cursor-pointer ${shapeStrokeColor === hex ? 'border-amber-400 scale-125' : 'border-slate-300'}`} />
+                          ))}
+                          <input type="color" value={shapeStrokeColor} onChange={(e) => setShapeStrokeColor(e.target.value)} className="w-6 h-5 rounded border border-[var(--line)] cursor-pointer" title="Custom outline color" />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-[var(--muted)]">Inner Color</span>
+                        <div className="flex items-center gap-1.5">
+                          <button type="button" onClick={() => setShapeFillColor('transparent')} className={`px-1.5 py-0.5 rounded border text-[10px] cursor-pointer ${shapeFillColor === 'transparent' ? 'bg-[var(--brand)] text-white border-[var(--brand)]' : 'border-[var(--line)]'}`}>None</button>
+                          {['#ffffff', '#fef08a', '#bae6fd', '#fecdd3'].map((hex) => (
+                            <button key={hex} type="button" onClick={() => setShapeFillColor(hex)} style={{ backgroundColor: hex }} className={`w-4 h-4 rounded-full border cursor-pointer ${shapeFillColor === hex ? 'border-[var(--brand)] scale-125' : 'border-slate-300'}`} />
+                          ))}
+                          <input type="color" value={shapeFillColor === 'transparent' ? '#ffffff' : shapeFillColor} onChange={(e) => setShapeFillColor(e.target.value)} className="w-6 h-5 rounded border border-[var(--line)] cursor-pointer" title="Custom inner fill color" />
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-2 text-[var(--muted)]">
+                        <span className="w-20 shrink-0">Thickness ({shapeStrokeWidth}px)</span>
+                        <input type="range" min={1} max={12} step={0.5} value={shapeStrokeWidth} onChange={(e) => setShapeStrokeWidth(Number(e.target.value))} className="flex-1" />
+                      </label>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-[var(--muted)]">Border Style</span>
+                        <div className="flex gap-1">
+                          {['solid', 'dashed', 'dotted'].map((ds) => (
+                            <button key={ds} type="button" onClick={() => setShapeDashStyle(ds)} className={`px-2 py-0.5 rounded capitalize border border-[var(--line)] cursor-pointer ${shapeDashStyle === ds ? 'bg-[var(--brand)] text-white' : 'bg-[var(--surface-subtle)]'}`}>
+                              {ds}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-2 text-[var(--muted)]">
+                        <span className="w-20 shrink-0">Opacity ({Math.round(shapeOpacity * 100)}%)</span>
+                        <input type="range" min={0.1} max={1} step={0.05} value={shapeOpacity} onChange={(e) => setShapeOpacity(Number(e.target.value))} className="flex-1" />
+                      </label>
+                    </div>
                   </div>
                 )}
               </div>
 
-              <button
-                type="button"
-                disabled={readOnlyLocked}
-                onClick={() => {
-                  setActiveTool('whiteout');
-                  setOpenMenuDropdown(null);
-                }}
-                title="Whiteout (Cover-only — not secure removal; use Redact to permanently remove)"
-                className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'whiteout'
-                    ? 'bg-[var(--brand)] text-white'
-                    : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
-                }`}
-              >
-                <Eraser className="w-4 h-4" />
-                <span>Whiteout</span>
-              </button>
+              {/* Whiteout Dropdown */}
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  disabled={readOnlyLocked}
+                  onClick={() => {
+                    setActiveTool('whiteout');
+                    setOpenMenuDropdown(openMenuDropdown === 'whiteout' ? null : 'whiteout');
+                  }}
+                  title="Whiteout (Cover-only — not secure removal; use Redact to permanently remove)"
+                  className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
+                    activeTool === 'whiteout'
+                      ? 'bg-[var(--brand)] text-white'
+                      : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                  }`}
+                >
+                  <Eraser className="w-4 h-4" />
+                  <span>Whiteout</span>
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {openMenuDropdown === 'whiteout' && (
+                  <div className="absolute left-0 top-full mt-1 w-56 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-2 text-[12px]">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-[var(--muted)]">Cover Color</span>
+                      <div className="flex items-center gap-1.5">
+                        {['#ffffff', '#fefce8', '#f1f5f9', '#000000'].map((hex) => (
+                          <button key={hex} type="button" onClick={() => setWhiteoutColor(hex)} style={{ backgroundColor: hex }} className={`w-4 h-4 rounded-full border cursor-pointer ${whiteoutColor === hex ? 'border-[var(--brand)] scale-125' : 'border-slate-300'}`} />
+                        ))}
+                        <input type="color" value={whiteoutColor} onChange={(e) => setWhiteoutColor(e.target.value)} className="w-6 h-5 rounded border border-[var(--line)] cursor-pointer" />
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-[var(--muted)] leading-snug">
+                      Cover-only visually hides areas. For permanent deletion, use Redact.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTool('redact');
+                        setOpenMenuDropdown(null);
+                      }}
+                      className="px-2 py-1.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-300 hover:bg-rose-500/20 text-[11px] font-semibold cursor-pointer"
+                    >
+                      Switch to Secure Redact &rarr;
+                    </button>
+                  </div>
+                )}
+              </div>
 
               <button
                 type="button"
@@ -2440,50 +2748,153 @@ export default function PdfEditorModal({
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {openMenuDropdown === 'notes' && (
-                  <div className="absolute left-0 top-full mt-1 w-48 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-1.5 z-50 flex flex-col gap-1">
-                    <button type="button" onClick={() => { setActiveTool('comment'); setOpenMenuDropdown(null); }} className={`px-2.5 py-2 rounded-lg text-[13px] font-medium text-left cursor-pointer ${activeTool === 'comment' ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'}`}>
-                      Sticky Note Comment
-                    </button>
-                    <button type="button" onClick={() => { setActiveTool('callout'); setOpenMenuDropdown(null); }} className={`px-2.5 py-2 rounded-lg text-[13px] font-medium text-left cursor-pointer ${activeTool === 'callout' ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'}`}>
-                      Callout Box
-                    </button>
+                  <div className="absolute right-0 sm:left-0 top-full mt-1 w-56 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2 z-50 flex flex-col gap-2 text-[12px]">
+                    <div className="flex flex-col gap-1">
+                      <button type="button" onClick={() => setActiveTool('comment')} className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-left cursor-pointer ${activeTool === 'comment' ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'}`}>
+                        Sticky Note Comment
+                      </button>
+                      <button type="button" onClick={() => setActiveTool('callout')} className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-left cursor-pointer ${activeTool === 'callout' ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'}`}>
+                        Callout Box
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-[var(--line)]">
+                      <span className="text-[11px] font-semibold text-[var(--muted)]">Note Color</span>
+                      <div className="flex items-center gap-1.5">
+                        {[
+                          ['#f59e0b', '#fef3c7', '#d97706'],
+                          ['#3b82f6', '#dbeafe', '#2563eb'],
+                          ['#10b981', '#d1fae5', '#059669'],
+                          ['#ec4899', '#fce7f3', '#db2777']
+                        ].map(([nc, bgc, bdc]) => (
+                          <button
+                            key={nc}
+                            type="button"
+                            onClick={() => {
+                              setCommentColor(nc);
+                              setCalloutBgColor(bgc);
+                              setCalloutBorderColor(bdc);
+                            }}
+                            style={{ backgroundColor: nc }}
+                            className={`w-4 h-4 rounded-full border cursor-pointer ${commentColor === nc ? 'border-slate-900 scale-125' : 'border-slate-300'}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
 
-              <button
-                type="button"
-                disabled={readOnlyLocked}
-                onClick={() => {
-                  setActiveTool('link');
-                  setOpenMenuDropdown(null);
-                }}
-                title="Insert URL Link or Page Jump"
-                className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'link' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
-                }`}
-              >
-                <Link2 className="w-4 h-4" />
-                <span>Link</span>
-              </button>
+              {/* Link Dropdown */}
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  disabled={readOnlyLocked}
+                  onClick={() => {
+                    setActiveTool('link');
+                    setOpenMenuDropdown(openMenuDropdown === 'link' ? null : 'link');
+                  }}
+                  title="Insert URL Link or Page Jump"
+                  className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
+                    activeTool === 'link' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                  }`}
+                >
+                  <Link2 className="w-4 h-4" />
+                  <span>Link</span>
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {openMenuDropdown === 'link' && (
+                  <div className="absolute right-0 sm:left-0 top-full mt-1 w-60 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-2 text-[12px]">
+                    <div className="grid grid-cols-2 gap-1">
+                      <button type="button" onClick={() => { setDefaultLinkKind('url'); setActiveTool('link'); }} className={`px-2 py-1.5 rounded-lg font-medium cursor-pointer ${defaultLinkKind === 'url' ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'}`}>
+                        External URL
+                      </button>
+                      <button type="button" onClick={() => { setDefaultLinkKind('page'); setActiveTool('link'); }} className={`px-2 py-1.5 rounded-lg font-medium cursor-pointer ${defaultLinkKind === 'page' ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'}`}>
+                        Jump to Page
+                      </button>
+                    </div>
+                    {defaultLinkKind === 'url' ? (
+                      <input
+                        type="url"
+                        value={defaultLinkUrl}
+                        onChange={(e) => setDefaultLinkUrl(e.target.value)}
+                        placeholder="https://example.com"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface-subtle)] text-[12px]"
+                      />
+                    ) : (
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-[var(--muted)] font-medium">Target Page</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={Math.max(1, pageOrder.length)}
+                          value={defaultLinkPage}
+                          onChange={(e) => setDefaultLinkPage(Math.max(1, Math.min(pageOrder.length || 1, Number(e.target.value) || 1)))}
+                          className="w-20 px-2 py-1 rounded-lg border border-[var(--line)] bg-[var(--surface-subtle)] text-[12px]"
+                        />
+                      </label>
+                    )}
+                    <span className="text-[11px] text-[var(--muted)]">Drag a box anywhere on the page to place this link.</span>
+                  </div>
+                )}
+              </div>
 
-              <button
-                type="button"
-                disabled={readOnlyLocked}
-                onClick={() => {
-                  setActiveTool('redact');
-                  setOpenMenuDropdown(null);
-                }}
-                title="Mark Secure Redaction Area"
-                className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'redact'
-                    ? 'bg-rose-500/15 border border-rose-500 text-rose-700 dark:text-rose-200'
-                    : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
-                }`}
-              >
-                <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400" />
-                <span>Redact</span>
-              </button>
+              {/* Redact Dropdown */}
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  disabled={readOnlyLocked}
+                  onClick={() => {
+                    setActiveTool('redact');
+                    setOpenMenuDropdown(openMenuDropdown === 'redact' ? null : 'redact');
+                  }}
+                  title="Mark Secure Redaction Area"
+                  className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
+                    activeTool === 'redact'
+                      ? 'bg-rose-500/15 border border-rose-500 text-rose-700 dark:text-rose-200'
+                      : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                  }`}
+                >
+                  <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+                  <span>Redact</span>
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {openMenuDropdown === 'redact' && (
+                  <div className="absolute right-0 top-full mt-1 w-56 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-1.5 z-50 flex flex-col gap-1 text-[12px]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTool('redact');
+                        setOpenMenuDropdown(null);
+                      }}
+                      className="px-2.5 py-2 rounded-lg text-left hover:bg-[var(--surface-subtle)] font-medium cursor-pointer"
+                    >
+                      Draw Redaction Box
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowLeftSidebar(true);
+                        setLeftSidebarTab('search');
+                        setOpenMenuDropdown(null);
+                      }}
+                      className="px-2.5 py-2 rounded-lg text-left hover:bg-[var(--surface-subtle)] font-medium cursor-pointer"
+                    >
+                      Find &amp; Redact Patterns...
+                    </button>
+                    <button
+                      type="button"
+                      disabled={redactionsSummary.length === 0}
+                      onClick={() => {
+                        setOpenMenuDropdown(null);
+                        setIsApplyRedactionsOpen(true);
+                      }}
+                      className="px-2.5 py-2 rounded-lg text-left bg-rose-600 text-white font-semibold hover:bg-rose-700 cursor-pointer disabled:opacity-40"
+                    >
+                      Apply Redactions ({redactionsSummary.reduce((s, p) => s + p.count, 0)})
+                    </button>
+                  </div>
+                )}
+              </div>
 
               <button
                 type="button"
@@ -2559,27 +2970,32 @@ export default function PdfEditorModal({
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {openMenuDropdown === 'fields' && (
-                  <div className="absolute left-0 top-full mt-1 w-64 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2 z-50 grid grid-cols-2 gap-1">
-                    {FIELD_TYPES.map((ft) => {
-                      const Icon = ft.icon;
-                      return (
-                        <button
-                          key={ft.id}
-                          type="button"
-                          onClick={() => {
-                            setActiveFieldType(ft.id);
-                            setActiveTool('field');
-                            setOpenMenuDropdown(null);
-                          }}
-                          className={`px-2 py-2 rounded-lg text-[12px] font-medium flex items-center gap-1.5 text-left cursor-pointer ${
-                            activeTool === 'field' && activeFieldType === ft.id ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'
-                          }`}
-                        >
-                          <Icon className={`w-3.5 h-3.5 shrink-0 ${activeTool === 'field' && activeFieldType === ft.id ? 'text-white' : 'text-[var(--brand)]'}`} />
-                          <span className="truncate">{ft.label}</span>
-                        </button>
-                      );
-                    })}
+                  <div className="absolute left-0 top-full mt-1 w-64 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-2">
+                    <div className="grid grid-cols-2 gap-1">
+                      {FIELD_TYPES.map((ft) => {
+                        const Icon = ft.icon;
+                        return (
+                          <button
+                            key={ft.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveFieldType(ft.id);
+                              setActiveTool('field');
+                            }}
+                            className={`px-2 py-2 rounded-lg text-[12px] font-medium flex items-center gap-1.5 text-left cursor-pointer ${
+                              activeTool === 'field' && activeFieldType === ft.id ? 'bg-[var(--brand)] text-white' : 'hover:bg-[var(--surface-subtle)]'
+                            }`}
+                          >
+                            <Icon className={`w-3.5 h-3.5 shrink-0 ${activeTool === 'field' && activeFieldType === ft.id ? 'text-white' : 'text-[var(--brand)]'}`} />
+                            <span className="truncate">{ft.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <label className="pt-2 border-t border-[var(--line)] flex items-center gap-2 text-[12px] font-medium cursor-pointer">
+                      <input type="checkbox" checked={newFieldRequired} onChange={(e) => setNewFieldRequired(e.target.checked)} />
+                      <span>Mark new fields as Required</span>
+                    </label>
                   </div>
                 )}
               </div>
@@ -3505,29 +3921,41 @@ export default function PdfEditorModal({
                     );
                   }
 
+                  const startResize = (mode) => (e) => {
+                    e.stopPropagation();
+                    const { x, y } = getOverlayPos(e);
+                    dragModeRef.current = mode;
+                    const origMap = new Map();
+                    origMap.set(ann.id, {
+                      x: ann.x || 0,
+                      y: ann.y || 0,
+                      width: ann.width || 120,
+                      height: ann.height || 30,
+                      x1: ann.x1,
+                      y1: ann.y1,
+                      x2: ann.x2,
+                      y2: ann.y2
+                    });
+                    dragStartRef.current = { x, y, origMap };
+                  };
+
                   const renderHandles = () =>
                     isSel && !ann.locked && !readOnlyLocked ? (
                       <>
                         <div
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                            const { x, y } = getOverlayPos(e);
-                            dragModeRef.current = 'resize';
-                            const origMap = new Map();
-                            origMap.set(ann.id, {
-                              x: ann.x || 0,
-                              y: ann.y || 0,
-                              width: ann.width || 80,
-                              height: ann.height || 30,
-                              x1: ann.x1,
-                              y1: ann.y1,
-                              x2: ann.x2,
-                              y2: ann.y2
-                            });
-                            dragStartRef.current = { x, y, origMap };
-                          }}
+                          onMouseDown={startResize('resize')}
                           className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-600 border-2 border-white rounded-sm cursor-se-resize shadow"
-                          title="Drag to resize"
+                          title="Drag corner to resize width & height"
+                        />
+                        <div
+                          onMouseDown={startResize('resizeX')}
+                          className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-2.5 h-4 bg-blue-600 border border-white rounded-sm cursor-ew-resize shadow"
+                          title="Drag horizontally to resize width"
+                        />
+                        <div
+                          onMouseDown={startResize('resizeY')}
+                          className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-2.5 bg-blue-600 border border-white rounded-sm cursor-ns-resize shadow"
+                          title="Drag vertically to resize height"
                         />
                       </>
                     ) : null;
@@ -3600,12 +4028,17 @@ export default function PdfEditorModal({
                             kind: ann.type,
                             x: ann.x,
                             y: ann.y,
-                            width: Math.max(180, ann.width || 200),
-                            height: Math.max(36, ann.height || 36),
+                            width: Math.max(80, ann.width || 160),
+                            height: Math.max(24, ann.height || 28),
                             text: ann.text || '',
                             fontSize: ann.fontSize || 16,
                             fontFamily: ann.fontFamily || 'Inter',
                             color: ann.color || '#000000',
+                            bgColor: ann.bgColor || 'transparent',
+                            isBold: Boolean(ann.isBold),
+                            isItalic: Boolean(ann.isItalic),
+                            isUnderline: Boolean(ann.isUnderline),
+                            align: ann.align || 'left',
                             isCoverReplace: ann.type === 'coverText',
                             coverColor: ann.coverColor || ann.bgColor || '#ffffff'
                           });
@@ -3614,7 +4047,9 @@ export default function PdfEditorModal({
                         style={{
                           left: `${ann.x}px`,
                           top: `${ann.y}px`,
-                          minWidth: `${Math.max(40, ann.width || 60)}px`,
+                          width: `${Math.max(40, ann.width || 140)}px`,
+                          minHeight: `${Math.max(20, ann.height || 26)}px`,
+                          overflowWrap: 'break-word',
                           fontSize: `${ann.fontSize || 16}px`,
                           fontFamily: ann.fontFamily || 'Inter, sans-serif',
                           color: ann.color || '#000000',
@@ -3627,7 +4062,7 @@ export default function PdfEditorModal({
                           lineHeight: ann.lineSpacing || 1.3,
                           opacity: ann.opacity ?? 1
                         }}
-                        title="Double-click to edit text"
+                        title="Drag to move, handles to resize vertically/horizontally, double-click to edit"
                         className={`absolute px-1 py-0.5 rounded whitespace-pre-wrap cursor-move ${
                           isSel ? 'ring-2 ring-blue-500' : 'hover:ring-1 hover:ring-blue-400/60'
                         }`}
@@ -3877,7 +4312,7 @@ export default function PdfEditorModal({
                   />
                 )}
 
-                {/* Inline Multi-Line Auto-Grow Textarea (Text, Edit Text, Comment, Callout) */}
+                {/* Clean In-Place Direct Text Editor (Appears Directly Where Clicked, Resizable) */}
                 {inlineTextEdit && (
                   <div
                     style={{
@@ -3885,37 +4320,44 @@ export default function PdfEditorModal({
                       top: `${inlineTextEdit.y}px`,
                       backgroundColor:
                         inlineTextEdit.kind === 'comment' || inlineTextEdit.kind === 'callout'
-                          ? '#fef3c7'
+                          ? (inlineTextEdit.bgColor || '#fef3c7')
                           : inlineTextEdit.isCoverReplace
                           ? inlineTextEdit.coverColor
-                          : '#ffffff'
+                          : inlineTextEdit.bgColor && inlineTextEdit.bgColor !== 'transparent'
+                          ? inlineTextEdit.bgColor
+                          : 'rgba(255, 255, 255, 0.92)'
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
                     onTouchStart={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute z-30 border-2 border-blue-600 rounded-md shadow-xl p-1.5 flex flex-col gap-1 min-w-[220px]"
+                    className="absolute z-30 border border-dashed border-blue-600 rounded-xs shadow-sm"
                   >
-                    <div className="text-[11px] font-semibold text-slate-600 px-0.5 flex items-center justify-between">
-                      <span>
-                        {inlineTextEdit.kind === 'comment'
-                          ? 'Sticky-Note Comment'
-                          : inlineTextEdit.kind === 'callout'
-                          ? 'Callout Box Note'
-                          : inlineTextEdit.isCoverReplace
-                          ? 'Edit Text'
-                          : 'Add Text'}
-                      </span>
-                      <span className="text-[10px] text-slate-400">Ctrl+Enter to Apply</span>
-                    </div>
                     <textarea
                       ref={inlineTextAreaRef}
-                      rows={2}
+                      rows={1}
                       value={inlineTextEdit.text}
+                      style={{
+                        width: `${Math.max(120, inlineTextEdit.width || 180)}px`,
+                        minHeight: `${Math.max(24, inlineTextEdit.height || 30)}px`,
+                        fontSize: `${inlineTextEdit.fontSize || 16}px`,
+                        fontFamily: inlineTextEdit.fontFamily || 'Inter, sans-serif',
+                        color: inlineTextEdit.color || '#000000',
+                        fontWeight: inlineTextEdit.isBold ? 700 : 400,
+                        fontStyle: inlineTextEdit.isItalic ? 'italic' : 'normal',
+                        textDecoration: inlineTextEdit.isUnderline ? 'underline' : undefined,
+                        textAlign: inlineTextEdit.align || 'left',
+                        resize: 'both'
+                      }}
                       onMouseDown={(e) => e.stopPropagation()}
                       onChange={(e) => {
                         e.target.style.height = 'auto';
-                        e.target.style.height = `${e.target.scrollHeight}px`;
-                        setInlineTextEdit((p) => ({ ...p, text: e.target.value }));
+                        e.target.style.height = `${Math.max(24, e.target.scrollHeight)}px`;
+                        setInlineTextEdit((p) => ({
+                          ...p,
+                          text: e.target.value,
+                          width: e.target.offsetWidth || p.width,
+                          height: e.target.offsetHeight || p.height
+                        }));
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Escape') {
@@ -3929,27 +4371,27 @@ export default function PdfEditorModal({
                       }}
                       placeholder={
                         inlineTextEdit.kind === 'comment'
-                          ? 'Write sticky-note comment...'
+                          ? 'Write comment...'
                           : inlineTextEdit.kind === 'callout'
-                          ? 'Write callout note...'
-                          : 'Type text (multi-line)...'
+                          ? 'Callout note...'
+                          : 'Type here...'
                       }
-                      className="pdf-paper-input text-sm text-slate-900 bg-transparent outline-none resize-none min-w-[210px] p-1"
+                      className="pdf-paper-input block bg-transparent outline-none px-1 py-0.5 leading-snug"
                     />
-                    <div className="flex justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setInlineTextEdit(null)}
-                        className="px-2 py-0.5 text-xs text-slate-600 hover:text-slate-900 cursor-pointer"
-                      >
-                        Cancel
-                      </button>
+                    <div className="absolute left-0 top-full mt-1 flex items-center gap-1 bg-[var(--surface)] border border-[var(--line)] rounded-md shadow-md px-1.5 py-0.5 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={commitInlineText}
-                        className="px-2.5 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer"
+                        className="px-2 py-0.5 text-[11px] font-semibold bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer"
                       >
                         Apply
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInlineTextEdit(null)}
+                        className="px-1.5 py-0.5 text-[11px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+                      >
+                        Cancel
                       </button>
                     </div>
                   </div>
