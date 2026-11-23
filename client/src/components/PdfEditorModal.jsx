@@ -1762,15 +1762,15 @@ export default function PdfEditorModal({
       />
       <input ref={mergePdfInputRef} type="file" accept="application/pdf" onChange={handleMergePdfFile} className="hidden" />
 
-      {/* 1. DARK TOP BAR (Existing layout items preserved) */}
-      <header className="h-14 border-b border-slate-800 bg-[#111827] text-slate-100 px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0">
+      {/* 1. TOP BAR */}
+      <header className="h-14 border-b border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-1.5 min-w-0">
           <button
             type="button"
             onClick={() => setShowLeftSidebar((p) => !p)}
             aria-label={showLeftSidebar ? 'Hide sidebar' : 'Show sidebar'}
             title={showLeftSidebar ? 'Hide sidebar' : 'Show sidebar'}
-            className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer"
+            className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] rounded-lg cursor-pointer"
           >
             {showLeftSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
           </button>
@@ -1780,9 +1780,9 @@ export default function PdfEditorModal({
             onClick={() => openDiskInputRef.current?.click()}
             title="Open PDF from computer"
             aria-label="Open PDF file"
-            className="px-2.5 py-1.5 min-h-[38px] rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[13px] font-medium flex items-center gap-1.5 cursor-pointer"
+            className="px-2.5 py-1.5 min-h-[38px] rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--ink)] text-[13px] font-medium flex items-center gap-1.5 cursor-pointer"
           >
-            <FolderOpen className="w-4 h-4 text-blue-400" />
+            <FolderOpen className="w-4 h-4 text-[var(--brand)]" />
             <span className="hidden sm:inline">Open</span>
           </button>
 
@@ -1793,7 +1793,7 @@ export default function PdfEditorModal({
               onClick={() => setOpenMenuDropdown(openMenuDropdown === 'recent' ? null : 'recent')}
               title="Recent PDF files"
               aria-label="Recent PDF files"
-              className="p-2 min-h-[38px] rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+              className="p-2 min-h-[38px] rounded-lg hover:bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
             >
               <Clock className="w-4 h-4" />
             </button>
@@ -1826,10 +1826,10 @@ export default function PdfEditorModal({
             }}
             aria-label="Document file name"
             title="Rename document"
-            className="font-medium text-[14px] text-slate-100 bg-transparent border border-transparent hover:border-slate-700 focus:border-blue-500 px-2 py-1 rounded max-w-[190px] truncate outline-none"
+            className="font-medium text-[14px] text-[var(--ink)] bg-transparent border border-transparent hover:border-[var(--line)] focus:border-[var(--brand)] px-2 py-1 rounded max-w-[190px] truncate outline-none"
           />
           {readOnlyLocked && (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-semibold shrink-0">
+            <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold shrink-0">
               Locked
             </span>
           )}
@@ -1837,35 +1837,35 @@ export default function PdfEditorModal({
 
         {/* Center Zoom, Page Nav, Undo/Redo */}
         <div className="flex items-center gap-1.5">
-          <div className="hidden md:flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700">
-            <button type="button" onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.15).toFixed(2))))} aria-label="Zoom out" title="Zoom out" className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded cursor-pointer">
+          <div className="hidden md:flex items-center bg-[var(--surface-subtle)] rounded-lg p-0.5 border border-[var(--line)]">
+            <button type="button" onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.15).toFixed(2))))} aria-label="Zoom out" title="Zoom out" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] rounded cursor-pointer">
               <ZoomOut className="w-4 h-4" />
             </button>
-            <span className="text-[13px] px-2 text-slate-200 font-mono min-w-[50px] text-center">
+            <span className="text-[13px] px-2 text-[var(--ink)] font-mono min-w-[50px] text-center">
               {Math.round(zoom * 100)}%
             </span>
-            <button type="button" onClick={() => setZoom((z) => Math.min(2.8, Number((z + 0.15).toFixed(2))))} aria-label="Zoom in" title="Zoom in" className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded cursor-pointer">
+            <button type="button" onClick={() => setZoom((z) => Math.min(2.8, Number((z + 0.15).toFixed(2))))} aria-label="Zoom in" title="Zoom in" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] rounded cursor-pointer">
               <ZoomIn className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700">
-            <button type="button" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage <= 1} aria-label="Previous page" title="Previous page" className="p-1.5 text-slate-300 hover:text-white disabled:opacity-30 cursor-pointer">
+          <div className="flex items-center bg-[var(--surface-subtle)] rounded-lg p-0.5 border border-[var(--line)]">
+            <button type="button" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage <= 1} aria-label="Previous page" title="Previous page" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-30 cursor-pointer">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="text-[13px] px-2 text-slate-200 font-mono whitespace-nowrap">
+            <span className="text-[13px] px-2 text-[var(--ink)] font-mono whitespace-nowrap">
               {currentPage} / {pageOrder.length || 1}
             </span>
-            <button type="button" onClick={() => setCurrentPage((p) => Math.min(pageOrder.length, p + 1))} disabled={currentPage >= pageOrder.length} aria-label="Next page" title="Next page" className="p-1.5 text-slate-300 hover:text-white disabled:opacity-30 cursor-pointer">
+            <button type="button" onClick={() => setCurrentPage((p) => Math.min(pageOrder.length, p + 1))} disabled={currentPage >= pageOrder.length} aria-label="Next page" title="Next page" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-30 cursor-pointer">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700">
-            <button type="button" onClick={handleUndo} disabled={historyIndex <= 0 || readOnlyLocked} aria-label="Undo" title="Undo (Ctrl+Z)" className="p-1.5 text-slate-300 hover:text-white disabled:opacity-30 cursor-pointer">
+          <div className="flex items-center bg-[var(--surface-subtle)] rounded-lg p-0.5 border border-[var(--line)]">
+            <button type="button" onClick={handleUndo} disabled={historyIndex <= 0 || readOnlyLocked} aria-label="Undo" title="Undo (Ctrl+Z)" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-30 cursor-pointer">
               <Undo2 className="w-4 h-4" />
             </button>
-            <button type="button" onClick={handleRedo} disabled={historyIndex >= history.length - 1 || readOnlyLocked} aria-label="Redo" title="Redo (Ctrl+Shift+Z)" className="p-1.5 text-slate-300 hover:text-white disabled:opacity-30 cursor-pointer">
+            <button type="button" onClick={handleRedo} disabled={historyIndex >= history.length - 1 || readOnlyLocked} aria-label="Redo" title="Redo (Ctrl+Shift+Z)" className="p-1.5 text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-30 cursor-pointer">
               <Redo2 className="w-4 h-4" />
             </button>
           </div>
@@ -1883,10 +1883,12 @@ export default function PdfEditorModal({
             title={isLocalOnlyMode ? 'AI Analysis (Local-only mode active)' : 'AI Analysis'}
             aria-label="AI Analysis"
             className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 border cursor-pointer ${
-              showAiDrawer ? 'bg-purple-600/30 border-purple-400 text-purple-200' : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+              showAiDrawer
+                ? 'bg-purple-500/15 border-purple-500/40 text-purple-700 dark:text-purple-300'
+                : 'bg-[var(--surface-subtle)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--surface-hover)]'
             }`}
           >
-            <Sparkles className="w-4 h-4 text-purple-400" />
+            <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
             <span className="hidden lg:inline">AI Analysis</span>
           </button>
 
@@ -1897,17 +1899,12 @@ export default function PdfEditorModal({
             </Button>
           )}
 
-          <button
-            type="button"
-            onClick={() => handleExport({ saveToVault: false })}
-            disabled={isExporting || isLoading}
-            className="px-3 py-1.5 min-h-[34px] rounded-[8px] bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 text-[13px] font-medium inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-          >
-            <Download className="w-4 h-4" />
+          <Button variant="secondary" size="sm" onClick={() => handleExport({ saveToVault: false })} disabled={isExporting || isLoading}>
+            <Download className="w-4 h-4 mr-1" />
             <span className="hidden sm:inline">Download</span>
-          </button>
+          </Button>
 
-          <button type="button" onClick={onClose} aria-label="Close PDF editor" title="Close editor" className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer">
+          <button type="button" onClick={onClose} aria-label="Close editor" title="Close editor" className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] rounded-lg cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>

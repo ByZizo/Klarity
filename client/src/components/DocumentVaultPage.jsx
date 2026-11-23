@@ -551,7 +551,7 @@ export default function DocumentVaultPage({
                 <button
                   type="button"
                   onClick={() => setEditingPdfDoc(doc)}
-                  title="Open in PDF Editor"
+                  title="Open in Editor"
                   className="p-1.5 rounded-[6px] text-[#1B4B91] hover:bg-[#1B4B91]/10 cursor-pointer"
                 >
                   <PenTool className="w-4 h-4" />
@@ -696,7 +696,7 @@ export default function DocumentVaultPage({
               variant="ghost"
               size="sm"
               onClick={() => setEditingPdfDoc(doc)}
-              title="Open in PDF Editor"
+              title="Open in Editor"
               className="text-[#1B4B91] hover:bg-[#1B4B91]/10"
             >
               <PenTool className="w-4 h-4" />
@@ -1019,11 +1019,11 @@ export default function DocumentVaultPage({
             variant="secondary"
             size="sm"
             onClick={() => pdfFileInputRef.current?.click()}
-            title="Open any PDF in the built-in PDF Editor"
+            title="Open any PDF in the built-in Editor"
             className="hidden sm:inline-flex items-center gap-1.5 border-[var(--line)] hover:border-[#1B4B91]/50 text-[var(--ink)]"
           >
             <PenTool className="w-4 h-4 text-[#1B4B91]" />
-            <span>PDF Editor</span>
+            <span>Editor</span>
           </Button>
 
           {/* Upload Document Primary Button (Anchored Prominently on the Far Right) */}
@@ -1583,7 +1583,7 @@ export default function DocumentVaultPage({
                       setPreviewDoc(null);
                       setEditingPdfDoc(doc);
                     }}
-                    title="Open and annotate in Klarity PDF Editor"
+                    title="Open and annotate in Klarity Editor"
                     className="bg-[#1B4B91] hover:bg-[#2563eb]"
                   >
                     <PenTool className="w-4 h-4" />
@@ -1908,7 +1908,7 @@ export default function DocumentVaultPage({
         <Suspense
           fallback={
             <div className="fixed inset-0 z-[100] bg-[var(--bg)] text-[var(--ink)] flex items-center justify-center text-[15px]">
-              Loading PDF Editor...
+              Loading Editor...
             </div>
           }
         >

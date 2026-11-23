@@ -24,6 +24,60 @@ import {
 
 const SAVED_SIGNATURES_KEY = 'klarity_saved_signatures_v2';
 const SIG_PIN_PROTECT_KEY = 'klarity_sig_pin_protect_v1';
+const SIG_KIND_DRAFTS_KEY = 'klarity_sig_kind_drafts_v1';
+
+function deriveInitials(name = '') {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+function createDefaultKindDraft(kind, defaultName = '') {
+  const cleanName = String(defaultName || '').trim();
+  return {
+    typedText: kind === 'initials' ? deriveInitials(cleanName) : cleanName,
+    selectedFontId: SCRIPT_FONTS[0].id,
+    inkColor: '#000000',
+    saveLabel: '',
+    captionText: '',
+    drawnData: [],
+    processedImageUrl: ''
+  };
+}
+
+function loadPersistedDrafts(defaultName = '') {
+  const base = {
+    signature: createDefaultKindDraft('signature', defaultName),
+    initials: createDefaultKindDraft('initials', defaultName)
+  };
+  try {
+    const raw = localStorage.getItem(SIG_KIND_DRAFTS_KEY);
+    if (!raw) return base;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return {
+        signature: { ...base.signature, ...(parsed.signature || {}) },
+        initials: { ...base.initials, ...(parsed.initials || {}) }
+      };
+    }
+  } catch {}
+  return base;
+}
+
+function savePersistedDrafts(drafts) {
+  try {
+    localStorage.setItem(SIG_KIND_DRAFTS_KEY, JSON.stringify(drafts));
+  } catch {
+    try {
+      const compact = {
+        signature: { ...drafts.signature, processedImageUrl: '' },
+        initials: { ...drafts.initials, processedImageUrl: '' }
+      };
+      localStorage.setItem(SIG_KIND_DRAFTS_KEY, JSON.stringify(compact));
+    } catch {}
+  }
+}
 
 const INK_COLORS = [
   { label: 'Black', hex: '#000000' },
@@ -156,22 +210,44 @@ export default function SignaturePadModal({
 }) {
   const [kind, setKind] = useState(initialKind);
   const [tab, setTab] = useState('draw'); // 'draw' | 'type' | 'upload' | 'camera' | 'saved'
-  const [inkColor, setInkColor] = useState('#000000');
+
+  // Separate persistent draft state per kind ('signature' vs 'initials')
+  const [draftsByKind, setDraftsByKind] = useState(() => loadPersistedDrafts(defaultSignerName));
+  const draftsByKindRef = useRef(draftsByKind);
+  useEffect(() => {
+    draftsByKindRef.current = draftsByKind;
+  }, [draftsByKind]);
+
+  const activeKind = kind === 'initials' ? 'initials' : 'signature';
+  const currentDraft = draftsByKind[activeKind] || createDefaultKindDraft(activeKind, defaultSignerName);
+  const inkColor = currentDraft.inkColor || '#000000';
+  const typedText = currentDraft.typedText ?? '';
+  const selectedFontId = currentDraft.selectedFontId || SCRIPT_FONTS[0].id;
+  const processedImageUrl = currentDraft.processedImageUrl || '';
+  const saveLabel = currentDraft.saveLabel || '';
+  const captionText = currentDraft.captionText || '';
+
+  const updateKindDraft = useCallback((targetKind, patch) => {
+    const k = targetKind === 'initials' ? 'initials' : 'signature';
+    setDraftsByKind((prev) => {
+      const next = {
+        ...prev,
+        [k]: { ...(prev[k] || createDefaultKindDraft(k)), ...patch }
+      };
+      savePersistedDrafts(next);
+      return next;
+    });
+  }, []);
 
   // Draw tab via signature_pad
   const drawCanvasRef = useRef(null);
   const sigPadRef = useRef(null);
-  const [hasDrawn, setHasDrawn] = useState(false);
-
-  // Type tab
-  const [typedText, setTypedText] = useState(defaultSignerName || '');
-  const [selectedFontId, setSelectedFontId] = useState(SCRIPT_FONTS[0].id);
+  const [hasDrawn, setHasDrawn] = useState(() => Array.isArray(currentDraft.drawnData) && currentDraft.drawnData.length > 0);
 
   // Upload & Camera processing
   const [rawUploadImg, setRawUploadImg] = useState(null);
   const [bgThreshold, setBgThreshold] = useState(205);
   const [autoTrim, setAutoTrim] = useState(true);
-  const [processedImageUrl, setProcessedImageUrl] = useState('');
   const uploadInputRef = useRef(null);
 
   // Camera opt-in state
@@ -181,8 +257,6 @@ export default function SignaturePadModal({
   const [cameraError, setCameraError] = useState('');
 
   // Optional label + name/title subtitle under placed signature
-  const [saveLabel, setSaveLabel] = useState('');
-  const [captionText, setCaptionText] = useState('');
   const [saveToLibrary, setSaveToLibrary] = useState(true);
 
   // Encrypted saved library & optional Vault PIN protection
@@ -215,14 +289,32 @@ export default function SignaturePadModal({
       stopCamera();
       return;
     }
-    setKind(initialKind || 'signature');
-    setTypedText((prev) => prev || defaultSignerName || '');
-    setHasDrawn(false);
-    setProcessedImageUrl('');
+    const nextKind = initialKind === 'initials' ? 'initials' : 'signature';
+    setKind(nextKind);
     setRawUploadImg(null);
     setCameraError('');
     setPinEntry('');
     setPinError('');
+
+    if (defaultSignerName) {
+      setDraftsByKind((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        if (!prev.signature?.typedText) {
+          next.signature = { ...prev.signature, typedText: defaultSignerName };
+          changed = true;
+        }
+        if (!prev.initials?.typedText) {
+          next.initials = { ...prev.initials, typedText: deriveInitials(defaultSignerName) };
+          changed = true;
+        }
+        if (changed) savePersistedDrafts(next);
+        return changed ? next : prev;
+      });
+    }
+
+    const savedStrokes = draftsByKindRef.current[nextKind]?.drawnData;
+    setHasDrawn(Array.isArray(savedStrokes) && savedStrokes.length > 0);
 
     const pinRequired = protectWithPin && hasMasterPinSet();
     setIsLibraryUnlocked(!pinRequired);
@@ -232,11 +324,14 @@ export default function SignaturePadModal({
     });
   }, [isOpen, initialKind, defaultSignerName, protectWithPin, stopCamera]);
 
-  // Initialize & sync SignaturePad instance
+  // Initialize & sync SignaturePad instance independently for Signature vs Initials
   useEffect(() => {
     if (!isOpen || tab !== 'draw') return;
     const canvas = drawCanvasRef.current;
     if (!canvas) return;
+
+    const currentActiveKind = kind === 'initials' ? 'initials' : 'signature';
+    const kindDraft = draftsByKindRef.current[currentActiveKind] || createDefaultKindDraft(currentActiveKind);
 
     const ratio = Math.max(window.devicePixelRatio || 1, 1);
     const rect = canvas.getBoundingClientRect();
@@ -250,11 +345,20 @@ export default function SignaturePadModal({
     const pad = new SignaturePad(canvas, {
       minWidth: 1.0,
       maxWidth: 3.4,
-      penColor: inkColor,
+      penColor: kindDraft.inkColor || '#000000',
       throttle: 8
     });
+
+    if (Array.isArray(kindDraft.drawnData) && kindDraft.drawnData.length > 0) {
+      try {
+        pad.fromData(kindDraft.drawnData);
+      } catch {}
+    }
+    setHasDrawn(!pad.isEmpty());
+
     pad.addEventListener('endStroke', () => {
       setHasDrawn(!pad.isEmpty());
+      updateKindDraft(currentActiveKind, { drawnData: pad.toData() });
     });
     sigPadRef.current = pad;
 
@@ -262,7 +366,7 @@ export default function SignaturePadModal({
       pad.off();
       sigPadRef.current = null;
     };
-  }, [isOpen, tab]);
+  }, [isOpen, tab, kind, updateKindDraft]);
 
   useEffect(() => {
     if (sigPadRef.current) {
@@ -273,9 +377,11 @@ export default function SignaturePadModal({
   // Re-run background removal cleanly when slider changes
   useEffect(() => {
     if (rawUploadImg) {
-      setProcessedImageUrl(processSignatureImage(rawUploadImg, bgThreshold, autoTrim));
+      updateKindDraft(activeKind, {
+        processedImageUrl: processSignatureImage(rawUploadImg, bgThreshold, autoTrim)
+      });
     }
-  }, [rawUploadImg, bgThreshold, autoTrim]);
+  }, [rawUploadImg, bgThreshold, autoTrim, activeKind, updateKindDraft]);
 
   if (!isOpen) return null;
 
@@ -287,23 +393,28 @@ export default function SignaturePadModal({
       data.pop();
       pad.fromData(data);
       setHasDrawn(!pad.isEmpty());
+      updateKindDraft(activeKind, { drawnData: pad.toData() });
     }
   };
 
   const handleClearDraw = () => {
     sigPadRef.current?.clear();
     setHasDrawn(false);
+    updateKindDraft(activeKind, { drawnData: [] });
   };
 
   const handleUploadFile = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const targetKind = activeKind;
     const reader = new FileReader();
     reader.onload = (ev) => {
       const img = new Image();
       img.onload = () => {
         setRawUploadImg(img);
-        setProcessedImageUrl(processSignatureImage(img, bgThreshold, autoTrim));
+        updateKindDraft(targetKind, {
+          processedImageUrl: processSignatureImage(img, bgThreshold, autoTrim)
+        });
       };
       img.src = ev.target.result;
     };
@@ -336,6 +447,7 @@ export default function SignaturePadModal({
   const handleCaptureCameraFrame = () => {
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
+    const targetKind = activeKind;
     const capCanvas = document.createElement('canvas');
     capCanvas.width = video.videoWidth;
     capCanvas.height = video.videoHeight;
@@ -344,7 +456,9 @@ export default function SignaturePadModal({
     const img = new Image();
     img.onload = () => {
       setRawUploadImg(img);
-      setProcessedImageUrl(processSignatureImage(img, bgThreshold, autoTrim));
+      updateKindDraft(targetKind, {
+        processedImageUrl: processSignatureImage(img, bgThreshold, autoTrim)
+      });
       stopCamera();
     };
     img.src = capCanvas.toDataURL('image/png');
@@ -474,9 +588,12 @@ export default function SignaturePadModal({
             <div className="flex items-center p-1 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)]">
               <button
                 type="button"
-                onClick={() => setKind('signature')}
+                onClick={() => {
+                  setRawUploadImg(null);
+                  setKind('signature');
+                }}
                 className={`px-3 py-1.5 min-h-[36px] rounded-lg text-[13px] font-semibold transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] ${
-                  kind === 'signature'
+                  activeKind === 'signature'
                     ? 'bg-[var(--brand)] text-white'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                 }`}
@@ -485,9 +602,12 @@ export default function SignaturePadModal({
               </button>
               <button
                 type="button"
-                onClick={() => setKind('initials')}
+                onClick={() => {
+                  setRawUploadImg(null);
+                  setKind('initials');
+                }}
                 className={`px-3 py-1.5 min-h-[36px] rounded-lg text-[13px] font-semibold transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] ${
-                  kind === 'initials'
+                  activeKind === 'initials'
                     ? 'bg-[var(--brand)] text-white'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                 }`}
@@ -555,7 +675,7 @@ export default function SignaturePadModal({
                     <button
                       key={c.hex}
                       type="button"
-                      onClick={() => setInkColor(c.hex)}
+                      onClick={() => updateKindDraft(activeKind, { inkColor: c.hex })}
                       style={{ backgroundColor: c.hex }}
                       aria-label={`${c.label} ink`}
                       title={c.label}
@@ -615,7 +735,7 @@ export default function SignaturePadModal({
                     id="sig-typed-input"
                     type="text"
                     value={typedText}
-                    onChange={(e) => setTypedText(e.target.value)}
+                    onChange={(e) => updateKindDraft(activeKind, { typedText: e.target.value })}
                     placeholder={kind === 'initials' ? 'e.g. J.D.' : 'e.g. Jane Doe'}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--line)] bg-[var(--surface-subtle)] text-[15px] text-[var(--ink)] outline-none focus:border-[var(--brand)]"
                   />
@@ -626,7 +746,7 @@ export default function SignaturePadModal({
                     <button
                       key={c.hex}
                       type="button"
-                      onClick={() => setInkColor(c.hex)}
+                      onClick={() => updateKindDraft(activeKind, { inkColor: c.hex })}
                       style={{ backgroundColor: c.hex }}
                       aria-label={`${c.label} ink`}
                       className={`w-6 h-6 rounded-full border-2 cursor-pointer ${
@@ -644,7 +764,7 @@ export default function SignaturePadModal({
                     <button
                       key={fontObj.id}
                       type="button"
-                      onClick={() => setSelectedFontId(fontObj.id)}
+                      onClick={() => updateKindDraft(activeKind, { selectedFontId: fontObj.id })}
                       className={`p-3 rounded-xl border-2 text-left bg-white transition-all cursor-pointer flex flex-col justify-between min-h-[84px] ${
                         isSel
                           ? 'border-[var(--brand)] ring-2 ring-[var(--brand)]/25'
@@ -914,7 +1034,7 @@ export default function SignaturePadModal({
                   id="sig-save-name"
                   type="text"
                   value={saveLabel}
-                  onChange={(e) => setSaveLabel(e.target.value)}
+                  onChange={(e) => updateKindDraft(activeKind, { saveLabel: e.target.value })}
                   placeholder="e.g. Formal Signature"
                   className="w-full px-3 py-2 rounded-lg border border-[var(--line)] bg-[var(--surface-subtle)] text-[14px] text-[var(--ink)] outline-none focus:border-[var(--brand)]"
                 />
@@ -927,7 +1047,7 @@ export default function SignaturePadModal({
                   id="sig-caption-line"
                   type="text"
                   value={captionText}
-                  onChange={(e) => setCaptionText(e.target.value)}
+                  onChange={(e) => updateKindDraft(activeKind, { captionText: e.target.value })}
                   placeholder="e.g. Jane Doe, Authorized Signer"
                   className="w-full px-3 py-2 rounded-lg border border-[var(--line)] bg-[var(--surface-subtle)] text-[14px] text-[var(--ink)] outline-none focus:border-[var(--brand)]"
                 />
