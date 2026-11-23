@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   FileText,
   Bookmark,
@@ -12,8 +12,48 @@ import {
   ShieldAlert,
   ChevronRight
 } from 'lucide-react';
-import { REDACTION_PATTERN_PRESETS } from '../../utils/pdfEditorEngine';
+import { REDACTION_PATTERN_PRESETS, renderPdfPageToCanvas } from '../../utils/pdfEditorEngine';
 import { formatFileSize } from '../../utils/documentVaultStorage';
+
+function PdfThumbnailCanvas({ pdfJsDoc, sourcePageNumber, rotationOffset = 0, cropBox = null }) {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (!pdfJsDoc || !canvasRef.current || !sourcePageNumber) return;
+    let active = true;
+    const targetCanvas = canvasRef.current;
+
+    renderPdfPageToCanvas(
+      pdfJsDoc,
+      sourcePageNumber,
+      targetCanvas,
+      0.28,
+      rotationOffset,
+      cropBox,
+      true
+    ).catch((err) => {
+      if (err?.name !== 'RenderingCancelledException') {
+        console.warn(`Thumbnail render error p.${sourcePageNumber}:`, err);
+      }
+    });
+
+    return () => {
+      active = false;
+      if (targetCanvas?.__activeRenderTask && !active) {
+        try {
+          targetCanvas.__activeRenderTask.cancel();
+        } catch {}
+      }
+    };
+  }, [pdfJsDoc, sourcePageNumber, rotationOffset, cropBox]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="max-w-full max-h-full w-auto h-auto object-contain block bg-white"
+    />
+  );
+}
 
 export default function PdfLeftSidebar({
   activeTab,
@@ -22,6 +62,7 @@ export default function PdfLeftSidebar({
   currentPage = 1,
   onSelectPage,
   pageOrder = [],
+  pdfJsDoc = null,
   annotations = {},
   outline = [],
   searchQuery = '',
@@ -151,9 +192,25 @@ export default function PdfLeftSidebar({
                   }`}
                 >
                   <div className="aspect-[3/4] bg-white rounded-lg border border-slate-300 flex flex-col items-center justify-center relative overflow-hidden shadow-2xs">
-                    <span className="text-slate-700 font-semibold text-[15px]">{pNum}</span>
-                    {descriptor?.sourceType === 'blank' && (
-                      <span className="text-[11px] text-slate-400 mt-0.5">Blank page</span>
+                    {pdfJsDoc && descriptor?.sourceType !== 'blank' ? (
+                      <>
+                        <PdfThumbnailCanvas
+                          pdfJsDoc={pdfJsDoc}
+                          sourcePageNumber={descriptor?.sourcePageNumber || pNum}
+                          rotationOffset={rot}
+                          cropBox={descriptor?.cropBox || null}
+                        />
+                        <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-slate-900/75 text-white text-[11px] font-semibold">
+                          {pNum}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-slate-700 font-semibold text-[15px]">{pNum}</span>
+                        {descriptor?.sourceType === 'blank' && (
+                          <span className="text-[11px] text-slate-400 mt-0.5">Blank page</span>
+                        )}
+                      </>
                     )}
                     {pageAnns.length > 0 && (
                       <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-[var(--brand)] text-white text-[11px] font-bold">

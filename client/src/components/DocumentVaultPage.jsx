@@ -1271,8 +1271,8 @@ export default function DocumentVaultPage({
                 {paginatedUnfiledDocuments.map(renderDocumentRow)}
               </Card>
             )}
-            {unfiledDocuments.length > 0 && (
-              <Card className="mt-4 overflow-hidden">
+            {unfiledDocuments.length > docPageSize && (
+              <Card padding="p-0" className="mt-4 overflow-hidden">
                 <PaginationBar
                   totalItems={unfiledDocuments.length}
                   pageSize={docPageSize}
@@ -1300,20 +1300,22 @@ export default function DocumentVaultPage({
                 {paginatedFilteredDocuments.map(renderDocumentRow)}
               </Card>
             )}
-            <Card className="mt-4 overflow-hidden">
-              <PaginationBar
-                totalItems={filteredDocuments.length}
-                pageSize={docPageSize}
-                currentPage={safeFilteredDocPage}
-                onPageChange={setDocPage}
-                onPageSizeChange={(size) => {
-                  setDocPageSize(size);
-                  setDocPage(1);
-                }}
-                pageSizeOptions={[24, 36, 72]}
-                itemLabel="documents"
-              />
-            </Card>
+            {filteredDocuments.length > docPageSize && (
+              <Card padding="p-0" className="mt-4 overflow-hidden">
+                <PaginationBar
+                  totalItems={filteredDocuments.length}
+                  pageSize={docPageSize}
+                  currentPage={safeFilteredDocPage}
+                  onPageChange={setDocPage}
+                  onPageSizeChange={(size) => {
+                    setDocPageSize(size);
+                    setDocPage(1);
+                  }}
+                  pageSizeOptions={[24, 36, 72]}
+                  itemLabel="documents"
+                />
+              </Card>
+            )}
           </>
         )
       ) : (
@@ -1341,20 +1343,22 @@ export default function DocumentVaultPage({
                 {paginatedFilteredDocuments.map(renderDocumentRow)}
               </Card>
             )}
-            <Card className="mt-4 overflow-hidden">
-              <PaginationBar
-                totalItems={filteredDocuments.length}
-                pageSize={docPageSize}
-                currentPage={safeFilteredDocPage}
-                onPageChange={setDocPage}
-                onPageSizeChange={(size) => {
-                  setDocPageSize(size);
-                  setDocPage(1);
-                }}
-                pageSizeOptions={[24, 36, 72]}
-                itemLabel="documents"
-              />
-            </Card>
+            {filteredDocuments.length > docPageSize && (
+              <Card padding="p-0" className="mt-4 overflow-hidden">
+                <PaginationBar
+                  totalItems={filteredDocuments.length}
+                  pageSize={docPageSize}
+                  currentPage={safeFilteredDocPage}
+                  onPageChange={setDocPage}
+                  onPageSizeChange={(size) => {
+                    setDocPageSize(size);
+                    setDocPage(1);
+                  }}
+                  pageSizeOptions={[24, 36, 72]}
+                  itemLabel="documents"
+                />
+              </Card>
+            )}
           </>
         )
       )}
@@ -1635,7 +1639,7 @@ export default function DocumentVaultPage({
             </div>
 
             {/* Preview Frame Body */}
-            <div className="flex-1 w-full bg-[#0a0a0c] overflow-auto flex items-center justify-center p-2">
+            <div className="flex-1 w-full bg-[var(--surface-subtle)] dark:bg-[#0a0a0c] overflow-auto flex items-center justify-center p-2">
               {previewDoc.fileType?.includes('pdf') || previewDoc.fileName?.toLowerCase().endsWith('.pdf') ? (
                 <iframe
                   src={previewDoc.dataUrl}
@@ -1651,10 +1655,10 @@ export default function DocumentVaultPage({
                   className="max-h-full max-w-full object-contain rounded-lg shadow-lg"
                 />
               ) : (
-                <div className="p-8 text-center text-white flex flex-col items-center gap-3">
-                  <File className="w-16 h-16 text-slate-400" />
+                <div className="p-8 text-center text-[var(--ink)] flex flex-col items-center gap-3">
+                  <File className="w-16 h-16 text-[var(--muted)]" />
                   <p className="text-lg font-medium">{previewDoc.name}</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-[var(--muted)]">
                     Direct inline preview is not supported for this file type.
                   </p>
                   <Button variant="primary" onClick={() => handleDownload(previewDoc)}>
@@ -1903,7 +1907,7 @@ export default function DocumentVaultPage({
       {editingPdfDoc && (
         <Suspense
           fallback={
-            <div className="fixed inset-0 z-[100] bg-[#0b0f19] text-slate-200 flex items-center justify-center text-[15px]">
+            <div className="fixed inset-0 z-[100] bg-[var(--bg)] text-[var(--ink)] flex items-center justify-center text-[15px]">
               Loading PDF Editor...
             </div>
           }

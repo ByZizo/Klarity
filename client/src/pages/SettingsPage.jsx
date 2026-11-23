@@ -188,13 +188,6 @@ export function SettingsPage({
   const [newSettingsFolderName, setNewSettingsFolderName] = useState('');
   const [isClearingBrowserData, setIsClearingBrowserData] = useState(false);
   const [confirmClearBrowserData, setConfirmClearBrowserData] = useState(false);
-  const [pdfAutofillOptIn, setPdfAutofillOptIn] = useState(() => {
-    try {
-      return localStorage.getItem('klarity_pdf_autofill_opt_in') === 'true';
-    } catch {
-      return false;
-    }
-  });
   const [newStartupPageInput, setNewStartupPageInput] = useState('');
   const [electronBrowserPrefs, setElectronBrowserPrefs] = useState({
     doNotTrack: Boolean(browserSettings?.doNotTrack),
@@ -543,29 +536,6 @@ export function SettingsPage({
                       Save profile
                     </Button>
                   </div>
-                </Card>
-
-                <Card className="p-5 flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-[15px] font-semibold text-[var(--ink)]">PDF Editor Profile Autofill</p>
-                    <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
-                      Opt-in to allow Klarity&apos;s Fill &amp; Sign PDF editor to fill your name, email, phone, and address locally. Never sent over the network.
-                    </p>
-                  </div>
-                  <label className="flex items-center gap-2 shrink-0 cursor-pointer text-[13px] font-semibold">
-                    <input
-                      type="checkbox"
-                      checked={pdfAutofillOptIn}
-                      onChange={(e) => {
-                        const next = e.target.checked;
-                        setPdfAutofillOptIn(next);
-                        try {
-                          localStorage.setItem('klarity_pdf_autofill_opt_in', next ? 'true' : 'false');
-                        } catch {}
-                      }}
-                    />
-                    <span>{pdfAutofillOptIn ? 'Enabled' : 'Disabled'}</span>
-                  </label>
                 </Card>
               </div>
             )}

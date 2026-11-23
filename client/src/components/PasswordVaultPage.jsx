@@ -1594,8 +1594,8 @@ export default function PasswordVaultPage({
           })}
         </div>
       )}
-      {filteredItems.length > 0 && (
-        <Card className="mt-4 overflow-hidden">
+      {filteredItems.length > pageSize && (
+        <Card padding="p-0" className="mt-4 overflow-hidden">
           <PaginationBar
             totalItems={filteredItems.length}
             pageSize={pageSize}

@@ -341,6 +341,27 @@ export default function PdfEditorModal({
           }
         }
 
+        const initialOrder = Array.from({ length: loaded.numPages }, (_, idx) => ({
+          uid: `p_${idx + 1}`,
+          sourceType: 'original',
+          sourcePageNumber: idx + 1,
+          rotationOffset: 0,
+          cropBox: null
+        }));
+
+        let detectedFields = [];
+        const initVals = {};
+        if (!preserveEdits) {
+          try {
+            detectedFields = await inspectAcroFormFields(loaded.rawBytes, loaded.pdfJsDoc);
+            detectedFields.forEach((f) => {
+              initVals[f.fieldName] = f.value;
+            });
+          } catch (acroErr) {
+            console.warn('AcroForm inspect warning:', acroErr);
+          }
+        }
+
         setPdfJsDoc(loaded.pdfJsDoc);
         setRawPdfBytes(loaded.rawBytes);
         setOutline(loaded.outline || []);
@@ -350,14 +371,6 @@ export default function PdfEditorModal({
         setIsEncryptedDoc(inspectPdfEncryptionInfo(loaded.rawBytes).isEncrypted);
 
         if (docTitle) setDocName(docTitle);
-
-        const initialOrder = Array.from({ length: loaded.numPages }, (_, idx) => ({
-          uid: `p_${idx + 1}`,
-          sourceType: 'original',
-          sourcePageNumber: idx + 1,
-          rotationOffset: 0,
-          cropBox: null
-        }));
 
         if (!preserveEdits) {
           setPageOrder(initialOrder);
@@ -370,13 +383,7 @@ export default function PdfEditorModal({
           setHistoryIndex(0);
           setHasUnsavedChanges(false);
           setReadOnlyLocked(false);
-
-          const detectedFields = await inspectAcroFormFields(loaded.rawBytes, loaded.pdfJsDoc);
           setAcroFormFields(detectedFields);
-          const initVals = {};
-          detectedFields.forEach((f) => {
-            initVals[f.fieldName] = f.value;
-          });
           setAcroFormValues(initVals);
         }
 
@@ -411,9 +418,9 @@ export default function PdfEditorModal({
     }
   }, [isOpen, initialDocument, loadPdfDocumentSource, recordRecentFile]);
 
-  // Render active page + text layer whenever page, zoom, rotation, or crop changes
+  // Render active page + text layer whenever loading finishes or page/zoom/rotation/crop changes
   useEffect(() => {
-    if (!isOpen || !pdfJsDoc || !pdfCanvasRef.current || !activePageDesc) return;
+    if (!isOpen || isLoading || !pdfJsDoc || !pdfCanvasRef.current || !activePageDesc) return;
     let active = true;
 
     async function renderPage() {
@@ -447,15 +454,22 @@ export default function PdfEditorModal({
         if (!active || !res) return;
         setCanvasDims({ width: Math.floor(res.viewportWidth), height: Math.floor(res.viewportHeight) });
 
-        const tl = await getPageTextLayer(
-          pdfJsDoc,
-          activePageDesc.sourcePageNumber || 1,
-          zoom,
-          activePageDesc.rotationOffset || 0
-        );
-        if (active) setTextLayerSpans(tl.spans || []);
+        try {
+          const tl = await getPageTextLayer(
+            pdfJsDoc,
+            activePageDesc.sourcePageNumber || 1,
+            zoom,
+            activePageDesc.rotationOffset || 0
+          );
+          if (active) setTextLayerSpans(tl.spans || []);
+        } catch (tlErr) {
+          console.warn('Text layer warning:', tlErr);
+          if (active) setTextLayerSpans([]);
+        }
       } catch (err) {
-        console.warn('Page render warning:', err);
+        if (err?.name !== 'RenderingCancelledException') {
+          console.warn('Page render warning:', err);
+        }
       }
     }
 
@@ -463,7 +477,7 @@ export default function PdfEditorModal({
     return () => {
       active = false;
     };
-  }, [isOpen, pdfJsDoc, activePageDesc, zoom]);
+  }, [isOpen, isLoading, pdfJsDoc, activePageDesc, zoom]);
 
   // History management
   const commitHistory = useCallback(
@@ -1883,10 +1897,15 @@ export default function PdfEditorModal({
             </Button>
           )}
 
-          <Button variant="secondary" size="sm" onClick={() => handleExport({ saveToVault: false })} disabled={isExporting || isLoading} className="border-slate-700 text-slate-200 hover:bg-slate-800">
-            <Download className="w-4 h-4 mr-1" />
+          <button
+            type="button"
+            onClick={() => handleExport({ saveToVault: false })}
+            disabled={isExporting || isLoading}
+            className="px-3 py-1.5 min-h-[34px] rounded-[8px] bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 text-[13px] font-medium inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
             <span className="hidden sm:inline">Download</span>
-          </Button>
+          </button>
 
           <button type="button" onClick={onClose} aria-label="Close PDF editor" title="Close editor" className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer">
             <X className="w-5 h-5" />
@@ -1895,9 +1914,9 @@ export default function PdfEditorModal({
       </header>
 
       {/* 2. MODE TABS + SINGLE-ROW TOOLBAR */}
-      <div className="border-b border-slate-800 bg-[#161e2e] text-slate-200 px-3 sm:px-4 flex flex-col shrink-0">
+      <div className="border-b border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] px-3 sm:px-4 flex flex-col shrink-0">
         {/* Top Mode Tabs */}
-        <div className="flex items-center justify-between gap-4 border-b border-slate-800/80 pt-1">
+        <div className="flex items-center justify-between gap-4 border-b border-[var(--line)] pt-1">
           <div className="flex items-center gap-1" role="tablist" aria-label="Editor modes">
             {[
               { id: 'edit', label: 'Edit' },
@@ -1917,8 +1936,8 @@ export default function PdfEditorModal({
                 }}
                 className={`px-3.5 py-2 text-[13px] font-semibold border-b-2 transition-colors cursor-pointer ${
                   modeTab === m.id
-                    ? 'border-blue-400 text-white'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                    ? 'border-[var(--brand)] text-[var(--brand)]'
+                    : 'border-transparent text-[var(--muted)] hover:text-[var(--ink)]'
                 }`}
               >
                 {m.label}
@@ -1930,9 +1949,9 @@ export default function PdfEditorModal({
             <button
               type="button"
               onClick={() => setShowPropertiesPanel((p) => !p)}
-              className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[12px] font-medium flex items-center gap-1 cursor-pointer hover:bg-slate-700"
+              className="px-2.5 py-1 rounded-lg bg-[var(--surface-subtle)] border border-[var(--line)] text-[var(--ink)] text-[12px] font-medium flex items-center gap-1 cursor-pointer hover:bg-[var(--surface-hover)]"
             >
-              <Sliders className="w-3.5 h-3.5 text-blue-400" />
+              <Sliders className="w-3.5 h-3.5 text-[var(--brand)]" />
               <span>{showPropertiesPanel ? 'Hide Properties' : 'Properties'}</span>
             </button>
           )}
@@ -1948,7 +1967,7 @@ export default function PdfEditorModal({
                 onClick={() => setActiveTool('select')}
                 title="Select / Move / Multi-Select (V)"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                  activeTool === 'select' ? 'bg-[#1B4B91] text-white' : 'text-slate-300 hover:bg-slate-800'
+                  activeTool === 'select' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
                 <MousePointer className="w-4 h-4" />
@@ -1961,7 +1980,7 @@ export default function PdfEditorModal({
                 onClick={() => setActiveTool('text')}
                 title="Add Text Box (T)"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'text' ? 'bg-[#1B4B91] text-white' : 'text-slate-300 hover:bg-slate-800'
+                  activeTool === 'text' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
                 <Type className="w-4 h-4" />
@@ -1974,7 +1993,7 @@ export default function PdfEditorModal({
                 onClick={() => setActiveTool('editText')}
                 title="Cover & Replace Existing PDF Text"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'editText' ? 'bg-[#1B4B91] text-white' : 'text-slate-300 hover:bg-slate-800'
+                  activeTool === 'editText' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
                 <Edit3 className="w-4 h-4" />
@@ -1992,10 +2011,12 @@ export default function PdfEditorModal({
                   }}
                   title="Text Markup (Highlight, Underline, Strikethrough, Squiggly)"
                   className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 ${
-                    activeTool === 'markup' ? 'bg-amber-500/25 text-amber-200 border border-amber-500/50' : 'text-slate-300 hover:bg-slate-800'
+                    activeTool === 'markup'
+                      ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/40'
+                      : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                   }`}
                 >
-                  <Highlighter className="w-4 h-4 text-amber-400" />
+                  <Highlighter className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                   <span className="capitalize">{activeMarkupSubtype}</span>
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
@@ -2057,10 +2078,12 @@ export default function PdfEditorModal({
                   }}
                   title="Freehand Pen, Marker & Stroke Eraser"
                   className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 ${
-                    activeTool === 'draw' ? 'bg-blue-600/30 text-blue-200 border border-blue-400/50' : 'text-slate-300 hover:bg-slate-800'
+                    activeTool === 'draw'
+                      ? 'bg-[var(--brand-soft)] text-[var(--brand)] border border-[var(--brand)]/40'
+                      : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                   }`}
                 >
-                  {activeDrawSubtype === 'eraser' ? <Eraser className="w-4 h-4 text-rose-400" /> : <Pen className="w-4 h-4 text-blue-400" />}
+                  {activeDrawSubtype === 'eraser' ? <Eraser className="w-4 h-4 text-rose-500" /> : <Pen className="w-4 h-4 text-[var(--brand)]" />}
                   <span className="capitalize">{activeDrawSubtype}</span>
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
@@ -2114,7 +2137,7 @@ export default function PdfEditorModal({
                   }}
                   title="Insert Vector Shapes"
                   className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 ${
-                    activeTool === 'shape' ? 'bg-[#1B4B91] text-white' : 'text-slate-300 hover:bg-slate-800'
+                    activeTool === 'shape' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                   }`}
                 >
                   <Square className="w-4 h-4" />
@@ -2153,7 +2176,9 @@ export default function PdfEditorModal({
                 onClick={() => setActiveTool('whiteout')}
                 title="Whiteout (Cover-only — not secure removal; use Redact to permanently remove)"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'whiteout' ? 'bg-slate-200 text-slate-900' : 'text-slate-300 hover:bg-slate-800'
+                  activeTool === 'whiteout'
+                    ? 'bg-[var(--brand)] text-white'
+                    : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
                 <Eraser className="w-4 h-4" />
@@ -2165,7 +2190,7 @@ export default function PdfEditorModal({
                 disabled={readOnlyLocked}
                 onClick={() => insertImageInputRef.current?.click()}
                 title="Insert Image (PNG, JPG, WebP, SVG) or Ctrl+V paste"
-                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-slate-300 hover:bg-slate-800 flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40"
+                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40"
               >
                 <ImageIcon className="w-4 h-4" />
                 <span>Image</span>
@@ -2179,10 +2204,12 @@ export default function PdfEditorModal({
                   onClick={() => setOpenMenuDropdown(openMenuDropdown === 'notes' ? null : 'notes')}
                   title="Sticky Comments & Callouts"
                   className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 ${
-                    activeTool === 'comment' || activeTool === 'callout' ? 'bg-amber-600/30 text-amber-200' : 'text-slate-300 hover:bg-slate-800'
+                    activeTool === 'comment' || activeTool === 'callout'
+                      ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/40'
+                      : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                   }`}
                 >
-                  <MessageSquare className="w-4 h-4 text-amber-400" />
+                  <MessageSquare className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                   <span>Comment</span>
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
@@ -2204,7 +2231,7 @@ export default function PdfEditorModal({
                 onClick={() => setActiveTool('link')}
                 title="Insert URL Link or Page Jump"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'link' ? 'bg-[#1B4B91] text-white' : 'text-slate-300 hover:bg-slate-800'
+                  activeTool === 'link' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
                 <Link2 className="w-4 h-4" />
@@ -2217,10 +2244,12 @@ export default function PdfEditorModal({
                 onClick={() => setActiveTool('redact')}
                 title="Mark Secure Redaction Area"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'redact' ? 'bg-rose-900/50 border border-rose-500 text-rose-200' : 'text-slate-300 hover:bg-slate-800'
+                  activeTool === 'redact'
+                    ? 'bg-rose-500/15 border border-rose-500 text-rose-700 dark:text-rose-200'
+                    : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
-                <ShieldAlert className="w-4 h-4 text-rose-400" />
+                <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400" />
                 <span>Redact</span>
               </button>
 
@@ -2229,7 +2258,7 @@ export default function PdfEditorModal({
                 disabled={readOnlyLocked}
                 onClick={() => setIsPageSetupOpen(true)}
                 title="Page Numbers, Headers/Footers, Bates & Watermark"
-                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-slate-300 hover:bg-slate-800 flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40"
+                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40"
               >
                 <Sliders className="w-4 h-4" />
                 <span>Page Setup</span>
@@ -2250,10 +2279,10 @@ export default function PdfEditorModal({
                 }}
                 title="Create or Place Signature"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'signature' ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+                  activeTool === 'signature' ? 'bg-emerald-600 text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
-                <FileCheck className="w-4 h-4 text-emerald-400" />
+                <FileCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Signature</span>
               </button>
 
@@ -2267,10 +2296,10 @@ export default function PdfEditorModal({
                 }}
                 title="Create or Place Initials"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'initials' ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+                  activeTool === 'initials' ? 'bg-emerald-600 text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
-                <Pen className="w-4 h-4 text-emerald-400" />
+                <Pen className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Initials</span>
               </button>
 
@@ -2282,10 +2311,10 @@ export default function PdfEditorModal({
                   onClick={() => setOpenMenuDropdown(openMenuDropdown === 'fields' ? null : 'fields')}
                   title="Add Form or Signing Field"
                   className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 ${
-                    activeTool === 'field' ? 'bg-[#1B4B91] text-white' : 'text-slate-300 hover:bg-slate-800'
+                    activeTool === 'field' ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                   }`}
                 >
-                  <Plus className="w-4 h-4 text-blue-400" />
+                  <Plus className="w-4 h-4 text-[var(--brand)]" />
                   <span>Add Field</span>
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
@@ -2318,9 +2347,9 @@ export default function PdfEditorModal({
                 disabled={readOnlyLocked}
                 onClick={handleAutofillFromProfile}
                 title="Autofill Name, Email, Phone, Address from local Klarity profile"
-                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-slate-300 hover:bg-slate-800 flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40"
+                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40"
               >
-                <Wand2 className="w-4 h-4 text-purple-400" />
+                <Wand2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                 <span>Autofill Profile</span>
               </button>
 
@@ -2330,10 +2359,12 @@ export default function PdfEditorModal({
                 onClick={() => setIsSignersModalOpen(true)}
                 title="Configure Multiple In-Person Signers & Guided Signing"
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  guidedSigningActive ? 'bg-blue-600/30 text-blue-200 border border-blue-400' : 'text-slate-300 hover:bg-slate-800'
+                  guidedSigningActive
+                    ? 'bg-[var(--brand-soft)] text-[var(--brand)] border border-[var(--brand)]/40'
+                    : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
-                <Users className="w-4 h-4 text-blue-400" />
+                <Users className="w-4 h-4 text-[var(--brand)]" />
                 <span>In-Person Signers ({signers.length})</span>
               </button>
 
@@ -2341,7 +2372,7 @@ export default function PdfEditorModal({
                 <button
                   type="button"
                   onClick={handleJumpNextRequired}
-                  className="px-2.5 py-1.5 min-h-[38px] rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 text-[12px] font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  className="px-2.5 py-1.5 min-h-[38px] rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-[12px] font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer"
                 >
                   <span>
                     {doneReqCount} of {requiredFieldsList.length} required done
@@ -2350,7 +2381,7 @@ export default function PdfEditorModal({
                 </button>
               )}
 
-              <label className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[12px] text-slate-300 hover:bg-slate-800 flex items-center gap-1.5 shrink-0 cursor-pointer">
+              <label className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[12px] text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1.5 shrink-0 cursor-pointer">
                 <input type="checkbox" checked={flattenOnExport} disabled={readOnlyLocked} onChange={(e) => setFlattenOnExport(e.target.checked)} />
                 <span>Flatten Form</span>
               </label>
@@ -2371,37 +2402,37 @@ export default function PdfEditorModal({
           {/* PAGES MODE TOOLBAR */}
           {modeTab === 'pages' && (
             <>
-              <button type="button" disabled={readOnlyLocked} onClick={() => handleRotatePage(-90)} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-slate-300 hover:bg-slate-800 flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-40">
+              <button type="button" disabled={readOnlyLocked} onClick={() => handleRotatePage(-90)} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-40">
                 <RotateCcw className="w-4 h-4" /> <span>Rotate Left</span>
               </button>
-              <button type="button" disabled={readOnlyLocked} onClick={() => handleRotatePage(90)} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-slate-300 hover:bg-slate-800 flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-40">
+              <button type="button" disabled={readOnlyLocked} onClick={() => handleRotatePage(90)} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-40">
                 <RotateCw className="w-4 h-4" /> <span>Rotate Right</span>
               </button>
-              <button type="button" disabled={readOnlyLocked} onClick={() => handleMoveCurrentPage(-1)} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-slate-300 hover:bg-slate-800 shrink-0 cursor-pointer disabled:opacity-40">
+              <button type="button" disabled={readOnlyLocked} onClick={() => handleMoveCurrentPage(-1)} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-[var(--ink)] hover:bg-[var(--surface-subtle)] shrink-0 cursor-pointer disabled:opacity-40">
                 Move Up
               </button>
-              <button type="button" disabled={readOnlyLocked} onClick={() => handleMoveCurrentPage(1)} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-slate-300 hover:bg-slate-800 shrink-0 cursor-pointer disabled:opacity-40">
+              <button type="button" disabled={readOnlyLocked} onClick={() => handleMoveCurrentPage(1)} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-[var(--ink)] hover:bg-[var(--surface-subtle)] shrink-0 cursor-pointer disabled:opacity-40">
                 Move Down
               </button>
-              <button type="button" disabled={readOnlyLocked} onClick={handleInsertBlankPage} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-slate-300 hover:bg-slate-800 flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-40">
+              <button type="button" disabled={readOnlyLocked} onClick={handleInsertBlankPage} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-40">
                 <FilePlus className="w-4 h-4" /> <span>Blank Page</span>
               </button>
-              <button type="button" disabled={readOnlyLocked} onClick={() => mergePdfInputRef.current?.click()} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-slate-300 hover:bg-slate-800 flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-40">
+              <button type="button" disabled={readOnlyLocked} onClick={() => mergePdfInputRef.current?.click()} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-40">
                 <Plus className="w-4 h-4" /> <span>Merge PDF</span>
               </button>
-              <button type="button" disabled={readOnlyLocked} onClick={handleDuplicateCurrentPage} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-slate-300 hover:bg-slate-800 flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-40">
+              <button type="button" disabled={readOnlyLocked} onClick={handleDuplicateCurrentPage} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-40">
                 <Copy className="w-4 h-4" /> <span>Duplicate</span>
               </button>
-              <button type="button" onClick={() => handleExtractOrSplit(false)} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-slate-300 hover:bg-slate-800 shrink-0 cursor-pointer">
+              <button type="button" onClick={() => handleExtractOrSplit(false)} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-[var(--ink)] hover:bg-[var(--surface-subtle)] shrink-0 cursor-pointer">
                 Extract Page
               </button>
-              <button type="button" onClick={() => handleExtractOrSplit(true)} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-slate-300 hover:bg-slate-800 flex items-center gap-1 shrink-0 cursor-pointer">
+              <button type="button" onClick={() => handleExtractOrSplit(true)} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1 shrink-0 cursor-pointer">
                 <Scissors className="w-4 h-4" /> <span>Split Here</span>
               </button>
-              <button type="button" disabled={readOnlyLocked} onClick={() => setShowCropBar((p) => !p)} className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] flex items-center gap-1 shrink-0 cursor-pointer ${showCropBar ? 'bg-[#1B4B91] text-white' : 'text-slate-300 hover:bg-slate-800'}`}>
+              <button type="button" disabled={readOnlyLocked} onClick={() => setShowCropBar((p) => !p)} className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] flex items-center gap-1 shrink-0 cursor-pointer ${showCropBar ? 'bg-[var(--brand)] text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'}`}>
                 <Crop className="w-4 h-4" /> <span>Crop</span>
               </button>
-              <button type="button" onClick={handleRunOcr} disabled={isOcrRunning} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] bg-blue-600/25 border border-blue-500/40 text-blue-200 flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50">
+              <button type="button" onClick={handleRunOcr} disabled={isOcrRunning} className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] bg-blue-500/15 border border-blue-500/40 text-blue-700 dark:text-blue-200 flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50">
                 {isOcrRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanText className="w-4 h-4" />}
                 <span>OCR Page</span>
               </button>
@@ -2412,7 +2443,7 @@ export default function PdfEditorModal({
                   const next = pageOrder.filter((_, i) => i !== currentPage - 1);
                   updatePageOrder(next, Math.min(currentPage, next.length));
                 }}
-                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-rose-400 hover:bg-rose-950/40 flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-40"
+                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-40"
               >
                 <Trash2 className="w-4 h-4" /> <span>Delete</span>
               </button>
@@ -2427,10 +2458,10 @@ export default function PdfEditorModal({
                 disabled={readOnlyLocked}
                 onClick={() => setActiveTool('redact')}
                 className={`px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40 ${
-                  activeTool === 'redact' ? 'bg-rose-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+                  activeTool === 'redact' ? 'bg-rose-600 text-white' : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
-                <ShieldAlert className="w-4 h-4 text-rose-400" />
+                <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400" />
                 <span>Draw Redaction</span>
               </button>
               <button
@@ -2439,7 +2470,7 @@ export default function PdfEditorModal({
                   setShowLeftSidebar(true);
                   setLeftSidebarTab('search');
                 }}
-                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-slate-300 hover:bg-slate-800 shrink-0 cursor-pointer"
+                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] shrink-0 cursor-pointer"
               >
                 Find &amp; Redact Patterns
               </button>
@@ -2455,17 +2486,17 @@ export default function PdfEditorModal({
               <button
                 type="button"
                 onClick={() => setIsSecurityModalOpen(true)}
-                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-slate-300 hover:bg-slate-800 flex items-center gap-1.5 shrink-0 cursor-pointer"
+                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1.5 shrink-0 cursor-pointer"
               >
-                <Lock className="w-4 h-4 text-blue-400" />
+                <Lock className="w-4 h-4 text-[var(--brand)]" />
                 <span>Encrypt / Decrypt / Optimize</span>
               </button>
               <button
                 type="button"
                 onClick={() => setIsDigitalSigModalOpen(true)}
-                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-slate-300 hover:bg-slate-800 flex items-center gap-1.5 shrink-0 cursor-pointer"
+                className="px-2.5 py-1.5 min-h-[38px] rounded-lg text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-1.5 shrink-0 cursor-pointer"
               >
-                <KeyRound className="w-4 h-4 text-emerald-400" />
+                <KeyRound className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Digital Signatures &amp; Verify ({embeddedSignatures.length})</span>
               </button>
             </>
@@ -2575,6 +2606,7 @@ export default function PdfEditorModal({
               setSelectedFieldId(null);
             }}
             pageOrder={pageOrder}
+            pdfJsDoc={pdfJsDoc}
             annotations={annotations}
             outline={outline}
             searchQuery={searchQuery}
@@ -2648,7 +2680,7 @@ export default function PdfEditorModal({
 
         {/* CENTER PAGE CANVAS */}
         <main
-          className="flex-1 bg-[#090d16] overflow-auto flex items-start justify-center p-6 relative"
+          className="flex-1 bg-[#dfe5ee] dark:bg-[#090d16] overflow-auto flex items-start justify-center p-6 relative"
           onClick={() => {
             setSelectedAnnotationIds([]);
             setSelectedFieldId(null);
@@ -2664,15 +2696,15 @@ export default function PdfEditorModal({
           )}
 
           {isLoading ? (
-            <div className="self-center flex flex-col items-center gap-3 text-slate-300">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+            <div className="self-center flex flex-col items-center gap-3 text-[var(--ink)]">
+              <Loader2 className="w-8 h-8 animate-spin text-[var(--brand)]" />
               <p className="text-[15px] font-medium">Loading PDF locally...</p>
             </div>
           ) : !rawPdfBytes ? (
-            <div className="self-center p-8 rounded-2xl border border-dashed border-slate-700 text-center max-w-md text-slate-300">
-              <FileText className="w-10 h-10 mx-auto mb-3 text-blue-400" />
+            <div className="self-center p-8 rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)] text-center max-w-md text-[var(--ink)] shadow-sm">
+              <FileText className="w-10 h-10 mx-auto mb-3 text-[var(--brand)]" />
               <p className="text-[15px] font-semibold mb-1">No PDF Loaded</p>
-              <p className="text-[13px] text-slate-400 mb-4">Open a PDF file or drag and drop one anywhere here.</p>
+              <p className="text-[13px] text-[var(--muted)] mb-4">Open a PDF file or drag and drop one anywhere here.</p>
               <Button variant="primary" onClick={() => openDiskInputRef.current?.click()}>
                 Open PDF File
               </Button>
@@ -3372,46 +3404,46 @@ export default function PdfEditorModal({
 
         {/* AI FINANCIAL ASSISTANT DRAWER */}
         {showAiDrawer && (
-          <aside className="w-80 border-l border-slate-800 bg-[#111827] text-slate-100 flex flex-col shrink-0 shadow-2xl">
-            <div className="p-3.5 border-b border-slate-800 flex items-center justify-between">
+          <aside className="w-80 border-l border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] flex flex-col shrink-0 shadow-2xl">
+            <div className="p-3.5 border-b border-[var(--line)] bg-[var(--surface-subtle)] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-purple-400" />
+                <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                 <h4 className="font-semibold text-[14px]">Financial AI Assistant</h4>
               </div>
-              <button type="button" onClick={() => setShowAiDrawer(false)} aria-label="Close AI panel" className="p-1 text-slate-400 hover:text-white rounded cursor-pointer">
+              <button type="button" onClick={() => setShowAiDrawer(false)} aria-label="Close AI panel" className="p-1 text-[var(--muted)] hover:text-[var(--ink)] rounded cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
             {isLocalOnlyMode ? (
-              <div className="p-4 text-[13px] text-slate-300 leading-relaxed">
-                <strong>Local-only mode is active.</strong> No document text leaves this device. Use local search and offline OCR instead, or disable Local-only mode in AI Settings to analyze documents.
+              <div className="p-4 text-[13px] text-[var(--muted)] leading-relaxed">
+                <strong className="text-[var(--ink)]">Local-only mode is active.</strong> No document text leaves this device. Use local search and offline OCR instead, or disable Local-only mode in AI Settings to analyze documents.
               </div>
             ) : (
               <>
-                <div className="p-3 border-b border-slate-800 flex flex-col gap-1.5">
-                  <button type="button" onClick={() => handleAiAction('summary')} disabled={aiLoading} className="text-left px-2.5 py-2 rounded-lg text-[13px] bg-slate-800 hover:bg-slate-700 cursor-pointer">
+                <div className="p-3 border-b border-[var(--line)] flex flex-col gap-1.5">
+                  <button type="button" onClick={() => handleAiAction('summary')} disabled={aiLoading} className="text-left px-2.5 py-2 rounded-lg text-[13px] bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] cursor-pointer">
                     Summarize Document
                   </button>
-                  <button type="button" onClick={() => handleAiAction('fees')} disabled={aiLoading} className="text-left px-2.5 py-2 rounded-lg text-[13px] bg-slate-800 hover:bg-slate-700 cursor-pointer">
+                  <button type="button" onClick={() => handleAiAction('fees')} disabled={aiLoading} className="text-left px-2.5 py-2 rounded-lg text-[13px] bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] cursor-pointer">
                     Find Fees &amp; Penalties
                   </button>
-                  <button type="button" onClick={() => handleAiAction('transactions')} disabled={aiLoading} className="text-left px-2.5 py-2 rounded-lg text-[13px] bg-slate-800 hover:bg-slate-700 cursor-pointer">
+                  <button type="button" onClick={() => handleAiAction('transactions')} disabled={aiLoading} className="text-left px-2.5 py-2 rounded-lg text-[13px] bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] cursor-pointer">
                     Extract Line-Item Charges
                   </button>
                 </div>
-                <div className="flex-1 p-3.5 overflow-y-auto flex flex-col gap-3 text-[13px] text-slate-300">
-                  {aiLoading && <div className="flex items-center gap-2 text-purple-300"><Loader2 className="w-4 h-4 animate-spin" /><span>Analyzing...</span></div>}
-                  {aiSummary && <div className="p-3 rounded-xl bg-slate-800/80 whitespace-pre-line">{aiSummary}</div>}
+                <div className="flex-1 p-3.5 overflow-y-auto flex flex-col gap-3 text-[13px] text-[var(--ink)]">
+                  {aiLoading && <div className="flex items-center gap-2 text-purple-600 dark:text-purple-300"><Loader2 className="w-4 h-4 animate-spin" /><span>Analyzing...</span></div>}
+                  {aiSummary && <div className="p-3 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] whitespace-pre-line">{aiSummary}</div>}
                   {aiChatResponses.map((it, idx) => (
-                    <div key={idx} className="p-3 rounded-xl bg-slate-800/60">
-                      <div className="font-semibold text-purple-300 mb-1">{it.question}</div>
+                    <div key={idx} className="p-3 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)]">
+                      <div className="font-semibold text-purple-600 dark:text-purple-300 mb-1">{it.question}</div>
                       <div className="whitespace-pre-line">{it.answer}</div>
                     </div>
                   ))}
                 </div>
-                <form onSubmit={(e) => { e.preventDefault(); handleAiAction('custom'); }} className="p-3 border-t border-slate-800 flex gap-2">
-                  <input type="text" value={aiCustomQuestion} onChange={(e) => setAiCustomQuestion(e.target.value)} placeholder="Ask about this PDF..." className="flex-1 bg-slate-800 text-[13px] px-3 py-2 rounded-lg border border-slate-700 outline-none" />
-                  <button type="submit" disabled={aiLoading || !aiCustomQuestion.trim()} className="px-3 py-2 bg-purple-600 text-white rounded-lg text-[13px] font-semibold cursor-pointer disabled:opacity-40">Ask</button>
+                <form onSubmit={(e) => { e.preventDefault(); handleAiAction('custom'); }} className="p-3 border-t border-[var(--line)] flex gap-2">
+                  <input type="text" value={aiCustomQuestion} onChange={(e) => setAiCustomQuestion(e.target.value)} placeholder="Ask about this PDF..." className="flex-1 bg-[var(--surface-subtle)] text-[var(--ink)] text-[13px] px-3 py-2 rounded-lg border border-[var(--line)] outline-none focus:border-[var(--brand)]" />
+                  <button type="submit" disabled={aiLoading || !aiCustomQuestion.trim()} className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[13px] font-semibold cursor-pointer disabled:opacity-40">Ask</button>
                 </form>
               </>
             )}
@@ -3420,16 +3452,16 @@ export default function PdfEditorModal({
       </div>
 
       {/* 4. BOTTOM STATUS BAR */}
-      <footer className="h-8 border-t border-slate-800 bg-[#111827] text-slate-300 px-4 flex items-center justify-between text-[12px] shrink-0">
+      <footer className="h-8 border-t border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] px-4 flex items-center justify-between text-[12px] shrink-0">
         <div className="flex items-center gap-4">
           <span>Page {currentPage} of {pageOrder.length || 1}</span>
           <span>Zoom: {Math.round(zoom * 100)}%</span>
           <span>Size: {formatFileSize(rawPdfBytes?.byteLength || 0)}</span>
         </div>
         <div className="flex items-center gap-3">
-          {isEncryptedDoc && <span className="text-amber-300 font-medium">Encrypted PDF</span>}
-          {embeddedSignatures.length > 0 && <span className="text-emerald-300 font-medium">Digitally Signed</span>}
-          <span className={hasUnsavedChanges ? 'text-amber-300 font-semibold' : 'text-emerald-400 font-medium'}>
+          {isEncryptedDoc && <span className="text-amber-600 dark:text-amber-300 font-medium">Encrypted PDF</span>}
+          {embeddedSignatures.length > 0 && <span className="text-emerald-600 dark:text-emerald-300 font-medium">Digitally Signed</span>}
+          <span className={hasUnsavedChanges ? 'text-amber-600 dark:text-amber-300 font-semibold' : 'text-emerald-600 dark:text-emerald-400 font-medium'}>
             {hasUnsavedChanges ? 'Unsaved changes' : 'Saved'}
           </span>
         </div>

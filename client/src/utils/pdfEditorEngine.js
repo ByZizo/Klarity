@@ -210,6 +210,13 @@ export async function loadPdfForViewing(source, password = '') {
  */
 export async function renderPdfPageToCanvas(pdfJsDoc, pageNumber, canvas, scale = 1.5, rotationOffset = 0, cropBox = null, lowPower = false) {
   if (!pdfJsDoc || !canvas) return null;
+  if (canvas.__activeRenderTask) {
+    try {
+      canvas.__activeRenderTask.cancel();
+    } catch {}
+    canvas.__activeRenderTask = null;
+  }
+
   const page = await pdfJsDoc.getPage(pageNumber);
   const originalRotation = page.rotate || 0;
   const totalRotation = ((originalRotation + rotationOffset) % 360 + 360) % 360;
@@ -232,7 +239,15 @@ export async function renderPdfPageToCanvas(pdfJsDoc, pageNumber, canvas, scale 
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.scale(dpr, dpr);
 
-  await page.render({ canvasContext: context, viewport }).promise;
+  const renderTask = page.render({ canvasContext: context, viewport });
+  canvas.__activeRenderTask = renderTask;
+  try {
+    await renderTask.promise;
+  } finally {
+    if (canvas.__activeRenderTask === renderTask) {
+      canvas.__activeRenderTask = null;
+    }
+  }
 
   // Visual preview dim outside crop margins if user adjusted cropBox ({ top, right, bottom, left } normalized 0..0.45)
   if (cropBox && (cropBox.top > 0 || cropBox.right > 0 || cropBox.bottom > 0 || cropBox.left > 0)) {
