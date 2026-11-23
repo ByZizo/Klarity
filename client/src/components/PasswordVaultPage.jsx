@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   KeyRound,
   Plus,
@@ -18,7 +18,11 @@ import {
   List,
   MoreVertical,
   Star,
-  FileText
+  FileText,
+  Paperclip,
+  Image as ImageIcon,
+  Download,
+  Upload
 } from 'lucide-react';
 import {
   copySensitiveWithAutoClear,
@@ -30,7 +34,7 @@ import {
 } from '../utils/securityCrypto';
 import { Button, Card, EmptyState, ConfirmDialog, Pill, PaginationBar } from './ui';
 import DocumentVaultPage from './DocumentVaultPage';
-import { getDocumentCountSync } from '../utils/documentVaultStorage';
+import { getDocumentCountSync, formatFileSize } from '../utils/documentVaultStorage';
 
 export const DEFAULT_VAULT_ITEMS = [];
 
@@ -211,6 +215,9 @@ export default function PasswordVaultPage({
   const [importStatus, setImportStatus] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [previewAttachment, setPreviewAttachment] = useState(null);
+  const [isDraggingAttachment, setIsDraggingAttachment] = useState(false);
+  const attachmentInputRef = useRef(null);
 
   const [formState, setFormState] = useState({
     service: '',
@@ -219,7 +226,8 @@ export default function PasswordVaultPage({
     password: '',
     accountNumber: '',
     website: '',
-    notes: ''
+    notes: '',
+    attachments: []
   });
 
   const filteredItems = useMemo(() => {
@@ -461,7 +469,8 @@ export default function PasswordVaultPage({
       password: '',
       accountNumber: '',
       website: '',
-      notes: ''
+      notes: '',
+      attachments: []
     });
     setIsCreatingNewSection(false);
     setNewSectionInput('');
@@ -476,12 +485,130 @@ export default function PasswordVaultPage({
       password: item.password || '',
       accountNumber: item.accountNumber || '',
       website: item.website || '',
-      notes: item.notes || ''
+      notes: item.notes || '',
+      attachments: Array.isArray(item.attachments) ? item.attachments : []
     });
     setIsCreatingNewSection(false);
     setNewSectionInput('');
     setEditingId(item.id);
     setShowAddForm(true);
+  };
+
+  const readFileAsAttachment = (file) =>
+    new Promise((resolve, reject) => {
+      const MAX_BYTES = 8 * 1024 * 1024;
+      if (file.size > MAX_BYTES) {
+        reject(new Error(`"${file.name}" exceeds the 8 MB limit per file.`));
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error(`Unable to read "${file.name}".`));
+      reader.onload = (ev) => {
+        const rawDataUrl = ev.target.result;
+        const isRasterImg = /^image\/(jpeg|jpg|png|webp)$/i.test(file.type || '');
+        if (isRasterImg && file.size > 700 * 1024) {
+          const img = new Image();
+          img.onerror = () => {
+            resolve({
+              id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              name: file.name,
+              type: file.type || 'application/octet-stream',
+              size: file.size,
+              dataUrl: rawDataUrl,
+              addedAt: new Date().toISOString()
+            });
+          };
+          img.onload = () => {
+            try {
+              const maxDim = 1600;
+              let w = img.naturalWidth || img.width;
+              let h = img.naturalHeight || img.height;
+              if (w > maxDim || h > maxDim) {
+                const ratio = Math.min(maxDim / w, maxDim / h);
+                w = Math.max(1, Math.round(w * ratio));
+                h = Math.max(1, Math.round(h * ratio));
+              }
+              const canvas = document.createElement('canvas');
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, w, h);
+              const outType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+              const optimizedDataUrl = canvas.toDataURL(outType, outType === 'image/jpeg' ? 0.84 : undefined);
+              const approxBytes = Math.round((optimizedDataUrl.length * 3) / 4);
+              resolve({
+                id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                name: file.name,
+                type: outType,
+                size: Math.min(file.size, approxBytes),
+                dataUrl: optimizedDataUrl,
+                addedAt: new Date().toISOString()
+              });
+            } catch {
+              resolve({
+                id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                name: file.name,
+                type: file.type || 'application/octet-stream',
+                size: file.size,
+                dataUrl: rawDataUrl,
+                addedAt: new Date().toISOString()
+              });
+            }
+          };
+          img.src = rawDataUrl;
+        } else {
+          resolve({
+            id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            name: file.name,
+            type: file.type || 'application/octet-stream',
+            size: file.size,
+            dataUrl: rawDataUrl,
+            addedAt: new Date().toISOString()
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+  const handleAttachmentFiles = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return;
+
+    const added = [];
+    for (const file of files) {
+      try {
+        const item = await readFileAsAttachment(file);
+        added.push(item);
+      } catch (err) {
+        notify(err.message || `Could not attach "${file.name}".`, 'error');
+      }
+    }
+
+    if (added.length > 0) {
+      setFormState((prev) => ({
+        ...prev,
+        attachments: [...(prev.attachments || []), ...added]
+      }));
+      notify(`Attached ${added.length} file${added.length === 1 ? '' : 's'}`);
+    }
+  };
+
+  const handleRemoveFormAttachment = (attId) => {
+    setFormState((prev) => ({
+      ...prev,
+      attachments: (prev.attachments || []).filter((a) => a.id !== attId)
+    }));
+  };
+
+  const handleDownloadAttachment = (att) => {
+    if (!att?.dataUrl) return;
+    const a = document.createElement('a');
+    a.href = att.dataUrl;
+    a.download = att.name || 'attachment';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const handleDelete = (id) => {
@@ -1185,7 +1312,8 @@ export default function PasswordVaultPage({
                 password: '',
                 accountNumber: '',
                 website: '',
-                notes: ''
+                notes: '',
+                attachments: []
               });
               setShowAddForm(true);
             }}
@@ -1356,6 +1484,109 @@ export default function PasswordVaultPage({
                   className="w-full px-3.5 py-2 rounded-[8px] bg-[var(--surface)] border border-[var(--line)] text-[15px] text-[var(--ink)]"
                 />
               </div>
+
+              {/* Supporting Pictures & Files */}
+              <div className="sm:col-span-2 lg:col-span-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[13px] font-medium text-[var(--ink)]">
+                    Supporting pictures or files (optional)
+                  </span>
+                  <span className="text-[12px] text-[var(--muted)]">
+                    Stored locally with this account (images, PDFs, recovery codes)
+                  </span>
+                </div>
+
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf,.txt,.csv,.json,.doc,.docx,.xls,.xlsx"
+                  onChange={(e) => {
+                    handleAttachmentFiles(e.target.files);
+                    e.target.value = '';
+                  }}
+                  className="hidden"
+                />
+
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDraggingAttachment(true);
+                  }}
+                  onDragLeave={() => setIsDraggingAttachment(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingAttachment(false);
+                    handleAttachmentFiles(e.dataTransfer?.files);
+                  }}
+                  onClick={() => attachmentInputRef.current?.click()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      attachmentInputRef.current?.click();
+                    }
+                  }}
+                  className={`border-2 border-dashed rounded-[10px] p-4 flex flex-col sm:flex-row items-center justify-center gap-3 text-center cursor-pointer transition-colors ${
+                    isDraggingAttachment
+                      ? 'border-[#1B4B91] bg-[#1B4B91]/10'
+                      : 'border-[var(--line)] bg-[var(--surface-subtle)]/60 hover:border-[#1B4B91]/60'
+                  }`}
+                >
+                  <Upload className="w-5 h-5 text-[#1B4B91] shrink-0" />
+                  <div className="text-[13px] text-[var(--ink)]">
+                    <span className="font-semibold text-[#1B4B91]">Click to add pictures or files</span> or drag and drop here
+                  </div>
+                </div>
+
+                {(formState.attachments || []).length > 0 && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                    {formState.attachments.map((att) => {
+                      const isImg = (att.type || '').startsWith('image/');
+                      return (
+                        <div
+                          key={att.id}
+                          className="flex items-center gap-2.5 p-2 rounded-[8px] border border-[var(--line)] bg-[var(--surface)]"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setPreviewAttachment(att)}
+                            className="w-11 h-11 rounded-[6px] overflow-hidden bg-[var(--surface-subtle)] border border-[var(--line)] flex items-center justify-center shrink-0 cursor-pointer"
+                            title="Preview attachment"
+                          >
+                            {isImg ? (
+                              <img src={att.dataUrl} alt={att.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <FileText className="w-5 h-5 text-[#1B4B91]" />
+                            )}
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewAttachment(att)}
+                              className="text-[13px] font-medium text-[var(--ink)] hover:underline truncate block max-w-full text-left cursor-pointer"
+                            >
+                              {att.name}
+                            </button>
+                            <span className="text-[11px] text-[var(--muted)] block">
+                              {formatFileSize(att.size)}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${att.name}`}
+                            onClick={() => handleRemoveFormAttachment(att.id)}
+                            className="p-1 text-[var(--muted)] hover:text-[#B91C1C] cursor-pointer rounded-[6px]"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--line)]">
@@ -1433,6 +1664,15 @@ export default function PasswordVaultPage({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
+                    {Array.isArray(item.attachments) && item.attachments.length > 0 && (
+                      <span
+                        title={`${item.attachments.length} supporting file${item.attachments.length === 1 ? '' : 's'}`}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[6px] bg-[var(--surface-subtle)] border border-[var(--line)] text-[11px] font-medium text-[var(--muted)]"
+                      >
+                        <Paperclip className="w-3 h-3" />
+                        <span>{item.attachments.length}</span>
+                      </span>
+                    )}
                     <ChevronDown className={`w-4 h-4 text-[var(--muted)] transition-transform ${isExpanded ? 'rotate-180 text-[#1B4B91]' : ''}`} />
                   </div>
                 </button>
@@ -1586,6 +1826,64 @@ export default function PasswordVaultPage({
                           </button>
                         )}
                       </div>
+
+                      {/* Supporting Pictures & Files */}
+                      {Array.isArray(item.attachments) && item.attachments.length > 0 && (
+                        <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-2.5 flex flex-col gap-2">
+                          <span className="text-[13px] text-[var(--muted)] font-medium flex items-center gap-1.5">
+                            <Paperclip className="w-3.5 h-3.5" />
+                            <span>Supporting pictures &amp; files ({item.attachments.length})</span>
+                          </span>
+                          <div className="flex flex-col gap-1.5">
+                            {item.attachments.map((att) => {
+                              const isImg = (att.type || '').startsWith('image/');
+                              return (
+                                <div
+                                  key={att.id}
+                                  className="flex items-center justify-between gap-2 p-1.5 rounded-[6px] bg-[var(--surface-subtle)] border border-[var(--line)]"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPreviewAttachment(att);
+                                    }}
+                                    className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer group"
+                                  >
+                                    <div className="w-9 h-9 rounded-[6px] overflow-hidden bg-[var(--surface)] border border-[var(--line)] flex items-center justify-center shrink-0">
+                                      {isImg ? (
+                                        <img src={att.dataUrl} alt={att.name} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <FileText className="w-4 h-4 text-[#1B4B91]" />
+                                      )}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <span className="text-[13px] font-medium text-[var(--ink)] group-hover:text-[#1B4B91] group-hover:underline truncate block">
+                                        {att.name}
+                                      </span>
+                                      <span className="text-[11px] text-[var(--muted)] block">
+                                        {formatFileSize(att.size)}
+                                      </span>
+                                    </div>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label={`Download ${att.name}`}
+                                    title="Download file"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDownloadAttachment(att);
+                                    }}
+                                    className="p-1.5 text-[var(--muted)] hover:text-[#1B4B91] cursor-pointer rounded-[6px]"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1650,6 +1948,84 @@ export default function PasswordVaultPage({
           }
         }}
       />
+
+      {/* Attachment Preview Modal */}
+      {previewAttachment && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={previewAttachment.name || 'Attachment preview'}
+          onClick={() => setPreviewAttachment(null)}
+        >
+          <div
+            className="bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-3.5 border-b border-[var(--line)] flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                {(previewAttachment.type || '').startsWith('image/') ? (
+                  <ImageIcon className="w-4 h-4 text-[#1B4B91] shrink-0" />
+                ) : (
+                  <FileText className="w-4 h-4 text-[#1B4B91] shrink-0" />
+                )}
+                <span className="font-semibold text-[15px] truncate">{previewAttachment.name}</span>
+                <span className="text-[12px] text-[var(--muted)] shrink-0">
+                  ({formatFileSize(previewAttachment.size)})
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleDownloadAttachment(previewAttachment)}
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download</span>
+                </Button>
+                <button
+                  type="button"
+                  aria-label="Close preview"
+                  onClick={() => setPreviewAttachment(null)}
+                  className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 overflow-auto flex-1 flex items-center justify-center bg-[var(--surface-subtle)]/50 min-h-[300px]">
+              {(previewAttachment.type || '').startsWith('image/') ? (
+                <img
+                  src={previewAttachment.dataUrl}
+                  alt={previewAttachment.name}
+                  className="max-w-full max-h-[72vh] object-contain rounded-[8px] shadow"
+                />
+              ) : (previewAttachment.type || '').includes('pdf') ? (
+                <iframe
+                  src={previewAttachment.dataUrl}
+                  title={previewAttachment.name}
+                  className="w-full h-[70vh] rounded-[8px] border border-[var(--line)] bg-white"
+                />
+              ) : (
+                <div className="text-center p-8 flex flex-col items-center gap-3">
+                  <FileText className="w-12 h-12 text-[#1B4B91]" />
+                  <p className="text-[14px] font-medium text-[var(--ink)]">
+                    {previewAttachment.name}
+                  </p>
+                  <p className="text-[13px] text-[var(--muted)]">
+                    Preview is not available for this file type. Download the file to open it.
+                  </p>
+                  <Button variant="primary" size="sm" onClick={() => handleDownloadAttachment(previewAttachment)}>
+                    <Download className="w-4 h-4" />
+                    <span>Download file</span>
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
