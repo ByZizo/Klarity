@@ -82,7 +82,7 @@ function ShortcutIcon({ name, url, size = 'md' }) {
 
   return (
     <div
-      className={`${boxClass} bg-slate-800/90 border border-slate-700/70 flex items-center justify-center overflow-hidden shadow-sm shrink-0`}
+      className={`${boxClass} bg-[var(--surface-subtle)] border border-[var(--line)] flex items-center justify-center overflow-hidden shadow-sm shrink-0`}
     >
       <img
         src={faviconUrl}
@@ -446,12 +446,12 @@ export function NewTabPage({
   const hasWallpaper = prefs.backgroundStyle === 'wallpaper' && Boolean(prefs.wallpaperUrl?.trim());
   const backgroundClass =
     prefs.backgroundStyle === 'gradient'
-      ? 'bg-[radial-gradient(ellipse_at_top,#1e293b_0%,#0f172a_58%,#020617_100%)]'
-      : 'bg-[#0f172a]';
+      ? 'bg-[radial-gradient(ellipse_at_top,var(--surface-subtle)_0%,var(--background)_65%,var(--surface)_100%)]'
+      : 'bg-[var(--background)]';
 
   return (
     <div
-      className={`w-full h-full relative overflow-y-auto text-slate-100 select-none ${backgroundClass}`}
+      className={`w-full h-full relative overflow-y-auto text-[var(--ink)] select-none ${backgroundClass}`}
       style={
         hasWallpaper
           ? {
@@ -472,20 +472,21 @@ export function NewTabPage({
             type="button"
             onClick={() => setIsCustomizeOpen((prev) => !prev)}
             title="Customize page"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1e293b]/85 hover:bg-[#1e293b] border border-slate-700/70 hover:border-blue-500/50 text-xs font-medium text-slate-300 hover:text-white transition-all shadow-sm backdrop-blur-md cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--surface)]/90 hover:bg-[var(--surface-hover)] border border-[var(--line)] hover:border-[var(--brand)]/50 text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] transition-all shadow-sm backdrop-blur-md cursor-pointer"
           >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
+            <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--brand)]" />
             <span>Customize</span>
           </button>
 
           {isCustomizeOpen && (
-            <div className="absolute right-0 mt-2 w-80 max-h-[82vh] overflow-y-auto rounded-2xl bg-[#1e293b] border border-slate-700/80 shadow-2xl p-4 text-xs z-30 scrollbar-thin">
+            <div className="absolute right-0 mt-2 w-80 max-h-[82vh] overflow-y-auto rounded-2xl bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] shadow-2xl p-4 text-xs z-30 scrollbar-thin">
               <div className="flex items-center justify-between mb-3">
-                <span className="font-semibold text-slate-100 text-sm">Customize Page</span>
+                <span className="font-semibold text-[var(--ink)] text-sm">Customize Page</span>
                 <button
                   type="button"
                   onClick={() => setIsCustomizeOpen(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+                  aria-label="Close customize menu"
+                  className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -493,27 +494,27 @@ export function NewTabPage({
 
               <div className="space-y-2.5">
                 <label className="flex items-center justify-between py-1 cursor-pointer">
-                  <span className="text-slate-200 font-medium">Quick Links (Speed Dial)</span>
+                  <span className="text-[var(--ink)] font-medium">Quick Links (Speed Dial)</span>
                   <input
                     type="checkbox"
                     checked={prefs.showQuickLinks}
                     onChange={(e) => setPrefs((p) => ({ ...p, showQuickLinks: e.target.checked }))}
-                    className="accent-blue-500 w-4 h-4 cursor-pointer"
+                    className="accent-[var(--brand)] w-4 h-4 cursor-pointer"
                   />
                 </label>
 
                 <label className="flex items-center justify-between py-1 cursor-pointer">
-                  <span className="text-slate-200 font-medium">Clock & Greeting</span>
+                  <span className="text-[var(--ink)] font-medium">Clock & Greeting</span>
                   <input
                     type="checkbox"
                     checked={prefs.showClock}
                     onChange={(e) => setPrefs((p) => ({ ...p, showClock: e.target.checked }))}
-                    className="accent-blue-500 w-4 h-4 cursor-pointer"
+                    className="accent-[var(--brand)] w-4 h-4 cursor-pointer"
                   />
                 </label>
 
                 <label className="flex items-center justify-between py-1 cursor-pointer">
-                  <span className="text-slate-200 font-medium">Quick Notes</span>
+                  <span className="text-[var(--ink)] font-medium">Quick Notes</span>
                   <input
                     type="checkbox"
                     checked={typeof showHomepageNotes === 'boolean' ? showHomepageNotes : prefs.showNotes !== false}
@@ -524,15 +525,15 @@ export function NewTabPage({
                         onToggleHomepageNotes(checked);
                       }
                     }}
-                    className="accent-blue-500 w-4 h-4 cursor-pointer"
+                    className="accent-[var(--brand)] w-4 h-4 cursor-pointer"
                   />
                 </label>
               </div>
 
-              <div className="my-3 border-t border-slate-700/70" />
+              <div className="my-3 border-t border-[var(--line)]" />
 
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-2">
                   Background Style
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
@@ -547,8 +548,8 @@ export function NewTabPage({
                       onClick={() => setPrefs((p) => ({ ...p, backgroundStyle: opt.id }))}
                       className={`py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-colors cursor-pointer ${
                         prefs.backgroundStyle === opt.id
-                          ? 'bg-blue-600/20 border-blue-500 text-blue-300'
-                          : 'bg-slate-800/70 border-slate-700 text-slate-300 hover:border-slate-500'
+                          ? 'bg-[var(--brand-soft)] border-[var(--brand)] text-[var(--brand)]'
+                          : 'bg-[var(--surface-subtle)] border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
                       }`}
                     >
                       {opt.label}
@@ -562,7 +563,7 @@ export function NewTabPage({
                     value={prefs.wallpaperUrl || ''}
                     onChange={(e) => setPrefs((p) => ({ ...p, wallpaperUrl: e.target.value }))}
                     placeholder="https://example.com/wallpaper.jpg"
-                    className="mt-2.5 w-full px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-slate-700 focus:border-blue-500 outline-none text-xs text-slate-100 placeholder-slate-500"
+                    className="mt-2.5 w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-subtle)] border border-[var(--line)] focus:border-[var(--brand)] outline-none text-xs text-[var(--ink)] placeholder-[var(--muted)]"
                   />
                 )}
               </div>
@@ -576,10 +577,18 @@ export function NewTabPage({
         {/* Minimal Clock / Greeting */}
         {prefs.showClock && (
           <div className="text-center mb-7">
-            <div className="text-5xl font-semibold tracking-tight text-slate-50 tabular-nums">
+            <div
+              className={`text-5xl font-semibold tracking-tight tabular-nums ${
+                hasWallpaper ? 'text-white drop-shadow' : 'text-[var(--ink)]'
+              }`}
+            >
               {timeString}
             </div>
-            <div className="mt-1.5 text-sm font-medium text-slate-400">
+            <div
+              className={`mt-1.5 text-sm font-medium ${
+                hasWallpaper ? 'text-slate-200 drop-shadow-xs' : 'text-[var(--muted)]'
+              }`}
+            >
               {greeting} · {dateString}
             </div>
           </div>
@@ -587,21 +596,21 @@ export function NewTabPage({
 
         {/* Centered Pill Search Bar */}
         <form onSubmit={handleSearchSubmit} className="w-full max-w-2xl mb-10">
-          <div className="flex items-center gap-3 pl-5 pr-2.5 py-2.5 rounded-full bg-[#1e293b]/90 border border-slate-700/80 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/25 shadow-xl backdrop-blur-md transition-all min-h-[52px]">
-            <Search className="w-5 h-5 text-slate-400 shrink-0" />
+          <div className="flex items-center gap-3 pl-5 pr-2.5 py-2.5 rounded-full bg-[var(--surface)]/95 border border-[var(--line)] focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/20 shadow-md backdrop-blur-md transition-all min-h-[52px]">
+            <Search className="w-5 h-5 text-[var(--muted)] shrink-0" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={`Search ${activeEngine.name} or enter web address...`}
-              className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-[15px] text-slate-100 placeholder-slate-400 min-w-0 px-2.5 py-1 leading-normal rounded-full"
+              className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-[15px] text-[var(--ink)] placeholder-[var(--muted)] min-w-0 px-2.5 py-1 leading-normal rounded-full"
               style={{ outline: 'none', boxShadow: 'none', border: 'none', background: 'transparent' }}
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery('')}
-                className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+                className="p-1.5 rounded-full text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] cursor-pointer"
                 aria-label="Clear search"
               >
                 <X className="w-4 h-4" />
@@ -609,7 +618,7 @@ export function NewTabPage({
             )}
             <button
               type="submit"
-              className="px-5 py-2 rounded-full bg-[#2563eb] hover:bg-[#3b82f6] text-white text-xs font-semibold transition-colors cursor-pointer shrink-0 shadow-sm"
+              className="px-5 py-2 rounded-full bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold transition-colors cursor-pointer shrink-0 shadow-sm"
             >
               Search
             </button>
@@ -661,31 +670,31 @@ export function NewTabPage({
                           }}
                           className={`group relative flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md backdrop-blur-sm ${
                             isDropTarget
-                              ? 'bg-blue-600/20 border-blue-400 scale-[1.03]'
-                              : 'bg-[#1e293b]/85 hover:bg-[#1e293b] border-slate-700/70 hover:border-blue-500/50'
+                              ? 'bg-[var(--brand-soft)] border-[var(--brand)] scale-[1.03]'
+                              : 'bg-[var(--surface)]/90 hover:bg-[var(--surface-hover)] border-[var(--line)] hover:border-[var(--brand)]/50'
                           }`}
                         >
                           <button
                             type="button"
                             onClick={(e) => openTileMenuAt(e, item)}
                             aria-label={`Options for ${item.name}`}
-                            className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/80 transition-opacity cursor-pointer"
+                            className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-opacity cursor-pointer"
                           >
                             <MoreVertical className="w-3.5 h-3.5" />
                           </button>
 
                           {/* 2x2 Mini-Grid Group Icon */}
-                          <div className="w-10 h-10 rounded-xl bg-slate-900/80 border border-slate-700/80 p-1 grid grid-cols-2 gap-0.5 place-items-center">
+                          <div className="w-10 h-10 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] p-1 grid grid-cols-2 gap-0.5 place-items-center">
                             {previewItems.map((sub) => (
                               <ShortcutIcon key={sub.id} name={sub.name} url={sub.url} size="sm" />
                             ))}
                           </div>
 
                           <div className="w-full text-center">
-                            <div className="text-xs font-medium text-slate-100 truncate">
+                            <div className="text-xs font-medium text-[var(--ink)] truncate">
                               {item.name}
                             </div>
-                            <div className="text-[10px] text-slate-400">
+                            <div className="text-[10px] text-[var(--muted)]">
                               {(item.items || []).length} sites
                             </div>
                           </div>
@@ -730,20 +739,20 @@ export function NewTabPage({
                         }}
                         className={`group relative flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md backdrop-blur-sm ${
                           isDropTarget
-                            ? 'bg-blue-600/20 border-blue-400 scale-[1.03]'
-                            : 'bg-[#1e293b]/80 hover:bg-[#1e293b] border-slate-700/60 hover:border-blue-500/50'
+                            ? 'bg-[var(--brand-soft)] border-[var(--brand)] scale-[1.03]'
+                            : 'bg-[var(--surface)]/90 hover:bg-[var(--surface-hover)] border-[var(--line)] hover:border-[var(--brand)]/50'
                         }`}
                       >
                         <button
                           type="button"
                           onClick={(e) => openTileMenuAt(e, item)}
                           aria-label={`Options for ${item.name}`}
-                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/80 transition-opacity cursor-pointer"
+                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-opacity cursor-pointer"
                         >
                           <MoreVertical className="w-3.5 h-3.5" />
                         </button>
                         <ShortcutIcon name={item.name} url={item.url} />
-                        <span className="text-xs font-medium text-slate-200 truncate w-full text-center">
+                        <span className="text-xs font-medium text-[var(--ink)] truncate w-full text-center">
                           {item.name}
                         </span>
                       </div>
@@ -754,12 +763,12 @@ export function NewTabPage({
                   <button
                     type="button"
                     onClick={() => setShortcutModal({ mode: 'add', name: '', url: '' })}
-                    className="flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl bg-[#1e293b]/45 hover:bg-[#1e293b]/85 border border-dashed border-slate-700/80 hover:border-blue-500/60 transition-all cursor-pointer group"
+                    className="flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl bg-[var(--surface)]/60 hover:bg-[var(--surface)] border border-dashed border-[var(--line)] hover:border-[var(--brand)] transition-all cursor-pointer group"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-slate-800/80 group-hover:bg-blue-600/20 border border-slate-700/70 group-hover:border-blue-500/50 flex items-center justify-center text-slate-400 group-hover:text-blue-400 transition-colors">
+                    <div className="w-10 h-10 rounded-xl bg-[var(--surface-subtle)] group-hover:bg-[var(--brand-soft)] border border-[var(--line)] group-hover:border-[var(--brand)]/40 flex items-center justify-center text-[var(--muted)] group-hover:text-[var(--brand)] transition-colors">
                       <Plus className="w-5 h-5" />
                     </div>
-                    <span className="text-xs font-medium text-slate-400 group-hover:text-slate-200">
+                    <span className="text-xs font-medium text-[var(--muted)] group-hover:text-[var(--ink)]">
                       Add Shortcut
                     </span>
                   </button>
@@ -778,10 +787,10 @@ export function NewTabPage({
           }}
         >
           <div
-            className="w-full max-w-lg rounded-2xl bg-[#1e293b] border border-slate-700 shadow-2xl p-5"
+            className="w-full max-w-lg rounded-2xl bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] shadow-2xl p-5"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-700/70">
+            <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-[var(--line)]">
               {isEditingOpenGroupName ? (
                 <form
                   onSubmit={(e) => {
@@ -795,11 +804,11 @@ export function NewTabPage({
                     value={openGroupNameDraft}
                     onChange={(e) => setOpenGroupNameDraft(e.target.value)}
                     autoFocus
-                    className="flex-1 px-2.5 py-1 rounded-lg bg-slate-900/80 border border-blue-500 outline-none text-sm font-semibold text-slate-100"
+                    className="flex-1 px-2.5 py-1 rounded-lg bg-[var(--surface-subtle)] border border-[var(--brand)] outline-none text-sm font-semibold text-[var(--ink)]"
                   />
                   <button
                     type="submit"
-                    className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white cursor-pointer"
+                    className="p-1.5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white cursor-pointer"
                     title="Save group name"
                   >
                     <Check className="w-3.5 h-3.5" />
@@ -807,15 +816,15 @@ export function NewTabPage({
                 </form>
               ) : (
                 <div className="flex items-center gap-2 min-w-0">
-                  <FolderOpen className="w-4 h-4 text-blue-400 shrink-0" />
-                  <h3 className="text-sm font-semibold text-slate-100 truncate">{openGroup.name}</h3>
+                  <FolderOpen className="w-4 h-4 text-[var(--brand)] shrink-0" />
+                  <h3 className="text-sm font-semibold text-[var(--ink)] truncate">{openGroup.name}</h3>
                   <button
                     type="button"
                     onClick={() => {
                       setOpenGroupNameDraft(openGroup.name || '');
                       setIsEditingOpenGroupName(true);
                     }}
-                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+                    className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] cursor-pointer"
                     title="Rename group"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
@@ -827,7 +836,7 @@ export function NewTabPage({
                 <button
                   type="button"
                   onClick={() => handleUngroup(openGroup.id)}
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-300 hover:text-white hover:bg-slate-700/70 flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] flex items-center gap-1 cursor-pointer"
                   title="Ungroup all shortcuts"
                 >
                   <Ungroup className="w-3.5 h-3.5" />
@@ -839,7 +848,8 @@ export function NewTabPage({
                     setOpenGroupId(null);
                     setIsEditingOpenGroupName(false);
                   }}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+                  aria-label="Close group dialog"
+                  className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -857,18 +867,18 @@ export function NewTabPage({
                   onContextMenu={(e) => openTileMenuAt(e, sub, openGroup.id)}
                   role="button"
                   tabIndex={0}
-                  className="group relative flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-900/60 hover:bg-slate-800 border border-slate-700/60 hover:border-blue-500/50 transition-all cursor-pointer"
+                  className="group relative flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-[var(--surface-subtle)]/80 hover:bg-[var(--surface-hover)] border border-[var(--line)] hover:border-[var(--brand)]/50 transition-all cursor-pointer"
                 >
                   <button
                     type="button"
                     onClick={(e) => openTileMenuAt(e, sub, openGroup.id)}
                     aria-label={`Options for ${sub.name}`}
-                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-1.5 right-1.5 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/80 transition-opacity cursor-pointer"
+                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-1.5 right-1.5 p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface)] transition-opacity cursor-pointer"
                   >
                     <MoreVertical className="w-3 h-3" />
                   </button>
                   <ShortcutIcon name={sub.name} url={sub.url} />
-                  <span className="text-xs font-medium text-slate-200 truncate w-full text-center">
+                  <span className="text-xs font-medium text-[var(--ink)] truncate w-full text-center">
                     {sub.name}
                   </span>
                 </div>
@@ -879,12 +889,12 @@ export function NewTabPage({
                 onClick={() =>
                   setShortcutModal({ mode: 'add', groupId: openGroup.id, name: '', url: '' })
                 }
-                className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-900/35 hover:bg-slate-800/70 border border-dashed border-slate-700 hover:border-blue-500/60 transition-all cursor-pointer group"
+                className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-[var(--surface-subtle)]/40 hover:bg-[var(--surface-hover)] border border-dashed border-[var(--line)] hover:border-[var(--brand)] transition-all cursor-pointer group"
               >
-                <div className="w-10 h-10 rounded-xl bg-slate-800/80 group-hover:bg-blue-600/20 border border-slate-700/70 flex items-center justify-center text-slate-400 group-hover:text-blue-400">
+                <div className="w-10 h-10 rounded-xl bg-[var(--surface-subtle)] group-hover:bg-[var(--brand-soft)] border border-[var(--line)] group-hover:border-[var(--brand)]/40 flex items-center justify-center text-[var(--muted)] group-hover:text-[var(--brand)]">
                   <Plus className="w-5 h-5" />
                 </div>
-                <span className="text-xs font-medium text-slate-400 group-hover:text-slate-200">
+                <span className="text-xs font-medium text-[var(--muted)] group-hover:text-[var(--ink)]">
                   Add
                 </span>
               </button>
@@ -898,7 +908,7 @@ export function NewTabPage({
         <div
           ref={tileMenuRef}
           style={{ top: `${tileMenu.y}px`, left: `${tileMenu.x}px` }}
-          className="fixed z-50 w-52 rounded-xl bg-[#1e293b] border border-slate-700 shadow-2xl py-1 text-xs text-slate-200"
+          className="fixed z-50 w-52 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl py-1 text-xs text-[var(--ink)]"
         >
           {tileMenu.item.type === 'group' ? (
             <>
@@ -910,9 +920,9 @@ export function NewTabPage({
                   );
                   setTileMenu(null);
                 }}
-                className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+                className="w-full px-3 py-2 text-left hover:bg-[var(--surface-hover)] flex items-center gap-2 cursor-pointer"
               >
-                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                <ExternalLink className="w-3.5 h-3.5 text-[var(--brand)]" />
                 <span>Open all in new tabs</span>
               </button>
               <button
@@ -925,23 +935,23 @@ export function NewTabPage({
                   });
                   setTileMenu(null);
                 }}
-                className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+                className="w-full px-3 py-2 text-left hover:bg-[var(--surface-hover)] flex items-center gap-2 cursor-pointer"
               >
-                <Edit2 className="w-3.5 h-3.5 text-slate-400" />
+                <Edit2 className="w-3.5 h-3.5 text-[var(--muted)]" />
                 <span>Rename group</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleUngroup(tileMenu.item.id)}
-                className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+                className="w-full px-3 py-2 text-left hover:bg-[var(--surface-hover)] flex items-center gap-2 cursor-pointer"
               >
-                <Ungroup className="w-3.5 h-3.5 text-slate-400" />
+                <Ungroup className="w-3.5 h-3.5 text-[var(--muted)]" />
                 <span>Ungroup</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleRemoveItem(tileMenu.item.id)}
-                className="w-full px-3 py-2 text-left hover:bg-rose-950/50 text-rose-400 flex items-center gap-2 cursor-pointer"
+                className="w-full px-3 py-2 text-left hover:bg-[var(--danger-soft)] text-[var(--danger)] flex items-center gap-2 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Remove group</span>
@@ -955,9 +965,9 @@ export function NewTabPage({
                   onOpenNewTab(tileMenu.item.url, tileMenu.item.name);
                   setTileMenu(null);
                 }}
-                className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+                className="w-full px-3 py-2 text-left hover:bg-[var(--surface-hover)] flex items-center gap-2 cursor-pointer"
               >
-                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                <ExternalLink className="w-3.5 h-3.5 text-[var(--brand)]" />
                 <span>Open in New Tab</span>
               </button>
               <button
@@ -972,9 +982,9 @@ export function NewTabPage({
                   });
                   setTileMenu(null);
                 }}
-                className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+                className="w-full px-3 py-2 text-left hover:bg-[var(--surface-hover)] flex items-center gap-2 cursor-pointer"
               >
-                <Edit2 className="w-3.5 h-3.5 text-slate-400" />
+                <Edit2 className="w-3.5 h-3.5 text-[var(--muted)]" />
                 <span>Edit</span>
               </button>
 
@@ -982,15 +992,15 @@ export function NewTabPage({
                 <button
                   type="button"
                   onClick={() => handleRemoveFromGroup(tileMenu.item.id, tileMenu.groupId)}
-                  className="w-full px-3 py-2 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+                  className="w-full px-3 py-2 text-left hover:bg-[var(--surface-hover)] flex items-center gap-2 cursor-pointer"
                 >
-                  <Ungroup className="w-3.5 h-3.5 text-slate-400" />
+                  <Ungroup className="w-3.5 h-3.5 text-[var(--muted)]" />
                   <span>Move out of group</span>
                 </button>
               ) : (
                 <>
-                  <div className="my-1 border-t border-slate-700/70" />
-                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  <div className="my-1 border-t border-[var(--line)]" />
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
                     Add to group
                   </div>
                   {existingGroups.map((grp) => (
@@ -998,9 +1008,9 @@ export function NewTabPage({
                       key={grp.id}
                       type="button"
                       onClick={() => handleMoveLinkToGroup(tileMenu.item.id, grp.id)}
-                      className="w-full px-3 py-1.5 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer"
+                      className="w-full px-3 py-1.5 text-left hover:bg-[var(--surface-hover)] flex items-center gap-2 cursor-pointer"
                     >
-                      <FolderOpen className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                      <FolderOpen className="w-3.5 h-3.5 text-[var(--brand)] shrink-0" />
                       <span className="truncate">{grp.name}</span>
                     </button>
                   ))}
@@ -1014,19 +1024,19 @@ export function NewTabPage({
                       });
                       setTileMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 text-left hover:bg-slate-700/70 flex items-center gap-2 cursor-pointer text-blue-400"
+                    className="w-full px-3 py-1.5 text-left hover:bg-[var(--surface-hover)] flex items-center gap-2 cursor-pointer text-[var(--brand)]"
                   >
                     <FolderPlus className="w-3.5 h-3.5 shrink-0" />
                     <span>New group...</span>
                   </button>
-                  <div className="my-1 border-t border-slate-700/70" />
+                  <div className="my-1 border-t border-[var(--line)]" />
                 </>
               )}
 
               <button
                 type="button"
                 onClick={() => handleRemoveItem(tileMenu.item.id, tileMenu.groupId)}
-                className="w-full px-3 py-2 text-left hover:bg-rose-950/50 text-rose-400 flex items-center gap-2 cursor-pointer"
+                className="w-full px-3 py-2 text-left hover:bg-[var(--danger-soft)] text-[var(--danger)] flex items-center gap-2 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Remove</span>
@@ -1039,15 +1049,16 @@ export function NewTabPage({
       {/* Add / Edit Shortcut Modal */}
       {shortcutModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-[#1e293b] border border-slate-700 shadow-2xl p-5">
+          <div className="w-full max-w-sm rounded-2xl bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] shadow-2xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-slate-100">
+              <h3 className="text-sm font-semibold text-[var(--ink)]">
                 {shortcutModal.mode === 'edit' ? 'Edit Shortcut' : 'Add Shortcut'}
               </h3>
               <button
                 type="button"
                 onClick={() => setShortcutModal(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+                aria-label="Close shortcut modal"
+                className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1055,7 +1066,7 @@ export function NewTabPage({
 
             <form onSubmit={handleSaveShortcut} className="space-y-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1">
                   Name
                 </label>
                 <input
@@ -1064,12 +1075,12 @@ export function NewTabPage({
                   onChange={(e) => setShortcutModal((m) => ({ ...m, name: e.target.value }))}
                   placeholder="e.g. GitHub"
                   autoFocus
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-700 focus:border-blue-500 outline-none text-xs text-slate-100 placeholder-slate-500"
+                  className="w-full px-3 py-2 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] focus:border-[var(--brand)] outline-none text-xs text-[var(--ink)] placeholder-[var(--muted)]"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1">
                   URL
                 </label>
                 <input
@@ -1078,7 +1089,7 @@ export function NewTabPage({
                   onChange={(e) => setShortcutModal((m) => ({ ...m, url: e.target.value }))}
                   placeholder="https://github.com"
                   required
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-700 focus:border-blue-500 outline-none text-xs text-slate-100 placeholder-slate-500"
+                  className="w-full px-3 py-2 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] focus:border-[var(--brand)] outline-none text-xs text-[var(--ink)] placeholder-[var(--muted)]"
                 />
               </div>
 
@@ -1086,13 +1097,13 @@ export function NewTabPage({
                 <button
                   type="button"
                   onClick={() => setShortcutModal(null)}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-xl bg-[#2563eb] hover:bg-[#3b82f6] text-white text-xs font-semibold cursor-pointer shadow-sm"
+                  className="px-4 py-1.5 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold cursor-pointer shadow-sm"
                 >
                   {shortcutModal.mode === 'edit' ? 'Save' : 'Add'}
                 </button>
@@ -1105,15 +1116,16 @@ export function NewTabPage({
       {/* Create / Rename Group Modal */}
       {groupModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-[#1e293b] border border-slate-700 shadow-2xl p-5">
+          <div className="w-full max-w-sm rounded-2xl bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] shadow-2xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-slate-100">
+              <h3 className="text-sm font-semibold text-[var(--ink)]">
                 {groupModal.mode === 'edit' ? 'Rename Group' : 'Create Quick Tile Group'}
               </h3>
               <button
                 type="button"
                 onClick={() => setGroupModal(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+                aria-label="Close group modal"
+                className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1121,7 +1133,7 @@ export function NewTabPage({
 
             <form onSubmit={handleSaveGroupModal} className="space-y-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1">
                   Group Name
                 </label>
                 <input
@@ -1130,7 +1142,7 @@ export function NewTabPage({
                   onChange={(e) => setGroupModal((m) => ({ ...m, name: e.target.value }))}
                   placeholder="e.g. Finance, Social, Work"
                   autoFocus
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-700 focus:border-blue-500 outline-none text-xs text-slate-100 placeholder-slate-500"
+                  className="w-full px-3 py-2 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] focus:border-[var(--brand)] outline-none text-xs text-[var(--ink)] placeholder-[var(--muted)]"
                 />
               </div>
 
@@ -1138,13 +1150,13 @@ export function NewTabPage({
                 <button
                   type="button"
                   onClick={() => setGroupModal(null)}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/60 cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-xl bg-[#2563eb] hover:bg-[#3b82f6] text-white text-xs font-semibold cursor-pointer shadow-sm"
+                  className="px-4 py-1.5 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold cursor-pointer shadow-sm"
                 >
                   {groupModal.mode === 'edit' ? 'Save' : 'Create'}
                 </button>

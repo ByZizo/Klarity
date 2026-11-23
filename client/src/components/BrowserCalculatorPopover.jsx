@@ -452,7 +452,7 @@ export function BrowserCalculatorPopover({
           onClick={handleEvaluate}
           aria-label="Equals"
           title="Evaluate (= or Enter)"
-          className={`${keypadBtnClass} bg-[var(--brand)] hover:bg-[var(--brand-hover)] border-[var(--brand)] text-[var(--brand-ink)]`}
+          className={`${keypadBtnClass} bg-[var(--brand)] hover:bg-[var(--brand-hover)] border-[var(--brand)] text-white`}
         >
           =
         </button>

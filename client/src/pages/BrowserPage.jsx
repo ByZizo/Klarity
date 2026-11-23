@@ -2480,7 +2480,7 @@ export function BrowserPage({
                 aria-pressed={isCalculatorOpen}
                 className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
                   isCalculatorOpen
-                    ? 'bg-[var(--brand)] text-[var(--brand-ink)]'
+                    ? 'bg-[var(--brand)] text-white'
                     : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
@@ -2508,7 +2508,7 @@ export function BrowserPage({
               aria-pressed={isNotesVisible}
               className={`hidden md:flex w-9 h-9 rounded-lg items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
                 isNotesVisible
-                  ? 'bg-[var(--brand)] text-[var(--brand-ink)]'
+                  ? 'bg-[var(--brand)] text-white'
                   : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
               }`}
             >
@@ -2530,7 +2530,7 @@ export function BrowserPage({
                 aria-expanded={isDownloadsPopoverOpen}
                 className={`hidden md:flex relative w-9 h-9 rounded-lg items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
                   isDownloadsPopoverOpen
-                    ? 'bg-[var(--brand)] text-[var(--brand-ink)]'
+                    ? 'bg-[var(--brand)] text-white'
                     : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
                 }`}
               >
@@ -2782,7 +2782,7 @@ export function BrowserPage({
               aria-pressed={isBrowserAiSidebarOpen}
               className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
                 isBrowserAiSidebarOpen
-                  ? 'bg-[var(--brand)] text-[var(--brand-ink)]'
+                  ? 'bg-[var(--brand)] text-white'
                   : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
               }`}
             >
@@ -2825,7 +2825,7 @@ export function BrowserPage({
               aria-expanded={isOverflowMenuOpen}
               className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
                 isOverflowMenuOpen
-                  ? 'bg-[var(--brand)] text-[var(--brand-ink)]'
+                  ? 'bg-[var(--brand)] text-white'
                   : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
               }`}
             >
