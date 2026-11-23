@@ -2231,25 +2231,6 @@ export default function PdfEditorModal({
               <ZoomIn className="w-4 h-4" />
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              const next = !showAiDrawer;
-              setShowAiDrawer(next);
-              if (next && !aiSummary && !isLocalOnlyMode) handleAiAction('summary');
-            }}
-            title={isLocalOnlyMode ? 'AI Analysis (Local-only mode active)' : 'AI Analysis'}
-            aria-label="AI Analysis"
-            className={`px-2.5 py-1.5 min-h-[36px] rounded-lg text-[13px] font-medium hidden sm:flex items-center gap-1.5 border cursor-pointer ${
-              showAiDrawer
-                ? 'bg-purple-500/15 border-purple-500/40 text-purple-700 dark:text-purple-300'
-                : 'bg-[var(--surface-subtle)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--surface-hover)]'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <span>AI Analysis</span>
-          </button>
         </div>
 
         <button type="button" onClick={onClose} aria-label="Close editor" title="Close editor" className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] rounded-lg cursor-pointer shrink-0">
