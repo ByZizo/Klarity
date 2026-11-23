@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import {
   CreditCard,
   Building2,
@@ -71,17 +71,17 @@ import {
   MoreVertical,
   ArrowUpCircle
 } from 'lucide-react';
-import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
-import { marked } from 'marked';
 import KlarityLogo from './components/KlarityLogo';
-import LegalShieldStatusCard from './components/LegalShieldStatusCard';
-import InteractivePayoffComparison from './components/InteractivePayoffComparison';
-import HardshipPlaybookModal from './components/HardshipPlaybookModal';
 import { DEFAULT_INCOME_STREAMS, calculateJudgmentProofRatio } from './utils/statutoryDebtEngine';
-import HouseholdLifestyleHub from './components/HouseholdLifestyleHub';
-import PasswordVaultPage, { DEFAULT_VAULT_ITEMS } from './components/PasswordVaultPage';
-import RetirementPage from './components/RetirementPage';
+import {
+  loadPerformanceModePref,
+  savePerformanceModePref,
+  resolveLowPowerState,
+  applyLowPowerMode
+} from './utils/devicePerformance';
+
+const HardshipPlaybookModal = React.lazy(() => import('./components/HardshipPlaybookModal'));
 import { DEFAULT_HOUSEHOLD_PROFILE, calculateHouseholdAndFleetMetrics, buildHouseholdAiSummary } from './utils/householdLifestyleEngine';
 import {
   secureStorage,
@@ -164,21 +164,20 @@ import {
   formatUserFacingReleaseNote,
   formatCleanUpdateMessage
 } from './components/SharedAppComponents';
-import { Button, Card, Pill, Toast, ConfirmDialog } from './components/ui';
-import {
-  OverviewPage,
-  TransactionsPage,
-  BillsPage,
-  SubscriptionsPage,
-  CardsPage,
-  BudgetsPage,
-  RetirementPage as RetirementPageView,
-  HouseholdPage,
-  VaultPage,
-  AdvisorPage,
-  BrowserPage,
-  SettingsPage
-} from './pages';
+import { Button, Card, Pill, Toast, ConfirmDialog, Skeleton } from './components/ui';
+import { OverviewPage } from './pages/OverviewPage';
+
+const TransactionsPage = React.lazy(() => import('./pages/TransactionsPage').then((m) => ({ default: m.TransactionsPage })));
+const BillsPage = React.lazy(() => import('./pages/BillsPage').then((m) => ({ default: m.BillsPage })));
+const SubscriptionsPage = React.lazy(() => import('./pages/SubscriptionsPage').then((m) => ({ default: m.SubscriptionsPage })));
+const CardsPage = React.lazy(() => import('./pages/CardsPage').then((m) => ({ default: m.CardsPage })));
+const BudgetsPage = React.lazy(() => import('./pages/BudgetsPage').then((m) => ({ default: m.BudgetsPage })));
+const RetirementPageView = React.lazy(() => import('./pages/RetirementPage').then((m) => ({ default: m.RetirementPage })));
+const HouseholdPage = React.lazy(() => import('./pages/HouseholdPage').then((m) => ({ default: m.HouseholdPage })));
+const VaultPage = React.lazy(() => import('./pages/VaultPage').then((m) => ({ default: m.VaultPage })));
+const AdvisorPage = React.lazy(() => import('./pages/AdvisorPage').then((m) => ({ default: m.AdvisorPage })));
+const BrowserPage = React.lazy(() => import('./pages/BrowserPage').then((m) => ({ default: m.BrowserPage })));
+const SettingsPage = React.lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 import {
   loadBrowserSettings,
   saveBrowserSettings,
@@ -404,22 +403,21 @@ function KlarityApp() {
           setDesktopAppInfo(prev => ({ ...prev, updateStatus: status }));
         }
       });
-      // Proactively check for updates immediately on launch and every 60s
+      // Main process handles periodic polling; trigger a single startup check on mount
       const t = setTimeout(() => {
         window.klarityDesktop.checkForUpdates?.().catch(() => {});
-      }, 1000);
-      const pollTimer = setInterval(() => {
-        window.klarityDesktop.checkForUpdates?.().catch(() => {});
-      }, 60 * 1000);
+      }, 1500);
       return () => {
         clearTimeout(t);
-        clearInterval(pollTimer);
         if (typeof unsub === 'function') unsub();
       };
     } else {
-      // In web browser mode, proactively poll server update check on mount and every 60s
-      const t = setTimeout(checkServerUpdate, 1200);
-      const pollTimer = setInterval(checkServerUpdate, 60 * 1000);
+      // In web/Chrome OS browser mode, check on mount and every 15m while tab is visible
+      const t = setTimeout(checkServerUpdate, 1500);
+      const pollTimer = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        checkServerUpdate();
+      }, 15 * 60 * 1000);
       return () => {
         clearTimeout(t);
         clearInterval(pollTimer);
@@ -851,6 +849,21 @@ function KlarityApp() {
   const [uiPrivacyMask, setUiPrivacyMask] = useState(() => {
     try { return localStorage.getItem('klarity_ui_privacy_mask') === 'true'; } catch (e) { return false; }
   });
+  const [uiPerformanceMode, setUiPerformanceMode] = useState(() => loadPerformanceModePref());
+
+  const { isLowPower: isLowPowerMode, capabilities: deviceCapabilities } = useMemo(
+    () => resolveLowPowerState(uiPerformanceMode, desktopAppInfo?.hardware || null),
+    [uiPerformanceMode, desktopAppInfo?.hardware]
+  );
+
+  useEffect(() => {
+    applyLowPowerMode(isLowPowerMode);
+  }, [isLowPowerMode]);
+
+  const handleSetPerformanceMode = (mode) => {
+    const saved = savePerformanceModePref(mode);
+    setUiPerformanceMode(saved);
+  };
 
   const applyUiPreferences = (scale, dens, motion, focus, mask) => {
     try {
@@ -1712,26 +1725,50 @@ function KlarityApp() {
     setIsResizingAdvisor(true);
     const startX = mouseDownEvent.clientX;
     const startWidth = advisorWidth;
+    let latestW = startWidth;
+    let rafId = null;
+
+    const getMaxAdvisorW = () =>
+      Math.min(650, Math.max(280, Math.floor((window.innerWidth || 1280) * 0.45)));
 
     const doDrag = (mouseMoveEvent) => {
       // Dragging leftwards increases right sidebar width
       const deltaX = startX - mouseMoveEvent.clientX;
-      const newW = Math.min(Math.max(startWidth + deltaX, 280), 650);
-      setAdvisorWidth(newW);
+      latestW = Math.min(Math.max(startWidth + deltaX, 280), getMaxAdvisorW());
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          setAdvisorWidth(latestW);
+        });
+      }
     };
 
     const stopDrag = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      setAdvisorWidth(latestW);
       setIsResizingAdvisor(false);
       window.removeEventListener('mousemove', doDrag);
       window.removeEventListener('mouseup', stopDrag);
       try {
-        localStorage.setItem('klarity_advisor_width', String(advisorWidth));
+        localStorage.setItem('klarity_advisor_width', String(latestW));
       } catch (e) {}
     };
 
     window.addEventListener('mousemove', doDrag);
     window.addEventListener('mouseup', stopDrag);
   };
+
+  useEffect(() => {
+    const handleViewportResize = () => {
+      const maxW = Math.min(650, Math.max(280, Math.floor((window.innerWidth || 1280) * 0.45)));
+      setAdvisorWidth((prev) => (prev > maxW ? maxW : prev));
+    };
+    window.addEventListener('resize', handleViewportResize);
+    return () => window.removeEventListener('resize', handleViewportResize);
+  }, []);
 
   // Active chat messages
   const [chatMessages, setChatMessages] = useState(() => {
@@ -1745,7 +1782,9 @@ function KlarityApp() {
   });
   const [isAdvisorCollapsed, setIsAdvisorCollapsed] = useState(() => {
     try {
-      return localStorage.getItem('klarity_advisor_collapsed') === 'true';
+      const saved = localStorage.getItem('klarity_advisor_collapsed');
+      if (saved !== null) return saved === 'true';
+      return typeof window !== 'undefined' && window.innerWidth < 1280;
     } catch {
       return false;
     }
@@ -2352,12 +2391,13 @@ function KlarityApp() {
       cleanupDesktop = window.klarityDesktop.onLocalAiStatus((st) => {
         if (st) setLocalAiEngineStatus(st);
       });
-    }
-
-    if (settingsAiProvider !== 'local' && settingsActiveTab !== 'ai') {
       return () => {
         if (cleanupDesktop) cleanupDesktop();
       };
+    }
+
+    if (settingsAiProvider !== 'local' && !(isSettingsOpen && settingsActiveTab === 'ai')) {
+      return undefined;
     }
 
     let es = null;
@@ -2375,7 +2415,7 @@ function KlarityApp() {
       if (cleanupDesktop) cleanupDesktop();
       if (es) es.close();
     };
-  }, [settingsAiProvider, settingsActiveTab]);
+  }, [settingsAiProvider, settingsActiveTab, isSettingsOpen]);
 
   const handleProviderChange = (newProvider) => {
     setSettingsAiProvider(newProvider);
@@ -5628,7 +5668,14 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         <div className={`flex-1 flex min-w-0 ${normalizedActiveTab === 'browser' ? 'min-h-0 h-full overflow-hidden' : ''}`}>
           {normalizedActiveTab === 'browser' ? (
             <main className="flex-1 min-w-0 h-full flex flex-col overflow-hidden p-0 m-0 pb-14 min-[760px]:pb-0">
-              <BrowserPage
+              <Suspense
+                fallback={
+                  <div className="flex-1 flex items-center justify-center text-[15px] text-[var(--muted)]">
+                    Loading browser...
+                  </div>
+                }
+              >
+                <BrowserPage
                 onAskAdvisor={(prompt, contextOverride) => {
                   setActiveTab('advisor');
                   setIsAdvisorCollapsed(false);
@@ -5684,6 +5731,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   setIsSettingsOpen(true);
                 }}
               />
+              </Suspense>
             </main>
           ) : (
             <main
@@ -5764,6 +5812,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 />
               )}
 
+              <Suspense
+                fallback={
+                  <div className="flex flex-col gap-4 py-4">
+                    <Skeleton className="h-8 w-48" />
+                    <Skeleton className="h-36 w-full" />
+                    <Skeleton className="h-36 w-full" />
+                  </div>
+                }
+              >
               {normalizedActiveTab === 'transactions' && (
                 <TransactionsPage
                   isLoading={loading}
@@ -5980,6 +6037,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   FormattedChatMessage={FormattedChatMessage}
                 />
               )}
+              </Suspense>
 
               {normalizedActiveTab === 'more' && (
                 <div className="flex flex-col gap-5">
@@ -6464,113 +6522,125 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       {/* =================================================================== */}
 
       {/* 1. Settings Modal (6 Merged Tabs: Profile, Preferences, AI advisor, Bank, Security, About) */}
-      <SettingsPage
-        isOpen={isSettingsOpen}
-        onClose={() => {
-          setIsSettingsOpen(false);
-          setIsBrowserSettingsOnly(false);
-        }}
-        browserOnly={isBrowserSettingsOnly}
-        settingsActiveTab={settingsActiveTab}
-        setSettingsActiveTab={setSettingsActiveTab}
-        browserSettings={browserSettings}
-        onUpdateBrowserSettings={handleUpdateBrowserSettings}
-        browserBookmarks={browserBookmarks}
-        onUpdateBrowserBookmarks={handleUpdateBrowserBookmarks}
-        currentUser={currentUser}
-        userInitials={userInitials}
-        settingsDisplayName={settingsDisplayName}
-        setSettingsDisplayName={setSettingsDisplayName}
-        handleSaveProfile={handleSaveProfile}
-        themeMode={themeMode}
-        handleThemeChange={handleThemeChange}
-        uiFontScale={uiFontScale}
-        handleSetFontScale={handleSetFontScale}
-        uiDensity={uiDensity}
-        handleSetDensity={handleSetDensity}
-        uiReduceMotion={uiReduceMotion}
-        handleToggleReduceMotion={handleToggleReduceMotion}
-        uiHighFocus={uiHighFocus}
-        handleToggleHighFocus={handleToggleHighFocus}
-        uiPrivacyMask={uiPrivacyMask}
-        handleTogglePrivacyMask={handleTogglePrivacyMask}
-        featureFlags={featureFlags}
-        handleUpdateFeatureFlags={handleUpdateFeatureFlags}
-        settingsAiProvider={settingsAiProvider}
-        handleProviderChange={handleProviderChange}
-        settingsAiModel={settingsAiModel}
-        setSettingsAiModel={setSettingsAiModel}
-        localAiEngineStatus={localAiEngineStatus}
-        settingsAiApiKey={settingsAiApiKey}
-        setSettingsAiApiKey={setSettingsAiApiKey}
-        settingsAiMaskedKey={settingsAiMaskedKey}
-        settingsAiShowKey={settingsAiShowKey}
-        setSettingsAiShowKey={setSettingsAiShowKey}
-        settingsAiStatus={settingsAiStatus}
-        settingsAiTesting={settingsAiTesting}
-        handleRemoveAiKey={handleRemoveAiKey}
-        handleSaveAndTestAiKey={handleSaveAndTestAiKey}
-        aiPermissions={settingsAiPermissions}
-        handleToggleAiPermission={handleTogglePermission}
-        aiMemory={aiMemory}
-        handleClearAllMemory={handleClearAllMemory}
-        settingsPlaidStatus={settingsPlaidStatus}
-        settingsPlaidClientId={settingsPlaidClientId}
-        setSettingsPlaidClientId={setSettingsPlaidClientId}
-        settingsPlaidSecret={settingsPlaidSecret}
-        setSettingsPlaidSecret={setSettingsPlaidSecret}
-        settingsPlaidMaskedSecret={settingsPlaidMaskedSecret}
-        settingsPlaidShowSecret={settingsPlaidShowSecret}
-        setSettingsPlaidShowSecret={setSettingsPlaidShowSecret}
-        handleSavePlaidCredentials={handleSavePlaidCredentials}
-        initiatePlaidLink={initiatePlaidLink}
-        plaidItems={settings?.plaidItems || []}
-        data={data}
-        handleDisconnectBank={handleDisconnectBank}
-        handleDeleteAccount={handleDeleteAccount}
-        setIsAddAccountOpen={setIsAddAccountOpen}
-        autoLockMinutes={autoLockMinutes}
-        setAutoLockMinutes={setAutoLockMinutes}
-        idleAction={idleAction}
-        setIdleAction={setIdleAction}
-        handleLockSession={handleLockSession}
-        vaultLockType={vaultLockType}
-        setVaultLockType={setVaultLockType}
-        vaultPinTimeout={vaultPinTimeout}
-        setVaultPinTimeout={setVaultPinTimeout}
-        clipboardClearSeconds={clipboardClearSeconds}
-        setClipboardClearSeconds={setClipboardClearSeconds}
-        handleLogout={handleLogout}
-        desktopAppInfo={desktopAppInfo}
-        formatVersionString={formatVersionString}
-        handleManualCheckForUpdate={handleManualCheckForUpdate}
-        isCheckingUpdateInSettings={isCheckingUpdateInSettings}
-        onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
-        handlePerformUpdate={handlePerformUpdate}
-        isInstallingUpdate={isInstallingUpdate}
-        feedbackType={feedbackType}
-        setFeedbackType={setFeedbackType}
-        feedbackText={feedbackText}
-        setFeedbackText={setFeedbackText}
-        isSubmittingFeedback={isSubmittingFeedback}
-        feedbackSubmitted={feedbackSubmitted}
-        handleSendFeedback={handleSendFeedback}
-        onShowToast={showToast}
-        sidebarNavOrder={sidebarNavOrder}
-        handleMoveSidebarItem={handleMoveSidebarItem}
-        handleResetSidebarOrder={handleResetSidebarOrder}
-        SIDEBAR_ITEMS_CONFIG={SIDEBAR_ITEMS_CONFIG}
-      />
+      {isSettingsOpen && (
+        <Suspense fallback={null}>
+          <SettingsPage
+            isOpen={isSettingsOpen}
+            onClose={() => {
+              setIsSettingsOpen(false);
+              setIsBrowserSettingsOnly(false);
+            }}
+            browserOnly={isBrowserSettingsOnly}
+            settingsActiveTab={settingsActiveTab}
+            setSettingsActiveTab={setSettingsActiveTab}
+            browserSettings={browserSettings}
+            onUpdateBrowserSettings={handleUpdateBrowserSettings}
+            browserBookmarks={browserBookmarks}
+            onUpdateBrowserBookmarks={handleUpdateBrowserBookmarks}
+            currentUser={currentUser}
+            userInitials={userInitials}
+            settingsDisplayName={settingsDisplayName}
+            setSettingsDisplayName={setSettingsDisplayName}
+            handleSaveProfile={handleSaveProfile}
+            themeMode={themeMode}
+            handleThemeChange={handleThemeChange}
+            uiFontScale={uiFontScale}
+            handleSetFontScale={handleSetFontScale}
+            uiDensity={uiDensity}
+            handleSetDensity={handleSetDensity}
+            uiReduceMotion={uiReduceMotion}
+            handleToggleReduceMotion={handleToggleReduceMotion}
+            uiHighFocus={uiHighFocus}
+            handleToggleHighFocus={handleToggleHighFocus}
+            uiPrivacyMask={uiPrivacyMask}
+            handleTogglePrivacyMask={handleTogglePrivacyMask}
+            uiPerformanceMode={uiPerformanceMode}
+            handleSetPerformanceMode={handleSetPerformanceMode}
+            isLowPowerMode={isLowPowerMode}
+            deviceCapabilities={deviceCapabilities}
+            featureFlags={featureFlags}
+            handleUpdateFeatureFlags={handleUpdateFeatureFlags}
+            settingsAiProvider={settingsAiProvider}
+            handleProviderChange={handleProviderChange}
+            settingsAiModel={settingsAiModel}
+            setSettingsAiModel={setSettingsAiModel}
+            localAiEngineStatus={localAiEngineStatus}
+            settingsAiApiKey={settingsAiApiKey}
+            setSettingsAiApiKey={setSettingsAiApiKey}
+            settingsAiMaskedKey={settingsAiMaskedKey}
+            settingsAiShowKey={settingsAiShowKey}
+            setSettingsAiShowKey={setSettingsAiShowKey}
+            settingsAiStatus={settingsAiStatus}
+            settingsAiTesting={settingsAiTesting}
+            handleRemoveAiKey={handleRemoveAiKey}
+            handleSaveAndTestAiKey={handleSaveAndTestAiKey}
+            aiPermissions={settingsAiPermissions}
+            handleToggleAiPermission={handleTogglePermission}
+            aiMemory={aiMemory}
+            handleClearAllMemory={handleClearAllMemory}
+            settingsPlaidStatus={settingsPlaidStatus}
+            settingsPlaidClientId={settingsPlaidClientId}
+            setSettingsPlaidClientId={setSettingsPlaidClientId}
+            settingsPlaidSecret={settingsPlaidSecret}
+            setSettingsPlaidSecret={setSettingsPlaidSecret}
+            settingsPlaidMaskedSecret={settingsPlaidMaskedSecret}
+            settingsPlaidShowSecret={settingsPlaidShowSecret}
+            setSettingsPlaidShowSecret={setSettingsPlaidShowSecret}
+            handleSavePlaidCredentials={handleSavePlaidCredentials}
+            initiatePlaidLink={initiatePlaidLink}
+            plaidItems={settings?.plaidItems || []}
+            data={data}
+            handleDisconnectBank={handleDisconnectBank}
+            handleDeleteAccount={handleDeleteAccount}
+            setIsAddAccountOpen={setIsAddAccountOpen}
+            autoLockMinutes={autoLockMinutes}
+            setAutoLockMinutes={setAutoLockMinutes}
+            idleAction={idleAction}
+            setIdleAction={setIdleAction}
+            handleLockSession={handleLockSession}
+            vaultLockType={vaultLockType}
+            setVaultLockType={setVaultLockType}
+            vaultPinTimeout={vaultPinTimeout}
+            setVaultPinTimeout={setVaultPinTimeout}
+            clipboardClearSeconds={clipboardClearSeconds}
+            setClipboardClearSeconds={setClipboardClearSeconds}
+            handleLogout={handleLogout}
+            desktopAppInfo={desktopAppInfo}
+            formatVersionString={formatVersionString}
+            handleManualCheckForUpdate={handleManualCheckForUpdate}
+            isCheckingUpdateInSettings={isCheckingUpdateInSettings}
+            onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
+            handlePerformUpdate={handlePerformUpdate}
+            isInstallingUpdate={isInstallingUpdate}
+            feedbackType={feedbackType}
+            setFeedbackType={setFeedbackType}
+            feedbackText={feedbackText}
+            setFeedbackText={setFeedbackText}
+            isSubmittingFeedback={isSubmittingFeedback}
+            feedbackSubmitted={feedbackSubmitted}
+            handleSendFeedback={handleSendFeedback}
+            onShowToast={showToast}
+            sidebarNavOrder={sidebarNavOrder}
+            handleMoveSidebarItem={handleMoveSidebarItem}
+            handleResetSidebarOrder={handleResetSidebarOrder}
+            SIDEBAR_ITEMS_CONFIG={SIDEBAR_ITEMS_CONFIG}
+          />
+        </Suspense>
+      )}
 
       {/* 2. Payment Relief Guide Modal */}
-      <HardshipPlaybookModal
-        isOpen={isHardshipModalOpen}
-        onClose={() => setIsHardshipModalOpen(false)}
-        cards={displayCards}
-        userName={currentUser?.name || firstName}
-        isJudgmentProof={true}
-        onShowToast={showToast}
-      />
+      {isHardshipModalOpen && (
+        <Suspense fallback={null}>
+          <HardshipPlaybookModal
+            isOpen={isHardshipModalOpen}
+            onClose={() => setIsHardshipModalOpen(false)}
+            cards={displayCards}
+            userName={currentUser?.name || firstName}
+            isJudgmentProof={true}
+            onShowToast={showToast}
+          />
+        </Suspense>
+      )}
 
       {/* 3. Add Card / Bank Account Modal */}
       {isAddAccountOpen && (

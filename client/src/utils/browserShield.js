@@ -236,7 +236,29 @@ export function buildYouTubeAdShieldScript(enabled = true) {
     } catch (e) {}
   }
 
-  setInterval(processVideoAds, 150);
+  let observedPlayer = null;
+  let adObserver = null;
+
+  function ensurePlayerObserver() {
+    try {
+      const player = document.querySelector('#movie_player');
+      if (player && player !== observedPlayer && typeof MutationObserver !== 'undefined') {
+        if (adObserver) adObserver.disconnect();
+        observedPlayer = player;
+        adObserver = new MutationObserver(() => {
+          processVideoAds();
+        });
+        adObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
+      }
+    } catch (e) {}
+  }
+
+  ensurePlayerObserver();
+  setInterval(() => {
+    if (document.hidden) return;
+    ensurePlayerObserver();
+    processVideoAds();
+  }, 1000);
   document.addEventListener('timeupdate', processVideoAds, true);
 })();
   `;

@@ -83,8 +83,45 @@ class LocalModelEngine extends EventEmitter {
       speedMBps: 0,
       message: 'Local AI engine awaiting initialization',
       error: null,
+      hardware: this.getHardwareProfile(),
       updatedAt: Date.now()
     };
+  }
+
+  /**
+   * Inspect system RAM and CPU cores so older laptops degrade safely
+   */
+  getHardwareProfile() {
+    try {
+      const totalMemGB = Math.round((os.totalmem() / (1024 ** 3)) * 10) / 10;
+      const freeMemGB = Math.round((os.freemem() / (1024 ** 3)) * 10) / 10;
+      const cpuCount = Array.isArray(os.cpus()) ? os.cpus().length : 2;
+      const isVeryLowRam = totalMemGB < 3.5;
+      const isLowRam = totalMemGB < 8;
+      const isLowPowerDevice = totalMemGB <= 4 || cpuCount <= 4;
+      const recommendedModelId = isLowRam
+        ? 'DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf'
+        : 'Llama-3.2-3B-Instruct-Q4_K_M.gguf';
+      return {
+        totalMemGB,
+        freeMemGB,
+        cpuCount,
+        isVeryLowRam,
+        isLowRam,
+        isLowPowerDevice,
+        recommendedModelId
+      };
+    } catch {
+      return {
+        totalMemGB: null,
+        freeMemGB: null,
+        cpuCount: 2,
+        isVeryLowRam: false,
+        isLowRam: false,
+        isLowPowerDevice: false,
+        recommendedModelId: DEFAULT_MODEL_ID
+      };
+    }
   }
 
   /**
@@ -126,6 +163,7 @@ class LocalModelEngine extends EventEmitter {
       ...this.status,
       ...patch,
       modelsDir: this.getModelsDirectory(),
+      hardware: this.getHardwareProfile(),
       updatedAt: Date.now()
     };
     this.emit('status', this.status);
@@ -305,7 +343,12 @@ class LocalModelEngine extends EventEmitter {
    * Verify local GGUF model or download if missing, then initialize persistent context session
    */
   async ensureInitialized(options = {}) {
-    const requestedModelId = options.modelId || this.activeModelId;
+    const hw = this.getHardwareProfile();
+    const defaultModelForHardware =
+      !options.modelId && !process.env.KLARITY_LOCAL_MODEL && hw.isLowRam
+        ? 'DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf'
+        : this.activeModelId;
+    const requestedModelId = options.modelId || defaultModelForHardware;
     const forceModelSwitch =
       options.modelId && options.modelId !== this.activeModelId && this.status.state === 'ready';
 
@@ -315,6 +358,16 @@ class LocalModelEngine extends EventEmitter {
 
     if (this.initPromise && !forceModelSwitch) {
       return this.initPromise;
+    }
+
+    if (hw.isVeryLowRam) {
+      const lowRamMsg = `This device has ${hw.totalMemGB} GB RAM, which is below the 3.5 GB minimum for Local AI. Switch to a Cloud AI provider (Gemini, Claude, or OpenAI) in Settings for smooth performance.`;
+      this.updateStatus({
+        state: 'error',
+        message: lowRamMsg,
+        error: lowRamMsg
+      });
+      throw new Error(lowRamMsg);
     }
 
     this.initPromise = (async () => {
@@ -371,15 +424,27 @@ class LocalModelEngine extends EventEmitter {
         const { getLlama, LlamaChatSession } = await import('node-llama-cpp');
 
         if (!this.llama) {
-          this.llama = await getLlama();
+          try {
+            this.llama = await getLlama({ gpu: hw.totalMemGB && hw.totalMemGB < 6 ? false : 'auto' });
+          } catch (gpuErr) {
+            console.warn(
+              `[Klarity Local AI] GPU initialization failed (${gpuErr.message}); falling back to CPU-only mode.`
+            );
+            this.llama = await getLlama({ gpu: false });
+          }
         }
 
         this.model = await this.llama.loadModel({
           modelPath
         });
 
+        const safeThreads = Math.max(
+          1,
+          Math.min((hw.cpuCount || 2) - 1 || 1, hw.isLowPowerDevice ? 2 : 4)
+        );
         this.context = await this.model.createContext({
-          contextSize: { max: 4096, min: 1024 }
+          contextSize: hw.isLowRam ? { max: 2048, min: 512 } : { max: 4096, min: 1024 },
+          threads: safeThreads
         });
 
         this.session = new LlamaChatSession({

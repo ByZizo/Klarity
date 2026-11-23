@@ -7,3 +7,4 @@ export { Toast } from './Toast';
 export { Skeleton } from './Skeleton';
 export { EmptyState } from './EmptyState';
 export { ConfirmDialog } from './ConfirmDialog';
+export { PaginationBar } from './PaginationBar';

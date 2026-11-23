@@ -208,7 +208,7 @@ export async function loadPdfForViewing(source, password = '') {
 /**
  * Render a single PDF page onto a high-DPI HTML5 canvas element.
  */
-export async function renderPdfPageToCanvas(pdfJsDoc, pageNumber, canvas, scale = 1.5, rotationOffset = 0, cropBox = null) {
+export async function renderPdfPageToCanvas(pdfJsDoc, pageNumber, canvas, scale = 1.5, rotationOffset = 0, cropBox = null, lowPower = false) {
   if (!pdfJsDoc || !canvas) return null;
   const page = await pdfJsDoc.getPage(pageNumber);
   const originalRotation = page.rotate || 0;
@@ -216,7 +216,11 @@ export async function renderPdfPageToCanvas(pdfJsDoc, pageNumber, canvas, scale 
 
   const viewport = page.getViewport({ scale, rotation: totalRotation });
   const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const isLow = Boolean(
+    lowPower ||
+      (typeof document !== 'undefined' && document.documentElement?.classList?.contains('low-power'))
+  );
+  const dpr = isLow ? 1 : Math.min(2, window.devicePixelRatio || 1);
 
   canvas.width = Math.floor(viewport.width * dpr);
   canvas.height = Math.floor(viewport.height * dpr);

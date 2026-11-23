@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/400-italic.css';
 import '@fontsource/inter/700.css';
@@ -88,7 +88,7 @@ import {
   inspectPdfDigitalSignatures,
   saveSignatureReceiptRecord
 } from '../utils/pdfSecurityEngine';
-import SignaturePadModal from './SignaturePadModal';
+const SignaturePadModal = React.lazy(() => import('./SignaturePadModal'));
 import PdfLeftSidebar from './pdf/PdfLeftSidebar';
 import PdfPropertiesPanel from './pdf/PdfPropertiesPanel';
 import {
@@ -381,7 +381,14 @@ export default function PdfEditorModal({
         }
 
         inspectPdfDigitalSignatures(loaded.rawBytes).then(setEmbeddedSignatures).catch(() => {});
-        extractPdfText(loaded.pdfJsDoc, 15).then(setAiExtractedText).catch(() => {});
+        const isLowPower = Boolean(
+          typeof document !== 'undefined' && document.documentElement?.classList?.contains('low-power')
+        );
+        if (!isLowPower) {
+          extractPdfText(loaded.pdfJsDoc, 10).then(setAiExtractedText).catch(() => {});
+        } else {
+          setAiExtractedText('');
+        }
       } catch (err) {
         console.error('PDF load error:', err);
         notify('Unable to load PDF. Check the file format or password.', 'error');
@@ -414,7 +421,8 @@ export default function PdfEditorModal({
         const w = Math.floor(612 * zoom);
         const h = Math.floor(792 * zoom);
         const canvas = pdfCanvasRef.current;
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const isLow = Boolean(typeof document !== 'undefined' && document.documentElement?.classList?.contains('low-power'));
+        const dpr = isLow ? 1 : Math.min(2, window.devicePixelRatio || 1);
         canvas.width = w * dpr;
         canvas.height = h * dpr;
         canvas.style.width = `${w}px`;
@@ -1655,17 +1663,18 @@ export default function PdfEditorModal({
       setShowAiDrawer(true);
       return;
     }
-    if (!aiExtractedText && pdfJsDoc) {
-      const text = await extractPdfText(pdfJsDoc, 15);
-      setAiExtractedText(text);
+    let sourceText = aiExtractedText;
+    if (!sourceText && pdfJsDoc) {
+      sourceText = await extractPdfText(pdfJsDoc, 15);
+      setAiExtractedText(sourceText);
     }
     setAiLoading(true);
     setShowAiDrawer(true);
     let prompt = '';
-    if (promptType === 'summary') prompt = `Summarize this financial document concisely:\n\n${aiExtractedText.slice(0, 8000)}`;
-    else if (promptType === 'fees') prompt = `List any fees, APR rates, penalties, or anomalies in this document:\n\n${aiExtractedText.slice(0, 8000)}`;
-    else if (promptType === 'transactions') prompt = `Extract transaction line items as Date | Description | Amount:\n\n${aiExtractedText.slice(0, 8000)}`;
-    else prompt = `Answer based on the document: "${aiCustomQuestion}"\n\n${aiExtractedText.slice(0, 8000)}`;
+    if (promptType === 'summary') prompt = `Summarize this financial document concisely:\n\n${sourceText.slice(0, 8000)}`;
+    else if (promptType === 'fees') prompt = `List any fees, APR rates, penalties, or anomalies in this document:\n\n${sourceText.slice(0, 8000)}`;
+    else if (promptType === 'transactions') prompt = `Extract transaction line items as Date | Description | Amount:\n\n${sourceText.slice(0, 8000)}`;
+    else prompt = `Answer based on the document: "${aiCustomQuestion}"\n\n${sourceText.slice(0, 8000)}`;
 
     try {
       const res = await fetch('/api/ai/chat', {
@@ -3427,40 +3436,44 @@ export default function PdfEditorModal({
       </footer>
 
       {/* DIALOGS & MODALS */}
-      <SignaturePadModal
-        isOpen={isSignatureModalOpen}
-        initialKind={signatureModalKind}
-        defaultSignerName={guidedSigningActive ? signers[activeSignerIdx]?.name : localProfile.name || ''}
-        onClose={() => {
-          setIsSignatureModalOpen(false);
-          setPendingSignatureTargetFieldId(null);
-        }}
-        onAdoptSignature={(payload) => {
-          const sigObj = typeof payload === 'string' ? { dataUrl: payload, captionText: '', kind: 'signature' } : payload;
-          if (pendingSignatureTargetFieldId) {
-            setCustomFields((prev) =>
-              prev.map((f) =>
-                f.id === pendingSignatureTargetFieldId
-                  ? {
-                      ...f,
-                      value: sigObj.dataUrl,
-                      captionText: sigObj.captionText || f.captionText || '',
-                      completedAtIso: new Date().toISOString(),
-                      completedAtLabel: `${new Date().toLocaleString()} (device clock time)`
-                    }
-                  : f
-              )
-            );
-            setPendingSignatureTargetFieldId(null);
-            setHasUnsavedChanges(true);
-            notify('Signature placed in field.', 'success');
-          } else {
-            setPendingSignaturePayload(sigObj);
-            setActiveTool(sigObj.kind === 'initials' ? 'initials' : 'signature');
-            notify('Signature ready! Click anywhere on the page to place.', 'success');
-          }
-        }}
-      />
+      {isSignatureModalOpen && (
+        <Suspense fallback={null}>
+          <SignaturePadModal
+            isOpen={isSignatureModalOpen}
+            initialKind={signatureModalKind}
+            defaultSignerName={guidedSigningActive ? signers[activeSignerIdx]?.name : localProfile.name || ''}
+            onClose={() => {
+              setIsSignatureModalOpen(false);
+              setPendingSignatureTargetFieldId(null);
+            }}
+            onAdoptSignature={(payload) => {
+              const sigObj = typeof payload === 'string' ? { dataUrl: payload, captionText: '', kind: 'signature' } : payload;
+              if (pendingSignatureTargetFieldId) {
+                setCustomFields((prev) =>
+                  prev.map((f) =>
+                    f.id === pendingSignatureTargetFieldId
+                      ? {
+                          ...f,
+                          value: sigObj.dataUrl,
+                          captionText: sigObj.captionText || f.captionText || '',
+                          completedAtIso: new Date().toISOString(),
+                          completedAtLabel: `${new Date().toLocaleString()} (device clock time)`
+                        }
+                      : f
+                  )
+                );
+                setPendingSignatureTargetFieldId(null);
+                setHasUnsavedChanges(true);
+                notify('Signature placed in field.', 'success');
+              } else {
+                setPendingSignaturePayload(sigObj);
+                setActiveTool(sigObj.kind === 'initials' ? 'initials' : 'signature');
+                notify('Signature ready! Click anywhere on the page to place.', 'success');
+              }
+            }}
+          />
+        </Suspense>
+      )}
 
       <PageSetupModal isOpen={isPageSetupOpen} onClose={() => setIsPageSetupOpen(false)} pageSetup={pageSetup} onSavePageSetup={(draft) => { setPageSetup(draft); setHasUnsavedChanges(true); }} />
 

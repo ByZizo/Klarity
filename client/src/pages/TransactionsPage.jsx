@@ -7,7 +7,7 @@ import {
   CreditCard,
   Trash2
 } from 'lucide-react';
-import { Button, Card, EmptyState, Skeleton, ConfirmDialog } from '../components/ui';
+import { Button, Card, EmptyState, Skeleton, ConfirmDialog, PaginationBar } from '../components/ui';
 
 export function TransactionsPage({
   isLoading = false,
@@ -35,6 +35,20 @@ export function TransactionsPage({
   fmtMoney
 }) {
   const [confirmDeleteTx, setConfirmDeleteTx] = useState(null);
+  const [pageSize, setPageSize] = useState(50);
+
+  const firstTxId = filteredTransactions[0]?.id ?? '';
+  const txFilterKey = `${filteredTransactions.length}:${firstTxId}:${pageSize}`;
+  const [pageState, setPageState] = useState({ key: txFilterKey, page: 1 });
+  const currentPage = pageState.key === txFilterKey ? pageState.page : 1;
+  const setCurrentPage = (nextPage) => setPageState({ key: txFilterKey, page: nextPage });
+
+  const totalTxPages = Math.max(1, Math.ceil(filteredTransactions.length / pageSize));
+  const safePage = Math.min(currentPage, totalTxPages);
+  const paginatedTransactions = filteredTransactions.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize
+  );
 
   if (isLoading) {
     return (
@@ -183,11 +197,11 @@ export function TransactionsPage({
           </div>
         ) : (
           <div className="divide-y divide-[var(--line)]">
-            {filteredTransactions.map((tx) => {
+            {paginatedTransactions.map((tx) => {
               const isDeposit = (tx.category || '').toLowerCase() === 'income' || (tx.name || '').toLowerCase().includes('deposit');
               const displayAmount = Math.abs(Number(tx.amount));
               return (
-                <div key={tx.id} className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 hover:bg-[var(--surface-subtle)] transition-colors">
+                <div key={tx.id} className="klarity-virtual-row p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 hover:bg-[var(--surface-subtle)] transition-colors">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[15px] font-semibold text-[var(--ink)] break-words">{tx.name}</span>
@@ -274,6 +288,18 @@ export function TransactionsPage({
             })}
           </div>
         )}
+
+        <PaginationBar
+          totalItems={filteredTransactions.length}
+          pageSize={pageSize}
+          currentPage={safePage}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setCurrentPage(1);
+          }}
+          itemLabel="transactions"
+        />
 
         <div className="bg-[var(--surface-subtle)] px-5 py-3.5 border-t border-[var(--line)] flex items-center justify-between text-[13px]">
           <span className="text-[var(--muted)] font-medium">Total purchases ({filteredTransactions.length} shown)</span>

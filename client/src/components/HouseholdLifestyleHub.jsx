@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, Suspense } from 'react';
 import {
   Home,
   Users,
@@ -73,8 +73,8 @@ import {
   calculateProfileCompleteness,
   formatHouseholdLabel
 } from '../utils/householdSchema';
-import HouseholdQuestionnaire from './household/HouseholdQuestionnaire.jsx';
-import HouseholdSummary from './household/HouseholdSummary.jsx';
+const HouseholdQuestionnaire = React.lazy(() => import('./household/HouseholdQuestionnaire.jsx'));
+const HouseholdSummary = React.lazy(() => import('./household/HouseholdSummary.jsx'));
 
 
 // Shows the user's own insurance card photo; flips to the back side if one was provided.
@@ -1477,21 +1477,25 @@ export default function HouseholdLifestyleHub({
               </div>
             );
           })() : householdScreen === 'questionnaire' ? (
-            <HouseholdQuestionnaire
-              profile={normalizedProfile}
-              onChangeProfile={handleUpdateNormalizedProfile}
-              onExitToSummary={() => setHouseholdScreen('summary')}
-            />
+            <Suspense fallback={<div className="p-6 text-[14px] text-[var(--muted)]">Loading questionnaire...</div>}>
+              <HouseholdQuestionnaire
+                profile={normalizedProfile}
+                onChangeProfile={handleUpdateNormalizedProfile}
+                onExitToSummary={() => setHouseholdScreen('summary')}
+              />
+            </Suspense>
           ) : (
-            <HouseholdSummary
-              profile={normalizedProfile}
-              metrics={metrics}
-              bills={bills}
-              onChangeProfile={handleUpdateNormalizedProfile}
-              onStartQuestionnaire={handleStartQuestionnaire}
-              onSyncUtilitiesToBills={onSyncUtilitiesToBills}
-              onShowToast={onShowToast}
-            />
+            <Suspense fallback={<div className="p-6 text-[14px] text-[var(--muted)]">Loading household summary...</div>}>
+              <HouseholdSummary
+                profile={normalizedProfile}
+                metrics={metrics}
+                bills={bills}
+                onChangeProfile={handleUpdateNormalizedProfile}
+                onStartQuestionnaire={handleStartQuestionnaire}
+                onSyncUtilitiesToBills={onSyncUtilitiesToBills}
+                onShowToast={onShowToast}
+              />
+            </Suspense>
           )}
         </div>
       )}

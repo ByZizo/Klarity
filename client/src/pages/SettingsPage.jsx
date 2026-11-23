@@ -72,6 +72,10 @@ export function SettingsPage({
   handleToggleHighFocus,
   uiPrivacyMask = false,
   handleTogglePrivacyMask,
+  uiPerformanceMode = 'auto',
+  handleSetPerformanceMode,
+  isLowPowerMode = false,
+  deviceCapabilities = null,
   featureFlags = {},
   handleUpdateFeatureFlags,
   settingsAiProvider = 'local',
@@ -355,6 +359,21 @@ export function SettingsPage({
     if (onShowToast) onShowToast('Vault lock disabled', 'success');
   };
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        if (confirmDisablePinOpen) {
+          setConfirmDisablePinOpen(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [isOpen, confirmDisablePinOpen, onClose]);
+
   if (!isOpen) return null;
 
   const tabs = [
@@ -404,7 +423,7 @@ export function SettingsPage({
     >
       <Card
         onClick={(e) => e.stopPropagation()}
-        className={`${browserOnly ? 'max-w-[700px]' : 'max-w-[900px]'} w-full max-h-[90vh] h-[680px] flex flex-col overflow-hidden shadow-xl`}
+        className={`${browserOnly ? 'max-w-[700px]' : 'max-w-[900px]'} w-full max-h-[92vh] h-[min(680px,90vh)] flex flex-col overflow-hidden shadow-xl`}
       >
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Left Navigation Tabs (Hidden when opened directly as Browser Settings) */}
@@ -718,6 +737,42 @@ export function SettingsPage({
                     ))}
                   </div>
                 </Card>
+
+                {/* Performance Mode for Older Laptops & Chromebooks */}
+                <Card className="p-5 flex flex-col gap-4">
+                  <div>
+                    <h4 className="text-[16px] font-semibold text-[var(--ink)]">Performance mode</h4>
+                    <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
+                      Reduces backdrop blur, heavy shadows, decorative animations, and background rendering load on older laptops and Chromebooks.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {[
+                      { id: 'auto', label: 'Auto (Recommended)' },
+                      { id: 'low', label: 'Low-power' },
+                      { id: 'standard', label: 'Standard' }
+                    ].map((opt) => (
+                      <Button
+                        key={opt.id}
+                        aria-pressed={uiPerformanceMode === opt.id}
+                        variant={uiPerformanceMode === opt.id ? 'primary' : 'secondary'}
+                        onClick={() => handleSetPerformanceMode?.(opt.id)}
+                      >
+                        {opt.label}
+                      </Button>
+                    ))}
+                  </div>
+
+                  <div className="p-3 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)] text-[13px] font-medium text-[var(--muted)] flex flex-col gap-0.5">
+                    <span className="text-[var(--ink)] font-semibold">
+                      {isLowPowerMode ? 'Low-power optimizations active' : 'Standard visual effects active'}
+                    </span>
+                    {deviceCapabilities?.summaryLabel && (
+                      <span>Detected hardware: {deviceCapabilities.summaryLabel}</span>
+                    )}
+                  </div>
+                </Card>
               </div>
             )}
 
@@ -892,8 +947,19 @@ export function SettingsPage({
                   </div>
 
                   {settingsAiProvider === 'local' ? (
-                    <div className="p-3.5 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)] text-[13px] font-medium text-[var(--muted)]">
-                      {localAiEngineStatus?.message || 'Runs locally on your device. No external API key required.'}
+                    <div className="flex flex-col gap-2.5">
+                      <div className="p-3.5 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)] text-[13px] font-medium text-[var(--muted)]">
+                        {localAiEngineStatus?.message || 'Runs locally on your device. No external API key required.'}
+                      </div>
+                      {(!desktopAppInfo?.isDesktopApp ||
+                        (deviceCapabilities?.deviceMemoryGB != null && deviceCapabilities.deviceMemoryGB <= 6) ||
+                        (localAiEngineStatus?.hardware?.totalMemGB != null && localAiEngineStatus.hardware.totalMemGB <= 6)) && (
+                        <div className="p-3.5 rounded-[8px] bg-amber-500/10 border border-amber-500/30 text-[13px] font-medium text-[var(--ink)]">
+                          {!desktopAppInfo?.isDesktopApp
+                            ? 'Web / Chromebook tip: Built-in Local AI requires a local desktop or self-hosted server engine. If local models feel slow or unavailable, switch Provider above to Google Gemini, Claude, or OpenAI.'
+                            : 'Low-memory device detected: Klarity automatically limits threads and uses smaller context windows, or selects the lighter 1.5B model. For instant replies on older laptops, you can also use a Cloud AI provider above.'}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div>

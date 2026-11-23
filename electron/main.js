@@ -1,7 +1,26 @@
-const { app, BrowserWindow, shell, ipcMain, session, nativeTheme, Menu, MenuItem, dialog } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, session, nativeTheme, Menu, MenuItem, dialog, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const crypto = require('crypto');
+
+function getHardwareProfile() {
+  try {
+    const totalMemGB = Math.round((os.totalmem() / (1024 ** 3)) * 10) / 10;
+    const freeMemGB = Math.round((os.freemem() / (1024 ** 3)) * 10) / 10;
+    const cpuCount = Array.isArray(os.cpus()) ? os.cpus().length : 2;
+    const isChromeOS = Boolean(
+      process.platform === 'linux' &&
+        (process.env.CHROMEOS_RELEASE_VERSION ||
+          (fs.existsSync('/etc/lsb-release') &&
+            /CHROMEOS/i.test(fs.readFileSync('/etc/lsb-release', 'utf8'))))
+    );
+    const isLowPowerDevice = Boolean(isChromeOS || totalMemGB <= 4 || cpuCount <= 4);
+    return { totalMemGB, freeMemGB, cpuCount, isChromeOS, isLowPowerDevice };
+  } catch {
+    return { totalMemGB: null, freeMemGB: null, cpuCount: null, isChromeOS: false, isLowPowerDevice: false };
+  }
+}
 
 // Generate per-launch cryptographic secret for desktop loopback verification
 const DESKTOP_IPC_SECRET = crypto.randomBytes(32).toString('hex');
@@ -50,13 +69,31 @@ let updateStatusState = {
 let browserAdsBlockedCount = 0;
 let adBlockerEnabled = true;
 
-function broadcastAdBlockStats() {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('klarity:adblock-stats', {
-      adsBlockedCount: browserAdsBlockedCount,
-      enabled: adBlockerEnabled
-    });
+let adBlockBroadcastTimer = null;
+
+function broadcastAdBlockStats(immediate = false) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const sendNow = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('klarity:adblock-stats', {
+        adsBlockedCount: browserAdsBlockedCount,
+        enabled: adBlockerEnabled
+      });
+    }
+  };
+  if (immediate) {
+    if (adBlockBroadcastTimer) {
+      clearTimeout(adBlockBroadcastTimer);
+      adBlockBroadcastTimer = null;
+    }
+    sendNow();
+    return;
   }
+  if (adBlockBroadcastTimer) return;
+  adBlockBroadcastTimer = setTimeout(() => {
+    adBlockBroadcastTimer = null;
+    sendNow();
+  }, 500);
 }
 
 let runningCommitSha = null;
@@ -804,11 +841,21 @@ async function createDesktopWindow() {
     callback({ cancel: false });
   });
 
+  let winWidth = 1400;
+  let winHeight = 900;
+  try {
+    const workArea = screen.getPrimaryDisplay()?.workAreaSize;
+    if (workArea?.width && workArea?.height) {
+      winWidth = Math.min(1400, Math.max(760, workArea.width - 24));
+      winHeight = Math.min(900, Math.max(540, workArea.height - 24));
+    }
+  } catch {}
+
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 960,
-    minHeight: 640,
+    width: winWidth,
+    height: winHeight,
+    minWidth: 720,
+    minHeight: 500,
     title: 'Klarity Finance — Private Financial & Password Suite',
     icon: path.join(__dirname, 'klarity.ico'),
     backgroundColor: '#f8fafc',
@@ -820,7 +867,8 @@ async function createDesktopWindow() {
       nodeIntegration: false,
       sandbox: true,
       spellcheck: true,
-      webviewTag: true
+      webviewTag: true,
+      backgroundThrottling: true
     }
   });
 
@@ -876,8 +924,9 @@ async function createDesktopWindow() {
   });
 
   setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
     checkForGitHubUpdate();
-  }, 60 * 1000);
+  }, 15 * 60 * 1000);
 }
 
 // Native Desktop Google Sign-In (RFC 8252 Loopback + Secret-Free OIDC id_token via Default System Browser)
@@ -1009,7 +1058,8 @@ ipcMain.handle('klarity:get-app-info', () => ({
   version: app.getVersion(),
   userDataDir: app.getPath('userData'),
   repo: 'ByZizo/Klarity',
-  updateStatus: updateStatusState
+  updateStatus: updateStatusState,
+  hardware: getHardwareProfile()
 }));
 
 ipcMain.handle('klarity:check-for-updates', async () => {
@@ -1171,7 +1221,7 @@ ipcMain.handle('klarity:browser-get-adblock-stats', () => {
 
 ipcMain.handle('klarity:browser-toggle-adblock', (_e, enabled) => {
   adBlockerEnabled = enabled !== undefined ? Boolean(enabled) : !adBlockerEnabled;
-  broadcastAdBlockStats();
+  broadcastAdBlockStats(true);
   return {
     adsBlockedCount: browserAdsBlockedCount,
     enabled: adBlockerEnabled
@@ -1180,7 +1230,7 @@ ipcMain.handle('klarity:browser-toggle-adblock', (_e, enabled) => {
 
 ipcMain.handle('klarity:browser-reset-adblock-count', () => {
   browserAdsBlockedCount = 0;
-  broadcastAdBlockStats();
+  broadcastAdBlockStats(true);
   return {
     adsBlockedCount: browserAdsBlockedCount,
     enabled: adBlockerEnabled

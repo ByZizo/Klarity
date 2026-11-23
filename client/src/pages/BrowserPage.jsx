@@ -546,6 +546,8 @@ export function BrowserPage({
     };
 
     setIsDraggingNotes(true);
+    let latestPos = null;
+    let rafId = null;
 
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - notesDragStartRef.current.mouseX;
@@ -559,14 +561,26 @@ export function BrowserPage({
       const boundedX = Math.round(Math.min(maxX, Math.max(minX, notesDragStartRef.current.cardX + deltaX)));
       const boundedY = Math.round(Math.min(maxY, Math.max(minY, notesDragStartRef.current.cardY + deltaY)));
 
-      const nextPos = { x: boundedX, y: boundedY };
-      setFloatingNotesPos(nextPos);
-      try {
-        localStorage.setItem('klarity_floating_notes_pos', JSON.stringify(nextPos));
-      } catch {}
+      latestPos = { x: boundedX, y: boundedY };
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          if (latestPos) setFloatingNotesPos(latestPos);
+        });
+      }
     };
 
     const handleMouseUp = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      if (latestPos) {
+        setFloatingNotesPos(latestPos);
+        try {
+          localStorage.setItem('klarity_floating_notes_pos', JSON.stringify(latestPos));
+        } catch {}
+      }
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       setIsDraggingNotes(false);
@@ -603,6 +617,8 @@ export function BrowserPage({
     };
 
     setIsDraggingCalc(true);
+    let latestPos = null;
+    let rafId = null;
 
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - calcDragStartRef.current.mouseX;
@@ -616,14 +632,26 @@ export function BrowserPage({
       const boundedX = Math.round(Math.min(maxX, Math.max(minX, calcDragStartRef.current.cardX + deltaX)));
       const boundedY = Math.round(Math.min(maxY, Math.max(minY, calcDragStartRef.current.cardY + deltaY)));
 
-      const nextPos = { x: boundedX, y: boundedY };
-      setFloatingCalcPos(nextPos);
-      try {
-        localStorage.setItem('klarity_floating_calc_pos', JSON.stringify(nextPos));
-      } catch {}
+      latestPos = { x: boundedX, y: boundedY };
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          if (latestPos) setFloatingCalcPos(latestPos);
+        });
+      }
     };
 
     const handleMouseUp = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      if (latestPos) {
+        setFloatingCalcPos(latestPos);
+        try {
+          localStorage.setItem('klarity_floating_calc_pos', JSON.stringify(latestPos));
+        } catch {}
+      }
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       setIsDraggingCalc(false);
@@ -645,6 +673,8 @@ export function BrowserPage({
       startH: floatingNotesSize.height
     };
     setIsResizingNotes(true);
+    let latestSize = null;
+    let rafId = null;
 
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - notesResizeStartRef.current.mouseX;
@@ -658,14 +688,26 @@ export function BrowserPage({
       const nextW = Math.round(Math.min(maxW, Math.max(minW, notesResizeStartRef.current.startW + deltaX)));
       const nextH = Math.round(Math.min(maxH, Math.max(minH, notesResizeStartRef.current.startH + deltaY)));
 
-      const nextSize = { width: nextW, height: nextH };
-      setFloatingNotesSize(nextSize);
-      try {
-        localStorage.setItem('klarity_floating_notes_size', JSON.stringify(nextSize));
-      } catch {}
+      latestSize = { width: nextW, height: nextH };
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          if (latestSize) setFloatingNotesSize(latestSize);
+        });
+      }
     };
 
     const handleMouseUp = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      if (latestSize) {
+        setFloatingNotesSize(latestSize);
+        try {
+          localStorage.setItem('klarity_floating_notes_size', JSON.stringify(latestSize));
+        } catch {}
+      }
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       setIsResizingNotes(false);
@@ -707,6 +749,8 @@ export function BrowserPage({
       maxW: Math.max(280, maxW)
     };
     setIsResizingCalc(true);
+    let latestW = null;
+    let rafId = null;
 
     const handleMouseMove = (moveEvent) => {
       const dx = moveEvent.clientX - calcResizeStartRef.current.mouseX;
@@ -716,16 +760,28 @@ export function BrowserPage({
       const candidateFromY =
         (calcResizeStartRef.current.startH + dy) / Math.max(0.5, calcResizeStartRef.current.aspect);
       const chosen = Math.abs(dx) >= Math.abs(dy) ? candidateFromX : candidateFromY;
-      const nextW = Math.round(
+      latestW = Math.round(
         Math.min(calcResizeStartRef.current.maxW, Math.max(280, chosen))
       );
-      setFloatingCalcWidth(nextW);
-      try {
-        localStorage.setItem('klarity_floating_calc_width', String(nextW));
-      } catch {}
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          if (latestW !== null) setFloatingCalcWidth(latestW);
+        });
+      }
     };
 
     const handleMouseUp = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      if (latestW !== null) {
+        setFloatingCalcWidth(latestW);
+        try {
+          localStorage.setItem('klarity_floating_calc_width', String(latestW));
+        } catch {}
+      }
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       setIsResizingCalc(false);
@@ -989,6 +1045,57 @@ export function BrowserPage({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
+  }, []);
+
+  // Clamp floating panels & AI sidebar within smaller Chromebook / laptop viewports
+  useEffect(() => {
+    const clampToViewport = () => {
+      const vw = window.innerWidth || 1280;
+      const vh = window.innerHeight || 720;
+
+      setFloatingNotesSize((prev) => {
+        if (!prev) return prev;
+        const maxW = Math.max(280, vw - 24);
+        const maxH = Math.max(240, vh - 120);
+        const nextW = Math.min(Math.max(280, prev.width), maxW);
+        const nextH = Math.min(Math.max(240, prev.height), maxH);
+        return nextW === prev.width && nextH === prev.height
+          ? prev
+          : { width: nextW, height: nextH };
+      });
+
+      setFloatingNotesPos((prev) => {
+        if (!prev) return prev;
+        const maxX = Math.max(12, vw - 300);
+        const maxY = Math.max(12, vh - 260);
+        const nextX = Math.min(Math.max(12, prev.x), maxX);
+        const nextY = Math.min(Math.max(12, prev.y), maxY);
+        return nextX === prev.x && nextY === prev.y ? prev : { x: nextX, y: nextY };
+      });
+
+      setFloatingCalcWidth((prev) => {
+        const maxW = Math.min(540, Math.max(280, vw - 24));
+        return Math.min(Math.max(280, prev), maxW);
+      });
+
+      setFloatingCalcPos((prev) => {
+        if (!prev) return prev;
+        const maxX = Math.max(12, vw - 300);
+        const maxY = Math.max(12, vh - 320);
+        const nextX = Math.min(Math.max(12, prev.x), maxX);
+        const nextY = Math.min(Math.max(12, prev.y), maxY);
+        return nextX === prev.x && nextY === prev.y ? prev : { x: nextX, y: nextY };
+      });
+
+      setBrowserAiWidth((prev) => {
+        const maxW = Math.max(320, Math.min(760, Math.floor(vw * 0.65)));
+        return Math.min(Math.max(320, prev), maxW);
+      });
+    };
+
+    clampToViewport();
+    window.addEventListener('resize', clampToViewport);
+    return () => window.removeEventListener('resize', clampToViewport);
   }, []);
 
   // Focus and scroll Browser AI input when sidebar opens or new message arrives
@@ -1601,6 +1708,7 @@ export function BrowserPage({
     const startX = mouseDownEvent.clientX;
     const startWidth = browserAiWidth;
     let latestWidth = startWidth;
+    let rafId = null;
 
     const doDrag = (moveEvent) => {
       const maxAllowed = Math.min(760, Math.floor((window.innerWidth || 1200) * 0.65));
@@ -1608,10 +1716,20 @@ export function BrowserPage({
         Math.max(startWidth + (startX - moveEvent.clientX), 320),
         Math.max(360, maxAllowed)
       );
-      setBrowserAiWidth(latestWidth);
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          setBrowserAiWidth(latestWidth);
+        });
+      }
     };
 
     const stopDrag = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      setBrowserAiWidth(latestWidth);
       setIsResizingAiSidebar(false);
       window.removeEventListener('mousemove', doDrag);
       window.removeEventListener('mouseup', stopDrag);

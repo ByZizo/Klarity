@@ -147,8 +147,17 @@ export function NewTabPage({
 
   useEffect(() => {
     if (!prefs.showClock) return undefined;
-    const timer = setInterval(() => setNow(new Date()), 15000);
-    return () => clearInterval(timer);
+    const refreshClock = () => {
+      if (!document.hidden) {
+        setNow(new Date());
+      }
+    };
+    const timer = setInterval(refreshClock, 30000);
+    document.addEventListener('visibilitychange', refreshClock);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshClock);
+    };
   }, [prefs.showClock]);
 
   useEffect(() => {

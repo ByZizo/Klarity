@@ -5,7 +5,7 @@ import {
   Search,
   Trash2
 } from 'lucide-react';
-import { Button, Card, EmptyState, Skeleton, ConfirmDialog } from '../components/ui';
+import { Button, Card, EmptyState, Skeleton, ConfirmDialog, PaginationBar } from '../components/ui';
 
 export function BillsPage({
   isLoading = false,
@@ -26,6 +26,20 @@ export function BillsPage({
   fmtMoney
 }) {
   const [billToDelete, setBillToDelete] = useState(null);
+  const [pageSize, setPageSize] = useState(40);
+
+  const firstBillId = filteredBills[0]?.id ?? '';
+  const billFilterKey = `${filteredBills.length}:${firstBillId}:${pageSize}`;
+  const [pageState, setPageState] = useState({ key: billFilterKey, page: 1 });
+  const currentPage = pageState.key === billFilterKey ? pageState.page : 1;
+  const setCurrentPage = (nextPage) => setPageState({ key: billFilterKey, page: nextPage });
+
+  const totalBillPages = Math.max(1, Math.ceil(filteredBills.length / pageSize));
+  const safePage = Math.min(currentPage, totalBillPages);
+  const paginatedBills = filteredBills.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize
+  );
 
   if (isLoading) {
     return (
@@ -144,8 +158,8 @@ export function BillsPage({
           />
         ) : (
           <div className="divide-y divide-[var(--line)]">
-            {filteredBills.map((bill) => (
-              <div key={bill.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {paginatedBills.map((bill) => (
+              <div key={bill.id} className="klarity-virtual-row py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[15px] font-semibold text-[var(--ink)] break-words">{bill.name}</p>
                   <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
@@ -176,6 +190,19 @@ export function BillsPage({
             ))}
           </div>
         )}
+
+        <PaginationBar
+          totalItems={filteredBills.length}
+          pageSize={pageSize}
+          currentPage={safePage}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setCurrentPage(1);
+          }}
+          pageSizeOptions={[20, 40, 80]}
+          itemLabel="bills"
+        />
 
         <div className="-mx-5 -mb-5 px-5 py-3.5 bg-[var(--surface-subtle)] border-t border-[var(--line)] flex items-center justify-between text-[13px] mt-4">
           <span className="text-[var(--muted)] font-medium">Total monthly bills ({filteredBills.length} active)</span>

@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import * as XLSX from 'xlsx';
 import {
   KeyRound,
   Plus,
@@ -29,7 +28,7 @@ import {
   verifyMasterPin,
   removeMasterPin
 } from '../utils/securityCrypto';
-import { Button, Card, EmptyState, ConfirmDialog, Pill } from './ui';
+import { Button, Card, EmptyState, ConfirmDialog, Pill, PaginationBar } from './ui';
 import DocumentVaultPage from './DocumentVaultPage';
 import { getDocumentCountSync } from '../utils/documentVaultStorage';
 
@@ -244,6 +243,20 @@ export default function PasswordVaultPage({
     });
   }, [vaultItems, selectedCategory, searchQuery]);
 
+  const [pageSize, setPageSize] = useState(40);
+
+  const pwFilterKey = `${selectedCategory}:${searchQuery}:${filteredItems.length}:${pageSize}`;
+  const [pageState, setPageState] = useState({ key: pwFilterKey, page: 1 });
+  const currentPage = pageState.key === pwFilterKey ? pageState.page : 1;
+  const setCurrentPage = (nextPage) => setPageState({ key: pwFilterKey, page: nextPage });
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedItems = filteredItems.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize
+  );
+
   const togglePasswordVisibility = (id) => {
     setVisiblePasswords(prev => ({ ...prev, [id]: !prev[id] }));
   };
@@ -290,8 +303,9 @@ export default function PasswordVaultPage({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
+        const XLSX = await import('xlsx');
         const data = new Uint8Array(evt.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
         const imported = [];
@@ -1379,7 +1393,7 @@ export default function PasswordVaultPage({
               : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5'
           }
         >
-          {filteredItems.map(item => {
+          {paginatedItems.map(item => {
             const isExpanded = Boolean(expandedCardIds[item.id]);
             const isPwVisible = Boolean(visiblePasswords[item.id]);
             const isFav = Boolean(item.isFavorite);
@@ -1387,7 +1401,7 @@ export default function PasswordVaultPage({
             return (
               <Card
                 key={item.id}
-                className={`overflow-hidden transition-all ${
+                className={`klarity-virtual-row overflow-hidden transition-all ${
                   isExpanded ? 'border-[#1B4B91]' : ''
                 }`}
               >
@@ -1579,6 +1593,22 @@ export default function PasswordVaultPage({
             );
           })}
         </div>
+      )}
+      {filteredItems.length > 0 && (
+        <Card className="mt-4 overflow-hidden">
+          <PaginationBar
+            totalItems={filteredItems.length}
+            pageSize={pageSize}
+            currentPage={safePage}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCurrentPage(1);
+            }}
+            pageSizeOptions={[20, 40, 80]}
+            itemLabel="accounts"
+          />
+        </Card>
       )}
       </>
       )}

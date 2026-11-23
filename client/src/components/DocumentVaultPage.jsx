@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import {
   FileText,
   FileImage,
@@ -25,8 +25,8 @@ import {
   KeyRound,
   PenTool
 } from 'lucide-react';
-import { Button, Card, EmptyState, ConfirmDialog, Pill } from './ui';
-import PdfEditorModal from './PdfEditorModal';
+import { Button, Card, EmptyState, ConfirmDialog, Pill, PaginationBar } from './ui';
+const PdfEditorModal = React.lazy(() => import('./PdfEditorModal'));
 import {
   getAllDocuments,
   saveDocument,
@@ -498,6 +498,27 @@ export default function DocumentVaultPage({
     return filteredDocuments.filter(d => !d.folder || !known.has(d.folder.toLowerCase()));
   }, [filteredDocuments, folders]);
 
+  const [docPageSize, setDocPageSize] = useState(36);
+
+  const docFilterKey = `${selectedFolder}:${searchQuery}:${sortBy}:${filteredDocuments.length}:${docPageSize}`;
+  const [docPageState, setDocPageState] = useState({ key: docFilterKey, page: 1 });
+  const docPage = docPageState.key === docFilterKey ? docPageState.page : 1;
+  const setDocPage = (nextPage) => setDocPageState({ key: docFilterKey, page: nextPage });
+
+  const totalUnfiledPages = Math.max(1, Math.ceil(unfiledDocuments.length / docPageSize));
+  const safeUnfiledPage = Math.min(docPage, totalUnfiledPages);
+  const paginatedUnfiledDocuments = unfiledDocuments.slice(
+    (safeUnfiledPage - 1) * docPageSize,
+    safeUnfiledPage * docPageSize
+  );
+
+  const totalFilteredDocPages = Math.max(1, Math.ceil(filteredDocuments.length / docPageSize));
+  const safeFilteredDocPage = Math.min(docPage, totalFilteredDocPages);
+  const paginatedFilteredDocuments = filteredDocuments.slice(
+    (safeFilteredDocPage - 1) * docPageSize,
+    safeFilteredDocPage * docPageSize
+  );
+
   const totalBytes = useMemo(() => {
     return documents.reduce((sum, d) => sum + (d.fileSize || 0), 0);
   }, [documents]);
@@ -509,7 +530,7 @@ export default function DocumentVaultPage({
     return (
       <Card
         key={doc.id}
-        className="p-4 flex flex-col justify-between hover:border-[#1B4B91]/50 hover:shadow-md transition-all group"
+        className="klarity-virtual-row p-4 flex flex-col justify-between hover:border-[#1B4B91]/50 hover:shadow-md transition-all group"
       >
         <div>
           {/* Card Header: Badge & Quick Actions */}
@@ -617,7 +638,7 @@ export default function DocumentVaultPage({
     return (
       <div
         key={doc.id}
-        className="p-3.5 flex items-center justify-between gap-4 hover:bg-[var(--surface-subtle)] transition-colors group"
+        className="klarity-virtual-row p-3.5 flex items-center justify-between gap-4 hover:bg-[var(--surface-subtle)] transition-colors group"
       >
         <div className="flex items-center gap-3 min-w-0">
           <div className={`p-2 rounded-[8px] ${badge.bg} ${badge.color} shrink-0`}>
@@ -1242,26 +1263,58 @@ export default function DocumentVaultPage({
             {viewMode === 'grid' ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {sortedFolders.map(renderFolderCard)}
-                {unfiledDocuments.map(renderDocumentCard)}
+                {paginatedUnfiledDocuments.map(renderDocumentCard)}
               </div>
             ) : (
               <Card className="divide-y divide-[var(--line)] overflow-hidden">
                 {sortedFolders.map(renderFolderRow)}
-                {unfiledDocuments.map(renderDocumentRow)}
+                {paginatedUnfiledDocuments.map(renderDocumentRow)}
+              </Card>
+            )}
+            {unfiledDocuments.length > 0 && (
+              <Card className="mt-4 overflow-hidden">
+                <PaginationBar
+                  totalItems={unfiledDocuments.length}
+                  pageSize={docPageSize}
+                  currentPage={safeUnfiledPage}
+                  onPageChange={setDocPage}
+                  onPageSizeChange={(size) => {
+                    setDocPageSize(size);
+                    setDocPage(1);
+                  }}
+                  pageSizeOptions={[24, 36, 72]}
+                  itemLabel="documents"
+                />
               </Card>
             )}
           </div>
         ) : (
           /* Folders empty, but documents exist without folders */
-          viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredDocuments.map(renderDocumentCard)}
-            </div>
-          ) : (
-            <Card className="divide-y divide-[var(--line)] overflow-hidden">
-              {filteredDocuments.map(renderDocumentRow)}
+          <>
+            {viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {paginatedFilteredDocuments.map(renderDocumentCard)}
+              </div>
+            ) : (
+              <Card className="divide-y divide-[var(--line)] overflow-hidden">
+                {paginatedFilteredDocuments.map(renderDocumentRow)}
+              </Card>
+            )}
+            <Card className="mt-4 overflow-hidden">
+              <PaginationBar
+                totalItems={filteredDocuments.length}
+                pageSize={docPageSize}
+                currentPage={safeFilteredDocPage}
+                onPageChange={setDocPage}
+                onPageSizeChange={(size) => {
+                  setDocPageSize(size);
+                  setDocPage(1);
+                }}
+                pageSizeOptions={[24, 36, 72]}
+                itemLabel="documents"
+              />
             </Card>
-          )
+          </>
         )
       ) : (
         /* Specific Folder View OR Active Search View */
@@ -1277,14 +1330,32 @@ export default function DocumentVaultPage({
             actionLabel={selectedFolder !== 'All' ? `Add document to ${selectedFolder}` : 'Upload document'}
             onAction={handleOpenUploadModal}
           />
-        ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredDocuments.map(renderDocumentCard)}
-          </div>
         ) : (
-          <Card className="divide-y divide-[var(--line)] overflow-hidden">
-            {filteredDocuments.map(renderDocumentRow)}
-          </Card>
+          <>
+            {viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {paginatedFilteredDocuments.map(renderDocumentCard)}
+              </div>
+            ) : (
+              <Card className="divide-y divide-[var(--line)] overflow-hidden">
+                {paginatedFilteredDocuments.map(renderDocumentRow)}
+              </Card>
+            )}
+            <Card className="mt-4 overflow-hidden">
+              <PaginationBar
+                totalItems={filteredDocuments.length}
+                pageSize={docPageSize}
+                currentPage={safeFilteredDocPage}
+                onPageChange={setDocPage}
+                onPageSizeChange={(size) => {
+                  setDocPageSize(size);
+                  setDocPage(1);
+                }}
+                pageSizeOptions={[24, 36, 72]}
+                itemLabel="documents"
+              />
+            </Card>
+          </>
         )
       )}
 
@@ -1575,6 +1646,8 @@ export default function DocumentVaultPage({
                 <img
                   src={previewDoc.dataUrl}
                   alt={previewDoc.name}
+                  loading="lazy"
+                  decoding="async"
                   className="max-h-full max-w-full object-contain rounded-lg shadow-lg"
                 />
               ) : (
@@ -1828,15 +1901,23 @@ export default function DocumentVaultPage({
 
       {/* Full-featured PDF Editor Modal */}
       {editingPdfDoc && (
-        <PdfEditorModal
-          isOpen={Boolean(editingPdfDoc)}
-          onClose={() => setEditingPdfDoc(null)}
-          initialDocument={editingPdfDoc}
-          onSaveToVault={handleSavePdfToVault}
-          onShowToast={notify}
-          localProfile={localProfile}
-          isLocalOnlyMode={isLocalOnlyMode}
-        />
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-[100] bg-[#0b0f19] text-slate-200 flex items-center justify-center text-[15px]">
+              Loading PDF Editor...
+            </div>
+          }
+        >
+          <PdfEditorModal
+            isOpen={Boolean(editingPdfDoc)}
+            onClose={() => setEditingPdfDoc(null)}
+            initialDocument={editingPdfDoc}
+            onSaveToVault={handleSavePdfToVault}
+            onShowToast={notify}
+            localProfile={localProfile}
+            isLocalOnlyMode={isLocalOnlyMode}
+          />
+        </Suspense>
       )}
     </div>
   );
