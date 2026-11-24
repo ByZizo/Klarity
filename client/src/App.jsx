@@ -166,16 +166,16 @@ import {
 } from './components/SharedAppComponents';
 import { Button, Card, Pill, Toast, ConfirmDialog, Skeleton } from './components/ui';
 import { OverviewPage } from './pages/OverviewPage';
+import { TransactionsPage } from './pages/TransactionsPage';
+import { BillsPage } from './pages/BillsPage';
+import { SubscriptionsPage } from './pages/SubscriptionsPage';
+import { CardsPage } from './pages/CardsPage';
+import { BudgetsPage } from './pages/BudgetsPage';
+import { AdvisorPage } from './pages/AdvisorPage';
 
-const TransactionsPage = React.lazy(() => import('./pages/TransactionsPage').then((m) => ({ default: m.TransactionsPage })));
-const BillsPage = React.lazy(() => import('./pages/BillsPage').then((m) => ({ default: m.BillsPage })));
-const SubscriptionsPage = React.lazy(() => import('./pages/SubscriptionsPage').then((m) => ({ default: m.SubscriptionsPage })));
-const CardsPage = React.lazy(() => import('./pages/CardsPage').then((m) => ({ default: m.CardsPage })));
-const BudgetsPage = React.lazy(() => import('./pages/BudgetsPage').then((m) => ({ default: m.BudgetsPage })));
 const RetirementPageView = React.lazy(() => import('./pages/RetirementPage').then((m) => ({ default: m.RetirementPage })));
 const HouseholdPage = React.lazy(() => import('./pages/HouseholdPage').then((m) => ({ default: m.HouseholdPage })));
 const VaultPage = React.lazy(() => import('./pages/VaultPage').then((m) => ({ default: m.VaultPage })));
-const AdvisorPage = React.lazy(() => import('./pages/AdvisorPage').then((m) => ({ default: m.AdvisorPage })));
 const BrowserPage = React.lazy(() => import('./pages/BrowserPage').then((m) => ({ default: m.BrowserPage })));
 const SettingsPage = React.lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const BrowserHistoryModal = React.lazy(() => import('./components/BrowserHistoryModal').then((m) => ({ default: m.BrowserHistoryModal })));
@@ -753,7 +753,12 @@ function KlarityApp() {
   };
 
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState(getInitialTab); // dashboard | cards | bills | subscriptions | transactions | advisor
+  const [activeTab, setActiveTabRaw] = useState(getInitialTab); // dashboard | cards | bills | subscriptions | transactions | advisor
+  const setActiveTab = React.useCallback((nextTab) => {
+    React.startTransition(() => {
+      setActiveTabRaw(nextTab);
+    });
+  }, []);
   const isNavigatingFromHistory = useRef(false);
   const settingsModalRef = useRef(null);
   const [viewHousehold, setViewHousehold] = useState(false);
