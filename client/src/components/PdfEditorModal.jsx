@@ -4370,9 +4370,10 @@ export default function PdfEditorModal({
           )}
         </main>
 
-        {/* RIGHT CONTEXT-SENSITIVE PROPERTIES PANEL (hidden when nothing is selected) */}
+        {/* RIGHT CONTEXT-SENSITIVE PROPERTIES PANEL (floating overlay so page never shifts left) */}
         {showPropertiesPanel && (selectedAnnObjects.length > 0 || selectedFieldObj) && (
-          <PdfPropertiesPanel
+          <div className="absolute top-0 right-0 bottom-0 z-30 flex shadow-2xl">
+            <PdfPropertiesPanel
             selectedItems={selectedAnnObjects}
             selectedField={selectedFieldObj}
             numPages={pageOrder.length}
@@ -4432,12 +4433,13 @@ export default function PdfEditorModal({
             }}
             onFontAdded={() => setFontTick((t) => t + 1)}
             readOnlyLocked={readOnlyLocked}
-          />
+            />
+          </div>
         )}
 
         {/* AI FINANCIAL ASSISTANT DRAWER */}
         {showAiDrawer && (
-          <aside className="w-80 border-l border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] flex flex-col shrink-0 shadow-2xl">
+          <aside className="absolute top-0 right-0 bottom-0 z-30 w-80 border-l border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] flex flex-col shrink-0 shadow-2xl">
             <div className="p-3.5 border-b border-[var(--line)] bg-[var(--surface-subtle)] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
