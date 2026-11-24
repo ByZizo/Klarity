@@ -1904,7 +1904,7 @@ export default function PdfEditorModal({
           fileType: 'application/pdf',
           fileSize: res.bytes.byteLength,
           dataUrl: res.dataUrl,
-          folder: initialDocument?.folder || 'Financial'
+          folder: initialDocument?.folder || ''
         });
         setHasUnsavedChanges(false);
         notify('Saved PDF to encrypted Vault!', 'success');

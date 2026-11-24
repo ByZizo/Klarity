@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import {
   FileText,
   FileImage,
@@ -21,6 +22,7 @@ import {
   AlertCircle,
   Tag,
   ArrowUpDown,
+  ArrowLeft,
   Check,
   KeyRound,
   PenTool,
@@ -81,7 +83,7 @@ export default function DocumentVaultPage({
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
   const [newFolderNameInput, setNewFolderNameInput] = useState('');
   const [isFolderDropdownOpen, setIsFolderDropdownOpen] = useState(false);
-  const [openDocMenuId, setOpenDocMenuId] = useState(null);
+  const [openDocMenu, setOpenDocMenu] = useState(null); // { doc, top, left }
 
   // Upload modal form state
   const [uploadFile, setUploadFile] = useState(null);
@@ -116,7 +118,7 @@ export default function DocumentVaultPage({
         fileType: file.type || 'application/pdf',
         fileSize: file.size,
         dataUrl: event.target.result,
-        folder: selectedFolder !== 'All' ? selectedFolder : 'Financial'
+        folder: selectedFolder !== 'All' ? selectedFolder : ''
       });
     };
     reader.readAsDataURL(file);
@@ -214,10 +216,8 @@ export default function DocumentVaultPage({
     setDroppedImportFile(fileToImport instanceof File ? fileToImport : null);
     if (selectedFolder !== 'All' && folders.includes(selectedFolder)) {
       setDocFolder(selectedFolder);
-    } else if (folders.length > 0) {
-      setDocFolder(folders[0]);
     } else {
-      setDocFolder('__CREATE_NEW__');
+      setDocFolder('');
     }
     setNewDocFolderInput('');
     setUploadError('');
@@ -237,7 +237,7 @@ export default function DocumentVaultPage({
     }
 
     setRecentlyImportedDoc(saved);
-    notify(`Imported "${saved.name}" into ${targetFolder}`);
+    notify(targetFolder ? `Imported "${saved.name}" into ${targetFolder}` : `Imported "${saved.name}" to Vault`);
   };
 
   // Resolve canonical IR whenever previewDoc opens (for Word, Excel/CSV, PPTX, MD, TXT)
@@ -344,7 +344,7 @@ export default function DocumentVaultPage({
     }
 
     try {
-      const finalFolder = (editingIsNewFolder ? editingNewFolderInput.trim() : (editingDoc.folder || '')).trim() || 'General';
+      const finalFolder = (editingIsNewFolder ? editingNewFolderInput.trim() : (editingDoc.folder || '')).trim();
       const updated = {
         ...editingDoc,
         folder: finalFolder,
@@ -352,7 +352,7 @@ export default function DocumentVaultPage({
       };
       await saveDocument(updated);
 
-      if (!folders.includes(finalFolder)) {
+      if (finalFolder && !folders.includes(finalFolder)) {
         const nextFolders = Array.from(new Set([...folders, finalFolder]));
         setFolders(nextFolders);
         saveDocumentFolders(nextFolders);
@@ -606,14 +606,27 @@ export default function DocumentVaultPage({
   }, [documents]);
 
   const renderDocumentActionsMenu = (doc) => {
-    const isMenuOpen = openDocMenuId === doc.id;
-    const isPdf = Boolean(doc.fileType?.includes('pdf') || doc.fileName?.toLowerCase().endsWith('.pdf'));
+    const isMenuOpen = openDocMenu?.doc?.id === doc.id;
 
     return (
       <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
-          onClick={() => setOpenDocMenuId(isMenuOpen ? null : doc.id)}
+          onClick={(e) => {
+            if (isMenuOpen) {
+              setOpenDocMenu(null);
+              return;
+            }
+            const rect = e.currentTarget.getBoundingClientRect();
+            const menuWidth = 192;
+            const estimatedHeight = 250;
+            const openUpward = rect.bottom + estimatedHeight > window.innerHeight - 12;
+            const top = openUpward
+              ? Math.max(12, rect.top - estimatedHeight)
+              : rect.bottom + 6;
+            const left = Math.max(12, Math.min(window.innerWidth - menuWidth - 12, rect.right - menuWidth));
+            setOpenDocMenu({ doc, top, left });
+          }}
           title="Document actions"
           aria-label={`Actions for ${doc.name}`}
           aria-expanded={isMenuOpen}
@@ -625,90 +638,6 @@ export default function DocumentVaultPage({
         >
           <MoreVertical className="w-4 h-4" />
         </button>
-
-        {isMenuOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-30"
-              onClick={() => setOpenDocMenuId(null)}
-            />
-            <div className="absolute right-0 top-full mt-1 w-48 py-1.5 rounded-[10px] bg-[var(--surface)] border border-[var(--line)] shadow-xl z-40 flex flex-col">
-              <button
-                type="button"
-                onClick={() => {
-                  setOpenDocMenuId(null);
-                  setPreviewDoc(doc);
-                }}
-                className="w-full px-3 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer"
-              >
-                <Eye className="w-4 h-4 text-[var(--muted)]" />
-                <span>View</span>
-              </button>
-              {isPdf && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpenDocMenuId(null);
-                    setEditingPdfDoc(doc);
-                  }}
-                  className="w-full px-3 py-2 text-left text-[13px] font-medium text-[#1B4B91] hover:bg-[#1B4B91]/10 flex items-center gap-2.5 cursor-pointer"
-                >
-                  <PenTool className="w-4 h-4" />
-                  <span>Open in Editor</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setOpenDocMenuId(null);
-                  setExportDoc(doc);
-                }}
-                className="w-full px-3 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer"
-              >
-                <FileOutput className="w-4 h-4 text-[var(--muted)]" />
-                <span>Export As...</span>
-              </button>
-              {doc.dataUrl && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpenDocMenuId(null);
-                    handleDownload(doc);
-                  }}
-                  className="w-full px-3 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer"
-                >
-                  <Download className="w-4 h-4 text-[var(--muted)]" />
-                  <span>Download</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setOpenDocMenuId(null);
-                  setEditingDoc(doc);
-                  setEditingIsNewFolder(false);
-                  setEditingNewFolderInput('');
-                }}
-                className="w-full px-3 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer"
-              >
-                <Edit3 className="w-4 h-4 text-[var(--muted)]" />
-                <span>Edit Details</span>
-              </button>
-              <div className="my-1 border-t border-[var(--line)]" />
-              <button
-                type="button"
-                onClick={() => {
-                  setOpenDocMenuId(null);
-                  setDeleteConfirmDoc(doc);
-                }}
-                className="w-full px-3 py-2 text-left text-[13px] font-medium text-rose-500 hover:bg-rose-500/10 flex items-center gap-2.5 cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Delete</span>
-              </button>
-            </div>
-          </>
-        )}
       </div>
     );
   };
@@ -720,9 +649,7 @@ export default function DocumentVaultPage({
     return (
       <Card
         key={doc.id}
-        className={`klarity-virtual-row p-4 flex flex-col justify-between hover:border-[#1B4B91]/50 hover:shadow-md transition-all group ${
-          openDocMenuId === doc.id ? 'relative z-30' : ''
-        }`}
+        className="klarity-virtual-row p-4 flex flex-col justify-between hover:border-[#1B4B91]/50 hover:shadow-md transition-all group"
       >
         <div>
           {/* Card Header: Badge & Three-Dot Actions Menu */}
@@ -755,17 +682,21 @@ export default function DocumentVaultPage({
 
         {/* Card Footer: Folder Tag & File Meta */}
         <div className="pt-3 mt-3 border-t border-[var(--line)] flex items-center justify-between text-[11px] text-[var(--muted)]">
-          <span
-            className="inline-flex items-center gap-1.5 font-medium px-2 py-0.5 rounded-[6px] bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400 text-[11px] cursor-pointer hover:bg-amber-500/20 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedFolder(doc.folder);
-            }}
-            title={`View folder "${doc.folder}"`}
-          >
-            <Folder className="w-3.5 h-3.5 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-400" />
-            <span>{doc.folder}</span>
-          </span>
+          {doc.folder ? (
+            <span
+              className="inline-flex items-center gap-1.5 font-medium px-2 py-0.5 rounded-[6px] bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400 text-[11px] cursor-pointer hover:bg-amber-500/20 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedFolder(doc.folder);
+              }}
+              title={`View folder "${doc.folder}"`}
+            >
+              <Folder className="w-3.5 h-3.5 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-400" />
+              <span>{doc.folder}</span>
+            </span>
+          ) : (
+            <span className="text-[11px] text-[var(--muted)]">All Documents</span>
+          )}
           <div className="flex items-center gap-1.5">
             <span>{formatFileSize(doc.fileSize)}</span>
             <span>•</span>
@@ -797,17 +728,19 @@ export default function DocumentVaultPage({
               >
                 {doc.name}
               </span>
-              <span
-                className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-[6px] bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400 shrink-0 cursor-pointer hover:bg-amber-500/20 transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedFolder(doc.folder);
-                }}
-                title={`View folder "${doc.folder}"`}
-              >
-                <Folder className="w-3.5 h-3.5 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-400" />
-                <span>{doc.folder}</span>
-              </span>
+              {doc.folder && (
+                <span
+                  className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-[6px] bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400 shrink-0 cursor-pointer hover:bg-amber-500/20 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedFolder(doc.folder);
+                  }}
+                  title={`View folder "${doc.folder}"`}
+                >
+                  <Folder className="w-3.5 h-3.5 fill-amber-400 text-amber-600 dark:fill-amber-500 dark:text-amber-400" />
+                  <span>{doc.folder}</span>
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 text-[12px] text-[var(--muted)] truncate mt-0.5">
               <span>{doc.fileName}</span>
@@ -1193,7 +1126,20 @@ export default function DocumentVaultPage({
 
       {/* Folder Selection Bar / Dropdown Menu */}
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Icon-Only Back Arrow Button BEFORE Folder Selector when inside a folder */}
+          {selectedFolder !== 'All' && (
+            <button
+              type="button"
+              onClick={() => setSelectedFolder('All')}
+              title="Back to All Documents"
+              aria-label="Back to All Documents"
+              className="p-2 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:text-[#1B4B91] hover:border-[#1B4B91]/40 shadow-xs cursor-pointer transition-all"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          )}
+
           {/* Dropdown Menu for All Documents / Folders */}
           <div className="relative">
             <button
@@ -1327,17 +1273,6 @@ export default function DocumentVaultPage({
               );
             })()}
           </div>
-
-          {/* Breadcrumb / Back button if inside a folder */}
-          {selectedFolder !== 'All' && (
-            <button
-              type="button"
-              onClick={() => setSelectedFolder('All')}
-              className="text-[13px] text-[#1B4B91] hover:underline flex items-center gap-1 font-medium cursor-pointer"
-            >
-              <span>← Back to All Documents</span>
-            </button>
-          )}
         </div>
 
         {/* Right side New Folder Button */}
@@ -1886,7 +1821,7 @@ export default function DocumentVaultPage({
                   Folder / Category
                 </label>
                 <select
-                  value={editingIsNewFolder ? '__CREATE_NEW__' : (editingDoc.folder || (folders[0] || '__CREATE_NEW__'))}
+                  value={editingIsNewFolder ? '__CREATE_NEW__' : (editingDoc.folder || '')}
                   onChange={(e) => {
                     if (e.target.value === '__CREATE_NEW__') {
                       setEditingIsNewFolder(true);
@@ -1898,10 +1833,11 @@ export default function DocumentVaultPage({
                   }}
                   className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91] cursor-pointer"
                 >
+                  <option value="">No folder (All Documents)</option>
                   {Array.from(new Set([...folders, editingDoc.folder].filter(Boolean))).map(f => (
                     <option key={f} value={f}>📁 {f}</option>
                   ))}
-                  {folders.length > 0 && <option disabled>──────────</option>}
+                  <option disabled>──────────</option>
                   <option value="__CREATE_NEW__">📁+ Create new folder...</option>
                 </select>
 
@@ -2066,6 +2002,101 @@ export default function DocumentVaultPage({
             </form>
           </Card>
         </div>
+      )}
+
+      {/* Portal-rendered Three-Dot Document Actions Dropdown (escapes row clipping) */}
+      {openDocMenu && typeof document !== 'undefined' && createPortal(
+        (() => {
+          const doc = openDocMenu.doc;
+          const isPdf = Boolean(doc.fileType?.includes('pdf') || doc.fileName?.toLowerCase().endsWith('.pdf'));
+          return (
+            <>
+              <div
+                className="fixed inset-0 z-[90]"
+                onClick={() => setOpenDocMenu(null)}
+              />
+              <div
+                style={{ top: `${openDocMenu.top}px`, left: `${openDocMenu.left}px` }}
+                className="fixed w-48 py-1.5 rounded-[10px] bg-[var(--surface)] border border-[var(--line)] shadow-2xl z-[95] flex flex-col"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenDocMenu(null);
+                    setPreviewDoc(doc);
+                  }}
+                  className="w-full px-3 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer"
+                >
+                  <Eye className="w-4 h-4 text-[var(--muted)]" />
+                  <span>View</span>
+                </button>
+                {isPdf && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenDocMenu(null);
+                      setEditingPdfDoc(doc);
+                    }}
+                    className="w-full px-3 py-2 text-left text-[13px] font-medium text-[#1B4B91] hover:bg-[#1B4B91]/10 flex items-center gap-2.5 cursor-pointer"
+                  >
+                    <PenTool className="w-4 h-4" />
+                    <span>Open in Editor</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenDocMenu(null);
+                    setExportDoc(doc);
+                  }}
+                  className="w-full px-3 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer"
+                >
+                  <FileOutput className="w-4 h-4 text-[var(--muted)]" />
+                  <span>Export As...</span>
+                </button>
+                {doc.dataUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenDocMenu(null);
+                      handleDownload(doc);
+                    }}
+                    className="w-full px-3 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4 text-[var(--muted)]" />
+                    <span>Download</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenDocMenu(null);
+                    setEditingDoc(doc);
+                    setEditingIsNewFolder(false);
+                    setEditingNewFolderInput('');
+                  }}
+                  className="w-full px-3 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer"
+                >
+                  <Edit3 className="w-4 h-4 text-[var(--muted)]" />
+                  <span>Edit Details</span>
+                </button>
+                <div className="my-1 border-t border-[var(--line)]" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenDocMenu(null);
+                    setDeleteConfirmDoc(doc);
+                  }}
+                  className="w-full px-3 py-2 text-left text-[13px] font-medium text-rose-500 hover:bg-rose-500/10 flex items-center gap-2.5 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete</span>
+                </button>
+              </div>
+            </>
+          );
+        })(),
+        document.body
       )}
 
       {/* Delete Confirmation Dialog */}

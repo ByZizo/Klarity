@@ -618,19 +618,6 @@ export default function BrowserSettingsPanel({
               label="Ad & tracker blocker"
               description={`${browserAdBlockStats.adsBlockedCount || 0} requests blocked this session`}
             >
-              <SettingSwitch
-                label="Ad and tracker blocker"
-                checked={Boolean(browserAdBlockStats.enabled)}
-                onChange={async (val) => {
-                  if (window.klarityDesktop?.toggleAdBlock) {
-                    const next = await window.klarityDesktop.toggleAdBlock(val);
-                    if (next) onUpdateAdBlockStats?.(next);
-                  } else {
-                    patchSettings({ adBlockerEnabled: val });
-                    onUpdateAdBlockStats?.({ ...browserAdBlockStats, enabled: val });
-                  }
-                }}
-              />
               <Button
                 size="sm"
                 variant="secondary"
@@ -645,6 +632,19 @@ export default function BrowserSettingsPanel({
               >
                 Reset
               </Button>
+              <SettingSwitch
+                label="Ad and tracker blocker"
+                checked={Boolean(browserAdBlockStats.enabled)}
+                onChange={async (val) => {
+                  if (window.klarityDesktop?.toggleAdBlock) {
+                    const next = await window.klarityDesktop.toggleAdBlock(val);
+                    if (next) onUpdateAdBlockStats?.(next);
+                  } else {
+                    patchSettings({ adBlockerEnabled: val });
+                    onUpdateAdBlockStats?.({ ...browserAdBlockStats, enabled: val });
+                  }
+                }}
+              />
             </SettingRow>
             <SettingRow
               htmlFor="bs-yt-shield"

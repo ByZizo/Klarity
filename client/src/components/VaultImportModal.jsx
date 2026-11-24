@@ -52,10 +52,8 @@ export default function VaultImportModal({
     if (!isOpen) return;
     if (initialFolder && initialFolder !== 'All' && folders.includes(initialFolder)) {
       setDocFolder(initialFolder);
-    } else if (folders.length > 0) {
-      setDocFolder(folders[0]);
     } else {
-      setDocFolder('__CREATE_NEW__');
+      setDocFolder('');
     }
     setNewFolderInput('');
     setError('');
@@ -139,7 +137,7 @@ export default function VaultImportModal({
 
     const title = docTitle.trim() || parsedResult.title || parsedResult.fileName;
     const targetFolder =
-      (docFolder === '__CREATE_NEW__' ? newFolderInput.trim() : docFolder.trim()) || 'General';
+      docFolder === '__CREATE_NEW__' ? newFolderInput.trim() : docFolder.trim();
     const tags = docTagsInput
       .split(',')
       .map((t) => t.trim())
@@ -383,12 +381,13 @@ export default function VaultImportModal({
                 }}
                 className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91] cursor-pointer"
               >
+                <option value="">No folder (All Documents)</option>
                 {folders.map((f) => (
                   <option key={f} value={f}>
                     📁 {f}
                   </option>
                 ))}
-                {folders.length > 0 && <option disabled>──────────</option>}
+                <option disabled>──────────</option>
                 <option value="__CREATE_NEW__">📁+ Create new folder...</option>
               </select>
 
