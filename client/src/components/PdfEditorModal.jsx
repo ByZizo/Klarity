@@ -830,18 +830,25 @@ export default function PdfEditorModal({
     mutatePageAnnotations
   ]);
 
-  // Overlay coordinate helper
+  // Overlay coordinate helper (normalizes against CSS zoom / transform scaling)
   const getOverlayPos = (e) => {
-    const rect = overlayRef.current?.getBoundingClientRect();
-    if (!rect) return { x: 0, y: 0, width: canvasDims.width, height: canvasDims.height };
+    const el = overlayRef.current;
+    const rect = el?.getBoundingClientRect();
+    if (!el || !rect || !rect.width || !rect.height) {
+      return { x: 0, y: 0, width: canvasDims.width, height: canvasDims.height };
+    }
     const pt = e.touches?.[0] || e.changedTouches?.[0] || e;
     const cx = pt.clientX ?? 0;
     const cy = pt.clientY ?? 0;
+    const localW = el.offsetWidth || canvasDims.width || rect.width;
+    const localH = el.offsetHeight || canvasDims.height || rect.height;
+    const scaleX = localW / rect.width;
+    const scaleY = localH / rect.height;
     return {
-      x: Math.max(0, Math.min(rect.width, cx - rect.left)),
-      y: Math.max(0, Math.min(rect.height, cy - rect.top)),
-      width: rect.width,
-      height: rect.height
+      x: Math.max(0, Math.min(localW, (cx - rect.left) * scaleX)),
+      y: Math.max(0, Math.min(localH, (cy - rect.top) * scaleY)),
+      width: localW,
+      height: localH
     };
   };
 
