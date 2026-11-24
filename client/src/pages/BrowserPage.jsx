@@ -43,7 +43,9 @@ import {
   Minimize2,
   Square,
   ArrowUpRight,
-  History
+  History,
+  ZoomIn,
+  Minus
 } from 'lucide-react';
 import { Button, Card } from '../components/ui';
 import { FormattedChatMessage } from '../components/SharedAppComponents';
@@ -226,6 +228,7 @@ export function BrowserPage({
   settingsAiModel,
   advisorContext = null,
   browserSettings = DEFAULT_BROWSER_SETTINGS,
+  onUpdateBrowserSettings,
   browserBookmarks = [],
   onUpdateBookmarks,
   pendingBrowserUrl = '',
@@ -3067,29 +3070,11 @@ export function BrowserPage({
             </button>
           </div>
 
-          {/* Divider before Browser Settings */}
-          {typeof onOpenBrowserSettings === 'function' && (
-            <div className="hidden md:block w-px h-5 bg-[var(--line)] mx-0.5 shrink-0" aria-hidden="true" />
-          )}
+          {/* Divider before Three-Dot Browser Menu */}
+          <div className="w-px h-5 bg-[var(--line)] mx-0.5 shrink-0" aria-hidden="true" />
 
-          {/* Browser Settings (Desktop >= md) */}
-          {typeof onOpenBrowserSettings === 'function' && (
-            <button
-              type="button"
-              onClick={() => {
-                closeToolbarPopovers();
-                onOpenBrowserSettings();
-              }}
-              aria-label="Browser settings"
-              title="Browser settings"
-              className="hidden md:flex w-9 h-9 rounded-lg items-center justify-center hover:bg-[var(--surface-subtle)] text-[var(--ink)] transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2"
-            >
-              <SettingsIcon className="w-[18px] h-[18px]" />
-            </button>
-          )}
-
-          {/* Overflow Menu for Narrow Windows (< md) keeping Calculator & Advisor visible longest */}
-          <div className="relative shrink-0 md:hidden" ref={overflowMenuRef}>
+          {/* Unified Three-Dot Browser Menu (All screen sizes, only real Klarity browser features) */}
+          <div className="relative shrink-0" ref={overflowMenuRef}>
             <button
               type="button"
               onClick={() => {
@@ -3097,8 +3082,8 @@ export function BrowserPage({
                 closeToolbarPopovers();
                 setIsOverflowMenuOpen(next);
               }}
-              aria-label="More browser actions"
-              title="More options"
+              aria-label="Browser menu"
+              title="Browser menu"
               aria-expanded={isOverflowMenuOpen}
               className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
                 isOverflowMenuOpen
@@ -3115,89 +3100,227 @@ export function BrowserPage({
               )}
             </button>
 
-            {isOverflowMenuOpen && (
-              <div
-                role="menu"
-                aria-label="More browser actions"
-                className="absolute right-0 top-full mt-2 w-52 bg-[var(--surface)] border border-[var(--line)] rounded-xl shadow-xl z-50 py-1.5 flex flex-col"
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setIsOverflowMenuOpen(false);
-                    if (isNotesVisible) {
-                      handleCloseNotes();
-                    } else {
-                      setIsNotesOpen(true);
-                      setHomepageNotesDismissed(false);
-                      if (notesDisplayMode === 'sidebar') setIsBrowserAiSidebarOpen(false);
-                      setTimeout(() => browserNotesRef.current?.focus(), 50);
-                    }
-                  }}
-                  className="px-3.5 py-2 text-left text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
-                >
-                  <span className="flex items-center gap-2.5">
-                    <StickyNote className="w-[18px] h-[18px] text-[var(--muted)]" />
-                    <span>Notes</span>
-                  </span>
-                  {isNotesVisible && <Check className="w-3.5 h-3.5 text-[var(--brand)]" />}
-                </button>
+            {isOverflowMenuOpen && (() => {
+              const currentZoom = Number(browserSettings?.pageZoom || 100);
+              const zoomSteps = [75, 80, 90, 100, 110, 125, 150, 175, 200];
+              const stepZoom = (delta) => {
+                if (!onUpdateBrowserSettings) return;
+                const idx = zoomSteps.reduce(
+                  (best, val, i) => (Math.abs(val - currentZoom) < Math.abs(zoomSteps[best] - currentZoom) ? i : best),
+                  3
+                );
+                const nextIdx = Math.max(0, Math.min(zoomSteps.length - 1, idx + delta));
+                onUpdateBrowserSettings({ ...browserSettings, pageZoom: zoomSteps[nextIdx] });
+              };
 
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setIsOverflowMenuOpen(false);
-                    setIsDownloadsPopoverOpen(true);
-                    setHasUnseenDownload(false);
-                    refreshBrowserDownloads();
-                  }}
-                  className="px-3.5 py-2 text-left text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
+              return (
+                <div
+                  role="menu"
+                  aria-label="Browser menu"
+                  className="absolute right-0 top-full mt-2 w-64 bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-2xl z-50 py-1.5 flex flex-col"
                 >
-                  <span className="flex items-center gap-2.5">
-                    <Download className="w-[18px] h-[18px] text-[var(--muted)]" />
-                    <span>Downloads</span>
-                  </span>
-                  {activeDownloads.length > 0 && (
-                    <span className="w-2 h-2 rounded-full bg-[var(--brand)]" />
-                  )}
-                </button>
-
-                {typeof onOpenBrowserHistory === 'function' && (
+                  {/* Group 1: Tabs */}
                   <button
                     type="button"
                     role="menuitem"
                     onClick={() => {
                       setIsOverflowMenuOpen(false);
-                      onOpenBrowserHistory();
+                      handleNewTab();
                     }}
-                    className="px-3.5 py-2 text-left text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
+                    className="px-3.5 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
                   >
-                    <span className="flex items-center gap-2.5">
-                      <History className="w-[18px] h-[18px] text-[var(--muted)]" />
-                      <span>History</span>
+                    <span className="flex items-center gap-3">
+                      <Plus className="w-4 h-4 text-[var(--muted)]" />
+                      <span>New tab</span>
                     </span>
-                    <span className="text-[10px] text-[var(--muted)]">Ctrl+H</span>
+                    <span className="text-[11px] text-[var(--muted)]">Ctrl+T</span>
                   </button>
-                )}
 
-                {typeof onOpenBrowserSettings === 'function' && (
+                  <div className="my-1.5 border-t border-[var(--line)]" role="separator" />
+
+                  {/* Group 2: History, Bookmarks, Downloads */}
+                  {typeof onOpenBrowserHistory === 'function' && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsOverflowMenuOpen(false);
+                        onOpenBrowserHistory();
+                      }}
+                      className="px-3.5 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
+                    >
+                      <span className="flex items-center gap-3">
+                        <History className="w-4 h-4 text-[var(--muted)]" />
+                        <span>History</span>
+                      </span>
+                      <span className="text-[11px] text-[var(--muted)]">Ctrl+H</span>
+                    </button>
+                  )}
+
+                  {typeof onUpdateBrowserSettings === 'function' && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onUpdateBrowserSettings({
+                          ...browserSettings,
+                          showBookmarksBar: browserSettings?.showBookmarksBar === false
+                        });
+                      }}
+                      className="px-3.5 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
+                    >
+                      <span className="flex items-center gap-3">
+                        <Bookmark className="w-4 h-4 text-[var(--muted)]" />
+                        <span>Bookmarks bar</span>
+                      </span>
+                      {browserSettings?.showBookmarksBar !== false && (
+                        <Check className="w-3.5 h-3.5 text-[var(--brand)]" />
+                      )}
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     role="menuitem"
                     onClick={() => {
                       setIsOverflowMenuOpen(false);
-                      onOpenBrowserSettings();
+                      setIsDownloadsPopoverOpen(true);
+                      setHasUnseenDownload(false);
+                      refreshBrowserDownloads();
                     }}
-                    className="px-3.5 py-2 text-left text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer border-t border-[var(--line)] mt-1 pt-2.5"
+                    className="px-3.5 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
                   >
-                    <SettingsIcon className="w-[18px] h-[18px] text-[var(--muted)]" />
-                    <span>Browser settings</span>
+                    <span className="flex items-center gap-3">
+                      <Download className="w-4 h-4 text-[var(--muted)]" />
+                      <span>Downloads</span>
+                    </span>
+                    {activeDownloads.length > 0 && (
+                      <span className="w-2 h-2 rounded-full bg-[var(--brand)]" />
+                    )}
                   </button>
-                )}
-              </div>
-            )}
+
+                  {/* Group 3: Webpage Zoom */}
+                  {typeof onUpdateBrowserSettings === 'function' && (
+                    <>
+                      <div className="my-1.5 border-t border-[var(--line)]" role="separator" />
+                      <div className="px-3.5 py-1.5 flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-3 text-[13px] font-medium text-[var(--ink)]">
+                          <ZoomIn className="w-4 h-4 text-[var(--muted)]" />
+                          <span>Zoom</span>
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => stepZoom(-1)}
+                            disabled={currentZoom <= zoomSteps[0]}
+                            aria-label="Zoom out"
+                            className="w-7 h-7 rounded-md border border-[var(--line)] bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] flex items-center justify-center cursor-pointer disabled:opacity-40"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onUpdateBrowserSettings({ ...browserSettings, pageZoom: 100 })}
+                            title="Reset zoom to 100%"
+                            className="min-w-[44px] text-center text-[12px] font-semibold text-[var(--ink)] hover:text-[var(--brand)] tabular-nums cursor-pointer"
+                          >
+                            {currentZoom}%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => stepZoom(1)}
+                            disabled={currentZoom >= zoomSteps[zoomSteps.length - 1]}
+                            aria-label="Zoom in"
+                            className="w-7 h-7 rounded-md border border-[var(--line)] bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] flex items-center justify-center cursor-pointer disabled:opacity-40"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="my-1.5 border-t border-[var(--line)]" role="separator" />
+
+                  {/* Group 4: Klarity Browser Tools */}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsOverflowMenuOpen(false);
+                      setIsAdBlockPopoverOpen(true);
+                    }}
+                    className="px-3.5 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
+                  >
+                    <span className="flex items-center gap-3">
+                      <ShieldCheck className="w-4 h-4 text-[var(--muted)]" />
+                      <span>Ad blocker</span>
+                    </span>
+                    <span className={`text-[11px] font-semibold ${adBlockEnabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--muted)]'}`}>
+                      {adBlockEnabled ? 'On' : 'Off'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsOverflowMenuOpen(false);
+                      if (isNotesVisible) {
+                        handleCloseNotes();
+                      } else {
+                        setIsNotesOpen(true);
+                        setHomepageNotesDismissed(false);
+                        if (notesDisplayMode === 'sidebar') setIsBrowserAiSidebarOpen(false);
+                        setTimeout(() => browserNotesRef.current?.focus(), 50);
+                      }
+                    }}
+                    className="px-3.5 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
+                  >
+                    <span className="flex items-center gap-3">
+                      <StickyNote className="w-4 h-4 text-[var(--muted)]" />
+                      <span>Notes</span>
+                    </span>
+                    {isNotesVisible && <Check className="w-3.5 h-3.5 text-[var(--brand)]" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsOverflowMenuOpen(false);
+                      setIsBrowserAiSidebarOpen((prev) => !prev);
+                    }}
+                    className="px-3.5 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
+                  >
+                    <span className="flex items-center gap-3">
+                      <Sparkles className="w-4 h-4 text-[var(--muted)]" />
+                      <span>AI Advisor</span>
+                    </span>
+                    {isBrowserAiSidebarOpen && <Check className="w-3.5 h-3.5 text-[var(--brand)]" />}
+                  </button>
+
+                  {/* Group 5: Settings */}
+                  {typeof onOpenBrowserSettings === 'function' && (
+                    <>
+                      <div className="my-1.5 border-t border-[var(--line)]" role="separator" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setIsOverflowMenuOpen(false);
+                          onOpenBrowserSettings();
+                        }}
+                        className="px-3.5 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-3 cursor-pointer"
+                      >
+                        <SettingsIcon className="w-4 h-4 text-[var(--muted)]" />
+                        <span>Settings</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
 

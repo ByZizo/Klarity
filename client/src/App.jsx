@@ -5774,6 +5774,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                     : {})
                 }}
                 browserSettings={browserSettings}
+                onUpdateBrowserSettings={handleUpdateBrowserSettings}
                 browserBookmarks={browserBookmarks}
                 onUpdateBookmarks={handleUpdateBrowserBookmarks}
                 pendingBrowserUrl={pendingBrowserUrl}
