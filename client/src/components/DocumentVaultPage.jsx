@@ -83,7 +83,23 @@ export default function DocumentVaultPage({
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
   const [newFolderNameInput, setNewFolderNameInput] = useState('');
   const [isFolderDropdownOpen, setIsFolderDropdownOpen] = useState(false);
+  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+  const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
   const [openDocMenu, setOpenDocMenu] = useState(null); // { doc, top, left }
+
+  useEffect(() => {
+    if (!isViewMenuOpen && !isNewMenuOpen && !isFolderDropdownOpen && !openDocMenu) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsViewMenuOpen(false);
+        setIsNewMenuOpen(false);
+        setIsFolderDropdownOpen(false);
+        setOpenDocMenu(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isViewMenuOpen, isNewMenuOpen, isFolderDropdownOpen, openDocMenu]);
 
   // Upload modal form state
   const [uploadFile, setUploadFile] = useState(null);
@@ -975,9 +991,9 @@ export default function DocumentVaultPage({
       )}
 
       {/* Action and Filter Toolbar */}
-      <Card className="p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-        {/* Left: Compact Mode Switcher (Passwords / Documents) & Flexible Search Bar */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+      <Card className="p-3 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+        {/* 1. Left: Compact Icon-Only Vault Switcher (Passwords / Documents) */}
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           {onSelectVaultSection && (
             <div className="h-10 flex items-center bg-[var(--surface-subtle)] p-1 rounded-[10px] border border-[var(--line)] shrink-0">
               <button
@@ -1024,14 +1040,14 @@ export default function DocumentVaultPage({
             </div>
           )}
 
-          {/* Search Bar (Shrinks smoothly on compact laptops & Chromebooks) */}
-          <div className="relative flex-1 min-w-[110px]">
+          {/* 2. Center-Left: Spacious Search Input */}
+          <div className="relative flex-1 min-w-[180px]">
             <label htmlFor="doc-vault-search" className="sr-only">Search documents</label>
             <Search className="w-4 h-4 text-[var(--muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               id="doc-vault-search"
               type="text"
-              placeholder="Search documents..."
+              placeholder="Search documents, folders, or notes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full h-10 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[10px] pl-9 pr-8 text-[14px] text-[var(--ink)] placeholder-[var(--muted)] outline-none focus:border-[#1B4B91]"
@@ -1049,111 +1065,207 @@ export default function DocumentVaultPage({
           </div>
         </div>
 
-        {/* Right: Passive View/Sort Group | Divider | Primary Actions */}
-        <div className="flex items-center justify-end gap-2 shrink-0">
-          {/* Passive View & Sort Utility Controls */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Compact Sort Control (collapses text label to icon + tooltip on smaller viewports) */}
-            <div
-              title={`Sort: ${
-                sortBy === 'newest'
-                  ? 'Newest first'
-                  : sortBy === 'oldest'
-                  ? 'Oldest first'
-                  : sortBy === 'name'
-                  ? 'Name (A–Z)'
-                  : 'File size'
-              }`}
-              className="relative h-10 flex items-center gap-1.5 px-2.5 rounded-[10px] bg-[var(--surface-subtle)] border border-[var(--line)] hover:border-[#1B4B91]/40 text-[13px] transition-colors"
-            >
-              <ArrowUpDown className="w-4 h-4 text-[var(--muted)] shrink-0 pointer-events-none" />
-              <span className="hidden lg:inline font-medium text-[var(--ink)] whitespace-nowrap pointer-events-none">
-                {sortBy === 'newest'
-                  ? 'Newest first'
-                  : sortBy === 'oldest'
-                  ? 'Oldest first'
-                  : sortBy === 'name'
-                  ? 'Name (A–Z)'
-                  : 'File size'}
-              </span>
-              <ChevronDown className="hidden lg:inline w-3.5 h-3.5 text-[var(--muted)] shrink-0 pointer-events-none" />
-              <select
-                aria-label="Sort documents"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              >
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="name">Name (A–Z)</option>
-                <option value="size">File size</option>
-              </select>
-            </div>
-
-            {/* Grid / List View Mode Toggle */}
-            <div className="h-10 flex items-center bg-[var(--surface-subtle)] p-1 rounded-[10px] border border-[var(--line)] shrink-0">
-              <button
-                type="button"
-                onClick={() => handleSetViewMode('grid')}
-                title="Grid view"
-                aria-label="Grid view"
-                className={`h-full w-8 flex items-center justify-center rounded-[7px] transition-colors cursor-pointer ${
-                  viewMode === 'grid'
-                    ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
-                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSetViewMode('list')}
-                title="List view"
-                aria-label="List view"
-                className={`h-full w-8 flex items-center justify-center rounded-[7px] transition-colors cursor-pointer ${
-                  viewMode === 'list'
-                    ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
-                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Vertical Divider separating passive view controls from creation actions */}
-          <div className="hidden sm:block h-6 w-px bg-[var(--line)] mx-0.5 shrink-0" aria-hidden="true" />
-
-          {/* Creation & Editing Actions */}
-          <div className="flex items-center gap-2 shrink-0">
-            <input
-              type="file"
-              ref={pdfFileInputRef}
-              accept="application/pdf"
-              className="hidden"
-              onChange={handleOpenPdfFromDisk}
-            />
+        {/* 3 & 4. Right: Consolidated View & Sort Dropdown | Divider | + New Action Dropdown */}
+        <div className="flex items-center gap-2.5 shrink-0 ml-auto">
+          {/* Consolidated View & Sort Dropdown */}
+          <div className="relative shrink-0">
             <button
               type="button"
-              onClick={() => pdfFileInputRef.current?.click()}
-              title="Open any PDF in the built-in Editor"
-              aria-label="Open PDF Editor"
-              className="h-10 px-3 rounded-[10px] inline-flex items-center justify-center gap-1.5 text-[13px] font-medium bg-transparent hover:bg-[var(--surface-subtle)] border border-[var(--line)] hover:border-[#1B4B91]/50 text-[var(--ink)] transition-colors cursor-pointer shrink-0"
+              onClick={() => {
+                setIsNewMenuOpen(false);
+                setIsViewMenuOpen((prev) => !prev);
+              }}
+              aria-expanded={isViewMenuOpen}
+              aria-haspopup="menu"
+              title="View & Sort options"
+              className={`h-10 px-3 rounded-[10px] border inline-flex items-center gap-2 text-[13px] font-medium transition-colors cursor-pointer ${
+                isViewMenuOpen
+                  ? 'bg-[var(--surface)] border-[#1B4B91] text-[#1B4B91]'
+                  : 'bg-[var(--surface-subtle)] border-[var(--line)] text-[var(--ink)] hover:border-[#1B4B91]/40'
+              }`}
             >
-              <PenTool className="w-4 h-4 text-[#1B4B91] shrink-0" />
-              <span className="hidden md:inline">Editor</span>
+              {viewMode === 'grid' ? (
+                <LayoutGrid className="w-4 h-4 text-[var(--muted)] shrink-0" />
+              ) : (
+                <List className="w-4 h-4 text-[var(--muted)] shrink-0" />
+              )}
+              <span className="hidden md:inline whitespace-nowrap">
+                {sortBy === 'newest'
+                  ? 'Newest'
+                  : sortBy === 'oldest'
+                  ? 'Oldest'
+                  : sortBy === 'name'
+                  ? 'Name'
+                  : 'Size'}
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 text-[var(--muted)] transition-transform ${isViewMenuOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Sole High-Contrast Primary Action Button on Far Right */}
+            {isViewMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setIsViewMenuOpen(false)} />
+                <div
+                  role="menu"
+                  aria-label="View and sort options"
+                  className="absolute right-0 top-full mt-1.5 w-56 rounded-[12px] bg-[var(--surface)] border border-[var(--line)] shadow-xl z-40 p-2 flex flex-col gap-2"
+                >
+                  <div>
+                    <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+                      Layout
+                    </div>
+                    <div className="grid grid-cols-2 gap-1 p-1 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)]">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => handleSetViewMode('grid')}
+                        className={`py-1.5 px-2 rounded-[6px] text-[12px] font-medium inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
+                          viewMode === 'grid'
+                            ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                            : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                        }`}
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                        <span>Grid</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => handleSetViewMode('list')}
+                        className={`py-1.5 px-2 rounded-[6px] text-[12px] font-medium inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
+                          viewMode === 'list'
+                            ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                            : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                        }`}
+                      >
+                        <List className="w-3.5 h-3.5" />
+                        <span>List</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[var(--line)] pt-1.5">
+                    <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+                      Sort by
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      {[
+                        { id: 'newest', label: 'Newest first' },
+                        { id: 'oldest', label: 'Oldest first' },
+                        { id: 'name', label: 'Name (A–Z)' },
+                        { id: 'size', label: 'File size' }
+                      ].map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setSortBy(opt.id);
+                            setIsViewMenuOpen(false);
+                          }}
+                          className={`w-full px-2.5 py-1.5 rounded-[7px] text-left text-[13px] flex items-center justify-between cursor-pointer transition-colors ${
+                            sortBy === opt.id
+                              ? 'bg-[#1B4B91]/10 text-[#1B4B91] font-semibold'
+                              : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)] font-medium'
+                          }`}
+                        >
+                          <span>{opt.label}</span>
+                          {sortBy === opt.id && <Check className="w-3.5 h-3.5 text-[#1B4B91]" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Subtle Vertical Divider */}
+          <div className="h-6 w-px bg-[var(--line)] shrink-0" aria-hidden="true" />
+
+          {/* Hidden PDF Editor File Picker */}
+          <input
+            type="file"
+            ref={pdfFileInputRef}
+            accept="application/pdf"
+            className="hidden"
+            onChange={handleOpenPdfFromDisk}
+          />
+
+          {/* Primary + New Action Dropdown */}
+          <div className="relative shrink-0">
             <Button
               variant="primary"
               size="sm"
-              onClick={() => handleOpenUploadModal(null)}
+              onClick={() => {
+                setIsViewMenuOpen(false);
+                setIsNewMenuOpen((prev) => !prev);
+              }}
+              aria-expanded={isNewMenuOpen}
+              aria-haspopup="menu"
               className="h-10 px-4 rounded-[10px] shrink-0"
             >
-              <UploadCloud className="w-4 h-4 shrink-0" />
-              <span>Import</span>
+              <Plus className="w-4 h-4 shrink-0" />
+              <span>New</span>
+              <ChevronDown className={`w-3.5 h-3.5 opacity-85 transition-transform ${isNewMenuOpen ? 'rotate-180' : ''}`} />
             </Button>
+
+            {isNewMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setIsNewMenuOpen(false)} />
+                <div
+                  role="menu"
+                  aria-label="Create or import options"
+                  className="absolute right-0 top-full mt-1.5 w-56 rounded-[12px] bg-[var(--surface)] border border-[var(--line)] shadow-xl z-40 py-1.5 flex flex-col"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsNewMenuOpen(false);
+                      handleOpenUploadModal(null);
+                    }}
+                    className="w-full px-3.5 py-2.5 text-left hover:bg-[var(--surface-subtle)] flex items-center gap-3 cursor-pointer transition-colors"
+                  >
+                    <UploadCloud className="w-4 h-4 text-[#1B4B91] shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-semibold text-[var(--ink)]">Import file</div>
+                      <div className="text-[11px] text-[var(--muted)]">PDF, Word, Excel, PPTX, Text</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsNewMenuOpen(false);
+                      pdfFileInputRef.current?.click();
+                    }}
+                    className="w-full px-3.5 py-2.5 text-left hover:bg-[var(--surface-subtle)] flex items-center gap-3 cursor-pointer transition-colors"
+                  >
+                    <PenTool className="w-4 h-4 text-[#1B4B91] shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-semibold text-[var(--ink)]">Open in Editor</div>
+                      <div className="text-[11px] text-[var(--muted)]">Edit, fill &amp; sign a PDF</div>
+                    </div>
+                  </button>
+
+                  <div className="my-1 border-t border-[var(--line)]" role="separator" />
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsNewMenuOpen(false);
+                      setIsNewFolderModalOpen(true);
+                    }}
+                    className="w-full px-3.5 py-2 text-left hover:bg-[var(--surface-subtle)] flex items-center gap-3 cursor-pointer transition-colors"
+                  >
+                    <FolderPlus className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span className="text-[13px] font-medium text-[var(--ink)]">New folder</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </Card>
