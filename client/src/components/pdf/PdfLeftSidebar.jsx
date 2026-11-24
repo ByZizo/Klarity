@@ -27,7 +27,7 @@ function PdfThumbnailCanvas({ pdfJsDoc, sourcePageNumber, rotationOffset = 0, cr
       pdfJsDoc,
       sourcePageNumber,
       targetCanvas,
-      0.28,
+      0.2,
       rotationOffset,
       cropBox,
       true
@@ -128,7 +128,7 @@ export default function PdfLeftSidebar({
   return (
     <aside
       aria-label="Document Navigation Sidebar"
-      className="w-64 sm:w-72 border-r border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] flex flex-col shrink-0 h-full overflow-hidden"
+      className="w-48 sm:w-52 border-r border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] flex flex-col shrink-0 h-full overflow-hidden"
     >
       {/* 5 Sidebar Tabs */}
       <div
@@ -167,11 +167,11 @@ export default function PdfLeftSidebar({
       </div>
 
       {/* Tab Contents */}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="flex-1 overflow-y-auto p-2">
         {/* 1. THUMBNAILS */}
         {activeTab === 'thumbnails' && (
-          <div className="flex flex-col gap-2.5">
-            <div className="text-[13px] font-semibold text-[var(--muted)] flex items-center justify-between px-1">
+          <div className="flex flex-col gap-2">
+            <div className="text-[12px] font-semibold text-[var(--muted)] flex items-center justify-between px-1">
               <span>Pages ({visiblePages.length})</span>
             </div>
             {visiblePages.map((pNum, idx) => {
@@ -185,13 +185,13 @@ export default function PdfLeftSidebar({
                   key={`thumb_${annKey}_${idx}`}
                   type="button"
                   onClick={() => onSelectPage(pNum)}
-                  className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] ${
+                  className={`w-full max-w-[132px] mx-auto text-left p-1.5 rounded-lg border transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] ${
                     isCurrent
                       ? 'border-[var(--brand)] bg-[var(--brand-soft)] ring-1 ring-[var(--brand)]/40'
                       : 'border-[var(--line)] bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
-                  <div className="aspect-[3/4] bg-white rounded-lg border border-slate-300 flex flex-col items-center justify-center relative overflow-hidden shadow-2xs">
+                  <div className="aspect-[3/4] bg-white rounded-md border border-slate-300 flex flex-col items-center justify-center relative overflow-hidden shadow-2xs">
                     {pdfJsDoc && descriptor?.sourceType !== 'blank' ? (
                       <>
                         <PdfThumbnailCanvas
@@ -200,29 +200,29 @@ export default function PdfLeftSidebar({
                           rotationOffset={rot}
                           cropBox={descriptor?.cropBox || null}
                         />
-                        <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-slate-900/75 text-white text-[11px] font-semibold">
+                        <span className="absolute bottom-1 left-1 px-1 py-0.5 rounded bg-slate-900/75 text-white text-[10px] font-semibold leading-none">
                           {pNum}
                         </span>
                       </>
                     ) : (
                       <>
-                        <span className="text-slate-700 font-semibold text-[15px]">{pNum}</span>
+                        <span className="text-slate-700 font-semibold text-[13px]">{pNum}</span>
                         {descriptor?.sourceType === 'blank' && (
-                          <span className="text-[11px] text-slate-400 mt-0.5">Blank page</span>
+                          <span className="text-[10px] text-slate-400 mt-0.5">Blank</span>
                         )}
                       </>
                     )}
                     {pageAnns.length > 0 && (
-                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-[var(--brand)] text-white text-[11px] font-bold">
+                      <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded-full bg-[var(--brand)] text-white text-[10px] font-bold leading-none">
                         {pageAnns.length}
                       </span>
                     )}
                   </div>
-                  <div className="mt-1.5 flex items-center justify-between text-[13px] font-medium text-[var(--ink)]">
+                  <div className="mt-1 flex items-center justify-between text-[11px] font-medium text-[var(--ink)]">
                     <span>Page {pNum}</span>
                     {rot ? (
-                      <span className="text-[12px] text-amber-500 flex items-center gap-0.5">
-                        <RotateCw className="w-3 h-3" />
+                      <span className="text-[10px] text-amber-500 flex items-center gap-0.5">
+                        <RotateCw className="w-2.5 h-2.5" />
                         {rot}°
                       </span>
                     ) : null}
