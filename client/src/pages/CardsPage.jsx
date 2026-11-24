@@ -1,13 +1,9 @@
 import React, { useState } from 'react';
 import {
   Plus,
-  CreditCard,
-  Calculator,
-  Sparkles,
-  PhoneCall
+  CreditCard
 } from 'lucide-react';
 import { Button, Card, Pill, EmptyState, Skeleton, ConfirmDialog } from '../components/ui';
-import { InteractivePayoffComparison } from '../components/InteractivePayoffComparison';
 
 export function CardsPage({
   isLoading = false,
@@ -16,25 +12,14 @@ export function CardsPage({
   manualAssets = [],
   displayCardBalances = 0,
   displayCash = 0,
-  projectedCashAfterBills = 0,
   cardsFilter = 'all',
   setCardsFilter,
-  cardsPayoffTab = 'speed',
-  setCardsPayoffTab,
-  debtStrategy = 'avalanche',
-  setDebtStrategy,
-  extraDebtPayment = 150,
-  setExtraDebtPayment,
-  debtPayoffComparison,
   setSelectedCardIds,
   setActiveTab,
   setIsAddAccountOpen,
   setIsAddManualAssetOpen,
-  setIsHardshipModalOpen,
   handleDeleteAccount,
   handleDeleteManualAsset,
-  handleSendPayoffPlanToAi,
-  setChatInput,
   fmtMoney
 }) {
   const [cardToRemove, setCardToRemove] = useState(null);
@@ -71,7 +56,7 @@ export function CardsPage({
             Cards and accounts
           </h1>
           <p className="text-[15px] font-medium text-[var(--muted)] mt-0.5">
-            All your credit cards, checking accounts, and debt help plans in one place.
+            All your credit cards, checking accounts, and loans in one place.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -82,10 +67,6 @@ export function CardsPage({
           <Button variant="secondary" size="sm" onClick={() => setIsAddManualAssetOpen(true)}>
             <CreditCard className="w-4 h-4" />
             Add loan or asset
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setIsHardshipModalOpen(true)}>
-            <PhoneCall className="w-4 h-4" />
-            Debt help
           </Button>
         </div>
       </div>
@@ -145,7 +126,7 @@ export function CardsPage({
       {allCount === 0 ? (
         <EmptyState
           title="No cards or accounts added"
-          message="Add a credit card, debit account, or loan to track balances and payoff options."
+          message="Add a credit card, debit account, or loan to track your balances."
           actionLabel="Add card or bank"
           onAction={() => setIsAddAccountOpen(true)}
         />
@@ -281,147 +262,6 @@ export function CardsPage({
             ))}
         </div>
       )}
-
-      {/* 3. Debt Help & Payoff Planner */}
-      <Card className="overflow-hidden flex flex-col">
-        <div className="p-5 border-b border-[var(--line)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[8px] bg-[#1B4B91]/10 flex items-center justify-center text-[#1B4B91] shrink-0">
-              <Calculator className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-serif text-[18px] font-semibold text-[var(--ink)]">
-                Debt help and payoff planner
-              </h2>
-              <p className="text-[13px] font-medium text-[var(--muted)] mt-0.5">
-                Compare payoff speed and explore 0% interest bank relief options.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant={cardsPayoffTab === 'speed' ? 'primary' : 'secondary'}
-              size="sm"
-              onClick={() => setCardsPayoffTab('speed')}
-            >
-              Payoff speed and order
-            </Button>
-            <Button
-              variant={cardsPayoffTab === 'options' ? 'primary' : 'secondary'}
-              size="sm"
-              onClick={() => setCardsPayoffTab('options')}
-            >
-              Debt help options (4 plans)
-            </Button>
-          </div>
-        </div>
-
-        {cardsPayoffTab === 'speed' && debtPayoffComparison && (
-          <div className="p-5 flex flex-col gap-4">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-[var(--surface-subtle)] rounded-[12px] p-4 border border-[var(--line)]">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[13px] font-semibold text-[var(--ink)]">Payoff order:</span>
-                <Button
-                  variant={debtStrategy === 'avalanche' ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={() => setDebtStrategy('avalanche')}
-                >
-                  Highest APR first
-                </Button>
-                <Button
-                  variant={debtStrategy === 'snowball' ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={() => setDebtStrategy('snowball')}
-                >
-                  Smallest balance first
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[13px] font-medium text-[var(--ink)]">
-                  Extra payment: <span className="font-semibold text-[#1B4B91]">+${extraDebtPayment}/mo</span>
-                </span>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {[50, 150, 300, 500].map((amt) => (
-                    <Button
-                      key={amt}
-                      variant={extraDebtPayment === amt ? 'primary' : 'secondary'}
-                      size="sm"
-                      onClick={() => setExtraDebtPayment(amt)}
-                    >
-                      +${amt}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 rounded-[12px] border border-[var(--line)] bg-[var(--surface)] flex flex-col justify-between">
-                <span className="text-[13px] text-[var(--muted)] font-medium">Projected debt-free date</span>
-                <p className="font-serif text-[22px] font-semibold text-[var(--ink)] mt-1">
-                  {debtPayoffComparison.activePlan.finishLabel}
-                </p>
-                <p className="text-[13px] text-[#15803D] font-semibold mt-1">
-                  {debtPayoffComparison.activePlan.months} months ({debtPayoffComparison.monthsSavedVsMin} mo faster)
-                </p>
-              </div>
-
-              <div className="p-4 rounded-[12px] border border-[var(--line)] bg-[var(--surface)] flex flex-col justify-between">
-                <span className="text-[13px] text-[var(--muted)] font-medium">Interest saved vs. minimums</span>
-                <p className="privacy-sensitive font-serif text-[22px] font-semibold text-[#15803D] mt-1">
-                  {fmtMoney(debtPayoffComparison.interestSavedVsMin)}
-                </p>
-                <p className="text-[13px] text-[var(--muted)] font-medium mt-1">
-                  Total interest: <span className="privacy-sensitive">{fmtMoney(debtPayoffComparison.activePlan.totalInterest)}</span>
-                </p>
-              </div>
-
-              <div className="p-4 rounded-[12px] border border-[var(--line)] bg-[var(--surface)] flex flex-col justify-between">
-                <span className="text-[13px] text-[var(--muted)] font-medium">Priority order</span>
-                <ol className="list-decimal list-inside font-medium text-[var(--ink)] mt-1 space-y-0.5 text-[13px]">
-                  {debtPayoffComparison.activePlan.order.map((name, i) => (
-                    <li key={i} className="truncate">{name}</li>
-                  ))}
-                </ol>
-              </div>
-            </div>
-
-            {projectedCashAfterBills > displayCardBalances && displayCardBalances > 0 && (
-              <div className="p-4 rounded-[12px] bg-[#1B4B91]/5 border border-[#1B4B91]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 text-[var(--ink)] min-w-0 text-[15px] font-medium">
-                  <Sparkles className="w-4 h-4 text-[#1B4B91] shrink-0" />
-                  <span>
-                    You have <span className="privacy-sensitive font-semibold">{fmtMoney(projectedCashAfterBills)}</span> in checking after bills—enough to clear all card debt today.
-                  </span>
-                </div>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    setChatInput('Should I pay off all my credit cards today with my checking balance?');
-                    setActiveTab('advisor');
-                  }}
-                >
-                  Ask Advisor
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {cardsPayoffTab === 'options' && (
-          <div className="p-5">
-            <InteractivePayoffComparison
-              cards={displayCards}
-              availableCash={displayCash}
-              onOpenHardshipPlaybook={() => setIsHardshipModalOpen(true)}
-              onSendPlanToAi={(plan) => handleSendPayoffPlanToAi(plan)}
-            />
-          </div>
-        )}
-      </Card>
 
       {/* Confirm Remove Card */}
       <ConfirmDialog
