@@ -85,6 +85,40 @@ export default function PdfLeftSidebar({
   readOnlyLocked = false
 }) {
   const [replyDrafts, setReplyDrafts] = useState({});
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const saved = parseInt(localStorage.getItem('klarity_pdf_sidebar_width') || '', 10);
+      if (!Number.isNaN(saved) && saved >= 170 && saved <= 440) return saved;
+    } catch {}
+    return 208;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+
+  const handleStartSidebarResize = (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    setIsResizing(true);
+
+    const onMouseMove = (moveEvent) => {
+      const nextWidth = Math.max(170, Math.min(440, startWidth + (moveEvent.clientX - startX)));
+      setSidebarWidth(nextWidth);
+    };
+
+    const onMouseUp = (upEvent) => {
+      const finalWidth = Math.max(170, Math.min(440, startWidth + (upEvent.clientX - startX)));
+      setSidebarWidth(finalWidth);
+      setIsResizing(false);
+      try {
+        localStorage.setItem('klarity_pdf_sidebar_width', String(finalWidth));
+      } catch {}
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
 
   const tabs = [
     { id: 'thumbnails', label: 'Pages', icon: FileText },
@@ -128,8 +162,26 @@ export default function PdfLeftSidebar({
   return (
     <aside
       aria-label="Document Navigation Sidebar"
-      className="w-48 sm:w-52 border-r border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] flex flex-col shrink-0 h-full overflow-hidden"
+      style={{ width: `${sidebarWidth}px` }}
+      className="relative border-r border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] flex flex-col shrink-0 h-full overflow-hidden select-none"
     >
+      {/* Drag-to-resize right edge handle */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize document sidebar"
+        title="Drag to resize sidebar (double-click to reset)"
+        onMouseDown={handleStartSidebarResize}
+        onDoubleClick={() => {
+          setSidebarWidth(208);
+          try {
+            localStorage.setItem('klarity_pdf_sidebar_width', '208');
+          } catch {}
+        }}
+        className={`absolute top-0 right-0 bottom-0 w-1.5 z-20 cursor-col-resize transition-colors ${
+          isResizing ? 'bg-[var(--brand)]' : 'hover:bg-[var(--brand)]/50'
+        }`}
+      />
       {/* 5 Sidebar Tabs */}
       <div
         role="tablist"
@@ -185,7 +237,7 @@ export default function PdfLeftSidebar({
                   key={`thumb_${annKey}_${idx}`}
                   type="button"
                   onClick={() => onSelectPage(pNum)}
-                  className={`w-full max-w-[132px] mx-auto text-left p-1.5 rounded-lg border transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] ${
+                  className={`w-full max-w-[240px] mx-auto text-left p-1.5 rounded-lg border transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] ${
                     isCurrent
                       ? 'border-[var(--brand)] bg-[var(--brand-soft)] ring-1 ring-[var(--brand)]/40'
                       : 'border-[var(--line)] bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)]'
