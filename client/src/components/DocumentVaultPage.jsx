@@ -23,10 +23,15 @@ import {
   ArrowUpDown,
   Check,
   KeyRound,
-  PenTool
+  PenTool,
+  FileOutput,
+  Presentation,
+  MoreVertical
 } from 'lucide-react';
 import { Button, Card, EmptyState, ConfirmDialog, Pill, PaginationBar } from './ui';
 const PdfEditorModal = React.lazy(() => import('./PdfEditorModal'));
+import VaultImportModal from './VaultImportModal';
+import VaultExportModal from './VaultExportModal';
 import {
   getAllDocuments,
   saveDocument,
@@ -35,6 +40,7 @@ import {
   saveDocumentFolders,
   formatFileSize
 } from '../utils/documentVaultStorage';
+import { ensureDocumentCanonical } from '../utils/documentPipeline';
 
 export default function DocumentVaultPage({
   onShowToast,
@@ -62,12 +68,20 @@ export default function DocumentVaultPage({
 
   // Modals state
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [droppedImportFile, setDroppedImportFile] = useState(null);
+  const [isVaultDropActive, setIsVaultDropActive] = useState(false);
+  const [exportDoc, setExportDoc] = useState(null);
+  const [recentlyImportedDoc, setRecentlyImportedDoc] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
+  const [previewCanonical, setPreviewCanonical] = useState(null);
+  const [previewTableIdx, setPreviewTableIdx] = useState(0);
+  const [previewSlideIdx, setPreviewSlideIdx] = useState(0);
   const [editingDoc, setEditingDoc] = useState(null);
   const [deleteConfirmDoc, setDeleteConfirmDoc] = useState(null);
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
   const [newFolderNameInput, setNewFolderNameInput] = useState('');
   const [isFolderDropdownOpen, setIsFolderDropdownOpen] = useState(false);
+  const [openDocMenuId, setOpenDocMenuId] = useState(null);
 
   // Upload modal form state
   const [uploadFile, setUploadFile] = useState(null);
@@ -196,7 +210,8 @@ export default function DocumentVaultPage({
     if (file) handleProcessFile(file);
   };
 
-  const handleOpenUploadModal = () => {
+  const handleOpenUploadModal = (fileToImport = null) => {
+    setDroppedImportFile(fileToImport instanceof File ? fileToImport : null);
     if (selectedFolder !== 'All' && folders.includes(selectedFolder)) {
       setDocFolder(selectedFolder);
     } else if (folders.length > 0) {
@@ -208,6 +223,47 @@ export default function DocumentVaultPage({
     setUploadError('');
     setIsUploadModalOpen(true);
   };
+
+  const handleImportComplete = async (newDoc, targetFolder) => {
+    const saved = await saveDocument(newDoc);
+    const updatedDocs = [saved, ...documents];
+    setDocuments(updatedDocs);
+    if (onDocumentsCountChange) onDocumentsCountChange(updatedDocs.length);
+
+    if (targetFolder && !folders.includes(targetFolder)) {
+      const updatedFolders = Array.from(new Set([...folders, targetFolder]));
+      setFolders(updatedFolders);
+      saveDocumentFolders(updatedFolders);
+    }
+
+    setRecentlyImportedDoc(saved);
+    notify(`Imported "${saved.name}" into ${targetFolder}`);
+  };
+
+  // Resolve canonical IR whenever previewDoc opens (for Word, Excel/CSV, PPTX, MD, TXT)
+  useEffect(() => {
+    let active = true;
+    setPreviewTableIdx(0);
+    setPreviewSlideIdx(0);
+    if (!previewDoc) {
+      setPreviewCanonical(null);
+      return;
+    }
+    if (previewDoc.canonical) {
+      setPreviewCanonical(previewDoc.canonical);
+      return;
+    }
+    ensureDocumentCanonical(previewDoc)
+      .then((c) => {
+        if (active) setPreviewCanonical(c);
+      })
+      .catch(() => {
+        if (active) setPreviewCanonical(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [previewDoc]);
 
   const handleSaveUpload = async (e) => {
     e.preventDefault();
@@ -404,6 +460,30 @@ export default function DocumentVaultPage({
         label: 'SPREADSHEET'
       };
     }
+    if (type.includes('presentation') || type.includes('powerpoint') || /\.pptx?$/i.test(name)) {
+      return {
+        icon: Presentation,
+        color: 'text-amber-600 dark:text-amber-400',
+        bg: 'bg-amber-500/10 dark:bg-amber-500/20',
+        label: 'PPTX'
+      };
+    }
+    if (type.includes('wordprocessingml') || type.includes('msword') || /\.docx?$/i.test(name)) {
+      return {
+        icon: FileText,
+        color: 'text-indigo-600 dark:text-indigo-400',
+        bg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
+        label: 'WORD'
+      };
+    }
+    if (type.includes('markdown') || type.includes('text/plain') || /\.(md|markdown|txt)$/i.test(name)) {
+      return {
+        icon: FileText,
+        color: 'text-sky-600 dark:text-sky-400',
+        bg: 'bg-sky-500/10 dark:bg-sky-500/20',
+        label: name.endsWith('.md') ? 'MD' : 'TEXT'
+      };
+    }
     return {
       icon: File,
       color: 'text-blue-600 dark:text-blue-400',
@@ -426,7 +506,9 @@ export default function DocumentVaultPage({
         (d.name && d.name.toLowerCase().includes(q)) ||
         (d.fileName && d.fileName.toLowerCase().includes(q)) ||
         (d.folder && d.folder.toLowerCase().includes(q)) ||
-        (d.notes && d.notes.toLowerCase().includes(q))
+        (d.notes && d.notes.toLowerCase().includes(q)) ||
+        (d.searchPreview && d.searchPreview.toLowerCase().includes(q)) ||
+        (Array.isArray(d.tags) && d.tags.some(t => String(t).toLowerCase().includes(q)))
       );
     }
 
@@ -523,6 +605,114 @@ export default function DocumentVaultPage({
     return documents.reduce((sum, d) => sum + (d.fileSize || 0), 0);
   }, [documents]);
 
+  const renderDocumentActionsMenu = (doc) => {
+    const isMenuOpen = openDocMenuId === doc.id;
+    const isPdf = Boolean(doc.fileType?.includes('pdf') || doc.fileName?.toLowerCase().endsWith('.pdf'));
+
+    return (
+      <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => setOpenDocMenuId(isMenuOpen ? null : doc.id)}
+          title="Document actions"
+          aria-label={`Actions for ${doc.name}`}
+          aria-expanded={isMenuOpen}
+          className={`p-1.5 rounded-[8px] border transition-colors cursor-pointer ${
+            isMenuOpen
+              ? 'bg-[var(--surface-subtle)] border-[#1B4B91]/40 text-[#1B4B91]'
+              : 'border-transparent text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+          }`}
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+
+        {isMenuOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-30"
+              onClick={() => setOpenDocMenuId(null)}
+            />
+            <div className="absolute right-0 top-full mt-1 w-48 py-1.5 rounded-[10px] bg-[var(--surface)] border border-[var(--line)] shadow-xl z-40 flex flex-col">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenDocMenuId(null);
+                  setPreviewDoc(doc);
+                }}
+                className="w-full px-3 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer"
+              >
+                <Eye className="w-4 h-4 text-[var(--muted)]" />
+                <span>View</span>
+              </button>
+              {isPdf && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenDocMenuId(null);
+                    setEditingPdfDoc(doc);
+                  }}
+                  className="w-full px-3 py-2 text-left text-[13px] font-medium text-[#1B4B91] hover:bg-[#1B4B91]/10 flex items-center gap-2.5 cursor-pointer"
+                >
+                  <PenTool className="w-4 h-4" />
+                  <span>Open in Editor</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenDocMenuId(null);
+                  setExportDoc(doc);
+                }}
+                className="w-full px-3 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer"
+              >
+                <FileOutput className="w-4 h-4 text-[var(--muted)]" />
+                <span>Export As...</span>
+              </button>
+              {doc.dataUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenDocMenuId(null);
+                    handleDownload(doc);
+                  }}
+                  className="w-full px-3 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-[var(--muted)]" />
+                  <span>Download</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenDocMenuId(null);
+                  setEditingDoc(doc);
+                  setEditingIsNewFolder(false);
+                  setEditingNewFolderInput('');
+                }}
+                className="w-full px-3 py-2 text-left text-[13px] font-medium text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center gap-2.5 cursor-pointer"
+              >
+                <Edit3 className="w-4 h-4 text-[var(--muted)]" />
+                <span>Edit Details</span>
+              </button>
+              <div className="my-1 border-t border-[var(--line)]" />
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenDocMenuId(null);
+                  setDeleteConfirmDoc(doc);
+                }}
+                className="w-full px-3 py-2 text-left text-[13px] font-medium text-rose-500 hover:bg-rose-500/10 flex items-center gap-2.5 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   const renderDocumentCard = (doc) => {
     const badge = getFileBadge(doc.fileType, doc.fileName);
     const IconComp = badge.icon;
@@ -530,62 +720,17 @@ export default function DocumentVaultPage({
     return (
       <Card
         key={doc.id}
-        className="klarity-virtual-row p-4 flex flex-col justify-between hover:border-[#1B4B91]/50 hover:shadow-md transition-all group"
+        className={`klarity-virtual-row p-4 flex flex-col justify-between hover:border-[#1B4B91]/50 hover:shadow-md transition-all group ${
+          openDocMenuId === doc.id ? 'relative z-30' : ''
+        }`}
       >
         <div>
-          {/* Card Header: Badge & Quick Actions */}
+          {/* Card Header: Badge & Three-Dot Actions Menu */}
           <div className="flex items-start justify-between gap-2 mb-3">
             <div className={`p-2.5 rounded-[10px] ${badge.bg} ${badge.color} shrink-0`}>
               <IconComp className="w-5 h-5" />
             </div>
-            <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
-              <button
-                type="button"
-                onClick={() => setPreviewDoc(doc)}
-                title="Preview document"
-                className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[#1B4B91] hover:bg-[var(--surface-subtle)] cursor-pointer"
-              >
-                <Eye className="w-4 h-4" />
-              </button>
-              {(doc.fileType?.includes('pdf') || doc.fileName?.toLowerCase().endsWith('.pdf')) && (
-                <button
-                  type="button"
-                  onClick={() => setEditingPdfDoc(doc)}
-                  title="Open in Editor"
-                  className="p-1.5 rounded-[6px] text-[#1B4B91] hover:bg-[#1B4B91]/10 cursor-pointer"
-                >
-                  <PenTool className="w-4 h-4" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => handleDownload(doc)}
-                title="Download file"
-                className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[#1B4B91] hover:bg-[var(--surface-subtle)] cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingDoc(doc);
-                  setEditingIsNewFolder(false);
-                  setEditingNewFolderInput('');
-                }}
-                title="Edit details"
-                className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[#1B4B91] hover:bg-[var(--surface-subtle)] cursor-pointer"
-              >
-                <Edit3 className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeleteConfirmDoc(doc)}
-                title="Delete document"
-                className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-rose-500 hover:bg-[var(--surface-subtle)] cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
+            {renderDocumentActionsMenu(doc)}
           </div>
 
           {/* Document Title & File Details */}
@@ -680,58 +825,9 @@ export default function DocumentVaultPage({
           </div>
         </div>
 
-        {/* List Action Buttons */}
-        <div className="flex items-center gap-1 shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPreviewDoc(doc)}
-            title="Preview document"
-          >
-            <Eye className="w-4 h-4" />
-            <span className="hidden md:inline">View</span>
-          </Button>
-          {(doc.fileType?.includes('pdf') || doc.fileName?.toLowerCase().endsWith('.pdf')) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setEditingPdfDoc(doc)}
-              title="Open in Editor"
-              className="text-[#1B4B91] hover:bg-[#1B4B91]/10"
-            >
-              <PenTool className="w-4 h-4" />
-              <span className="hidden md:inline">Edit</span>
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleDownload(doc)}
-            title="Download file"
-          >
-            <Download className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setEditingDoc(doc);
-              setEditingIsNewFolder(false);
-              setEditingNewFolderInput('');
-            }}
-            title="Edit details"
-          >
-            <Edit3 className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setDeleteConfirmDoc(doc)}
-            title="Delete document"
-            className="text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+        {/* List Action Three-Dot Dropdown Menu */}
+        <div className="flex items-center shrink-0">
+          {renderDocumentActionsMenu(doc)}
         </div>
       </div>
     );
@@ -887,7 +983,64 @@ export default function DocumentVaultPage({
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div
+      className={`flex flex-col gap-5 relative rounded-[14px] transition-all ${
+        isVaultDropActive ? 'ring-2 ring-[#1B4B91] ring-offset-2 ring-offset-[var(--bg)]' : ''
+      }`}
+      onDragOver={(e) => {
+        if (e.dataTransfer?.types?.includes('Files')) {
+          e.preventDefault();
+          setIsVaultDropActive(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          setIsVaultDropActive(false);
+        }
+      }}
+      onDrop={(e) => {
+        if (e.dataTransfer?.files?.length > 0) {
+          e.preventDefault();
+          setIsVaultDropActive(false);
+          handleOpenUploadModal(e.dataTransfer.files[0]);
+        }
+      }}
+    >
+      {/* Post-import confirmation banner with View Document quick action */}
+      {recentlyImportedDoc && (
+        <div className="px-4 py-2.5 rounded-[10px] bg-emerald-500/10 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2 text-[13px]">
+          <div className="flex items-center gap-2 text-[var(--ink)] min-w-0">
+            <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="truncate">
+              Imported <strong>{recentlyImportedDoc.name}</strong> into{' '}
+              <strong>{recentlyImportedDoc.folder}</strong>
+              {recentlyImportedDoc.canonical?.summary ? ` (${recentlyImportedDoc.canonical.summary})` : ''}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setPreviewDoc(recentlyImportedDoc);
+                setRecentlyImportedDoc(null);
+              }}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>View Document</span>
+            </Button>
+            <button
+              type="button"
+              onClick={() => setRecentlyImportedDoc(null)}
+              aria-label="Dismiss import banner"
+              className="p-1 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Action and Filter Toolbar */}
       <Card className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Left: Compact Icon Switcher (Passwords / Documents) & Flexible Search Bar */}
@@ -1026,14 +1179,14 @@ export default function DocumentVaultPage({
             <span>Editor</span>
           </Button>
 
-          {/* Upload Document Primary Button (Anchored Prominently on the Far Right) */}
+          {/* Import / Upload Document Primary Button (Anchored Prominently on the Far Right) */}
           <Button
             variant="primary"
             size="sm"
-            onClick={handleOpenUploadModal}
+            onClick={() => handleOpenUploadModal(null)}
           >
-            <Plus className="w-4 h-4" />
-            <span>Add document</span>
+            <UploadCloud className="w-4 h-4" />
+            <span>Import</span>
           </Button>
         </div>
       </Card>
@@ -1266,7 +1419,7 @@ export default function DocumentVaultPage({
                 {paginatedUnfiledDocuments.map(renderDocumentCard)}
               </div>
             ) : (
-              <Card className="divide-y divide-[var(--line)] overflow-hidden">
+              <Card className="divide-y divide-[var(--line)] overflow-visible">
                 {sortedFolders.map(renderFolderRow)}
                 {paginatedUnfiledDocuments.map(renderDocumentRow)}
               </Card>
@@ -1296,7 +1449,7 @@ export default function DocumentVaultPage({
                 {paginatedFilteredDocuments.map(renderDocumentCard)}
               </div>
             ) : (
-              <Card className="divide-y divide-[var(--line)] overflow-hidden">
+              <Card className="divide-y divide-[var(--line)] overflow-visible">
                 {paginatedFilteredDocuments.map(renderDocumentRow)}
               </Card>
             )}
@@ -1339,7 +1492,7 @@ export default function DocumentVaultPage({
                 {paginatedFilteredDocuments.map(renderDocumentCard)}
               </div>
             ) : (
-              <Card className="divide-y divide-[var(--line)] overflow-hidden">
+              <Card className="divide-y divide-[var(--line)] overflow-visible">
                 {paginatedFilteredDocuments.map(renderDocumentRow)}
               </Card>
             )}
@@ -1376,175 +1529,29 @@ export default function DocumentVaultPage({
       )}
 
       {/* ========================================================================= */}
-      {/* Upload Document Modal                                                     */}
+      {/* Multi-Format Import Modal                                                 */}
       {/* ========================================================================= */}
-      {isUploadModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="fixed inset-0" onClick={handleCloseUploadModal} />
-          <Card className="relative w-full max-w-lg p-6 shadow-2xl z-10 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--line)]">
-              <div className="flex items-center gap-2 text-[var(--ink)] font-semibold text-[17px]">
-                <UploadCloud className="w-5 h-5 text-[#1B4B91]" />
-                <span>Add Document to Vault</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleCloseUploadModal}
-                className="p-1 rounded text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <VaultImportModal
+        isOpen={isUploadModalOpen}
+        onClose={() => {
+          setIsUploadModalOpen(false);
+          setDroppedImportFile(null);
+        }}
+        folders={folders}
+        initialFolder={docFolder || selectedFolder}
+        initialFile={droppedImportFile}
+        onImportComplete={handleImportComplete}
+      />
 
-            {uploadError && (
-              <div className="p-3 rounded-[8px] bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-[13px] flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{uploadError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveUpload} className="flex flex-col gap-4">
-              {/* Drag and Drop Zone */}
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-[12px] p-6 text-center cursor-pointer transition-all ${
-                  isDraggingFile
-                    ? 'border-[#1B4B91] bg-[#1B4B91]/5 scale-[1.01]'
-                    : uploadFile
-                    ? 'border-emerald-500/50 bg-emerald-500/5'
-                    : 'border-[var(--line)] hover:border-[#1B4B91] bg-[var(--surface-subtle)]'
-                }`}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.webp,.svg,.txt,.csv,.xlsx,.doc,.docx"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleProcessFile(f);
-                  }}
-                  className="hidden"
-                />
-
-                {uploadFile ? (
-                  <div className="flex flex-col items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                    <Check className="w-8 h-8" />
-                    <span className="font-semibold text-[14px] text-[var(--ink)]">{uploadFile.name}</span>
-                    <span className="text-[12px] text-[var(--muted)]">
-                      {formatFileSize(uploadFile.size)} • Click to replace file
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-2">
-                    <UploadCloud className="w-9 h-9 text-[var(--muted)]" />
-                    <div>
-                      <span className="font-semibold text-[14px] text-[#1B4B91]">Click to browse</span>
-                      <span className="text-[14px] text-[var(--muted)]"> or drag & drop document</span>
-                    </div>
-                    <span className="text-[12px] text-[var(--muted)]">
-                      Supports PDF, PNG, JPG, Spreadsheets, and Text (up to 35 MB)
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Document Title */}
-              <div>
-                <label className="text-[13px] font-medium text-[var(--ink)] block mb-1">
-                  Document Title <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 2025 W2 Tax Form, State Farm Auto Policy"
-                  value={docName}
-                  onChange={(e) => setDocName(e.target.value)}
-                  className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3.5 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
-                />
-              </div>
-
-              {/* Folder Selector */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[13px] font-medium text-[var(--ink)] block mb-1">
-                    Folder / Category
-                  </label>
-                  <select
-                    value={docFolder}
-                    onChange={(e) => {
-                      setDocFolder(e.target.value);
-                      if (e.target.value === '__CREATE_NEW__') {
-                        setNewDocFolderInput('');
-                      }
-                    }}
-                    className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91] cursor-pointer"
-                  >
-                    {folders.map(f => (
-                      <option key={f} value={f}>📁 {f}</option>
-                    ))}
-                    {folders.length > 0 && <option disabled>──────────</option>}
-                    <option value="__CREATE_NEW__">📁+ Create new folder...</option>
-                  </select>
-
-                  {docFolder === '__CREATE_NEW__' && (
-                    <div className="mt-2 relative">
-                      <Folder className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 fill-amber-400" />
-                      <input
-                        type="text"
-                        autoFocus
-                        required
-                        placeholder="Enter new folder name (e.g. Taxes, Leases)..."
-                        value={newDocFolderInput}
-                        onChange={(e) => setNewDocFolderInput(e.target.value)}
-                        className="w-full bg-[var(--surface-subtle)] border border-amber-500/50 rounded-[8px] pl-9 pr-3.5 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-amber-500"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-[13px] font-medium text-[var(--ink)] block mb-1">
-                    Document Date / Tax Year
-                  </label>
-                  <input
-                    type="date"
-                    value={docDate}
-                    onChange={(e) => setDocDate(e.target.value)}
-                    className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-2 text-[14px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
-                  />
-                </div>
-              </div>
-
-              {/* Optional Notes */}
-              <div>
-                <label className="text-[13px] font-medium text-[var(--ink)] block mb-1">
-                  Notes / Policy Details (optional)
-                </label>
-                <textarea
-                  rows="2"
-                  placeholder="e.g. Policy #94821, renewal date Nov 2027, $500 deductible..."
-                  value={docNotes}
-                  onChange={(e) => setDocNotes(e.target.value)}
-                  className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] p-3 text-[13px] text-[var(--ink)] placeholder-[var(--muted)] outline-none focus:border-[#1B4B91] resize-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--line)]">
-                <Button type="button" variant="secondary" onClick={handleCloseUploadModal}>
-                  Cancel
-                </Button>
-                <Button type="submit" variant="primary" disabled={isSaving || !uploadFile}>
-                  <Check className="w-4 h-4" />
-                  <span>{isSaving ? 'Encrypting & Saving...' : 'Save to Vault'}</span>
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
+      {/* ========================================================================= */}
+      {/* Multi-Format Export Modal                                                 */}
+      {/* ========================================================================= */}
+      <VaultExportModal
+        doc={exportDoc}
+        isOpen={Boolean(exportDoc)}
+        onClose={() => setExportDoc(null)}
+        onShowToast={notify}
+      />
 
       {/* ========================================================================= */}
       {/* Inline Document Preview Modal                                             */}
@@ -1593,11 +1600,22 @@ export default function DocumentVaultPage({
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => handleDownload(previewDoc)}
+                  onClick={() => setExportDoc(previewDoc)}
+                  title="Export document to PDF, Word, Excel, CSV, PowerPoint, Markdown, or Text"
                 >
-                  <Download className="w-4 h-4" />
-                  <span>Download</span>
+                  <FileOutput className="w-4 h-4" />
+                  <span>Export As...</span>
                 </Button>
+                {previewDoc.dataUrl && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleDownload(previewDoc)}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">Original</span>
+                  </Button>
+                )}
                 <Button
                   variant="secondary"
                   size="sm"
@@ -1640,13 +1658,13 @@ export default function DocumentVaultPage({
 
             {/* Preview Frame Body */}
             <div className="flex-1 w-full bg-[var(--surface-subtle)] dark:bg-[#0a0a0c] overflow-auto flex items-center justify-center p-2">
-              {previewDoc.fileType?.includes('pdf') || previewDoc.fileName?.toLowerCase().endsWith('.pdf') ? (
+              {(previewDoc.fileType?.includes('pdf') || previewDoc.fileName?.toLowerCase().endsWith('.pdf')) && previewDoc.dataUrl ? (
                 <iframe
                   src={previewDoc.dataUrl}
                   title={previewDoc.name}
                   className="w-full h-full border-0 rounded-lg bg-white"
                 />
-              ) : previewDoc.fileType?.includes('image') || /\.(png|jpe?g|webp|svg|gif)$/i.test(previewDoc.fileName) ? (
+              ) : (previewDoc.fileType?.includes('image') || /\.(png|jpe?g|webp|svg|gif)$/i.test(previewDoc.fileName)) && previewDoc.dataUrl ? (
                 <img
                   src={previewDoc.dataUrl}
                   alt={previewDoc.name}
@@ -1654,6 +1672,157 @@ export default function DocumentVaultPage({
                   decoding="async"
                   className="max-h-full max-w-full object-contain rounded-lg shadow-lg"
                 />
+              ) : previewCanonical && (previewCanonical.slides?.length > 0 || previewCanonical.tables?.length > 0 || previewCanonical.blocks?.length > 0) ? (
+                <div className="w-full h-full overflow-auto p-4 sm:p-6 bg-[var(--surface)] rounded-lg text-[var(--ink)] flex flex-col gap-4">
+                  {/* Presentation Slide Viewer */}
+                  {previewCanonical.slides?.length > 0 && (() => {
+                    const safeIdx = Math.min(previewSlideIdx, previewCanonical.slides.length - 1);
+                    const slide = previewCanonical.slides[safeIdx];
+                    return (
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--line)]">
+                          <span className="text-[12px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+                            Slide {slide.index} of {previewCanonical.slides.length}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={safeIdx <= 0}
+                              onClick={() => setPreviewSlideIdx((i) => Math.max(0, i - 1))}
+                            >
+                              Previous
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={safeIdx >= previewCanonical.slides.length - 1}
+                              onClick={() => setPreviewSlideIdx((i) => Math.min(previewCanonical.slides.length - 1, i + 1))}
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="p-6 rounded-[12px] bg-[var(--surface-subtle)] border border-[var(--line)] min-h-[260px] flex flex-col gap-3">
+                          <h3 className="text-[20px] font-bold text-[#1B4B91]">{slide.title}</h3>
+                          {slide.bullets?.length > 0 && (
+                            <ul className="list-disc pl-5 space-y-1.5 text-[14px]">
+                              {slide.bullets.map((b, bi) => (
+                                <li key={bi}>{b}</li>
+                              ))}
+                            </ul>
+                          )}
+                          {slide.notes && (
+                            <div className="mt-auto pt-3 border-t border-[var(--line)] text-[12px] text-[var(--muted)]">
+                              <strong>Speaker Notes:</strong> {slide.notes}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Spreadsheet / Tabular Viewer */}
+                  {previewCanonical.tables?.length > 0 && (() => {
+                    const safeTIdx = Math.min(previewTableIdx, previewCanonical.tables.length - 1);
+                    const tbl = previewCanonical.tables[safeTIdx];
+                    const visibleRows = (tbl.rows || []).slice(0, 200);
+                    return (
+                      <div className="flex flex-col gap-2">
+                        {previewCanonical.tables.length > 1 && (
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                            {previewCanonical.tables.map((t, ti) => (
+                              <button
+                                key={ti}
+                                type="button"
+                                onClick={() => setPreviewTableIdx(ti)}
+                                className={`px-3 py-1 rounded-[8px] text-[12px] font-medium border cursor-pointer shrink-0 ${
+                                  ti === safeTIdx
+                                    ? 'bg-[#1B4B91] text-white border-[#1B4B91]'
+                                    : 'bg-[var(--surface-subtle)] text-[var(--ink)] border-[var(--line)]'
+                                }`}
+                              >
+                                {t.name || `Sheet ${ti + 1}`}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="overflow-auto border border-[var(--line)] rounded-[8px] max-h-[55vh]">
+                          <table className="w-full text-left border-collapse text-[12px]">
+                            <thead className="bg-[var(--surface-subtle)] sticky top-0">
+                              <tr>
+                                {(tbl.headers || []).map((h, hi) => (
+                                  <th key={hi} className="px-3 py-2 font-semibold border-b border-r border-[var(--line)] whitespace-nowrap">
+                                    {h}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {visibleRows.map((row, ri) => (
+                                <tr key={ri} className="border-b border-[var(--line)] hover:bg-[var(--surface-subtle)]/60">
+                                  {(tbl.headers || []).map((_, ci) => (
+                                    <td key={ci} className="px-3 py-1.5 border-r border-[var(--line)] whitespace-nowrap max-w-[260px] truncate">
+                                      {row[ci] ?? ''}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {(tbl.rows || []).length > 200 && (
+                          <p className="text-[11px] text-[var(--muted)]">
+                            Showing first 200 of {tbl.rows.length.toLocaleString()} rows. Use <strong>Export As...</strong> to download the complete table.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Rich Structured Document Blocks (Word, Markdown, Text) */}
+                  {!previewCanonical.slides?.length && previewCanonical.blocks?.length > 0 && (
+                    <div className="max-w-3xl mx-auto w-full flex flex-col gap-2.5 text-[14px] leading-relaxed">
+                      {previewCanonical.blocks.slice(0, 400).map((b, bi) => {
+                        if (b.type === 'heading') {
+                          const cls =
+                            b.level === 1
+                              ? 'text-[20px] font-bold text-[#1B4B91] mt-3'
+                              : b.level === 2
+                              ? 'text-[16px] font-semibold text-[var(--ink)] mt-2'
+                              : 'text-[14px] font-semibold text-[var(--ink)] mt-1';
+                          return <div key={bi} className={cls}>{b.text}</div>;
+                        }
+                        if (b.type === 'list' && Array.isArray(b.items)) {
+                          const ListTag = b.ordered ? 'ol' : 'ul';
+                          return (
+                            <ListTag key={bi} className={`${b.ordered ? 'list-decimal' : 'list-disc'} pl-5 space-y-1`}>
+                              {b.items.map((item, ii) => <li key={ii}>{item}</li>)}
+                            </ListTag>
+                          );
+                        }
+                        if (b.type === 'quote') {
+                          return (
+                            <blockquote key={bi} className="pl-3 border-l-3 border-[#1B4B91]/50 italic text-[var(--muted)]">
+                              {b.text}
+                            </blockquote>
+                          );
+                        }
+                        if (b.type === 'code') {
+                          return (
+                            <pre key={bi} className="p-3 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)] text-[12px] overflow-x-auto">
+                              <code>{b.text}</code>
+                            </pre>
+                          );
+                        }
+                        if (b.type === 'divider') {
+                          return <hr key={bi} className="border-[var(--line)] my-1" />;
+                        }
+                        return <p key={bi}>{b.text}</p>;
+                      })}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="p-8 text-center text-[var(--ink)] flex flex-col items-center gap-3">
                   <File className="w-16 h-16 text-[var(--muted)]" />
@@ -1661,10 +1830,18 @@ export default function DocumentVaultPage({
                   <p className="text-sm text-[var(--muted)]">
                     Direct inline preview is not supported for this file type.
                   </p>
-                  <Button variant="primary" onClick={() => handleDownload(previewDoc)}>
-                    <Download className="w-4 h-4" />
-                    <span>Download file to view</span>
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="primary" onClick={() => setExportDoc(previewDoc)}>
+                      <FileOutput className="w-4 h-4" />
+                      <span>Export As...</span>
+                    </Button>
+                    {previewDoc.dataUrl && (
+                      <Button variant="secondary" onClick={() => handleDownload(previewDoc)}>
+                        <Download className="w-4 h-4" />
+                        <span>Download original</span>
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

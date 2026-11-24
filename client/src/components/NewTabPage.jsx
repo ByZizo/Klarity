@@ -20,6 +20,16 @@ import {
   saveNewTabPrefs,
   saveNewTabQuickLinks
 } from '../utils/browserSettings';
+import {
+  BROWSER_HISTORY_UPDATED_EVENT,
+  RECENT_SEARCHES_UPDATED_EVENT,
+  buildSearchDropdownItems,
+  clearRecentSearches,
+  deleteRecentSearchItem,
+  loadBrowserHistory,
+  loadRecentSearches
+} from '../utils/browserHistory';
+import { BrowserSearchDropdown } from './BrowserSearchDropdown';
 
 function normalizeShortcutUrl(rawUrl) {
   const trimmed = String(rawUrl || '').trim();
@@ -105,11 +115,26 @@ export function NewTabPage({
   onNavigate,
   onOpenNewTab,
   showHomepageNotes,
-  onToggleHomepageNotes
+  onToggleHomepageNotes,
+  recentSearches: propRecentSearches,
+  browserHistory: propBrowserHistory,
+  recentSearchesEnabled = true,
+  historyEnabled = true
 }) {
   const activeEngine = getSearchEngineById(searchEngineId);
 
   const [query, setQuery] = useState('');
+  const [localRecentSearches, setLocalRecentSearches] = useState(() =>
+    Array.isArray(propRecentSearches) ? propRecentSearches : loadRecentSearches()
+  );
+  const [localHistoryItems, setLocalHistoryItems] = useState(() =>
+    Array.isArray(propBrowserHistory) ? propBrowserHistory : loadBrowserHistory()
+  );
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const [activeDropdownIndex, setActiveDropdownIndex] = useState(-1);
+  const searchFormRef = useRef(null);
+  const searchInputRef = useRef(null);
+
   const [quickLinks, setQuickLinks] = useState(() => loadNewTabQuickLinks());
   const [prefs, setPrefs] = useState(() => loadNewTabPrefs());
   const [now, setNow] = useState(() => new Date());
@@ -136,6 +161,41 @@ export function NewTabPage({
   // Drag & Drop to combine shortcuts into groups
   const [draggedTileId, setDraggedTileId] = useState(null);
   const [dropTargetId, setDropTargetId] = useState(null);
+
+  const effectiveRecentSearches = Array.isArray(propRecentSearches)
+    ? propRecentSearches
+    : localRecentSearches;
+  const effectiveHistoryItems = Array.isArray(propBrowserHistory)
+    ? propBrowserHistory
+    : localHistoryItems;
+
+  useEffect(() => {
+    if (Array.isArray(propRecentSearches) && Array.isArray(propBrowserHistory)) return undefined;
+    const syncSearches = () => setLocalRecentSearches(loadRecentSearches());
+    const syncHistory = () => setLocalHistoryItems(loadBrowserHistory());
+    window.addEventListener(RECENT_SEARCHES_UPDATED_EVENT, syncSearches);
+    window.addEventListener(BROWSER_HISTORY_UPDATED_EVENT, syncHistory);
+    return () => {
+      window.removeEventListener(RECENT_SEARCHES_UPDATED_EVENT, syncSearches);
+      window.removeEventListener(BROWSER_HISTORY_UPDATED_EVENT, syncHistory);
+    };
+  }, [propRecentSearches, propBrowserHistory]);
+
+  const {
+    recentMatches,
+    historyMatches,
+    flatItems: dropdownFlatItems
+  } = useMemo(
+    () =>
+      buildSearchDropdownItems({
+        recentSearches: effectiveRecentSearches,
+        historyItems: effectiveHistoryItems,
+        query,
+        showRecentSearches: recentSearchesEnabled !== false,
+        historyEnabled: historyEnabled !== false
+      }),
+    [effectiveRecentSearches, effectiveHistoryItems, query, recentSearchesEnabled, historyEnabled]
+  );
 
   useEffect(() => {
     saveNewTabQuickLinks(quickLinks);
@@ -168,6 +228,10 @@ export function NewTabPage({
       if (tileMenuRef.current && !tileMenuRef.current.contains(e.target)) {
         setTileMenu(null);
       }
+      if (searchFormRef.current && !searchFormRef.current.contains(e.target)) {
+        setIsSearchDropdownOpen(false);
+        setActiveDropdownIndex(-1);
+      }
     };
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
@@ -177,6 +241,8 @@ export function NewTabPage({
         setGroupModal(null);
         setOpenGroupId(null);
         setIsEditingOpenGroupName(false);
+        setIsSearchDropdownOpen(false);
+        setActiveDropdownIndex(-1);
       }
     };
     document.addEventListener('mousedown', handleOutside);
@@ -197,10 +263,78 @@ export function NewTabPage({
     [quickLinks, openGroupId]
   );
 
+  const handleSelectDropdownSearch = (selectedQuery) => {
+    const clean = String(selectedQuery || '').trim();
+    if (!clean) return;
+    setQuery(clean);
+    setIsSearchDropdownOpen(false);
+    setActiveDropdownIndex(-1);
+    onNavigate(clean);
+  };
+
+  const handleFillDropdownSearch = (selectedQuery) => {
+    setQuery(selectedQuery);
+    setActiveDropdownIndex(-1);
+    setIsSearchDropdownOpen(true);
+    setTimeout(() => searchInputRef.current?.focus(), 0);
+  };
+
+  const handleSelectDropdownHistory = (url) => {
+    if (!url) return;
+    setIsSearchDropdownOpen(false);
+    setActiveDropdownIndex(-1);
+    onNavigate(url);
+  };
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      if (isSearchDropdownOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsSearchDropdownOpen(false);
+        setActiveDropdownIndex(-1);
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      if (dropdownFlatItems.length === 0) return;
+      e.preventDefault();
+      if (!isSearchDropdownOpen) {
+        setIsSearchDropdownOpen(true);
+        setActiveDropdownIndex(0);
+      } else {
+        setActiveDropdownIndex((prev) =>
+          prev < dropdownFlatItems.length - 1 ? prev + 1 : 0
+        );
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      if (!isSearchDropdownOpen || dropdownFlatItems.length === 0) return;
+      e.preventDefault();
+      setActiveDropdownIndex((prev) =>
+        prev > 0 ? prev - 1 : dropdownFlatItems.length - 1
+      );
+    }
+  };
+
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    if (isSearchDropdownOpen && activeDropdownIndex >= 0 && dropdownFlatItems[activeDropdownIndex]) {
+      const selected = dropdownFlatItems[activeDropdownIndex];
+      if (selected.type === 'recent') {
+        handleSelectDropdownSearch(selected.item.query);
+      } else {
+        handleSelectDropdownHistory(selected.item.url);
+      }
+      return;
+    }
     const trimmed = query.trim();
     if (!trimmed) return;
+    setIsSearchDropdownOpen(false);
+    setActiveDropdownIndex(-1);
     onNavigate(trimmed);
   };
 
@@ -595,13 +729,42 @@ export function NewTabPage({
         )}
 
         {/* Centered Pill Search Bar */}
-        <form onSubmit={handleSearchSubmit} className="w-full max-w-2xl mb-10">
-          <div className="flex items-center gap-3 pl-5 pr-2.5 py-2.5 rounded-full bg-[var(--surface)]/95 border border-[var(--line)] focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/20 shadow-md backdrop-blur-md transition-all min-h-[52px]">
+        <form
+          ref={searchFormRef}
+          onSubmit={handleSearchSubmit}
+          className="relative w-full max-w-2xl mb-10 z-20"
+        >
+          <div className="flex items-center gap-3 pl-5 pr-2.5 py-2.5 rounded-full bg-[var(--surface)]/95 border border-[var(--line)] focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/20 shadow-md transition-colors min-h-[52px]">
             <Search className="w-5 h-5 text-[var(--muted)] shrink-0" />
             <input
+              ref={searchInputRef}
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => {
+                setIsSearchDropdownOpen(true);
+                setActiveDropdownIndex(-1);
+              }}
+              onBlur={(e) => {
+                if (!searchFormRef.current?.contains(e.relatedTarget)) {
+                  setIsSearchDropdownOpen(false);
+                  setActiveDropdownIndex(-1);
+                }
+              }}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setIsSearchDropdownOpen(true);
+                setActiveDropdownIndex(-1);
+              }}
+              onKeyDown={handleSearchKeyDown}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={isSearchDropdownOpen && dropdownFlatItems.length > 0}
+              aria-controls="klarity-newtab-search-dropdown"
+              aria-activedescendant={
+                isSearchDropdownOpen && activeDropdownIndex >= 0
+                  ? `klarity-newtab-search-dropdown-opt-${activeDropdownIndex}`
+                  : undefined
+              }
               placeholder={`Search ${activeEngine.name} or enter web address...`}
               className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-[15px] text-[var(--ink)] placeholder-[var(--muted)] min-w-0 px-2.5 py-1 leading-normal rounded-full"
               style={{ outline: 'none', boxShadow: 'none', border: 'none', background: 'transparent' }}
@@ -609,7 +772,11 @@ export function NewTabPage({
             {query && (
               <button
                 type="button"
-                onClick={() => setQuery('')}
+                onClick={() => {
+                  setQuery('');
+                  setActiveDropdownIndex(-1);
+                  searchInputRef.current?.focus();
+                }}
                 className="p-1.5 rounded-full text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] cursor-pointer"
                 aria-label="Clear search"
               >
@@ -623,6 +790,28 @@ export function NewTabPage({
               Search
             </button>
           </div>
+
+          <BrowserSearchDropdown
+            id="klarity-newtab-search-dropdown"
+            isOpen={isSearchDropdownOpen}
+            flatItems={dropdownFlatItems}
+            recentMatches={recentMatches}
+            historyMatches={historyMatches}
+            activeIndex={activeDropdownIndex}
+            onHighlight={setActiveDropdownIndex}
+            onSelectSearch={handleSelectDropdownSearch}
+            onFillSearch={handleFillDropdownSearch}
+            onRemoveRecentSearch={(id) => {
+              deleteRecentSearchItem(id);
+              setActiveDropdownIndex(-1);
+            }}
+            onClearRecentSearches={() => {
+              clearRecentSearches();
+              setActiveDropdownIndex(-1);
+            }}
+            onSelectHistory={handleSelectDropdownHistory}
+            roundedClass="rounded-2xl"
+          />
         </form>
 
         {/* Strictly Centered Speed Dial / Quick Links Grid */}

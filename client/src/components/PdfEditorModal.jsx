@@ -3922,23 +3922,11 @@ export default function PdfEditorModal({
 
                   const renderHandles = () =>
                     isSel && !ann.locked && !readOnlyLocked ? (
-                      <>
-                        <div
-                          onMouseDown={startResize('resize')}
-                          className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-600 border-2 border-white rounded-sm cursor-se-resize shadow"
-                          title="Drag corner to resize width & height"
-                        />
-                        <div
-                          onMouseDown={startResize('resizeX')}
-                          className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-2.5 h-4 bg-blue-600 border border-white rounded-sm cursor-ew-resize shadow"
-                          title="Drag horizontally to resize width"
-                        />
-                        <div
-                          onMouseDown={startResize('resizeY')}
-                          className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-2.5 bg-blue-600 border border-white rounded-sm cursor-ns-resize shadow"
-                          title="Drag vertically to resize height"
-                        />
-                      </>
+                      <div
+                        onMouseDown={startResize('resize')}
+                        className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-600 border-2 border-white rounded-full cursor-se-resize shadow"
+                        title="Drag corner to resize width & height"
+                      />
                     ) : null;
 
                   if (['highlight', 'underline', 'strikethrough', 'squiggly'].includes(ann.type)) {

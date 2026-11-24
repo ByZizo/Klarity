@@ -42,12 +42,14 @@ import {
   Maximize2,
   Minimize2,
   Square,
-  ArrowUpRight
+  ArrowUpRight,
+  History
 } from 'lucide-react';
 import { Button, Card } from '../components/ui';
 import { FormattedChatMessage } from '../components/SharedAppComponents';
 import { NewTabPage } from '../components/NewTabPage';
 import { BrowserCalculatorPopover } from '../components/BrowserCalculatorPopover';
+import { BrowserSearchDropdown } from '../components/BrowserSearchDropdown';
 import {
   buildYouTubeAdShieldScript,
   buildSponsorBlockScript,
@@ -67,6 +69,18 @@ import {
   saveNewTabNotes,
   loadNewTabPrefs
 } from '../utils/browserSettings';
+import {
+  BROWSER_HISTORY_UPDATED_EVENT,
+  RECENT_SEARCHES_UPDATED_EVENT,
+  buildSearchDropdownItems,
+  clearRecentSearches,
+  deleteRecentSearchItem,
+  loadBrowserHistory,
+  loadRecentSearches,
+  recordBrowserVisit,
+  recordRecentSearch,
+  updateHistoryEntryTitle
+} from '../utils/browserHistory';
 
 function formatDownloadBytes(bytes) {
   const value = Number(bytes);
@@ -216,7 +230,9 @@ export function BrowserPage({
   onUpdateBookmarks,
   pendingBrowserUrl = '',
   onClearPendingBrowserUrl,
-  onOpenBrowserSettings
+  onOpenBrowserSettings,
+  onOpenBrowserHistory,
+  isBrowserHistoryOpen = false
 }) {
   const activeEngine = getSearchEngineById(browserSettings?.searchEngine);
   const homeUrl = getBrowserHomeUrl(browserSettings);
@@ -236,6 +252,54 @@ export function BrowserPage({
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
   const [urlInput, setUrlInput] = useState(isNewTabUrl(activeTab?.url) ? '' : (activeTab?.url || ''));
   const urlInputRef = useRef(null);
+  const addressBarContainerRef = useRef(null);
+
+  // Local Browser History & Recent Searches state (synced via utils/browserHistory.js events)
+  const [browserHistory, setBrowserHistory] = useState(() => loadBrowserHistory());
+  const [recentSearches, setRecentSearches] = useState(() => loadRecentSearches());
+  const [isAddressDropdownOpen, setIsAddressDropdownOpen] = useState(false);
+  const [addressDropdownIndex, setAddressDropdownIndex] = useState(-1);
+
+  const browserSettingsRef = useRef(browserSettings);
+  const activeTabIdRef = useRef(activeTabId);
+  const openUrlHandlersRef = useRef({ navigateTo: null, handleNewTab: null });
+
+  useEffect(() => {
+    browserSettingsRef.current = browserSettings;
+  }, [browserSettings]);
+
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
+
+  useEffect(() => {
+    const syncHistory = () => setBrowserHistory(loadBrowserHistory());
+    const syncRecent = () => setRecentSearches(loadRecentSearches());
+    window.addEventListener(BROWSER_HISTORY_UPDATED_EVENT, syncHistory);
+    window.addEventListener(RECENT_SEARCHES_UPDATED_EVENT, syncRecent);
+    return () => {
+      window.removeEventListener(BROWSER_HISTORY_UPDATED_EVENT, syncHistory);
+      window.removeEventListener(RECENT_SEARCHES_UPDATED_EVENT, syncRecent);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleOpenHistoryUrl = (e) => {
+      const targetUrl = e?.detail?.url;
+      const inNewTab = Boolean(e?.detail?.newTab);
+      if (!targetUrl) return;
+      if (inNewTab) {
+        openUrlHandlersRef.current.handleNewTab?.({
+          url: targetUrl,
+          insertAfterTabId: activeTabIdRef.current
+        });
+      } else {
+        openUrlHandlersRef.current.navigateTo?.(targetUrl, activeTabIdRef.current);
+      }
+    };
+    window.addEventListener('klarity:browser-open-url', handleOpenHistoryUrl);
+    return () => window.removeEventListener('klarity:browser-open-url', handleOpenHistoryUrl);
+  }, []);
 
   // Drag & Drop Tab Reordering State
   const [draggedTabId, setDraggedTabId] = useState(null);
@@ -937,10 +1001,17 @@ export function BrowserPage({
     } catch {}
   };
 
+  const onOpenBrowserHistoryRef = useRef(onOpenBrowserHistory);
+  useEffect(() => {
+    onOpenBrowserHistoryRef.current = onOpenBrowserHistory;
+  }, [onOpenBrowserHistory]);
+
   const closeToolbarPopovers = () => {
     setIsAdBlockPopoverOpen(false);
     setIsDownloadsPopoverOpen(false);
     setIsOverflowMenuOpen(false);
+    setIsAddressDropdownOpen(false);
+    setAddressDropdownIndex(-1);
   };
 
   const handleToggleDownloadsPopover = () => {
@@ -1012,8 +1083,9 @@ export function BrowserPage({
       if (downloadsPopoverRef.current && !downloadsPopoverRef.current.contains(e.target)) {
         setIsDownloadsPopoverOpen(false);
       }
-      if (aiPopoverRef.current && !aiPopoverRef.current.contains(e.target)) {
-        setIsAiPopoverOpen(false);
+      if (addressBarContainerRef.current && !addressBarContainerRef.current.contains(e.target)) {
+        setIsAddressDropdownOpen(false);
+        setAddressDropdownIndex(-1);
       }
       if (addBookmarkRef.current && !addBookmarkRef.current.contains(e.target)) {
         setIsAddBookmarkOpen(false);
@@ -1029,14 +1101,22 @@ export function BrowserPage({
       }
     };
     const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        setIsAddressDropdownOpen(false);
+        setAddressDropdownIndex(-1);
+        onOpenBrowserHistoryRef.current?.();
+        return;
+      }
       if (e.key === 'Escape') {
         setTabContextMenu(null);
         setEditingGroupId(null);
-        setIsAiPopoverOpen(false);
         setIsCalculatorOpen(false);
         setIsAdBlockPopoverOpen(false);
         setIsDownloadsPopoverOpen(false);
         setIsOverflowMenuOpen(false);
+        setIsAddressDropdownOpen(false);
+        setAddressDropdownIndex(-1);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -1337,11 +1417,17 @@ export function BrowserPage({
         })
       );
 
+      if (rawUrl && rawUrl !== 'about:blank' && !isNewTabUrl(rawUrl) && rawTitle && rawTitle !== 'about:blank') {
+        updateHistoryEntryTitle(rawUrl, rawTitle, {
+          enabled: browserSettingsRef.current?.historyEnabled !== false
+        });
+      }
+
       if (rawUrl) {
         applyYouTubeEnhancements(tabId, rawUrl);
       }
 
-      if (tabId === activeTabId) {
+      if (tabId === activeTabIdRef.current) {
         if (rawUrl && rawUrl !== 'about:blank' && !isNewTabUrl(rawUrl)) {
           setUrlInput(rawUrl);
         }
@@ -1377,10 +1463,16 @@ export function BrowserPage({
           };
         })
       );
+      if (navUrl && navUrl !== 'about:blank' && !isNewTabUrl(navUrl)) {
+        recordBrowserVisit(
+          { url: navUrl, title: '' },
+          { enabled: browserSettingsRef.current?.historyEnabled !== false }
+        );
+      }
       if (navUrl) {
         applyYouTubeEnhancements(tabId, navUrl);
       }
-      if (tabId === activeTabId && navUrl && navUrl !== 'about:blank' && !isNewTabUrl(navUrl)) {
+      if (tabId === activeTabIdRef.current && navUrl && navUrl !== 'about:blank' && !isNewTabUrl(navUrl)) {
         setUrlInput(navUrl);
         extractPageContentForTab(tabId);
         setTimeout(() => {
@@ -1391,12 +1483,21 @@ export function BrowserPage({
 
     const handleTitleUpdate = (e) => {
       if (e.title && e.title !== 'about:blank') {
+        let currentUrl = '';
+        try {
+          currentUrl = webview.getURL() || '';
+        } catch {}
+        if (currentUrl && currentUrl !== 'about:blank' && !isNewTabUrl(currentUrl)) {
+          updateHistoryEntryTitle(currentUrl, e.title, {
+            enabled: browserSettingsRef.current?.historyEnabled !== false
+          });
+        }
         setTabs((prev) =>
           prev.map((t) =>
             t.id === tabId && !isNewTabUrl(t.url) ? { ...t, title: e.title } : t
           )
         );
-        if (tabId === activeTabId) {
+        if (tabId === activeTabIdRef.current) {
           extractPageContentForTab(tabId);
         }
       }
@@ -1416,6 +1517,12 @@ export function BrowserPage({
   const navigateTo = (destination, targetTabId = activeTabId) => {
     const target = resolveBrowserDestination(destination, browserSettings?.searchEngine);
     if (!target) return;
+
+    recordRecentSearch(destination, {
+      enabled: browserSettingsRef.current?.recentSearchesEnabled !== false
+    });
+    setIsAddressDropdownOpen(false);
+    setAddressDropdownIndex(-1);
 
     if (isNewTabUrl(target)) {
       if (targetTabId === activeTabId) {
@@ -1446,11 +1553,102 @@ export function BrowserPage({
       } catch {
         webview.src = target;
       }
+    } else if (!isDesktop) {
+      recordBrowserVisit(
+        { url: target, title: '' },
+        { enabled: browserSettingsRef.current?.historyEnabled !== false }
+      );
+    }
+  };
+
+  const effectiveAddressQuery =
+    activeTab?.url && !isNewTabUrl(activeTab.url) && urlInput === activeTab.url
+      ? ''
+      : urlInput;
+
+  const {
+    recentMatches: addressRecentMatches,
+    historyMatches: addressHistoryMatches,
+    flatItems: addressDropdownItems
+  } = buildSearchDropdownItems({
+    recentSearches,
+    historyItems: browserHistory,
+    query: effectiveAddressQuery,
+    showRecentSearches: browserSettings?.recentSearchesEnabled !== false,
+    historyEnabled: browserSettings?.historyEnabled !== false
+  });
+
+  const handleSelectAddressSearch = (selectedQuery) => {
+    const clean = String(selectedQuery || '').trim();
+    if (!clean) return;
+    setUrlInput(clean);
+    setIsAddressDropdownOpen(false);
+    setAddressDropdownIndex(-1);
+    navigateTo(clean, activeTabId);
+  };
+
+  const handleFillAddressSearch = (selectedQuery) => {
+    setUrlInput(selectedQuery);
+    setIsAddressDropdownOpen(true);
+    setAddressDropdownIndex(-1);
+    setTimeout(() => urlInputRef.current?.focus(), 0);
+  };
+
+  const handleSelectAddressHistory = (targetUrl) => {
+    if (!targetUrl) return;
+    setUrlInput(targetUrl);
+    setIsAddressDropdownOpen(false);
+    setAddressDropdownIndex(-1);
+    navigateTo(targetUrl, activeTabId);
+  };
+
+  const handleAddressInputKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      if (isAddressDropdownOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsAddressDropdownOpen(false);
+        setAddressDropdownIndex(-1);
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      if (addressDropdownItems.length === 0) return;
+      e.preventDefault();
+      if (!isAddressDropdownOpen) {
+        setIsAddressDropdownOpen(true);
+        setAddressDropdownIndex(0);
+      } else {
+        setAddressDropdownIndex((prev) =>
+          prev < addressDropdownItems.length - 1 ? prev + 1 : 0
+        );
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      if (!isAddressDropdownOpen || addressDropdownItems.length === 0) return;
+      e.preventDefault();
+      setAddressDropdownIndex((prev) =>
+        prev > 0 ? prev - 1 : addressDropdownItems.length - 1
+      );
     }
   };
 
   const handleUrlSubmit = (e) => {
     e.preventDefault();
+    if (isAddressDropdownOpen && addressDropdownIndex >= 0 && addressDropdownItems[addressDropdownIndex]) {
+      const selected = addressDropdownItems[addressDropdownIndex];
+      if (selected.type === 'recent') {
+        handleSelectAddressSearch(selected.item.query);
+      } else {
+        handleSelectAddressHistory(selected.item.url);
+      }
+      return;
+    }
+    setIsAddressDropdownOpen(false);
+    setAddressDropdownIndex(-1);
     navigateTo(urlInput, activeTabId);
   };
 
@@ -1511,6 +1709,10 @@ export function BrowserPage({
       setUrlInput(url);
     }
   };
+
+  useEffect(() => {
+    openUrlHandlersRef.current = { navigateTo, handleNewTab };
+  });
 
   const handleCloseTab = (tabId, e) => {
     if (e) e.stopPropagation();
@@ -2362,7 +2564,11 @@ export function BrowserPage({
           </div>
 
           {/* Smart Address & Search Input with Protection Shield inside left edge */}
-          <form onSubmit={handleUrlSubmit} className="flex-1 flex items-center min-w-0">
+          <form
+            ref={addressBarContainerRef}
+            onSubmit={handleUrlSubmit}
+            className="flex-1 flex items-center min-w-0 relative"
+          >
             <div className="flex-1 flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full bg-[var(--surface-subtle)] border border-[var(--line)] focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/20 transition-all min-h-[38px] min-w-0">
               {/* Protection Shield Inside Left Edge */}
               <div className="relative shrink-0" ref={adBlockPopoverRef}>
@@ -2440,8 +2646,32 @@ export function BrowserPage({
                 ref={urlInputRef}
                 type="text"
                 value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                onFocus={(e) => e.target.select()}
+                onChange={(e) => {
+                  setUrlInput(e.target.value);
+                  setIsAddressDropdownOpen(true);
+                  setAddressDropdownIndex(-1);
+                }}
+                onFocus={(e) => {
+                  e.target.select();
+                  setIsAddressDropdownOpen(true);
+                  setAddressDropdownIndex(-1);
+                }}
+                onBlur={(e) => {
+                  if (!addressBarContainerRef.current?.contains(e.relatedTarget)) {
+                    setIsAddressDropdownOpen(false);
+                    setAddressDropdownIndex(-1);
+                  }
+                }}
+                onKeyDown={handleAddressInputKeyDown}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={isAddressDropdownOpen && addressDropdownItems.length > 0}
+                aria-controls="klarity-addressbar-search-dropdown"
+                aria-activedescendant={
+                  isAddressDropdownOpen && addressDropdownIndex >= 0
+                    ? `klarity-addressbar-search-dropdown-opt-${addressDropdownIndex}`
+                    : undefined
+                }
                 placeholder="Search or enter web address"
                 aria-label="Address bar"
                 className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-sm text-[var(--ink)] placeholder-[var(--muted)] min-w-0 font-medium px-1.5 py-0.5 leading-normal rounded-full"
@@ -2450,7 +2680,12 @@ export function BrowserPage({
               {urlInput && (
                 <button
                   type="button"
-                  onClick={() => setUrlInput('')}
+                  onClick={() => {
+                    setUrlInput('');
+                    setIsAddressDropdownOpen(true);
+                    setAddressDropdownIndex(-1);
+                    urlInputRef.current?.focus();
+                  }}
                   aria-label="Clear URL"
                   title="Clear address"
                   className="p-1 rounded-full hover:bg-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)] transition-colors cursor-pointer"
@@ -2459,6 +2694,28 @@ export function BrowserPage({
                 </button>
               )}
             </div>
+
+            <BrowserSearchDropdown
+              id="klarity-addressbar-search-dropdown"
+              isOpen={isAddressDropdownOpen}
+              flatItems={addressDropdownItems}
+              recentMatches={addressRecentMatches}
+              historyMatches={addressHistoryMatches}
+              activeIndex={addressDropdownIndex}
+              onHighlight={setAddressDropdownIndex}
+              onSelectSearch={handleSelectAddressSearch}
+              onFillSearch={handleFillAddressSearch}
+              onRemoveRecentSearch={(id) => {
+                deleteRecentSearchItem(id);
+                setAddressDropdownIndex(-1);
+              }}
+              onClearRecentSearches={() => {
+                clearRecentSearches();
+                setAddressDropdownIndex(-1);
+              }}
+              onSelectHistory={handleSelectAddressHistory}
+              roundedClass="rounded-xl"
+            />
           </form>
 
           {/* Divider after address bar */}
@@ -2519,8 +2776,28 @@ export function BrowserPage({
           {/* Divider before Downloads & Advisor (hidden on narrow windows where Notes/Downloads collapse) */}
           <div className="hidden md:block w-px h-5 bg-[var(--line)] mx-0.5 shrink-0" aria-hidden="true" />
 
-          {/* Group 2: Downloads & AI Advisor */}
+          {/* Group 2: History, Downloads & AI Advisor */}
           <div className="flex items-center gap-1 shrink-0">
+            {typeof onOpenBrowserHistory === 'function' && (
+              <button
+                type="button"
+                onClick={() => {
+                  closeToolbarPopovers();
+                  onOpenBrowserHistory();
+                }}
+                aria-label="Browser History"
+                title="History (Ctrl+H)"
+                aria-pressed={isBrowserHistoryOpen}
+                className={`hidden md:flex w-9 h-9 rounded-lg items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 ${
+                  isBrowserHistoryOpen
+                    ? 'bg-[var(--brand)] text-white'
+                    : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+                }`}
+              >
+                <History className="w-[18px] h-[18px]" />
+              </button>
+            )}
+
             <div className="relative shrink-0" ref={downloadsPopoverRef}>
               <button
                 type="button"
@@ -2887,6 +3164,24 @@ export function BrowserPage({
                   )}
                 </button>
 
+                {typeof onOpenBrowserHistory === 'function' && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsOverflowMenuOpen(false);
+                      onOpenBrowserHistory();
+                    }}
+                    className="px-3.5 py-2 text-left text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-subtle)] flex items-center justify-between gap-2 cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <History className="w-[18px] h-[18px] text-[var(--muted)]" />
+                      <span>History</span>
+                    </span>
+                    <span className="text-[10px] text-[var(--muted)]">Ctrl+H</span>
+                  </button>
+                )}
+
                 {typeof onOpenBrowserSettings === 'function' && (
                   <button
                     type="button"
@@ -3205,6 +3500,10 @@ export function BrowserPage({
                         }
                         showHomepageNotes={showNotesOnHomepage}
                         onToggleHomepageNotes={handleToggleHomepageNotes}
+                        recentSearches={recentSearches}
+                        browserHistory={browserHistory}
+                        recentSearchesEnabled={browserSettings?.recentSearchesEnabled !== false}
+                        historyEnabled={browserSettings?.historyEnabled !== false}
                       />
                     </div>
                   )}
@@ -3220,6 +3519,10 @@ export function BrowserPage({
               }
               showHomepageNotes={showNotesOnHomepage}
               onToggleHomepageNotes={handleToggleHomepageNotes}
+              recentSearches={recentSearches}
+              browserHistory={browserHistory}
+              recentSearchesEnabled={browserSettings?.recentSearchesEnabled !== false}
+              historyEnabled={browserSettings?.historyEnabled !== false}
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-[var(--surface-subtle)]">

@@ -178,6 +178,7 @@ const VaultPage = React.lazy(() => import('./pages/VaultPage').then((m) => ({ de
 const AdvisorPage = React.lazy(() => import('./pages/AdvisorPage').then((m) => ({ default: m.AdvisorPage })));
 const BrowserPage = React.lazy(() => import('./pages/BrowserPage').then((m) => ({ default: m.BrowserPage })));
 const SettingsPage = React.lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const BrowserHistoryModal = React.lazy(() => import('./components/BrowserHistoryModal').then((m) => ({ default: m.BrowserHistoryModal })));
 import {
   loadBrowserSettings,
   saveBrowserSettings,
@@ -885,11 +886,39 @@ function KlarityApp() {
     } catch (e) {}
   };
 
-  // Scoped zoom factor applied directly to the scrollable main content page,
-  // leaving the left sidebar navigation and right AI advisor controls at crisp standard scale
+  // Scoped zoom factor applied to main content, AI advisor panel, and modals cleanly
   const contentZoomFactor = useMemo(() => {
     return parseFontScalePercent(uiFontScale) / 100;
   }, [uiFontScale]);
+
+  // Dedicated optional scale override for AI Advisor Quick Settings ('auto' follows global UI scale)
+  const [aiQuickSettingsScale, setAiQuickSettingsScale] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_ai_quick_settings_scale');
+      if (saved === 'auto' || !saved) return 'auto';
+      const num = parseInt(saved, 10);
+      if (!Number.isNaN(num) && num >= 75 && num <= 150) return String(num);
+      return 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+
+  const handleSetAiQuickSettingsScale = (val) => {
+    setAiQuickSettingsScale(val);
+    try {
+      localStorage.setItem('klarity_ai_quick_settings_scale', String(val));
+    } catch {}
+  };
+
+  const effectiveAiQuickSettingsZoom = useMemo(() => {
+    if (aiQuickSettingsScale === 'auto') {
+      // Clamp slightly for compact modal ergonomics while tracking global UI scale
+      return Math.min(1.35, Math.max(0.75, contentZoomFactor));
+    }
+    const parsed = parseInt(aiQuickSettingsScale, 10);
+    return Number.isNaN(parsed) ? contentZoomFactor : Math.min(1.5, Math.max(0.75, parsed / 100));
+  }, [aiQuickSettingsScale, contentZoomFactor]);
 
   const handleSetFontScale = (scale) => {
     setUiFontScale(scale);
@@ -1560,6 +1589,7 @@ function KlarityApp() {
   const [browserBookmarks, setBrowserBookmarks] = useState(() => loadBrowserBookmarks());
   const [pendingBrowserUrl, setPendingBrowserUrl] = useState('');
   const [isBrowserSettingsOnly, setIsBrowserSettingsOnly] = useState(false);
+  const [isBrowserHistoryOpen, setIsBrowserHistoryOpen] = useState(false);
 
   const handleUpdateBrowserSettings = (next) => {
     setBrowserSettings(next);
@@ -1569,6 +1599,21 @@ function KlarityApp() {
   const handleUpdateBrowserBookmarks = (next) => {
     setBrowserBookmarks(next);
     saveBrowserBookmarks(next);
+  };
+
+  const handleOpenHistoryUrl = (url, { newTab = false } = {}) => {
+    if (!url) return;
+    setIsBrowserHistoryOpen(false);
+    setIsSettingsOpen(false);
+    setIsBrowserSettingsOnly(false);
+    if (activeTab === 'browser') {
+      window.dispatchEvent(
+        new CustomEvent('klarity:browser-open-url', { detail: { url, newTab } })
+      );
+    } else {
+      setPendingBrowserUrl(url);
+      setActiveTab('browser');
+    }
   };
 
   // Left Sidebar Compact/Collapsed state
@@ -2418,6 +2463,9 @@ function KlarityApp() {
   }, [settingsAiProvider, settingsActiveTab, isSettingsOpen]);
 
   const handleProviderChange = (newProvider) => {
+    if (newProvider !== settingsAiProvider) {
+      setSettingsAiStatus('not_connected');
+    }
     setSettingsAiProvider(newProvider);
     if (newProvider === 'local') setSettingsAiModel('Llama-3.2-3B-Instruct-Q4_K_M.gguf');
     else if (newProvider === 'anthropic') setSettingsAiModel('claude-3-7-sonnet-20250219');
@@ -5730,6 +5778,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   setSettingsActiveTab('browser');
                   setIsSettingsOpen(true);
                 }}
+                onOpenBrowserHistory={() => setIsBrowserHistoryOpen(true)}
+                isBrowserHistoryOpen={isBrowserHistoryOpen}
               />
               </Suspense>
             </main>
@@ -6223,7 +6273,11 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   </div>
 
                   {/* Scrollable Conversation Stream */}
-                  <div ref={sidebarChatContainerRef} className="flex-1 overflow-y-auto py-3 space-y-3 min-h-0 pr-0.5 select-text">
+                  <div
+                    ref={sidebarChatContainerRef}
+                    style={{ zoom: contentZoomFactor !== 1 ? Math.min(1.3, Math.max(0.8, contentZoomFactor)) : undefined }}
+                    className="flex-1 overflow-y-auto py-3 space-y-3 min-h-0 pr-0.5 select-text"
+                  >
                     {settingsAiStatus !== 'connected' && settingsAiProvider !== 'local' && (
                       <div className="bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-800 rounded-2xl p-4 text-xs text-amber-900 dark:text-amber-200 flex flex-col gap-2 shadow-2xs">
                         <div className="flex items-center gap-2 font-bold text-amber-950 dark:text-amber-100">
@@ -6523,12 +6577,13 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
       {/* 1. Settings Modal (6 Merged Tabs: Profile, Preferences, AI advisor, Bank, Security, About) */}
       {isSettingsOpen && (
-        <Suspense fallback={null}>
-          <SettingsPage
-            isOpen={isSettingsOpen}
-            onClose={() => {
-              setIsSettingsOpen(false);
-              setIsBrowserSettingsOnly(false);
+        <div style={{ zoom: contentZoomFactor !== 1 ? Math.min(1.25, Math.max(0.8, contentZoomFactor)) : undefined }}>
+          <Suspense fallback={null}>
+            <SettingsPage
+              isOpen={isSettingsOpen}
+              onClose={() => {
+                setIsSettingsOpen(false);
+                setIsBrowserSettingsOnly(false);
             }}
             browserOnly={isBrowserSettingsOnly}
             settingsActiveTab={settingsActiveTab}
@@ -6537,6 +6592,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             onUpdateBrowserSettings={handleUpdateBrowserSettings}
             browserBookmarks={browserBookmarks}
             onUpdateBrowserBookmarks={handleUpdateBrowserBookmarks}
+            onOpenBrowserHistory={() => setIsBrowserHistoryOpen(true)}
+            isBrowserHistoryOpen={isBrowserHistoryOpen}
             currentUser={currentUser}
             userInitials={userInitials}
             settingsDisplayName={settingsDisplayName}
@@ -6624,6 +6681,23 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
             handleMoveSidebarItem={handleMoveSidebarItem}
             handleResetSidebarOrder={handleResetSidebarOrder}
             SIDEBAR_ITEMS_CONFIG={SIDEBAR_ITEMS_CONFIG}
+          />
+        </Suspense>
+        </div>
+      )}
+
+      {/* 1b. Browser History Modal (Accessible from Browser toolbar, Ctrl+H, or Settings) */}
+      {isBrowserHistoryOpen && (
+        <Suspense fallback={null}>
+          <BrowserHistoryModal
+            isOpen={isBrowserHistoryOpen}
+            onClose={() => setIsBrowserHistoryOpen(false)}
+            historyEnabled={browserSettings?.historyEnabled !== false}
+            onToggleHistoryEnabled={(enabled) =>
+              handleUpdateBrowserSettings({ ...browserSettings, historyEnabled: enabled })
+            }
+            onNavigate={handleOpenHistoryUrl}
+            onShowToast={showToast}
           />
         </Suspense>
       )}
@@ -7549,7 +7623,8 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-5 text-slate-800 animate-in fade-in zoom-in-95 cursor-default max-h-[90vh] overflow-y-auto"
+            style={{ zoom: effectiveAiQuickSettingsZoom !== 1 ? effectiveAiQuickSettingsZoom : undefined }}
+            className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-5 text-slate-800 animate-in fade-in zoom-in-95 cursor-default max-h-[88vh] overflow-y-auto"
           >
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
@@ -7574,6 +7649,45 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               >
                 ✕
               </button>
+            </div>
+
+            {/* Panel UI Scale Control (Follows Global Scale or Custom Override) */}
+            <div className="flex flex-col gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="ai-quick-settings-scale-range" className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Quick Settings Scale
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-[#18457c] tabular-nums">
+                    {aiQuickSettingsScale === 'auto'
+                      ? `Sync (${Math.round(effectiveAiQuickSettingsZoom * 100)}%)`
+                      : `${aiQuickSettingsScale}%`}
+                  </span>
+                  {aiQuickSettingsScale !== 'auto' && (
+                    <button
+                      type="button"
+                      onClick={() => handleSetAiQuickSettingsScale('auto')}
+                      className="text-[10px] font-semibold text-blue-700 hover:underline cursor-pointer"
+                    >
+                      Match App
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <span className="text-[10px] font-medium text-slate-500">75%</span>
+                <input
+                  id="ai-quick-settings-scale-range"
+                  type="range"
+                  min={75}
+                  max={140}
+                  step={5}
+                  value={aiQuickSettingsScale === 'auto' ? Math.round(effectiveAiQuickSettingsZoom * 100) : Number(aiQuickSettingsScale)}
+                  onChange={(e) => handleSetAiQuickSettingsScale(e.target.value)}
+                  className="flex-1 accent-[#18457c] cursor-pointer"
+                />
+                <span className="text-[10px] font-medium text-slate-500">140%</span>
+              </div>
             </div>
 
             {/* Tool 1: Response Length & Detail */}

@@ -228,6 +228,30 @@ function ensureCumulativeDataSchema(data) {
     if (b.spent === undefined) b.spent = 0;
   });
 
+  // Idempotently normalize any synced vault document metadata
+  if (data.userVaults && typeof data.userVaults === 'object') {
+    Object.values(data.userVaults).forEach((vault) => {
+      if (vault && Array.isArray(vault.documents)) {
+        vault.documents.forEach((doc) => {
+          if (!doc || typeof doc !== 'object') return;
+          if (doc.fileName) {
+            doc.fileName = String(doc.fileName)
+              .replace(/\\/g, '/')
+              .split('/')
+              .filter((s) => s && s !== '.' && s !== '..')
+              .pop() || 'document';
+          }
+          if (!Array.isArray(doc.tags)) doc.tags = [];
+          if (doc.sourceFormat === undefined) {
+            doc.sourceFormat = doc.fileName && doc.fileName.includes('.')
+              ? doc.fileName.split('.').pop().toLowerCase()
+              : '';
+          }
+        });
+      }
+    });
+  }
+
   // Idempotently normalize household profiles
   for (const uid of Object.keys(data.householdProfiles)) {
     const prof = data.householdProfiles[uid];

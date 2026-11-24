@@ -7,14 +7,20 @@
 // ============================================================================
 
 import { enforceStorageEncryptionAudit } from './securityCrypto.js';
-import { loadDocumentFolders } from './documentVaultStorage.js';
+import { loadDocumentFolders, reconcileDocumentVaultMetadata } from './documentVaultStorage.js';
 import {
   DEFAULT_BROWSER_SETTINGS,
   DEFAULT_NEWTAB_PREFS,
   DEFAULT_NOTE_STYLES
 } from './browserSettings.js';
+import {
+  BROWSER_HISTORY_STORAGE_KEY,
+  RECENT_SEARCHES_STORAGE_KEY,
+  sanitizeBrowserHistory,
+  sanitizeRecentSearches
+} from './browserHistory.js';
 
-export const CURRENT_CLIENT_SCHEMA_VERSION = '3.12.59';
+export const CURRENT_CLIENT_SCHEMA_VERSION = '3.12.61';
 
 /**
  * Runs all schema integrity verifications cumulatively and idempotently.
@@ -31,6 +37,7 @@ export async function runCumulativeClientMigrations() {
     vaultSectionsReconciled: false,
     securityDefaultsApplied: false,
     browserSettingsNormalized: false,
+    browserHistoryNormalized: false,
     uiPreferencesNormalized: false,
     encryptionAudited: false
   };
@@ -89,7 +96,8 @@ export async function runCumulativeClientMigrations() {
     // 2. DOCUMENT VAULT FOLDERS & METADATA RECONCILIATION
     // ------------------------------------------------------------------------
     try {
-      // Reconciles folders from document metadata and localStorage idempotently
+      // Reconciles folders & multi-format document metadata idempotently
+      reconcileDocumentVaultMetadata();
       loadDocumentFolders();
       migrationResults.documentFoldersReconciled = true;
     } catch (e) {
@@ -205,6 +213,36 @@ export async function runCumulativeClientMigrations() {
             }
           }
         } catch {}
+      }
+
+      const rawHistory = localStorage.getItem(BROWSER_HISTORY_STORAGE_KEY);
+      if (rawHistory !== null) {
+        try {
+          const parsedHistory = JSON.parse(rawHistory);
+          const { items, changed } = sanitizeBrowserHistory(parsedHistory);
+          if (changed) {
+            localStorage.setItem(BROWSER_HISTORY_STORAGE_KEY, JSON.stringify(items));
+            migrationResults.browserHistoryNormalized = true;
+          }
+        } catch {
+          localStorage.setItem(BROWSER_HISTORY_STORAGE_KEY, JSON.stringify([]));
+          migrationResults.browserHistoryNormalized = true;
+        }
+      }
+
+      const rawRecentSearches = localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
+      if (rawRecentSearches !== null) {
+        try {
+          const parsedSearches = JSON.parse(rawRecentSearches);
+          const { items, changed } = sanitizeRecentSearches(parsedSearches);
+          if (changed) {
+            localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(items));
+            migrationResults.browserHistoryNormalized = true;
+          }
+        } catch {
+          localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify([]));
+          migrationResults.browserHistoryNormalized = true;
+        }
       }
     } catch (e) {
       console.warn('Cumulative migration notice (browser):', e);

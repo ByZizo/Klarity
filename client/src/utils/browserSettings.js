@@ -67,7 +67,9 @@ export const DEFAULT_BROWSER_SETTINGS = {
   adBlockerEnabled: true,
   youtubeAdShield: true,
   sponsorBlockEnabled: true,
-  dearrowEnabled: true
+  dearrowEnabled: true,
+  historyEnabled: true,
+  recentSearchesEnabled: true
 };
 
 export const NEW_TAB_URL = 'klarity://newtab';
@@ -354,6 +356,20 @@ export function buildSearchUrl(query, engineId) {
   return `${engine.searchUrl}${encodeURIComponent(String(query || '').trim())}`;
 }
 
+export function isDirectUrlInput(input) {
+  const clean = String(input || '').trim();
+  if (!clean) return false;
+  if (clean.toLowerCase() === NEW_TAB_URL) return true;
+  if (/^https?:\/\/\S+/i.test(clean)) return true;
+  if (
+    /^([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(\/\S*)?$/i.test(clean) ||
+    /^localhost(:\d+)?(\/\S*)?$/i.test(clean)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function resolveBrowserDestination(input, engineId) {
   const clean = String(input || '').trim();
   if (!clean) return '';
@@ -366,10 +382,7 @@ export function resolveBrowserDestination(input, engineId) {
     return clean;
   }
 
-  if (
-    /^([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(\/\S*)?$/i.test(clean) ||
-    /^localhost(:\d+)?(\/\S*)?$/i.test(clean)
-  ) {
+  if (isDirectUrlInput(clean)) {
     return `https://${clean}`;
   }
 

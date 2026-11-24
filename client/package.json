@@ -1,7 +1,7 @@
 {
   "name": "client",
   "private": true,
-  "version": "3.12.61",
+  "version": "3.12.62",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -22,6 +22,7 @@
     "@react-oauth/google": "^0.13.5",
     "@tailwindcss/vite": "^4.3.3",
     "@tesseract.js-data/eng": "^1.0.0",
+    "fflate": "^0.8.3",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^1.61.0",
     "marked": "^18.1.2",

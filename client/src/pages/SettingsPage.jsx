@@ -34,6 +34,7 @@ import {
   Coffee
 } from 'lucide-react';
 import { Button, Card, Pill, ConfirmDialog } from '../components/ui';
+import BrowserSettingsPanel from '../components/BrowserSettingsPanel';
 import {
   formatCleanUpdateMessage,
   formatWhatsNewHighlights,
@@ -42,6 +43,14 @@ import {
   LATEST_RELEASE_NOTES
 } from '../components/SharedAppComponents';
 import { SEARCH_ENGINES, DEFAULT_BROWSER_SETTINGS, clearBrowserSessionState } from '../utils/browserSettings';
+import {
+  BROWSER_HISTORY_UPDATED_EVENT,
+  RECENT_SEARCHES_UPDATED_EVENT,
+  clearBrowserHistory,
+  clearRecentSearches,
+  loadBrowserHistory,
+  loadRecentSearches
+} from '../utils/browserHistory';
 import {
   hasMasterPinSet,
   verifyMasterPin,
@@ -146,7 +155,9 @@ export function SettingsPage({
   onUpdateBrowserSettings,
   browserBookmarks = [],
   onUpdateBrowserBookmarks,
-  browserOnly = false
+  browserOnly = false,
+  onOpenBrowserHistory,
+  isBrowserHistoryOpen = false
 }) {
   // Map legacy tab names ('ui', 'plaid') into modern tabs
   const normalizedTab = browserOnly
@@ -188,6 +199,9 @@ export function SettingsPage({
   const [newSettingsFolderName, setNewSettingsFolderName] = useState('');
   const [isClearingBrowserData, setIsClearingBrowserData] = useState(false);
   const [confirmClearBrowserData, setConfirmClearBrowserData] = useState(false);
+  const [confirmClearHistory, setConfirmClearHistory] = useState(false);
+  const [historyCount, setHistoryCount] = useState(() => loadBrowserHistory().length);
+  const [recentSearchCount, setRecentSearchCount] = useState(() => loadRecentSearches().length);
   const [newStartupPageInput, setNewStartupPageInput] = useState('');
   const [electronBrowserPrefs, setElectronBrowserPrefs] = useState({
     doNotTrack: Boolean(browserSettings?.doNotTrack),
@@ -208,7 +222,16 @@ export function SettingsPage({
           if (prefs) setElectronBrowserPrefs(prefs);
         }).catch(() => {});
       }
+      const syncHistoryCount = () => setHistoryCount(loadBrowserHistory().length);
+      const syncSearchCount = () => setRecentSearchCount(loadRecentSearches().length);
+      window.addEventListener(BROWSER_HISTORY_UPDATED_EVENT, syncHistoryCount);
+      window.addEventListener(RECENT_SEARCHES_UPDATED_EVENT, syncSearchCount);
+      return () => {
+        window.removeEventListener(BROWSER_HISTORY_UPDATED_EVENT, syncHistoryCount);
+        window.removeEventListener(RECENT_SEARCHES_UPDATED_EVENT, syncSearchCount);
+      };
     }
+    return undefined;
   }, [isOpen, normalizedTab]);
 
   const updateDesktopBrowserPrefs = async (patch) => {
@@ -230,6 +253,10 @@ export function SettingsPage({
     setIsClearingBrowserData(true);
     try {
       clearBrowserSessionState();
+      clearBrowserHistory();
+      clearRecentSearches();
+      setHistoryCount(0);
+      setRecentSearchCount(0);
       if (window.klarityDesktop?.clearBrowserData) {
         await window.klarityDesktop.clearBrowserData();
       }
@@ -356,8 +383,13 @@ export function SettingsPage({
     if (!isOpen) return undefined;
     const handleEsc = (e) => {
       if (e.key === 'Escape') {
+        if (isBrowserHistoryOpen) return;
         if (confirmDisablePinOpen) {
           setConfirmDisablePinOpen(false);
+        } else if (confirmClearHistory) {
+          setConfirmClearHistory(false);
+        } else if (confirmClearBrowserData) {
+          setConfirmClearBrowserData(false);
         } else {
           onClose();
         }
@@ -365,7 +397,7 @@ export function SettingsPage({
     };
     document.addEventListener('keydown', handleEsc);
     return () => document.removeEventListener('keydown', handleEsc);
-  }, [isOpen, confirmDisablePinOpen, onClose]);
+  }, [isOpen, confirmDisablePinOpen, confirmClearHistory, confirmClearBrowserData, isBrowserHistoryOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -416,7 +448,8 @@ export function SettingsPage({
     >
       <Card
         onClick={(e) => e.stopPropagation()}
-        className={`${browserOnly ? 'max-w-[700px]' : 'max-w-[900px]'} w-full max-h-[92vh] h-[min(680px,90vh)] flex flex-col overflow-hidden shadow-xl`}
+        padding={browserOnly ? 'p-0' : undefined}
+        className="max-w-[920px] w-full max-h-[92vh] h-[min(680px,90vh)] flex flex-col overflow-hidden shadow-xl"
       >
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Left Navigation Tabs (Hidden when opened directly as Browser Settings) */}
@@ -478,7 +511,7 @@ export function SettingsPage({
           )}
 
           {/* Right Content Panel */}
-          <div className="flex-1 p-5 sm:p-7 overflow-y-auto bg-[var(--surface)] text-[var(--ink)]">
+          <div className={`flex-1 ${browserOnly ? 'p-0 overflow-hidden flex flex-col' : 'p-5 sm:p-7 overflow-y-auto'} bg-[var(--surface)] text-[var(--ink)]`}>
             {/* TAB 1: PROFILE */}
             {normalizedTab === 'profile' && (
               <div className="flex flex-col gap-6">
@@ -968,38 +1001,66 @@ export function SettingsPage({
                     </div>
                   )}
 
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--line)]">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] text-[var(--muted)] font-medium">Status:</span>
-                      {settingsAiStatus === 'connected' || settingsAiProvider === 'local' ? (
-                        <Pill variant="success">Connected</Pill>
-                      ) : settingsAiStatus === 'invalid_key' ? (
-                        <Pill variant="danger">Invalid key</Pill>
-                      ) : (
-                        <Pill variant="warning">Not connected</Pill>
-                      )}
-                    </div>
+                  {(() => {
+                    const isLocal = settingsAiProvider === 'local';
+                    const localState = localAiEngineStatus?.state;
+                    const isLocalBusy = isLocal && (localState === 'verifying' || localState === 'downloading' || localState === 'loading');
+                    const isLocalError = isLocal && localState === 'error';
+                    const isLocalConnected = isLocal && !isLocalBusy && !isLocalError && (localState === 'ready' || settingsAiStatus === 'connected');
 
-                    <div className="flex items-center gap-2">
-                      {Boolean(settingsAiMaskedKey) && settingsAiProvider !== 'local' && (
-                        <Button variant="danger" size="sm" onClick={handleRemoveAiKey}>
-                          Remove key
-                        </Button>
-                      )}
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={handleSaveAndTestAiKey}
-                        disabled={settingsAiTesting}
-                      >
-                        {settingsAiTesting
-                          ? 'Saving...'
-                          : settingsAiProvider === 'local'
-                          ? 'Activate local model'
-                          : 'Save and test key'}
-                      </Button>
-                    </div>
-                  </div>
+                    return (
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--line)]">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] text-[var(--muted)] font-medium">Status:</span>
+                          {isLocal ? (
+                            isLocalError ? (
+                              <Pill variant="danger">Error</Pill>
+                            ) : isLocalBusy ? (
+                              <Pill variant="warning">
+                                {localState === 'downloading' ? 'Downloading...' : 'Loading...'}
+                              </Pill>
+                            ) : isLocalConnected ? (
+                              <Pill variant="success">Connected</Pill>
+                            ) : (
+                              <Pill variant="warning">Not connected</Pill>
+                            )
+                          ) : settingsAiStatus === 'connected' ? (
+                            <Pill variant="success">Connected</Pill>
+                          ) : settingsAiStatus === 'invalid_key' ? (
+                            <Pill variant="danger">Invalid key</Pill>
+                          ) : (
+                            <Pill variant="warning">Not connected</Pill>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {Boolean(settingsAiMaskedKey) && !isLocal && (
+                            <Button variant="danger" size="sm" onClick={handleRemoveAiKey}>
+                              Remove key
+                            </Button>
+                          )}
+                          {!isLocalConnected && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={handleSaveAndTestAiKey}
+                              disabled={settingsAiTesting || isLocalBusy}
+                            >
+                              {settingsAiTesting
+                                ? 'Saving...'
+                                : isLocal
+                                ? isLocalBusy
+                                  ? localState === 'downloading'
+                                    ? 'Downloading...'
+                                    : 'Loading...'
+                                  : 'Activate local model'
+                                : 'Save and test key'}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </Card>
 
                 {/* Data Access Permissions */}
@@ -1484,455 +1545,42 @@ export function SettingsPage({
 
             {/* BROWSER SETTINGS TAB */}
             {normalizedTab === 'browser' && (
-              <div className="flex flex-col gap-5">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-serif text-[22px] font-semibold text-[var(--ink)]">Browser</h3>
-                  {browserOnly && (
-                    <button
-                      type="button"
-                      aria-label="Close browser settings"
-                      onClick={onClose}
-                      className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* 1. Appearance */}
-                <Card className="p-5 flex flex-col gap-3.5">
-                  <h4 className="text-[15px] font-semibold text-[var(--ink)]">Appearance</h4>
-
-                  <div className="flex items-center justify-between gap-4 py-1">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">Show bookmarks bar</span>
-                    <input
-                      type="checkbox"
-                      checked={browserSettings?.showBookmarksBar !== false}
-                      onChange={(e) =>
-                        onUpdateBrowserSettings &&
-                        onUpdateBrowserSettings({ ...browserSettings, showBookmarksBar: e.target.checked })
-                      }
-                      className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">Show Home button</span>
-                    <input
-                      type="checkbox"
-                      checked={browserSettings?.showHomeButton !== false}
-                      onChange={(e) =>
-                        onUpdateBrowserSettings &&
-                        onUpdateBrowserSettings({ ...browserSettings, showHomeButton: e.target.checked })
-                      }
-                      className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">Theme</span>
-                    <select
-                      value={activeThemeMode}
-                      onChange={(e) => activeHandleThemeChange(e.target.value)}
-                      className="bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-1.5 text-[13px] font-medium text-[var(--ink)] cursor-pointer"
-                    >
-                      <option value="light">Light</option>
-                      <option value="dark">Dark</option>
-                      <option value="system">System</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">Page zoom</span>
-                    <select
-                      value={String(browserSettings?.pageZoom || 100)}
-                      onChange={(e) =>
-                        onUpdateBrowserSettings &&
-                        onUpdateBrowserSettings({ ...browserSettings, pageZoom: Number(e.target.value) })
-                      }
-                      className="bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-1.5 text-[13px] font-medium text-[var(--ink)] cursor-pointer"
-                    >
-                      {[75, 80, 90, 100, 110, 125, 150, 175, 200].map((z) => (
-                        <option key={z} value={String(z)}>
-                          {z}%
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </Card>
-
-                {/* 2. On Startup */}
-                <Card className="p-5 flex flex-col gap-3">
-                  <h4 className="text-[15px] font-semibold text-[var(--ink)]">On startup</h4>
-
-                  <label className="flex items-center gap-3 py-1 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="browserStartupMode"
-                      checked={(browserSettings?.startupMode || 'new_tab') === 'new_tab'}
-                      onChange={() =>
-                        onUpdateBrowserSettings &&
-                        onUpdateBrowserSettings({ ...browserSettings, startupMode: 'new_tab' })
-                      }
-                      className="accent-[#1B4B91]"
-                    />
-                    <span className="text-[14px] font-medium text-[var(--ink)]">Open the New Tab page</span>
-                  </label>
-
-                  <label className="flex items-center gap-3 py-1 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="browserStartupMode"
-                      checked={browserSettings?.startupMode === 'continue'}
-                      onChange={() =>
-                        onUpdateBrowserSettings &&
-                        onUpdateBrowserSettings({ ...browserSettings, startupMode: 'continue' })
-                      }
-                      className="accent-[#1B4B91]"
-                    />
-                    <span className="text-[14px] font-medium text-[var(--ink)]">Continue where you left off</span>
-                  </label>
-
-                  <div className="flex flex-col gap-2.5 py-1">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="browserStartupMode"
-                        checked={browserSettings?.startupMode === 'specific_pages'}
-                        onChange={() =>
-                          onUpdateBrowserSettings &&
-                          onUpdateBrowserSettings({ ...browserSettings, startupMode: 'specific_pages' })
-                        }
-                        className="accent-[#1B4B91]"
-                      />
-                      <span className="text-[14px] font-medium text-[var(--ink)]">
-                        Open a specific page or set of pages
-                      </span>
-                    </label>
-
-                    {browserSettings?.startupMode === 'specific_pages' && (
-                      <div className="pl-7 flex flex-col gap-2">
-                        {(browserSettings?.startupPages || []).map((pageUrl, idx) => (
-                          <div
-                            key={`${pageUrl}-${idx}`}
-                            className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-[8px] bg-[var(--surface-subtle)] border border-[var(--line)]"
-                          >
-                            <span className="text-[13px] font-medium text-[var(--ink)] truncate">{pageUrl}</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const nextPages = (browserSettings?.startupPages || []).filter((_, i) => i !== idx);
-                                onUpdateBrowserSettings &&
-                                  onUpdateBrowserSettings({ ...browserSettings, startupPages: nextPages });
-                              }}
-                              className="p-1 rounded text-[var(--muted)] hover:text-rose-600 cursor-pointer"
-                              aria-label="Remove startup page"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                        <form
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            const raw = newStartupPageInput.trim();
-                            if (!raw || !onUpdateBrowserSettings) return;
-                            const clean = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-                            const nextPages = [...(browserSettings?.startupPages || []), clean];
-                            onUpdateBrowserSettings({ ...browserSettings, startupPages: nextPages });
-                            setNewStartupPageInput('');
-                          }}
-                          className="flex gap-2"
-                        >
-                          <input
-                            type="text"
-                            value={newStartupPageInput}
-                            onChange={(e) => setNewStartupPageInput(e.target.value)}
-                            placeholder="Add a new page (e.g. https://www.google.com)"
-                            className="flex-1 min-w-0 bg-[var(--surface)] border border-[var(--line)] rounded-[8px] px-3 py-1.5 text-[13px] text-[var(--ink)]"
-                          />
-                          <Button type="submit" size="sm" variant="secondary">
-                            Add
-                          </Button>
-                        </form>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-
-                {/* 3. Search Engine */}
-                <Card className="p-5 flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-4">
-                    <h4 className="text-[15px] font-semibold text-[var(--ink)]">Search engine</h4>
-                    <select
-                      value={browserSettings?.searchEngine || 'duckduckgo'}
-                      onChange={(e) => {
-                        const engineId = e.target.value;
-                        if (onUpdateBrowserSettings) {
-                          onUpdateBrowserSettings({
-                            ...browserSettings,
-                            searchEngine: engineId,
-                            homepageMode: 'search_engine'
-                          });
-                        }
-                      }}
-                      className="bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-1.5 text-[13px] font-medium text-[var(--ink)] cursor-pointer min-w-[180px]"
-                    >
-                      {SEARCH_ENGINES.map((engine) => (
-                        <option key={engine.id} value={engine.id}>
-                          {engine.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </Card>
-
-                {/* 4. Downloads */}
-                <Card className="p-5 flex flex-col gap-3.5">
-                  <h4 className="text-[15px] font-semibold text-[var(--ink)]">Downloads</h4>
-
-                  <div className="flex items-center justify-between gap-4 py-1">
-                    <div className="min-w-0">
-                      <div className="text-[14px] font-medium text-[var(--ink)]">Location</div>
-                      <div className="text-[12px] text-[var(--muted)] truncate max-w-[360px]">
-                        {electronBrowserPrefs.downloadPath || 'Default Downloads folder'}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={async () => {
-                        if (window.klarityDesktop?.selectBrowserDownloadDir) {
-                          const res = await window.klarityDesktop.selectBrowserDownloadDir();
-                          if (res && !res.canceled && res.downloadPath) {
-                            setElectronBrowserPrefs((prev) => ({ ...prev, downloadPath: res.downloadPath }));
-                            if (onUpdateBrowserSettings) {
-                              onUpdateBrowserSettings({ ...browserSettings, downloadPath: res.downloadPath });
-                            }
-                          }
-                        }
-                      }}
-                    >
-                      Change
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">
-                      Ask where to save each file before downloading
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(electronBrowserPrefs.askWhereToSave)}
-                      onChange={(e) => updateDesktopBrowserPrefs({ askWhereToSave: e.target.checked })}
-                      className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
-                    />
-                  </div>
-                </Card>
-
-                {/* 5. Bookmarks & Folders */}
-                <Card className="p-5 flex flex-col gap-3.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-[15px] font-semibold text-[var(--ink)]">Bookmarks</h4>
-                    {browserBookmarks.length > 0 && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          if (onUpdateBrowserBookmarks) onUpdateBrowserBookmarks([]);
-                          if (onShowToast) onShowToast('All bookmarks cleared', 'success');
-                        }}
-                      >
-                        Clear all
-                      </Button>
-                    )}
-                  </div>
-
-                  {browserBookmarks.length === 0 ? (
-                    <div className="text-[13px] text-[var(--muted)] py-1">No bookmarks saved.</div>
-                  ) : (
-                    <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
-                      {browserBookmarks.map((item) => {
-                        const parentFolder = item.folderId
-                          ? browserBookmarks.find((f) => f.id === item.folderId)
-                          : null;
-                        return (
-                          <div
-                            key={item.id}
-                            className="flex items-center justify-between gap-2 px-3 py-2 rounded-[8px] border border-[var(--line)] bg-[var(--surface-subtle)]"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              {item.type === 'folder' ? (
-                                <Folder className="w-4 h-4 text-amber-500 shrink-0" />
-                              ) : (
-                                <Bookmark className="w-4 h-4 text-[#1B4B91] shrink-0" />
-                              )}
-                              <div className="min-w-0">
-                                <div className="text-[13px] font-semibold text-[var(--ink)] truncate">
-                                  {item.title}
-                                  {parentFolder && (
-                                    <span className="ml-2 text-[11px] font-medium text-[var(--muted)]">
-                                      ({parentFolder.title})
-                                    </span>
-                                  )}
-                                </div>
-                                {item.url && (
-                                  <div className="text-[11px] text-[var(--muted)] truncate">{item.url}</div>
-                                )}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (onUpdateBrowserBookmarks) {
-                                  onUpdateBrowserBookmarks(
-                                    browserBookmarks.filter((b) => b.id !== item.id && b.folderId !== item.id)
-                                  );
-                                }
-                              }}
-                              className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
-                              aria-label={`Delete ${item.title}`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </Card>
-
-                {/* 6. Privacy & Security */}
-                <Card className="p-5 flex flex-col gap-3.5">
-                  <h4 className="text-[15px] font-semibold text-[var(--ink)]">Privacy &amp; security</h4>
-
-                  <div className="flex items-center justify-between gap-4 py-1">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">
-                      Send a &ldquo;Do Not Track&rdquo; request
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(electronBrowserPrefs.doNotTrack)}
-                      onChange={(e) => updateDesktopBrowserPrefs({ doNotTrack: e.target.checked })}
-                      className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">Cookies</span>
-                    <select
-                      value={electronBrowserPrefs.cookiePolicy || 'allow'}
-                      onChange={(e) => updateDesktopBrowserPrefs({ cookiePolicy: e.target.value })}
-                      className="bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-3 py-1.5 text-[13px] font-medium text-[var(--ink)] cursor-pointer"
-                    >
-                      <option value="allow">Allow all cookies</option>
-                      <option value="block_third_party">Block third-party cookies</option>
-                      <option value="block_all">Block all cookies</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">
-                      Ad &amp; tracker blocker ({browserAdBlockStats.adsBlockedCount || 0} blocked)
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant={browserAdBlockStats.enabled ? 'primary' : 'secondary'}
-                        onClick={async () => {
-                          if (window.klarityDesktop?.toggleAdBlock) {
-                            const next = await window.klarityDesktop.toggleAdBlock(!browserAdBlockStats.enabled);
-                            if (next) setBrowserAdBlockStats(next);
-                          }
-                        }}
-                      >
-                        {browserAdBlockStats.enabled ? 'On' : 'Off'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={async () => {
-                          if (window.klarityDesktop?.resetAdBlockCount) {
-                            const next = await window.klarityDesktop.resetAdBlockCount();
-                            if (next) setBrowserAdBlockStats(next);
-                          }
-                        }}
-                      >
-                        Reset
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">
-                      YouTube video ad shield
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={browserSettings?.youtubeAdShield !== false}
-                      onChange={(e) => {
-                        if (onUpdateBrowserSettings) {
-                          onUpdateBrowserSettings({
-                            ...browserSettings,
-                            youtubeAdShield: e.target.checked
-                          });
-                        }
-                      }}
-                      className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">
-                      Skip sponsor segments (SponsorBlock)
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={browserSettings?.sponsorBlockEnabled !== false}
-                      onChange={(e) => {
-                        if (onUpdateBrowserSettings) {
-                          onUpdateBrowserSettings({
-                            ...browserSettings,
-                            sponsorBlockEnabled: e.target.checked
-                          });
-                        }
-                      }}
-                      className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">
-                      Clean video titles (DeArrow)
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={browserSettings?.dearrowEnabled !== false}
-                      onChange={(e) => {
-                        if (onUpdateBrowserSettings) {
-                          onUpdateBrowserSettings({
-                            ...browserSettings,
-                            dearrowEnabled: e.target.checked
-                          });
-                        }
-                      }}
-                      className="w-4 h-4 accent-[#1B4B91] cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 py-1 border-t border-[var(--line)] pt-3">
-                    <span className="text-[14px] font-medium text-[var(--ink)]">Clear browsing data</span>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      disabled={isClearingBrowserData}
-                      onClick={() => setConfirmClearBrowserData(true)}
-                    >
-                      {isClearingBrowserData ? 'Clearing...' : 'Clear data'}
-                    </Button>
-                  </div>
-                </Card>
-              </div>
+              <BrowserSettingsPanel
+                browserOnly={browserOnly}
+                onClose={onClose}
+                browserSettings={browserSettings}
+                onUpdateBrowserSettings={onUpdateBrowserSettings}
+                browserBookmarks={browserBookmarks}
+                onUpdateBrowserBookmarks={onUpdateBrowserBookmarks}
+                onOpenBrowserHistory={onOpenBrowserHistory}
+                historyCount={historyCount}
+                recentSearchCount={recentSearchCount}
+                onRequestClearHistory={() => setConfirmClearHistory(true)}
+                onClearRecentSearches={() => {
+                  clearRecentSearches();
+                  setRecentSearchCount(0);
+                  onShowToast?.('Recent searches cleared', 'success');
+                }}
+                onRequestClearBrowserData={() => setConfirmClearBrowserData(true)}
+                isClearingBrowserData={isClearingBrowserData}
+                browserAdBlockStats={browserAdBlockStats}
+                onUpdateAdBlockStats={setBrowserAdBlockStats}
+                electronBrowserPrefs={electronBrowserPrefs}
+                updateDesktopBrowserPrefs={updateDesktopBrowserPrefs}
+                activeThemeMode={activeThemeMode}
+                onThemeChange={activeHandleThemeChange}
+                uiFontScale={uiFontScale}
+                onSetFontScale={handleSetFontScale}
+                uiReduceMotion={uiReduceMotion}
+                onToggleReduceMotion={handleToggleReduceMotion}
+                uiPerformanceMode={uiPerformanceMode}
+                onSetPerformanceMode={handleSetPerformanceMode}
+                isLowPowerMode={isLowPowerMode}
+                deviceCapabilities={deviceCapabilities}
+                desktopAppInfo={desktopAppInfo}
+                formatVersionString={formatVersionString}
+                onShowToast={onShowToast}
+              />
             )}
 
             {/* TAB 6: ABOUT */}
@@ -2245,11 +1893,27 @@ export function SettingsPage({
       <ConfirmDialog
         open={confirmClearBrowserData}
         title="Clear browsing data?"
-        message="Are you sure you want to clear your browser cache, cookies, storage, and saved session tabs? This cannot be undone."
+        message="Are you sure you want to clear your browser cache, cookies, history, recent searches, storage, and saved session tabs? This cannot be undone."
         confirmLabel="Clear data"
         variant="danger"
         onCancel={() => setConfirmClearBrowserData(false)}
         onConfirm={handleConfirmClearBrowserData}
+      />
+
+      {/* Confirm Clear Browser History */}
+      <ConfirmDialog
+        open={confirmClearHistory}
+        title="Clear browser history?"
+        message="Are you sure you want to permanently remove all saved browser history entries from this device?"
+        confirmLabel="Clear history"
+        variant="danger"
+        onCancel={() => setConfirmClearHistory(false)}
+        onConfirm={() => {
+          clearBrowserHistory();
+          setHistoryCount(0);
+          setConfirmClearHistory(false);
+          onShowToast?.('Browser history cleared', 'success');
+        }}
       />
     </div>
   );
