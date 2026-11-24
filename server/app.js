@@ -5288,8 +5288,17 @@ app.post('/api/app/update-apply', async (req, res) => {
 // Serve compiled frontend assets when running inside the Native Desktop App or local standalone server
 const clientDistPath = path.join(__dirname, '../client/dist');
 if (fs.existsSync(clientDistPath)) {
-  app.use(express.static(clientDistPath));
-  app.get(/^\/(?!api).*/, (req, res) => {
+  app.use(
+    express.static(clientDistPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+        }
+      }
+    })
+  );
+  app.get(/^\/(?!api\/|assets\/).*/, (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 }

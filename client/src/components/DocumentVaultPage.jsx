@@ -975,23 +975,23 @@ export default function DocumentVaultPage({
       )}
 
       {/* Action and Filter Toolbar */}
-      <Card className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Left: Compact Icon Switcher (Passwords / Documents) & Flexible Search Bar */}
-        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+      <Card className="p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        {/* Left: Compact Mode Switcher (Passwords / Documents) & Flexible Search Bar */}
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           {onSelectVaultSection && (
-            <div className="flex items-center bg-[var(--surface-subtle)] p-1 rounded-[10px] border border-[var(--line)] shrink-0">
+            <div className="h-10 flex items-center bg-[var(--surface-subtle)] p-1 rounded-[10px] border border-[var(--line)] shrink-0">
               <button
                 type="button"
                 onClick={() => onSelectVaultSection('passwords')}
                 title={`Passwords (${passwordsCount})`}
                 aria-label={`Passwords (${passwordsCount})`}
-                className={`flex items-center gap-1.5 py-1 px-2.5 rounded-[8px] font-medium text-[13px] transition-all cursor-pointer ${
+                className={`h-full flex items-center gap-1.5 px-2.5 rounded-[7px] font-medium text-[13px] transition-colors cursor-pointer ${
                   activeVaultSection === 'passwords'
                     ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                 }`}
               >
-                <KeyRound className="w-4 h-4" />
+                <KeyRound className="w-4 h-4 shrink-0" />
                 <span className={`text-[11px] min-w-[18px] text-center px-1.5 py-0.5 rounded-full font-semibold leading-none ${
                   activeVaultSection === 'passwords'
                     ? 'bg-[#1B4B91]/15 text-[#1B4B91]'
@@ -1006,13 +1006,13 @@ export default function DocumentVaultPage({
                 onClick={() => onSelectVaultSection('documents')}
                 title={`Documents (${documents.length})`}
                 aria-label={`Documents (${documents.length})`}
-                className={`flex items-center gap-1.5 py-1 px-2.5 rounded-[8px] font-medium text-[13px] transition-all cursor-pointer ${
+                className={`h-full flex items-center gap-1.5 px-2.5 rounded-[7px] font-medium text-[13px] transition-colors cursor-pointer ${
                   activeVaultSection === 'documents'
                     ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                 }`}
               >
-                <FileText className="w-4 h-4" />
+                <FileText className="w-4 h-4 shrink-0" />
                 <span className={`text-[11px] min-w-[18px] text-center px-1.5 py-0.5 rounded-full font-semibold leading-none ${
                   activeVaultSection === 'documents'
                     ? 'bg-[#1B4B91]/15 text-[#1B4B91]'
@@ -1024,22 +1024,23 @@ export default function DocumentVaultPage({
             </div>
           )}
 
-          {/* Search Bar (Flexible Width) */}
-          <div className="relative flex-1 min-w-[160px]">
+          {/* Search Bar (Shrinks smoothly on compact laptops & Chromebooks) */}
+          <div className="relative flex-1 min-w-[110px]">
             <label htmlFor="doc-vault-search" className="sr-only">Search documents</label>
             <Search className="w-4 h-4 text-[var(--muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               id="doc-vault-search"
               type="text"
-              placeholder="Search documents by name, folder, or notes..."
+              placeholder="Search documents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] pl-9 pr-8 py-1.5 text-[14px] text-[var(--ink)] placeholder-[var(--muted)] outline-none focus:border-[#1B4B91]"
+              className="w-full h-10 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[10px] pl-9 pr-8 text-[14px] text-[var(--ink)] placeholder-[var(--muted)] outline-none focus:border-[#1B4B91]"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer p-0.5"
               >
                 <X className="w-3.5 h-3.5" />
@@ -1048,79 +1049,112 @@ export default function DocumentVaultPage({
           </div>
         </div>
 
-        {/* Right: Sort Dropdown, View Toggles & Primary Action Button */}
-        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-          {/* Sort Selector */}
-          <div className="flex items-center gap-1.5 bg-[var(--surface-subtle)] px-2.5 py-1 rounded-[8px] border border-[var(--line)] text-[13px]">
-            <ArrowUpDown className="w-3.5 h-3.5 text-[var(--muted)]" />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="bg-transparent border-none text-[var(--ink)] font-medium outline-none cursor-pointer"
+        {/* Right: Passive View/Sort Group | Divider | Primary Actions */}
+        <div className="flex items-center justify-end gap-2 shrink-0">
+          {/* Passive View & Sort Utility Controls */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Compact Sort Control (collapses text label to icon + tooltip on smaller viewports) */}
+            <div
+              title={`Sort: ${
+                sortBy === 'newest'
+                  ? 'Newest first'
+                  : sortBy === 'oldest'
+                  ? 'Oldest first'
+                  : sortBy === 'name'
+                  ? 'Name (A–Z)'
+                  : 'File size'
+              }`}
+              className="relative h-10 flex items-center gap-1.5 px-2.5 rounded-[10px] bg-[var(--surface-subtle)] border border-[var(--line)] hover:border-[#1B4B91]/40 text-[13px] transition-colors"
             >
-              <option value="newest">Newest first</option>
-              <option value="oldest">Oldest first</option>
-              <option value="name">Name (A–Z)</option>
-              <option value="size">File size</option>
-            </select>
+              <ArrowUpDown className="w-4 h-4 text-[var(--muted)] shrink-0 pointer-events-none" />
+              <span className="hidden lg:inline font-medium text-[var(--ink)] whitespace-nowrap pointer-events-none">
+                {sortBy === 'newest'
+                  ? 'Newest first'
+                  : sortBy === 'oldest'
+                  ? 'Oldest first'
+                  : sortBy === 'name'
+                  ? 'Name (A–Z)'
+                  : 'File size'}
+              </span>
+              <ChevronDown className="hidden lg:inline w-3.5 h-3.5 text-[var(--muted)] shrink-0 pointer-events-none" />
+              <select
+                aria-label="Sort documents"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              >
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="name">Name (A–Z)</option>
+                <option value="size">File size</option>
+              </select>
+            </div>
+
+            {/* Grid / List View Mode Toggle */}
+            <div className="h-10 flex items-center bg-[var(--surface-subtle)] p-1 rounded-[10px] border border-[var(--line)] shrink-0">
+              <button
+                type="button"
+                onClick={() => handleSetViewMode('grid')}
+                title="Grid view"
+                aria-label="Grid view"
+                className={`h-full w-8 flex items-center justify-center rounded-[7px] transition-colors cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetViewMode('list')}
+                title="List view"
+                aria-label="List view"
+                className={`h-full w-8 flex items-center justify-center rounded-[7px] transition-colors cursor-pointer ${
+                  viewMode === 'list'
+                    ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
+                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                }`}
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
-          {/* View Mode Toggle */}
-          <div className="flex items-center bg-[var(--surface-subtle)] p-0.5 rounded-[8px] border border-[var(--line)]">
+          {/* Vertical Divider separating passive view controls from creation actions */}
+          <div className="hidden sm:block h-6 w-px bg-[var(--line)] mx-0.5 shrink-0" aria-hidden="true" />
+
+          {/* Creation & Editing Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            <input
+              type="file"
+              ref={pdfFileInputRef}
+              accept="application/pdf"
+              className="hidden"
+              onChange={handleOpenPdfFromDisk}
+            />
             <button
               type="button"
-              onClick={() => handleSetViewMode('grid')}
-              title="Grid view"
-              className={`p-1.5 rounded-[6px] transition-all cursor-pointer ${
-                viewMode === 'grid'
-                  ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
-                  : 'text-[var(--muted)] hover:text-[var(--ink)]'
-              }`}
+              onClick={() => pdfFileInputRef.current?.click()}
+              title="Open any PDF in the built-in Editor"
+              aria-label="Open PDF Editor"
+              className="h-10 px-3 rounded-[10px] inline-flex items-center justify-center gap-1.5 text-[13px] font-medium bg-transparent hover:bg-[var(--surface-subtle)] border border-[var(--line)] hover:border-[#1B4B91]/50 text-[var(--ink)] transition-colors cursor-pointer shrink-0"
             >
-              <LayoutGrid className="w-4 h-4" />
+              <PenTool className="w-4 h-4 text-[#1B4B91] shrink-0" />
+              <span className="hidden md:inline">Editor</span>
             </button>
-            <button
-              type="button"
-              onClick={() => handleSetViewMode('list')}
-              title="List view"
-              className={`p-1.5 rounded-[6px] transition-all cursor-pointer ${
-                viewMode === 'list'
-                  ? 'bg-[var(--surface)] text-[#1B4B91] shadow-xs'
-                  : 'text-[var(--muted)] hover:text-[var(--ink)]'
-              }`}
+
+            {/* Sole High-Contrast Primary Action Button on Far Right */}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => handleOpenUploadModal(null)}
+              className="h-10 px-4 rounded-[10px] shrink-0"
             >
-              <List className="w-4 h-4" />
-            </button>
+              <UploadCloud className="w-4 h-4 shrink-0" />
+              <span>Import</span>
+            </Button>
           </div>
-
-          {/* PDF Editor File Picker & Button */}
-          <input
-            type="file"
-            ref={pdfFileInputRef}
-            accept="application/pdf"
-            className="hidden"
-            onChange={handleOpenPdfFromDisk}
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => pdfFileInputRef.current?.click()}
-            title="Open any PDF in the built-in Editor"
-            className="hidden sm:inline-flex items-center gap-1.5 border-[var(--line)] hover:border-[#1B4B91]/50 text-[var(--ink)]"
-          >
-            <PenTool className="w-4 h-4 text-[#1B4B91]" />
-            <span>Editor</span>
-          </Button>
-
-          {/* Import / Upload Document Primary Button (Anchored Prominently on the Far Right) */}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => handleOpenUploadModal(null)}
-          >
-            <UploadCloud className="w-4 h-4" />
-            <span>Import</span>
-          </Button>
         </div>
       </Card>
 
