@@ -888,6 +888,13 @@ async function createDesktopWindow() {
     }
   });
 
+  mainWindow.webContents.on('will-attach-webview', (_event, webPreferences) => {
+    webPreferences.nodeIntegration = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
+    webPreferences.preload = path.join(__dirname, 'browserGuestPreload.js');
+  });
+
   mainWindow.once('ready-to-show', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show();

@@ -69,7 +69,9 @@ export const DEFAULT_BROWSER_SETTINGS = {
   sponsorBlockEnabled: true,
   dearrowEnabled: true,
   historyEnabled: true,
-  recentSearchesEnabled: true
+  recentSearchesEnabled: true,
+  offerToSavePasswords: true,
+  neverSavePasswordDomains: []
 };
 
 export const NEW_TAB_URL = 'klarity://newtab';

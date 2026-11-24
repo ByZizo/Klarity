@@ -124,7 +124,7 @@ const NAV_CATEGORIES = [
     label: 'Privacy & History',
     icon: Shield,
     dividerBefore: true,
-    keywords: 'history clear browsing data cookies do not track ad blocker tracker youtube sponsorblock dearrow'
+    keywords: 'passwords vault save login autofill history clear browsing data cookies do not track ad blocker tracker youtube sponsorblock dearrow'
   },
   {
     id: 'downloads',
@@ -568,8 +568,61 @@ export default function BrowserSettingsPanel({
     }
 
     if (catId === 'privacy') {
+      const neverDomains = Array.isArray(browserSettings?.neverSavePasswordDomains)
+        ? browserSettings.neverSavePasswordDomains
+        : [];
+
       return (
         <div className="flex flex-col gap-5">
+          <SettingGroupCard title="Passwords & Vault">
+            <SettingRow
+              htmlFor="bs-offer-save-passwords"
+              label="Offer to save passwords"
+              description={
+                browserSettings?.offerToSavePasswords !== false
+                  ? 'Prompts to save or update login credentials in Klarity Vault when signing in on websites.'
+                  : 'Off — Klarity Browser will not ask to save passwords when signing in.'
+              }
+            >
+              <SettingSwitch
+                id="bs-offer-save-passwords"
+                label="Offer to save passwords"
+                checked={browserSettings?.offerToSavePasswords !== false}
+                onChange={(val) => patchSettings({ offerToSavePasswords: val })}
+              />
+            </SettingRow>
+            {neverDomains.length > 0 && (
+              <SettingRow
+                label={`Never-saved websites (${neverDomains.length})`}
+                description="Sites excluded from password save prompts."
+                vertical
+              >
+                <div className="flex flex-wrap gap-1.5">
+                  {neverDomains.map((dom) => (
+                    <span
+                      key={dom}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)]"
+                    >
+                      <span>{dom}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          patchSettings({
+                            neverSavePasswordDomains: neverDomains.filter((d) => d !== dom)
+                          })
+                        }
+                        aria-label={`Allow password prompts on ${dom}`}
+                        className="text-[var(--muted)] hover:text-rose-500 cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </SettingRow>
+            )}
+          </SettingGroupCard>
+
           <SettingGroupCard title="Browser History">
             <SettingRow
               htmlFor="bs-history-toggle"

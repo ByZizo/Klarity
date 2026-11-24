@@ -1474,7 +1474,6 @@ function KlarityApp() {
   useEffect(() => {
     if (!isVaultLoadedRef.current) return;
     try {
-      localStorage.setItem('klarity_password_vault', JSON.stringify(vaultItems));
       secureStorage.setItem('klarity_password_vault', vaultItems).catch(() => {});
     } catch (e) {}
 
@@ -5777,6 +5776,9 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 onUpdateBrowserSettings={handleUpdateBrowserSettings}
                 browserBookmarks={browserBookmarks}
                 onUpdateBookmarks={handleUpdateBrowserBookmarks}
+                vaultItems={vaultItems}
+                onUpdateVaultItems={setVaultItems}
+                onShowToast={showToast}
                 pendingBrowserUrl={pendingBrowserUrl}
                 onClearPendingBrowserUrl={() => setPendingBrowserUrl('')}
                 onOpenBrowserSettings={() => {

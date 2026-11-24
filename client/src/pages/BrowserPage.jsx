@@ -52,6 +52,7 @@ import { FormattedChatMessage } from '../components/SharedAppComponents';
 import { NewTabPage } from '../components/NewTabPage';
 import { BrowserCalculatorPopover } from '../components/BrowserCalculatorPopover';
 import { BrowserSearchDropdown } from '../components/BrowserSearchDropdown';
+import BrowserPasswordPrompt from '../components/BrowserPasswordPrompt';
 import {
   buildYouTubeAdShieldScript,
   buildSponsorBlockScript,
@@ -231,6 +232,9 @@ export function BrowserPage({
   onUpdateBrowserSettings,
   browserBookmarks = [],
   onUpdateBookmarks,
+  vaultItems = [],
+  onUpdateVaultItems,
+  onShowToast,
   pendingBrowserUrl = '',
   onClearPendingBrowserUrl,
   onOpenBrowserSettings,
@@ -359,8 +363,154 @@ export function BrowserPage({
 
   const [isOverflowMenuOpen, setIsOverflowMenuOpen] = useState(false);
   const overflowMenuRef = useRef(null);
+  const [passwordSavePrompt, setPasswordSavePrompt] = useState(null);
+  const vaultItemsRef = useRef(vaultItems);
+  useEffect(() => {
+    vaultItemsRef.current = vaultItems;
+  }, [vaultItems]);
+
   const isAnyToolbarPopoverOpen =
-    isAdBlockPopoverOpen || isDownloadsPopoverOpen || isOverflowMenuOpen;
+    isAdBlockPopoverOpen || isDownloadsPopoverOpen || isOverflowMenuOpen || Boolean(passwordSavePrompt);
+
+  const normalizeSiteHost = (raw) => {
+    try {
+      const str = String(raw || '').trim();
+      if (!str) return '';
+      const u = /^https?:\/\//i.test(str) ? new URL(str) : new URL(`https://${str}`);
+      return u.hostname.toLowerCase().replace(/^www\./, '');
+    } catch {
+      return String(raw || '').toLowerCase().replace(/^www\./, '').split('/')[0];
+    }
+  };
+
+  const deriveServiceName = (hostname) => {
+    const clean = normalizeSiteHost(hostname);
+    if (!clean) return 'Website';
+    const parts = clean.split('.');
+    const main = parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+    return main.charAt(0).toUpperCase() + main.slice(1);
+  };
+
+  const handleLoginCandidateDetected = (candidate, tabId) => {
+    if (!candidate || !candidate.password) return;
+    const settings = browserSettingsRef.current || DEFAULT_BROWSER_SETTINGS;
+    if (settings.offerToSavePasswords === false) return;
+
+    const hostname = normalizeSiteHost(candidate.hostname || candidate.origin || candidate.url);
+    if (!hostname) return;
+
+    const neverDomains = Array.isArray(settings.neverSavePasswordDomains)
+      ? settings.neverSavePasswordDomains.map((d) => normalizeSiteHost(d))
+      : [];
+    if (neverDomains.includes(hostname)) return;
+
+    const incomingUser = String(candidate.username || '').trim();
+    const incomingPw = String(candidate.password);
+    const serviceName = deriveServiceName(hostname);
+
+    const existingList = Array.isArray(vaultItemsRef.current) ? vaultItemsRef.current : [];
+    const matchingSiteItems = existingList.filter((item) => {
+      const itemHost = normalizeSiteHost(item.website || '');
+      const itemService = String(item.service || '').trim().toLowerCase();
+      return (
+        (itemHost && (itemHost === hostname || hostname.endsWith(`.${itemHost}`) || itemHost.endsWith(`.${hostname}`))) ||
+        itemService === serviceName.toLowerCase() ||
+        itemService === hostname
+      );
+    });
+
+    const exactAccount = matchingSiteItems.find(
+      (item) => String(item.username || '').trim().toLowerCase() === incomingUser.toLowerCase()
+    );
+
+    if (exactAccount) {
+      if (String(exactAccount.password || '') === incomingPw) {
+        // Exact username + password already saved in Vault — do not prompt
+        return;
+      }
+      setPasswordSavePrompt({
+        tabId,
+        mode: 'update',
+        existingItemId: exactAccount.id,
+        service: exactAccount.service || serviceName,
+        category: exactAccount.category || 'General',
+        hostname,
+        website: exactAccount.website || candidate.origin || `https://${hostname}`,
+        username: incomingUser,
+        password: incomingPw
+      });
+      return;
+    }
+
+    setPasswordSavePrompt({
+      tabId,
+      mode: 'save',
+      existingItemId: null,
+      service: serviceName,
+      category: 'General',
+      hostname,
+      website: candidate.origin || `https://${hostname}`,
+      username: incomingUser,
+      password: incomingPw
+    });
+  };
+
+  const handleConfirmPasswordSavePrompt = (payload) => {
+    if (!payload || !payload.password || typeof onUpdateVaultItems !== 'function') {
+      setPasswordSavePrompt(null);
+      return;
+    }
+
+    const currentList = Array.isArray(vaultItemsRef.current) ? vaultItemsRef.current : [];
+    if (payload.mode === 'update' && payload.existingItemId) {
+      const next = currentList.map((item) =>
+        item.id === payload.existingItemId
+          ? {
+              ...item,
+              service: payload.service || item.service,
+              username: payload.username,
+              password: payload.password,
+              website: payload.website || item.website,
+              category: payload.category || item.category || 'General'
+            }
+          : item
+      );
+      onUpdateVaultItems(next);
+      onShowToast?.(`Updated password for ${payload.service}`, 'success');
+    } else {
+      const newItem = {
+        id: `v-${Date.now()}`,
+        service: payload.service || payload.hostname || 'Website',
+        category: payload.category || 'General',
+        username: payload.username || '',
+        password: payload.password,
+        accountNumber: '',
+        website: payload.website || (payload.hostname ? `https://${payload.hostname}` : ''),
+        notes: '',
+        attachments: [],
+        isFavorite: String(payload.category || '').toLowerCase() === 'favorites'
+      };
+      onUpdateVaultItems([newItem, ...currentList]);
+      onShowToast?.(`Saved login for ${newItem.service} to Klarity Vault`, 'success');
+    }
+    setPasswordSavePrompt(null);
+  };
+
+  const handleNeverSaveForDomain = (domain) => {
+    const clean = normalizeSiteHost(domain);
+    setPasswordSavePrompt(null);
+    if (!clean || typeof onUpdateBrowserSettings !== 'function') return;
+    const prevList = Array.isArray(browserSettings?.neverSavePasswordDomains)
+      ? browserSettings.neverSavePasswordDomains
+      : [];
+    if (!prevList.includes(clean)) {
+      onUpdateBrowserSettings({
+        ...browserSettings,
+        neverSavePasswordDomains: [...prevList, clean]
+      });
+      onShowToast?.(`Won't ask to save passwords on ${clean}`, 'info');
+    }
+  };
 
   // Dedicated In-Browser AI Sidebar State (Self-contained, Advisor-powered, user-expandable)
   const [isBrowserAiSidebarOpen, setIsBrowserAiSidebarOpen] = useState(false);
@@ -1506,6 +1656,18 @@ export function BrowserPage({
       }
     };
 
+    const handleIpcMessage = (e) => {
+      if (e?.channel === 'klarity:login-detected') {
+        const candidate = Array.isArray(e.args) ? e.args[0] : null;
+        if (candidate && candidate.password) {
+          // Slight delay allows immediate client-side validation errors to settle cleanly
+          setTimeout(() => {
+            handleLoginCandidateDetected(candidate, tabId);
+          }, 350);
+        }
+      }
+    };
+
     webview.addEventListener('dom-ready', handleDomReady);
     webview.addEventListener('did-start-loading', handleStartLoading);
     webview.addEventListener('did-stop-loading', handleStopLoading);
@@ -1514,6 +1676,7 @@ export function BrowserPage({
     webview.addEventListener('page-title-updated', handleTitleUpdate);
     webview.addEventListener('media-started-playing', handleMediaStarted);
     webview.addEventListener('media-paused', handleMediaPaused);
+    webview.addEventListener('ipc-message', handleIpcMessage);
   };
 
   // Navigate active tab (or specific tabId)
@@ -2513,6 +2676,14 @@ export function BrowserPage({
 
       {/* 1. TOP BROWSER CONTROLS & SMART ADDRESS BAR */}
       <div className="shrink-0 bg-[var(--surface)] border-b border-[var(--line)] px-3 sm:px-4 py-2 flex flex-col gap-2 shadow-2xs relative z-50">
+        {passwordSavePrompt && (
+          <BrowserPasswordPrompt
+            promptData={passwordSavePrompt}
+            onSave={handleConfirmPasswordSavePrompt}
+            onNeverForSite={handleNeverSaveForDomain}
+            onDismiss={() => setPasswordSavePrompt(null)}
+          />
+        )}
         <div className="flex items-center gap-1.5">
           {/* Navigation Buttons: Back, Forward, Reload, Home */}
           <div className="flex items-center gap-1 shrink-0">
