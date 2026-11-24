@@ -3,22 +3,66 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
+const CHUNK_RELOAD_KEY = 'klarity_last_chunk_reload_at';
+
+function isStaleChunkError(error) {
+  const msg = String(error?.message || error || '');
+  return (
+    /Failed to fetch dynamically imported module/i.test(msg) ||
+    /Importing a module script failed/i.test(msg) ||
+    /ChunkLoadError/i.test(msg) ||
+    /Loading chunk \d+ failed/i.test(msg)
+  );
+}
+
+function tryAutoRecoverStaleChunk() {
+  try {
+    const now = Date.now();
+    const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
+    if (!last || now - last > 15000) {
+      sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+      window.location.reload();
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', (event) => {
+    if (tryAutoRecoverStaleChunk()) {
+      event.preventDefault();
+    }
+  });
+}
+
 class GlobalErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, isRecovering: false };
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    return { hasError: true, error, isRecovering: isStaleChunkError(error) };
   }
 
   componentDidCatch(error, errorInfo) {
+    if (isStaleChunkError(error) && tryAutoRecoverStaleChunk()) {
+      return;
+    }
+    this.setState({ isRecovering: false });
     console.error('Klarity UI uncaught render error:', error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
+      if (this.state.isRecovering) {
+        return (
+          <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', backgroundColor: '#f8fafc', color: '#1e293b', fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '14px', fontWeight: 500 }}>
+            Updating view...
+          </div>
+        );
+      }
       return (
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', backgroundColor: '#f8fafc', color: '#1e293b', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
           <div style={{ maxWidth: '520px', width: '100%', backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '28px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
