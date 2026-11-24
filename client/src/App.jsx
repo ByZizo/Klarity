@@ -298,16 +298,23 @@ function KlarityApp() {
   const [secPinMsg, setSecPinMsg] = useState('');
   const [desktopAppInfo, setDesktopAppInfo] = useState({
     isDesktopApp: Boolean(typeof window !== 'undefined' && window.klarityDesktop?.isDesktopApp),
-    version: '1.0.0',
+    version: CURRENT_APP_VERSION,
     updateStatus: { state: 'idle', message: 'Up to date' }
   });
-  const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
+  const [dismissedBannerUpdateKey, setDismissedBannerUpdateKey] = useState('');
   const [whatsNewData, setWhatsNewData] = useState(null);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
   const [isCheckingUpdateInSettings, setIsCheckingUpdateInSettings] = useState(false);
-  const [updatePromptDismissed, setUpdatePromptDismissed] = useState(false);
+  const [dismissedPromptUpdateKey, setDismissedPromptUpdateKey] = useState('');
+
+  const getUpdateIdentityKey = (status) => {
+    if (!status) return '';
+    const ver = String(status.latestVersion || '').replace(/^v/i, '').trim();
+    const sha = String(status.commitSha || status.fullSha || '').slice(0, 7).trim();
+    return [ver, sha].filter(Boolean).join('|');
+  };
   const [isReleaseNotesOpen, setIsReleaseNotesOpen] = useState(false);
   const [feedbackType, setFeedbackType] = useState('General Feedback');
   const [feedbackText, setFeedbackText] = useState('');
@@ -395,33 +402,89 @@ function KlarityApp() {
       } catch {}
     };
 
+    let lastSilentCheckAt = 0;
+
     if (typeof window !== 'undefined' && window.klarityDesktop) {
       window.klarityDesktop.getAppInfo?.().then(info => {
         if (info) setDesktopAppInfo(info);
       }).catch(() => {});
+
       const unsub = window.klarityDesktop.onUpdateStatus?.((status) => {
         if (status) {
           setDesktopAppInfo(prev => ({ ...prev, updateStatus: status }));
         }
       });
-      // Main process handles periodic polling; trigger a single startup check on mount
-      const t = setTimeout(() => {
-        window.klarityDesktop.checkForUpdates?.().catch(() => {});
-      }, 1500);
-      return () => {
-        clearTimeout(t);
-        if (typeof unsub === 'function') unsub();
+
+      const runDesktopSilentCheck = async (force = false) => {
+        const now = Date.now();
+        if (!force && now - lastSilentCheckAt < 25 * 1000) return;
+        lastSilentCheckAt = now;
+        try {
+          const st = await window.klarityDesktop.checkForUpdates?.({ manual: false });
+          if (st) {
+            setDesktopAppInfo(prev => ({ ...prev, updateStatus: st }));
+            if (st.state === 'available' || st.state === 'ready' || st.state === 'installing') {
+              return;
+            }
+          }
+        } catch {}
+        // Fallback check against embedded server so updates still surface even if main-process git/API fell back
+        await checkServerUpdate();
       };
-    } else {
-      // In web/Chrome OS browser mode, check on mount and every 15m while tab is visible
-      const t = setTimeout(checkServerUpdate, 1500);
-      const pollTimer = setInterval(() => {
-        if (typeof document !== 'undefined' && document.hidden) return;
-        checkServerUpdate();
-      }, 15 * 60 * 1000);
+
+      const t = setTimeout(() => runDesktopSilentCheck(true), 900);
+      const pollTimer = setInterval(() => runDesktopSilentCheck(false), 2 * 60 * 1000);
+      const onFocus = () => runDesktopSilentCheck(false);
+      const onVisibility = () => {
+        if (typeof document !== 'undefined' && !document.hidden) {
+          runDesktopSilentCheck(false);
+        }
+      };
+      const onOnline = () => runDesktopSilentCheck(true);
+
+      window.addEventListener('focus', onFocus);
+      window.addEventListener('online', onOnline);
+      document.addEventListener('visibilitychange', onVisibility);
+
       return () => {
         clearTimeout(t);
         clearInterval(pollTimer);
+        window.removeEventListener('focus', onFocus);
+        window.removeEventListener('online', onOnline);
+        document.removeEventListener('visibilitychange', onVisibility);
+        if (typeof unsub === 'function') unsub();
+      };
+    } else {
+      const runWebSilentCheck = (force = false) => {
+        const now = Date.now();
+        if (!force && now - lastSilentCheckAt < 25 * 1000) return;
+        lastSilentCheckAt = now;
+        checkServerUpdate();
+      };
+
+      const t = setTimeout(() => runWebSilentCheck(true), 900);
+      const pollTimer = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        runWebSilentCheck(false);
+      }, 2 * 60 * 1000);
+      const onFocus = () => runWebSilentCheck(false);
+      const onVisibility = () => {
+        if (typeof document !== 'undefined' && !document.hidden) {
+          runWebSilentCheck(false);
+        }
+      };
+      const onOnline = () => runWebSilentCheck(true);
+
+      window.addEventListener('focus', onFocus);
+      window.addEventListener('online', onOnline);
+      document.addEventListener('visibilitychange', onVisibility);
+
+      return () => {
+        clearTimeout(t);
+        clearInterval(pollTimer);
+        window.removeEventListener('focus', onFocus);
+        window.removeEventListener('online', onOnline);
+        document.removeEventListener('visibilitychange', onVisibility);
       };
     }
   }, []);
@@ -463,20 +526,24 @@ function KlarityApp() {
 
   // Perform Update (pulls latest from GitHub, rebuilds client, restarts app, and triggers What's New)
   const handlePerformUpdate = async () => {
+    const activeUpdateKey = getUpdateIdentityKey(desktopAppInfo.updateStatus);
     setIsInstallingUpdate(true);
     setIsUpdateModalOpen(false);
-    setUpdatePromptDismissed(true);
+    if (activeUpdateKey) setDismissedPromptUpdateKey(activeUpdateKey);
     try {
-      const pendingSha = desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
-      if (pendingSha) {
+      if (activeUpdateKey) {
         try {
-          sessionStorage.setItem('klarity_last_applied_sha', pendingSha);
+          sessionStorage.setItem('klarity_last_applied_sha', activeUpdateKey);
         } catch {}
       }
       if (typeof window !== 'undefined' && window.klarityDesktop?.installUpdateNow) {
         const res = await window.klarityDesktop.installUpdateNow();
         if (!res?.ok && res?.error) {
           setIsInstallingUpdate(false);
+          setDismissedPromptUpdateKey('');
+          try {
+            sessionStorage.removeItem('klarity_last_applied_sha');
+          } catch {}
           setNotificationToast(`Update notice: ${res.error}`);
           setTimeout(() => setNotificationToast(''), 4000);
         }
@@ -489,34 +556,42 @@ function KlarityApp() {
       }
     } catch (err) {
       setIsInstallingUpdate(false);
+      setDismissedPromptUpdateKey('');
       setNotificationToast(`Update failed: ${err.message}`);
       setTimeout(() => setNotificationToast(''), 4000);
     }
   };
 
-  // Trigger update notification prompt when Klarity opens or when a new update is pushed to GitHub
+  // Trigger update notification prompt when Klarity opens or whenever a new update is pushed to GitHub
   useEffect(() => {
-    if (
-      (desktopAppInfo.updateStatus?.state === 'available' || desktopAppInfo.updateStatus?.state === 'ready') &&
-      !updatePromptDismissed
-    ) {
-      let alreadyApplied = false;
+    const status = desktopAppInfo.updateStatus;
+    if (status?.state === 'available' || status?.state === 'ready') {
+      const currentKey = getUpdateIdentityKey(status);
+      if (currentKey && dismissedPromptUpdateKey === currentKey) {
+        return;
+      }
+      let alreadyHandled = false;
       try {
         const lastApplied = sessionStorage.getItem('klarity_last_applied_sha');
-        const dismissedSha = localStorage.getItem('klarity_dismissed_update_sha');
-        const currentPending = desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
-        if (lastApplied && currentPending && (currentPending.startsWith(lastApplied) || lastApplied.startsWith(currentPending))) {
-          alreadyApplied = true;
+        const dismissedKey = localStorage.getItem('klarity_dismissed_update_sha');
+        if (lastApplied && currentKey && lastApplied === currentKey) {
+          alreadyHandled = true;
         }
-        if (dismissedSha && currentPending && (currentPending.startsWith(dismissedSha) || dismissedSha.startsWith(currentPending))) {
-          alreadyApplied = true;
+        if (dismissedKey && currentKey && dismissedKey === currentKey) {
+          alreadyHandled = true;
         }
       } catch {}
-      if (!alreadyApplied) {
+      if (!alreadyHandled) {
         setIsUpdateModalOpen(true);
       }
     }
-  }, [desktopAppInfo.updateStatus?.state, desktopAppInfo.updateStatus?.commitSha, desktopAppInfo.updateStatus?.fullSha, desktopAppInfo.updateStatus?.latestVersion, updatePromptDismissed]);
+  }, [
+    desktopAppInfo.updateStatus?.state,
+    desktopAppInfo.updateStatus?.commitSha,
+    desktopAppInfo.updateStatus?.fullSha,
+    desktopAppInfo.updateStatus?.latestVersion,
+    dismissedPromptUpdateKey
+  ]);
 
   // Run background cumulative migrations on mount so older clients instantly catch up to current schema in one step
   useEffect(() => {
@@ -3180,8 +3255,8 @@ function KlarityApp() {
 
   const handleManualCheckForUpdate = async () => {
     setIsCheckingUpdateInSettings(true);
-    setUpdatePromptDismissed(false);
-    setUpdateBannerDismissed(false);
+    setDismissedPromptUpdateKey('');
+    setDismissedBannerUpdateKey('');
     try {
       localStorage.removeItem('klarity_dismissed_update_sha');
     } catch {}
@@ -3190,7 +3265,7 @@ function KlarityApp() {
       let statusPayload = null;
 
       if (typeof window !== 'undefined' && window.klarityDesktop?.checkForUpdates) {
-        const st = await window.klarityDesktop.checkForUpdates();
+        const st = await window.klarityDesktop.checkForUpdates({ manual: true });
         if (st && (st.state === 'available' || st.state === 'ready')) {
           foundUpdate = true;
           statusPayload = st;
@@ -5800,7 +5875,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 {/* Software Update Banner (Overview Page Only) */}
                 {normalizedActiveTab === 'dashboard' &&
                   (desktopAppInfo.updateStatus?.state === 'available' || desktopAppInfo.updateStatus?.state === 'ready') &&
-                  !updateBannerDismissed && (
+                  dismissedBannerUpdateKey !== getUpdateIdentityKey(desktopAppInfo.updateStatus) && (
                     <div className="bg-[#1B4B91] text-white px-4 py-3 rounded-xl flex flex-wrap items-center justify-between gap-3 text-[13px] font-medium shadow-md">
                       <div className="flex items-center gap-2.5">
                         <ArrowUpCircle className="w-5 h-5 shrink-0 text-blue-200" />
@@ -5818,7 +5893,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                         <button
                           type="button"
                           aria-label="Dismiss update banner"
-                          onClick={() => setUpdateBannerDismissed(true)}
+                          onClick={() => setDismissedBannerUpdateKey(getUpdateIdentityKey(desktopAppInfo.updateStatus))}
                           className="p-1 text-white/80 hover:text-white cursor-pointer"
                         >
                           <X className="w-4 h-4" />
@@ -7939,13 +8014,12 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               <Button
                 variant="secondary"
                 onClick={() => {
+                  const activeKey = getUpdateIdentityKey(desktopAppInfo.updateStatus);
                   setIsUpdateModalOpen(false);
-                  setUpdatePromptDismissed(true);
-                  const pendingSha =
-                    desktopAppInfo.updateStatus?.commitSha || desktopAppInfo.updateStatus?.fullSha;
-                  if (pendingSha) {
+                  if (activeKey) {
+                    setDismissedPromptUpdateKey(activeKey);
                     try {
-                      localStorage.setItem('klarity_dismissed_update_sha', pendingSha);
+                      localStorage.setItem('klarity_dismissed_update_sha', activeKey);
                     } catch {}
                   }
                 }}

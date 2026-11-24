@@ -16,7 +16,9 @@ marked.setOptions({
   gfm: true
 });
 
-export const CURRENT_APP_VERSION = '3.12.61';
+/* global __KLARITY_APP_VERSION__ */
+export const CURRENT_APP_VERSION =
+  typeof __KLARITY_APP_VERSION__ !== 'undefined' ? __KLARITY_APP_VERSION__ : '3.12.75';
 
 export const LATEST_RELEASE_NOTES = [
   {

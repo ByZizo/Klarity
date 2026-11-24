@@ -98,62 +98,62 @@ function broadcastAdBlockStats(immediate = false) {
 
 let runningCommitSha = null;
 let runningAppVersion = null;
+let checkUpdateInFlight = null;
+let lastAutoCheckAt = 0;
+let pendingPackagedAutoInstall = false;
+
+function initRunningBuildIdentity() {
+  const repoDir = path.join(__dirname, '..');
+
+  // When running from git repo (!app.isPackaged), snap actual git HEAD & repo package.json at launch
+  // BEFORE any future commits or background fetches happen while the app stays open.
+  if (!app.isPackaged) {
+    try {
+      const sha = require('child_process')
+        .execSync('git rev-parse HEAD', { cwd: repoDir, windowsHide: true })
+        .toString()
+        .trim();
+      if (sha) runningCommitSha = sha;
+    } catch {}
+
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
+      if (pkg && pkg.version) runningAppVersion = pkg.version;
+    } catch {}
+  }
+
+  // Fallback to persisted installed_version.json
+  if (!runningCommitSha || !runningAppVersion) {
+    try {
+      const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
+      if (fs.existsSync(versionFile)) {
+        const data = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
+        if (!runningCommitSha && data && data.commitSha) {
+          runningCommitSha = data.commitSha;
+        }
+        if (!runningAppVersion && data && data.version) {
+          runningAppVersion = data.version;
+        }
+      }
+    } catch {}
+  }
+
+  if (!runningAppVersion) {
+    runningAppVersion = app.getVersion() || '3.12.74';
+  }
+  if (!runningCommitSha) {
+    runningCommitSha = 'v' + runningAppVersion;
+  }
+}
+
+initRunningBuildIdentity();
+updateStatusState.version = runningAppVersion;
 
 function getRunningCommitSha() {
-  if (runningCommitSha) return runningCommitSha;
-
-  // 1. Check persisted installed_version.json (what was actually installed and launched)
-  try {
-    const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
-    if (fs.existsSync(versionFile)) {
-      const data = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
-      if (data && data.commitSha) {
-        runningCommitSha = data.commitSha;
-        return runningCommitSha;
-      }
-    }
-  } catch {}
-
-  // 2. Fall back to local git HEAD at initial launch
-  const repoDir = path.join(__dirname, '..');
-  try {
-    const sha = require('child_process').execSync('git rev-parse HEAD', { cwd: repoDir, windowsHide: true }).toString().trim();
-    if (sha) {
-      runningCommitSha = sha;
-      return runningCommitSha;
-    }
-  } catch {}
-
-  runningCommitSha = 'v' + app.getVersion();
   return runningCommitSha;
 }
 
 function getRunningAppVersion() {
-  if (runningAppVersion) return runningAppVersion;
-
-  // 1. Prefer repo package.json so newly pulled updates reflect immediately on relaunch
-  const repoDir = path.join(__dirname, '..');
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
-    if (pkg && pkg.version) {
-      runningAppVersion = pkg.version;
-      return runningAppVersion;
-    }
-  } catch {}
-
-  // 2. Fall back to persisted installed_version.json
-  try {
-    const versionFile = path.join(app.getPath('userData'), 'installed_version.json');
-    if (fs.existsSync(versionFile)) {
-      const data = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
-      if (data && data.version) {
-        runningAppVersion = data.version;
-        return runningAppVersion;
-      }
-    }
-  } catch {}
-
-  runningAppVersion = app.getVersion() || '3.12.24';
   return runningAppVersion;
 }
 
@@ -309,170 +309,226 @@ function broadcastUpdateStatus(patch) {
 }
 
 // Check GitHub (ByZizo/Klarity) for any newly pushed updates
-async function checkForGitHubUpdate() {
-  const repoDir = path.join(__dirname, '..');
-  try {
-    broadcastUpdateStatus({ state: 'checking', message: 'Checking GitHub for updates...' });
-
-    const currentSha = getRunningCommitSha();
-    const currentVersion = getRunningAppVersion();
-
-    let remoteSha = null;
-    let commitTitle = '';
-    let commitDate = '';
-    let recentCommits = [];
-
-    // 1. Fetch latest commits on main from GitHub API (with cache-busting so newly pushed commits appear immediately)
-    try {
-      const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5&_t=${Date.now()}`, {
-        headers: {
-          'User-Agent': 'KlarityDesktopApp',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      if (ghRes.ok) {
-        const commits = await ghRes.json();
-        if (Array.isArray(commits) && commits.length > 0) {
-          remoteSha = commits[0].sha;
-          commitTitle = commits[0].commit?.message?.split('\n')[0] || '';
-          commitDate = commits[0].commit?.author?.date || '';
-          recentCommits = commitTitle ? [commitTitle] : [];
-        }
-      }
-    } catch (apiErr) {
-      console.warn('GitHub API commit check note:', apiErr.message);
-    }
-
-    // 2. Fallback / local git check
-    try {
-      await runShell('git fetch origin main --quiet', repoDir);
-      const gitRemote = await runShell('git rev-parse origin/main', repoDir);
-      if (gitRemote) {
-        if (!remoteSha) remoteSha = gitRemote;
-        if (!commitTitle) {
-          commitTitle = await runShell('git log -1 --pretty=%s origin/main', repoDir);
-        }
-      }
-    } catch {}
-
-    // Fetch remote package.json to get semantic version (with cache-buster for GitHub raw CDN)
-    let remoteVersion = null;
-    try {
-      const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json?_t=${Date.now()}`, {
-        headers: {
-          'User-Agent': 'KlarityDesktopApp',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      if (pkgRes.ok) {
-        const pkgData = await pkgRes.json();
-        if (pkgData && pkgData.version) {
-          remoteVersion = pkgData.version;
-        }
-      }
-    } catch (pkgErr) {}
-
-    if (!remoteVersion) {
-      try {
-        const localPkgStr = await runShell('git show origin/main:package.json', repoDir);
-        if (localPkgStr) {
-          const pkgData = JSON.parse(localPkgStr);
-          if (pkgData && pkgData.version) remoteVersion = pkgData.version;
-        }
-      } catch (e) {}
-    }
-
-    const versionNum = remoteVersion || currentVersion || app.getVersion() || '3.12.24';
-    const cleanSemVer = versionNum.startsWith('v') ? versionNum.slice(1) : versionNum;
-    const formattedSemVer = `v${cleanSemVer}`;
-
-    function isSemverNewer(remoteVer, currentVer) {
-      if (!remoteVer || !currentVer) return false;
-      const rParts = String(remoteVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
-      const cParts = String(currentVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
-      for (let i = 0; i < Math.max(rParts.length, cParts.length); i++) {
-        const r = rParts[i] || 0;
-        const c = cParts[i] || 0;
-        if (r > c) return true;
-        if (r < c) return false;
-      }
-      return false;
-    }
-
-    // 3. Verify whether an update is available via either SemVer bump OR a newer commit SHA on GitHub
-    const semverIsNewer = Boolean(remoteVersion && currentVersion && isSemverNewer(remoteVersion, currentVersion));
-    const localSemverIsNewer = Boolean(remoteVersion && currentVersion && isSemverNewer(currentVersion, remoteVersion));
-    let alreadyUpToDate = false;
-
-    const sameCommitSha = Boolean(
-      remoteSha &&
-      currentSha &&
-      !currentSha.startsWith('v') &&
-      (remoteSha.startsWith(currentSha) || currentSha.startsWith(remoteSha))
-    );
-
-    if (sameCommitSha) {
-      alreadyUpToDate = true;
-    } else if (semverIsNewer) {
-      alreadyUpToDate = false;
-    } else if (localSemverIsNewer) {
-      alreadyUpToDate = true;
-    } else if (remoteSha && currentSha && !currentSha.startsWith('v')) {
-      // Compare commit SHAs when both are real git hashes
-      try {
-        const isAncestor = await runShell(`git merge-base --is-ancestor ${remoteSha} ${currentSha} && echo yes`, repoDir).catch(() => '');
-        if (isAncestor && isAncestor.includes('yes')) {
-          alreadyUpToDate = true;
-        }
-      } catch {}
-    } else {
-      // Packaged build without git SHA: rely on semantic version comparison
-      alreadyUpToDate = !semverIsNewer;
-    }
-
-    if (!alreadyUpToDate && (remoteSha || semverIsNewer)) {
-      broadcastUpdateStatus({
-        state: 'available',
-        latestVersion: formattedSemVer,
-        currentVersion: currentVersion,
-        currentSha: currentSha ? currentSha.slice(0, 7) : '',
-        fullSha: remoteSha || '',
-        commitSha: remoteSha ? remoteSha.slice(0, 7) : formattedSemVer,
-        commitTitle: commitTitle || 'New GitHub update available',
-        commitDate,
-        recentChanges: recentCommits,
-        message: commitTitle
-          ? `New update available (${formattedSemVer}): ${commitTitle}`
-          : `A new version of Klarity (${formattedSemVer}) is available!`
-      });
-      return updateStatusState;
-    }
-
-    // 4. Packaged electron-updater check
-    if (app.isPackaged && autoUpdater) {
-      try {
-        await autoUpdater.checkForUpdates();
-        return updateStatusState;
-      } catch {}
-    }
-
-    // 5. Up to date
-    broadcastUpdateStatus({
-      state: 'up-to-date',
-      version: currentVersion,
-      currentSha: currentSha ? currentSha.slice(0, 7) : 'latest',
-      commitSha: currentSha ? currentSha.slice(0, 7) : 'latest',
-      message: `Up to date — v${currentVersion} (${currentSha ? currentSha.slice(0, 7) : 'latest'})`
-    });
-  } catch (err) {
-    broadcastUpdateStatus({
-      state: 'up-to-date',
-      message: `Up to date — v${app.getVersion()}`
-    });
+async function checkForGitHubUpdate(options = {}) {
+  if (checkUpdateInFlight) {
+    return checkUpdateInFlight;
   }
-  return updateStatusState;
+
+  checkUpdateInFlight = (async () => {
+    const repoDir = path.join(__dirname, '..');
+    const isManual = Boolean(options && options.manual);
+    lastAutoCheckAt = Date.now();
+
+    try {
+      // Avoid overwriting an already discovered 'available' or 'ready' state during silent background polls
+      if (isManual || (updateStatusState.state !== 'available' && updateStatusState.state !== 'ready' && updateStatusState.state !== 'installing')) {
+        broadcastUpdateStatus({ state: 'checking', message: 'Checking GitHub for updates...' });
+      }
+
+      const currentSha = getRunningCommitSha();
+      const currentVersion = getRunningAppVersion();
+
+      let remoteSha = null;
+      let commitTitle = '';
+      let commitDate = '';
+      let recentCommits = [];
+      let remoteVersion = null;
+
+      // 1. In git-backed mode, fetch directly from origin/main FIRST (zero GitHub REST 60/hr rate limit & zero raw CDN lag)
+      if (!app.isPackaged) {
+        try {
+          await runShell('git fetch origin main --quiet', repoDir);
+          const gitRemote = await runShell('git rev-parse origin/main', repoDir);
+          if (gitRemote) {
+            remoteSha = gitRemote;
+            commitTitle = await runShell('git log -1 --pretty=%s origin/main', repoDir).catch(() => '');
+            commitDate = await runShell('git log -1 --pretty=%cI origin/main', repoDir).catch(() => '');
+            const multiLog = await runShell('git log -5 --pretty=%s origin/main', repoDir).catch(() => '');
+            if (multiLog) {
+              recentCommits = multiLog.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+            } else if (commitTitle) {
+              recentCommits = [commitTitle];
+            }
+          }
+          const localPkgStr = await runShell('git show origin/main:package.json', repoDir).catch(() => '');
+          if (localPkgStr) {
+            const pkgData = JSON.parse(localPkgStr);
+            if (pkgData && pkgData.version) remoteVersion = pkgData.version;
+          }
+        } catch {}
+      }
+
+      // 2. Fallback: Check GitHub Releases latest tag redirect (zero REST API rate limit, instant tag resolution)
+      if (!remoteVersion) {
+        try {
+          const relRes = await fetch(`https://github.com/ByZizo/Klarity/releases/latest?_t=${Date.now()}`, {
+            method: 'HEAD',
+            redirect: 'follow',
+            headers: {
+              'User-Agent': 'KlarityDesktopApp',
+              'Cache-Control': 'no-cache'
+            }
+          });
+          const finalUrl = relRes?.url || '';
+          const tagMatch = finalUrl.match(/\/releases\/tag\/v?([0-9]+\.[0-9]+\.[0-9]+[^\s/?#]*)/i);
+          if (tagMatch && tagMatch[1]) {
+            remoteVersion = tagMatch[1];
+          }
+        } catch {}
+      }
+
+      // 3. Fallback: Fetch remote package.json if still needed
+      if (!remoteVersion) {
+        try {
+          const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json?_t=${Date.now()}`, {
+            headers: {
+              'User-Agent': 'KlarityDesktopApp',
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          });
+          if (pkgRes.ok) {
+            const pkgData = await pkgRes.json();
+            if (pkgData && pkgData.version) {
+              remoteVersion = pkgData.version;
+            }
+          }
+        } catch {}
+      }
+
+      // 4. Fallback: Fetch latest commits from GitHub REST API only if git fetch did not already populate remoteSha/commitTitle
+      if (!remoteSha || !commitTitle) {
+        try {
+          const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5&_t=${Date.now()}`, {
+            headers: {
+              'User-Agent': 'KlarityDesktopApp',
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          });
+          if (ghRes.ok) {
+            const commits = await ghRes.json();
+            if (Array.isArray(commits) && commits.length > 0) {
+              if (!remoteSha) remoteSha = commits[0].sha;
+              if (!commitTitle) commitTitle = commits[0].commit?.message?.split('\n')[0] || '';
+              if (!commitDate) commitDate = commits[0].commit?.author?.date || '';
+              if (recentCommits.length === 0) {
+                recentCommits = commits
+                  .map(c => c?.commit?.message?.split('\n')[0] || '')
+                  .filter(Boolean);
+              }
+            }
+          }
+        } catch (apiErr) {
+          console.warn('GitHub API commit check note:', apiErr.message);
+        }
+      }
+
+      const versionNum = remoteVersion || currentVersion || app.getVersion() || '3.12.74';
+      const cleanSemVer = versionNum.startsWith('v') ? versionNum.slice(1) : versionNum;
+      const formattedSemVer = `v${cleanSemVer}`;
+
+      function isSemverNewer(remoteVer, currentVer) {
+        if (!remoteVer || !currentVer) return false;
+        const rParts = String(remoteVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+        const cParts = String(currentVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+        for (let i = 0; i < Math.max(rParts.length, cParts.length); i++) {
+          const r = rParts[i] || 0;
+          const c = cParts[i] || 0;
+          if (r > c) return true;
+          if (r < c) return false;
+        }
+        return false;
+      }
+
+      // Always kick off packaged electron-updater check so binary downloads happen automatically in background
+      if (app.isPackaged && autoUpdater) {
+        autoUpdater.checkForUpdates().catch(() => {});
+      }
+
+      // 5. Verify whether an update is available via either SemVer bump OR a newer commit SHA on GitHub
+      const semverIsNewer = Boolean(remoteVersion && currentVersion && isSemverNewer(remoteVersion, currentVersion));
+      const localSemverIsNewer = Boolean(remoteVersion && currentVersion && isSemverNewer(currentVersion, remoteVersion));
+      let alreadyUpToDate = false;
+
+      const sameCommitSha = Boolean(
+        remoteSha &&
+        currentSha &&
+        !currentSha.startsWith('v') &&
+        (remoteSha.startsWith(currentSha) || currentSha.startsWith(remoteSha))
+      );
+
+      if (sameCommitSha && !semverIsNewer) {
+        alreadyUpToDate = true;
+      } else if (semverIsNewer) {
+        alreadyUpToDate = false;
+      } else if (localSemverIsNewer) {
+        alreadyUpToDate = true;
+      } else if (remoteSha && currentSha && !currentSha.startsWith('v')) {
+        // Compare commit SHAs when both are real git hashes (exit code 0 => remoteSha is ancestor of currentSha)
+        try {
+          await runShell(`git merge-base --is-ancestor ${remoteSha} ${currentSha}`, repoDir);
+          alreadyUpToDate = true;
+        } catch {
+          alreadyUpToDate = false;
+        }
+      } else {
+        // Packaged build without git SHA: rely on semantic version comparison
+        alreadyUpToDate = !semverIsNewer;
+      }
+
+      if (!alreadyUpToDate && (remoteSha || semverIsNewer)) {
+        const nextState = updateStatusState.state === 'ready' ? 'ready' : 'available';
+        broadcastUpdateStatus({
+          state: nextState,
+          latestVersion: formattedSemVer,
+          currentVersion: currentVersion,
+          currentSha: currentSha ? currentSha.slice(0, 7) : '',
+          fullSha: remoteSha || '',
+          commitSha: remoteSha ? remoteSha.slice(0, 7) : formattedSemVer,
+          commitTitle: commitTitle || 'New GitHub update available',
+          commitDate,
+          recentChanges: recentCommits,
+          message: commitTitle
+            ? `New update available (${formattedSemVer}): ${commitTitle}`
+            : `A new version of Klarity (${formattedSemVer}) is available!`
+        });
+        return updateStatusState;
+      }
+
+      if (updateStatusState.state === 'ready' || updateStatusState.state === 'installing') {
+        return updateStatusState;
+      }
+
+      // 6. Up to date
+      broadcastUpdateStatus({
+        state: 'up-to-date',
+        version: currentVersion,
+        currentSha: currentSha ? currentSha.slice(0, 7) : 'latest',
+        commitSha: currentSha ? currentSha.slice(0, 7) : 'latest',
+        message: `Up to date — v${currentVersion} (${currentSha ? currentSha.slice(0, 7) : 'latest'})`
+      });
+    } catch (err) {
+      if (updateStatusState.state !== 'available' && updateStatusState.state !== 'ready') {
+        broadcastUpdateStatus({
+          state: 'up-to-date',
+          version: getRunningAppVersion(),
+          message: `Up to date — v${getRunningAppVersion()}`
+        });
+      }
+    }
+    return updateStatusState;
+  })().finally(() => {
+    checkUpdateInFlight = null;
+  });
+
+  return checkUpdateInFlight;
+}
+
+function triggerThrottledAutoUpdateCheck(minIntervalMs = 30 * 1000) {
+  if (Date.now() - lastAutoCheckAt < minIntervalMs) return;
+  if (updateStatusState.state === 'installing') return;
+  checkForGitHubUpdate({ manual: false }).catch(() => {});
 }
 
 function setupAutoUpdater() {
@@ -481,22 +537,35 @@ function setupAutoUpdater() {
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('update-available', (info) => {
+    const cleanVer = info?.version ? `v${String(info.version).replace(/^v/i, '')}` : updateStatusState.latestVersion;
     broadcastUpdateStatus({
-      state: 'available',
-      latestVersion: info?.version,
-      message: `A new update (v${info?.version || 'latest'}) is available! Would you like to update now?`
+      state: updateStatusState.state === 'installing' ? 'installing' : 'available',
+      latestVersion: cleanVer,
+      commitSha: updateStatusState.commitSha || cleanVer,
+      message: `A new update (${cleanVer || 'latest'}) is available! Would you like to update now?`
     });
   });
 
   autoUpdater.on('update-downloaded', (info) => {
+    const cleanVer = info?.version ? `v${String(info.version).replace(/^v/i, '')}` : updateStatusState.latestVersion;
     broadcastUpdateStatus({
       state: 'ready',
-      latestVersion: info?.version,
-      message: `Update v${info?.version || 'new'} is ready to install!`
+      latestVersion: cleanVer,
+      commitSha: updateStatusState.commitSha || cleanVer,
+      message: `Update ${cleanVer || 'new'} is ready to install!`
     });
+    if (pendingPackagedAutoInstall) {
+      pendingPackagedAutoInstall = false;
+      saveWhatsNewData(updateStatusState.recentChanges || [], cleanVer || app.getVersion(), cleanVer);
+      setTimeout(() => {
+        autoUpdater.quitAndInstall(false, true);
+      }, 400);
+    }
   });
 
-  autoUpdater.on('error', () => {});
+  autoUpdater.on('error', () => {
+    pendingPackagedAutoInstall = false;
+  });
 }
 
 // Start the embedded Express backend & Local AI Engine (node-llama-cpp)
@@ -926,14 +995,18 @@ async function createDesktopWindow() {
 
   mainWindow.webContents.once('did-finish-load', () => {
     setTimeout(() => {
-      checkForGitHubUpdate();
-    }, 1200);
+      checkForGitHubUpdate({ manual: false }).catch(() => {});
+    }, 1000);
   });
 
+  mainWindow.on('focus', () => triggerThrottledAutoUpdateCheck(30 * 1000));
+  mainWindow.on('restore', () => triggerThrottledAutoUpdateCheck(15 * 1000));
+  mainWindow.on('show', () => triggerThrottledAutoUpdateCheck(15 * 1000));
+
   setInterval(() => {
-    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
-    checkForGitHubUpdate();
-  }, 15 * 60 * 1000);
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    triggerThrottledAutoUpdateCheck(60 * 1000);
+  }, 2 * 60 * 1000);
 }
 
 // Native Desktop Google Sign-In (RFC 8252 Loopback + Secret-Free OIDC id_token via Default System Browser)
@@ -1062,15 +1135,15 @@ ipcMain.handle('klarity:clear-session', () => clearPersistentSession());
 
 ipcMain.handle('klarity:get-app-info', () => ({
   isDesktopApp: true,
-  version: app.getVersion(),
+  version: getRunningAppVersion(),
   userDataDir: app.getPath('userData'),
   repo: 'ByZizo/Klarity',
   updateStatus: updateStatusState,
   hardware: getHardwareProfile()
 }));
 
-ipcMain.handle('klarity:check-for-updates', async () => {
-  return await checkForGitHubUpdate();
+ipcMain.handle('klarity:check-for-updates', async (_e, opts) => {
+  return await checkForGitHubUpdate({ manual: Boolean(opts?.manual) });
 });
 
 ipcMain.handle('klarity:install-update-now', async () => {
@@ -1081,14 +1154,19 @@ ipcMain.handle('klarity:install-update-now', async () => {
       message: 'Downloading latest update & rebuilding Klarity...'
     });
 
+    if (app.isPackaged && autoUpdater) {
+      if (updateStatusState.state === 'ready') {
+        saveWhatsNewData(updateStatusState.recentChanges || [], updateStatusState.latestVersion || getRunningAppVersion(), updateStatusState.latestVersion);
+        autoUpdater.quitAndInstall(false, true);
+        return { ok: true };
+      }
+      pendingPackagedAutoInstall = true;
+      await autoUpdater.checkForUpdates();
+      return { ok: true, downloading: true };
+    }
+
     // Capture previous HEAD SHA before updating to extract exact incoming commits
     const previousSha = await runShell('git rev-parse HEAD', repoDir).catch(() => '');
-
-    if (app.isPackaged && autoUpdater && updateStatusState.state === 'ready') {
-      saveWhatsNewData(updateStatusState.recentChanges || [], updateStatusState.latestVersion || app.getVersion());
-      autoUpdater.quitAndInstall(false, true);
-      return { ok: true };
-    }
 
     // Safety backup of local data so user data is never lost across git resets or updates
     const localDataPath = path.join(repoDir, 'server', 'data.json');

@@ -1,9 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { readFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+let rootPkgVersion = '3.12.75'
+try {
+  const rootPkg = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf8'))
+  if (rootPkg?.version) rootPkgVersion = rootPkg.version
+} catch {}
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __KLARITY_APP_VERSION__: JSON.stringify(rootPkgVersion)
+  },
   plugins: [
     react(),
     tailwindcss()

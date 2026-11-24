@@ -1604,12 +1604,13 @@ export function SettingsPage({
                       </div>
                       <p className="text-[13px] font-medium text-[var(--muted)] mt-1">
                         {desktopAppInfo.isDesktopApp ? 'Klarity Desktop Application' : 'Klarity Web Application'}
-                        {desktopAppInfo.updateStatus?.message
+                        {desktopAppInfo.updateStatus?.state === 'available' ||
+                        desktopAppInfo.updateStatus?.state === 'ready'
                           ? ` • ${formatCleanUpdateMessage(
                               desktopAppInfo.updateStatus.message,
                               desktopAppInfo.updateStatus?.latestVersion
                             )}`
-                          : ''}
+                          : ' • Up to date'}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">

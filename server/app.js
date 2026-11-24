@@ -5075,6 +5075,15 @@ const SERVER_LAUNCH_SHA = (() => {
   }
 })();
 
+const SERVER_LAUNCH_VERSION = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+    return pkg?.version || '3.12.75';
+  } catch {
+    return '3.12.75';
+  }
+})();
+
 // Format commit messages into polished, developer-grade user-facing release notes
 function formatUserFacingReleaseNote(rawText) {
   if (!rawText || typeof rawText !== 'string') return 'Minor fixes and improvements';
@@ -5131,11 +5140,7 @@ function formatUserFacingReleaseNote(rawText) {
 app.get('/api/app/update-check', async (req, res) => {
   try {
     const repoDir = path.join(__dirname, '..');
-    let localVersion = '3.12.25';
-    try {
-      const pkg = JSON.parse(fs.readFileSync(path.join(repoDir, 'package.json'), 'utf8'));
-      if (pkg && pkg.version) localVersion = pkg.version;
-    } catch {}
+    let localVersion = SERVER_LAUNCH_VERSION;
     if (req.query?.clientVersion && typeof req.query.clientVersion === 'string') {
       localVersion = req.query.clientVersion.replace(/^v/i, '');
     }
@@ -5147,96 +5152,129 @@ app.get('/api/app/update-check', async (req, res) => {
       } catch {}
     }
 
-    // Fetch latest remote refs quietly if git is available so ancestry checks are accurate
+    let remoteSha = '';
+    let remoteVersion = null;
+    let rawTitle = '';
+    let commitDate = '';
+    let recentCommits = [];
+
+    // 1. Prefer direct git fetch from origin/main (immune to GitHub REST 60/hr rate limit & raw CDN cache)
     try {
-      require('child_process').execSync('git fetch origin main --quiet', { cwd: repoDir, windowsHide: true, timeout: 6000 });
+      require('child_process').execSync('git fetch origin main --quiet', { cwd: repoDir, windowsHide: true, timeout: 8000 });
+      remoteSha = require('child_process').execSync('git rev-parse origin/main', { cwd: repoDir, windowsHide: true }).toString().trim();
+      rawTitle = require('child_process').execSync('git log -1 --pretty=%s origin/main', { cwd: repoDir, windowsHide: true }).toString().trim();
+      commitDate = require('child_process').execSync('git log -1 --pretty=%cI origin/main', { cwd: repoDir, windowsHide: true }).toString().trim();
+      const logLines = require('child_process').execSync('git log -5 --pretty=%s origin/main', { cwd: repoDir, windowsHide: true }).toString().trim();
+      if (logLines) {
+        recentCommits = logLines.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      }
+      const remotePkgRaw = require('child_process').execSync('git show origin/main:package.json', { cwd: repoDir, windowsHide: true }).toString();
+      const remotePkg = JSON.parse(remotePkgRaw);
+      if (remotePkg?.version) remoteVersion = remotePkg.version;
     } catch {}
 
-    const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5&_t=${Date.now()}`, {
-      headers: {
-        'User-Agent': 'KlarityApp',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    });
-    if (ghRes.ok) {
-      const commits = await ghRes.json();
-      if (Array.isArray(commits) && commits.length > 0) {
-        const latest = commits[0];
-        const remoteSha = latest.sha || '';
-
-        // Fetch remote package.json to compare semantic version (with cache-busting)
-        let remoteVersion = null;
-        try {
-          const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json?_t=${Date.now()}`, {
-            headers: {
-              'User-Agent': 'KlarityApp',
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
-            }
-          });
-          if (pkgRes.ok) {
-            const pkgData = await pkgRes.json();
-            if (pkgData && pkgData.version) remoteVersion = pkgData.version;
+    // 2. HTTP Fallbacks when running outside a git checkout
+    if (!remoteSha) {
+      try {
+        const ghRes = await fetch(`https://api.github.com/repos/ByZizo/Klarity/commits?per_page=5&_t=${Date.now()}`, {
+          headers: {
+            'User-Agent': 'KlarityApp',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
           }
-        } catch {}
-
-        function isSemverNewer(remoteVer, currentVer) {
-          if (!remoteVer || !currentVer) return false;
-          const rParts = String(remoteVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
-          const cParts = String(currentVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
-          for (let i = 0; i < Math.max(rParts.length, cParts.length); i++) {
-            const r = rParts[i] || 0;
-            const c = cParts[i] || 0;
-            if (r > c) return true;
-            if (r < c) return false;
-          }
-          return false;
-        }
-
-        const semverIsNewer = Boolean(remoteVersion && isSemverNewer(remoteVersion, localVersion));
-        const localSemverIsNewer = Boolean(remoteVersion && isSemverNewer(localVersion, remoteVersion));
-        let isUpdateAvailable = false;
-
-        if (semverIsNewer) {
-          isUpdateAvailable = true;
-        } else if (!localSemverIsNewer && remoteSha && localSha) {
-          if (remoteSha.startsWith(localSha) || localSha.startsWith(remoteSha)) {
-            isUpdateAvailable = false;
-          } else {
-            // Check whether remoteSha is already an ancestor of localSha.
-            // Note: git merge-base --is-ancestor exits with code 1 (throwing in execSync) when remoteSha is NOT an ancestor (i.e. remoteSha is newer).
-            try {
-              require('child_process').execSync(`git merge-base --is-ancestor ${remoteSha} ${localSha}`, {
-                cwd: repoDir,
-                windowsHide: true
-              });
-              // Exit code 0 means remoteSha is already an ancestor of localSha -> no update needed
-              isUpdateAvailable = false;
-            } catch {
-              // Non-zero exit code means remoteSha is NOT in localSha's history -> new commit available on GitHub!
-              isUpdateAvailable = true;
-            }
-          }
-        }
-
-        const rawTitle = latest.commit?.message?.split('\n')[0] || '';
-        const humanizedMessage = formatUserFacingReleaseNote(rawTitle);
-        const humanizedRecentChanges = commits.map(c => formatUserFacingReleaseNote(c.commit?.message?.split('\n')[0])).filter(Boolean);
-
-        return res.json({
-          ok: true,
-          isUpdateAvailable,
-          currentVersion: localVersion,
-          latestVersion: remoteVersion || localVersion,
-          currentSha: localSha ? localSha.slice(0, 7) : 'latest',
-          sha: latest.sha?.slice(0, 7),
-          fullSha: latest.sha,
-          message: humanizedMessage,
-          date: latest.commit?.author?.date || '',
-          recentChanges: humanizedRecentChanges
         });
+        if (ghRes.ok) {
+          const commits = await ghRes.json();
+          if (Array.isArray(commits) && commits.length > 0) {
+            const latest = commits[0];
+            remoteSha = latest.sha || '';
+            rawTitle = latest.commit?.message?.split('\n')[0] || '';
+            commitDate = latest.commit?.author?.date || '';
+            recentCommits = commits.map(c => c.commit?.message?.split('\n')[0]).filter(Boolean);
+          }
+        }
+      } catch {}
+    }
+
+    if (!remoteVersion) {
+      try {
+        const relRes = await fetch(`https://github.com/ByZizo/Klarity/releases/latest?_t=${Date.now()}`, {
+          method: 'HEAD',
+          redirect: 'follow',
+          headers: { 'User-Agent': 'KlarityApp', 'Cache-Control': 'no-cache' }
+        });
+        const tagMatch = (relRes?.url || '').match(/\/releases\/tag\/v?([0-9]+\.[0-9]+\.[0-9]+[^\s/?#]*)/i);
+        if (tagMatch && tagMatch[1]) remoteVersion = tagMatch[1];
+      } catch {}
+    }
+
+    if (!remoteVersion) {
+      try {
+        const pkgRes = await fetch(`https://raw.githubusercontent.com/ByZizo/Klarity/main/package.json?_t=${Date.now()}`, {
+          headers: {
+            'User-Agent': 'KlarityApp',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+        if (pkgRes.ok) {
+          const pkgData = await pkgRes.json();
+          if (pkgData && pkgData.version) remoteVersion = pkgData.version;
+        }
+      } catch {}
+    }
+
+    if (remoteSha || remoteVersion) {
+      function isSemverNewer(remoteVer, currentVer) {
+        if (!remoteVer || !currentVer) return false;
+        const rParts = String(remoteVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+        const cParts = String(currentVer).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+        for (let i = 0; i < Math.max(rParts.length, cParts.length); i++) {
+          const r = rParts[i] || 0;
+          const c = cParts[i] || 0;
+          if (r > c) return true;
+          if (r < c) return false;
+        }
+        return false;
       }
+
+      const semverIsNewer = Boolean(remoteVersion && isSemverNewer(remoteVersion, localVersion));
+      const localSemverIsNewer = Boolean(remoteVersion && isSemverNewer(localVersion, remoteVersion));
+      let isUpdateAvailable = false;
+
+      if (semverIsNewer) {
+        isUpdateAvailable = true;
+      } else if (!localSemverIsNewer && remoteSha && localSha) {
+        if (remoteSha.startsWith(localSha) || localSha.startsWith(remoteSha)) {
+          isUpdateAvailable = false;
+        } else {
+          try {
+            require('child_process').execSync(`git merge-base --is-ancestor ${remoteSha} ${localSha}`, {
+              cwd: repoDir,
+              windowsHide: true
+            });
+            isUpdateAvailable = false;
+          } catch {
+            isUpdateAvailable = true;
+          }
+        }
+      }
+
+      const humanizedMessage = formatUserFacingReleaseNote(rawTitle);
+      const humanizedRecentChanges = recentCommits.map(formatUserFacingReleaseNote).filter(Boolean);
+
+      return res.json({
+        ok: true,
+        isUpdateAvailable,
+        currentVersion: localVersion,
+        latestVersion: remoteVersion || localVersion,
+        currentSha: localSha ? localSha.slice(0, 7) : 'latest',
+        sha: remoteSha ? remoteSha.slice(0, 7) : (remoteVersion || 'latest'),
+        fullSha: remoteSha || '',
+        message: humanizedMessage,
+        date: commitDate,
+        recentChanges: humanizedRecentChanges
+      });
     }
     return res.json({ ok: false, error: 'Could not fetch GitHub updates' });
   } catch (err) {

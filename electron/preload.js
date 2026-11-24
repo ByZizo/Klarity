@@ -6,7 +6,7 @@ const desktopBridge = {
   platform: process.platform,
   getAppInfo: () => ipcRenderer.invoke('klarity:get-app-info'),
   setThemeSource: (mode) => ipcRenderer.invoke('klarity:set-theme-source', mode),
-  checkForUpdates: () => ipcRenderer.invoke('klarity:check-for-updates'),
+  checkForUpdates: (opts) => ipcRenderer.invoke('klarity:check-for-updates', opts),
   installUpdateNow: () => ipcRenderer.invoke('klarity:install-update-now'),
   getWhatsNew: () => ipcRenderer.invoke('klarity:get-whats-new'),
   dismissWhatsNew: () => ipcRenderer.invoke('klarity:dismiss-whats-new'),
