@@ -568,6 +568,8 @@ export function BrowserPage({
 
   const [activeSectionId, setActiveSectionId] = useState(() => {
     try {
+      const pinned = loadNewTabPrefs().pinnedNoteSectionId;
+      if (pinned) return pinned;
       const saved = localStorage.getItem('klarity_active_note_section');
       if (saved) return saved;
     } catch {}
@@ -3798,6 +3800,10 @@ export function BrowserPage({
                         browserHistory={browserHistory}
                         recentSearchesEnabled={browserSettings?.recentSearchesEnabled !== false}
                         historyEnabled={browserSettings?.historyEnabled !== false}
+                        financialContext={financialContext}
+                        noteSections={noteSections}
+                        activeNoteSectionId={activeSectionId}
+                        onSelectNoteSection={(secId) => setActiveSectionId(secId)}
                       />
                     </div>
                   )}
@@ -3817,6 +3823,10 @@ export function BrowserPage({
               browserHistory={browserHistory}
               recentSearchesEnabled={browserSettings?.recentSearchesEnabled !== false}
               historyEnabled={browserSettings?.historyEnabled !== false}
+              financialContext={financialContext}
+              noteSections={noteSections}
+              activeNoteSectionId={activeSectionId}
+              onSelectNoteSection={(secId) => setActiveSectionId(secId)}
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-[var(--surface-subtle)]">

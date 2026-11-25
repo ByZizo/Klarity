@@ -194,15 +194,157 @@ export const DEFAULT_NOTE_STYLES = {
   customText: ''
 };
 
+export const NEWTAB_SOLID_PRESETS = [
+  { id: 'default', label: 'Theme Default', hex: '', isDark: null },
+  { id: 'slate', label: 'Midnight Slate', hex: '#0f172a', isDark: true },
+  { id: 'charcoal', label: 'Charcoal', hex: '#18181b', isDark: true },
+  { id: 'navy', label: 'Deep Navy', hex: '#0b192f', isDark: true },
+  { id: 'forest', label: 'Deep Forest', hex: '#0a221c', isDark: true },
+  { id: 'plum', label: 'Dark Plum', hex: '#1f1329', isDark: true },
+  { id: 'paper', label: 'Soft Paper', hex: '#f8fafc', isDark: false },
+  { id: 'sand', label: 'Warm Sand', hex: '#f5efe6', isDark: false }
+];
+
+export const NEWTAB_GRADIENT_PRESETS = [
+  {
+    id: 'aurora',
+    label: 'Aurora',
+    css: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 52%, #0f2e2b 100%)',
+    isDark: true
+  },
+  {
+    id: 'dusk',
+    label: 'Twilight Dusk',
+    css: 'linear-gradient(135deg, #1e1b4b 0%, #3b1d5e 52%, #4a1942 100%)',
+    isDark: true
+  },
+  {
+    id: 'ocean',
+    label: 'Deep Ocean',
+    css: 'linear-gradient(135deg, #082f49 0%, #0e4a6f 50%, #155e75 100%)',
+    isDark: true
+  },
+  {
+    id: 'emerald',
+    label: 'Pine Mist',
+    css: 'linear-gradient(135deg, #052e16 0%, #064e3b 52%, #115e59 100%)',
+    isDark: true
+  },
+  {
+    id: 'sunset',
+    label: 'Warm Horizon',
+    css: 'linear-gradient(135deg, #2b1820 0%, #5c2434 52%, #7c3a2d 100%)',
+    isDark: true
+  },
+  {
+    id: 'daylight',
+    label: 'Soft Daylight',
+    css: 'linear-gradient(135deg, #eef2ff 0%, #e0f2fe 52%, #f0fdf4 100%)',
+    isDark: false
+  }
+];
+
+export const NEWTAB_PREFS_UPDATED_EVENT = 'klarity:newtab-prefs-updated';
+
 export const DEFAULT_NEWTAB_PREFS = {
-  showQuickLinks: true,
-  showClock: true,
-  showNotes: false,
+  // Background & visual appearance
   backgroundStyle: 'slate', // 'slate' | 'gradient' | 'wallpaper'
+  solidColor: 'default', // preset id or custom '#rrggbb'
+  gradientPreset: 'aurora',
   wallpaperUrl: '',
+  wallpaperDim: 45, // 0 - 85
+  wallpaperBlur: false,
+  surfaceContrast: 'auto', // 'auto' | 'light' | 'dark'
+
+  // Search bar
+  showSearchBar: true,
+  searchBarStyle: 'standard', // 'standard' | 'compact'
+
+  // Quick links (Speed Dial)
+  showQuickLinks: true,
+  quickLinksColumns: 6, // 4 | 6 | 8
+  quickLinksStyle: 'card', // 'card' | 'icon_only'
+  quickLinksSource: 'custom', // 'custom' | 'top_visited'
+
+  // Clock & greeting
+  showClock: true,
+  clockFormat: '12h', // '12h' | '24h'
+  showSeconds: false,
+  showDate: true,
+  greetingName: '',
+  greetingSubtitle: '',
+
+  // Notes & Klarity widgets
+  showNotes: false,
+  pinnedNoteSectionId: '',
+  showFinanceGlance: false,
+  financeGlanceMasked: true,
+
+  // Layout
+  layoutMode: 'centered', // 'centered' | 'dashboard'
+  layoutDensity: 'spacious', // 'spacious' | 'compact'
+
   notesPosition: null,
   noteStyles: { ...DEFAULT_NOTE_STYLES }
 };
+
+export const NEWTAB_LAYOUT_PRESETS = [
+  {
+    id: 'minimal',
+    label: 'Minimal',
+    description: 'Clean clock & search bar',
+    patch: {
+      showClock: true,
+      showDate: true,
+      showSeconds: false,
+      showSearchBar: true,
+      searchBarStyle: 'compact',
+      showQuickLinks: false,
+      showNotes: false,
+      showFinanceGlance: false,
+      layoutMode: 'centered',
+      layoutDensity: 'compact'
+    }
+  },
+  {
+    id: 'balanced',
+    label: 'Balanced',
+    description: 'Search, clock & speed dial',
+    patch: {
+      showClock: true,
+      showDate: true,
+      showSeconds: false,
+      showSearchBar: true,
+      searchBarStyle: 'standard',
+      showQuickLinks: true,
+      quickLinksColumns: 6,
+      quickLinksStyle: 'card',
+      showNotes: false,
+      showFinanceGlance: false,
+      layoutMode: 'centered',
+      layoutDensity: 'spacious'
+    }
+  },
+  {
+    id: 'productivity',
+    label: 'Productivity',
+    description: 'Dashboard with notes & bills',
+    patch: {
+      showClock: true,
+      showDate: true,
+      showSeconds: false,
+      showSearchBar: true,
+      searchBarStyle: 'compact',
+      showQuickLinks: true,
+      quickLinksColumns: 6,
+      quickLinksStyle: 'card',
+      showNotes: true,
+      showFinanceGlance: true,
+      layoutMode: 'dashboard',
+      layoutDensity: 'compact'
+    }
+  }
+];
 
 const SETTINGS_STORAGE_KEY = 'klarity_browser_settings';
 const BOOKMARKS_STORAGE_KEY = 'klarity_browser_bookmarks';
@@ -316,8 +458,25 @@ export function loadNewTabPrefs() {
 
 export function saveNewTabPrefs(prefs) {
   try {
-    localStorage.setItem(NEWTAB_PREFS_KEY, JSON.stringify(prefs));
+    const serialized = JSON.stringify(prefs);
+    const prev = localStorage.getItem(NEWTAB_PREFS_KEY);
+    if (prev !== serialized) {
+      localStorage.setItem(NEWTAB_PREFS_KEY, serialized);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(NEWTAB_PREFS_UPDATED_EVENT, { detail: prefs }));
+      }
+    }
   } catch {}
+}
+
+export function isHexColorDark(hex) {
+  const clean = String(hex || '').replace('#', '').trim();
+  if (!/^[0-9a-f]{6}$/i.test(clean)) return false;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance < 0.52;
 }
 
 export function loadNewTabNotes() {

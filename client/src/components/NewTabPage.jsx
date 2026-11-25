@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Calendar,
   Check,
   Edit2,
   ExternalLink,
+  Eye,
+  EyeOff,
   FolderOpen,
   FolderPlus,
   MoreVertical,
@@ -11,10 +14,15 @@ import {
   SlidersHorizontal,
   Trash2,
   Ungroup,
+  Wallet,
   X
 } from 'lucide-react';
 import {
+  NEWTAB_GRADIENT_PRESETS,
+  NEWTAB_PREFS_UPDATED_EVENT,
+  NEWTAB_SOLID_PRESETS,
   getSearchEngineById,
+  isHexColorDark,
   loadNewTabPrefs,
   loadNewTabQuickLinks,
   saveNewTabPrefs,
@@ -30,6 +38,7 @@ import {
   loadRecentSearches
 } from '../utils/browserHistory';
 import { BrowserSearchDropdown } from './BrowserSearchDropdown';
+import { NewTabCustomizePanel } from './NewTabCustomizePanel';
 
 function normalizeShortcutUrl(rawUrl) {
   const trimmed = String(rawUrl || '').trim();
@@ -119,7 +128,11 @@ export function NewTabPage({
   recentSearches: propRecentSearches,
   browserHistory: propBrowserHistory,
   recentSearchesEnabled = true,
-  historyEnabled = true
+  historyEnabled = true,
+  financialContext = null,
+  noteSections = [],
+  activeNoteSectionId = '',
+  onSelectNoteSection
 }) {
   const activeEngine = getSearchEngineById(searchEngineId);
 
@@ -138,6 +151,18 @@ export function NewTabPage({
   const [quickLinks, setQuickLinks] = useState(() => loadNewTabQuickLinks());
   const [prefs, setPrefs] = useState(() => loadNewTabPrefs());
   const [now, setNow] = useState(() => new Date());
+  const [glanceRevealed, setGlanceRevealed] = useState(false);
+
+  const isLowPowerDevice = useMemo(() => {
+    try {
+      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      const lowCores = typeof navigator?.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4;
+      const lowMem = typeof navigator?.deviceMemory === 'number' && navigator.deviceMemory <= 4;
+      return Boolean(reducedMotion || (lowCores && lowMem));
+    } catch {
+      return false;
+    }
+  }, []);
 
   // Customize popover
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
@@ -205,20 +230,41 @@ export function NewTabPage({
     saveNewTabPrefs(prefs);
   }, [prefs]);
 
+  // Keep multiple open New Tabs in sync when prefs change in any tab
   useEffect(() => {
-    if (!prefs.showClock) return undefined;
+    const syncPrefs = (e) => {
+      if (e?.detail && typeof e.detail === 'object') {
+        setPrefs((prev) => {
+          const nextStr = JSON.stringify(e.detail);
+          return JSON.stringify(prev) === nextStr ? prev : e.detail;
+        });
+      }
+    };
+    window.addEventListener(NEWTAB_PREFS_UPDATED_EVENT, syncPrefs);
+    return () => window.removeEventListener(NEWTAB_PREFS_UPDATED_EVENT, syncPrefs);
+  }, []);
+
+  useEffect(() => {
+    if (prefs.financeGlanceMasked !== false) {
+      setGlanceRevealed(false);
+    }
+  }, [prefs.financeGlanceMasked]);
+
+  useEffect(() => {
+    if (prefs.showClock === false) return undefined;
     const refreshClock = () => {
       if (!document.hidden) {
         setNow(new Date());
       }
     };
-    const timer = setInterval(refreshClock, 30000);
+    const intervalMs = prefs.showSeconds ? 1000 : 30000;
+    const timer = setInterval(refreshClock, intervalMs);
     document.addEventListener('visibilitychange', refreshClock);
     return () => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', refreshClock);
     };
-  }, [prefs.showClock]);
+  }, [prefs.showClock, prefs.showSeconds]);
 
   useEffect(() => {
     const handleOutside = (e) => {
@@ -573,31 +619,189 @@ export function NewTabPage({
     });
   };
 
-  const timeString = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const timeString = now.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(prefs.showSeconds ? { second: '2-digit' } : {}),
+    hour12: (prefs.clockFormat || '12h') !== '24h'
+  });
   const dateString = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
-  const greeting = getGreeting(now.getHours());
+  const baseGreeting = getGreeting(now.getHours());
+  const greetingText = prefs.greetingName?.trim()
+    ? `${baseGreeting}, ${prefs.greetingName.trim()}`
+    : baseGreeting;
 
-  const hasWallpaper = prefs.backgroundStyle === 'wallpaper' && Boolean(prefs.wallpaperUrl?.trim());
-  const backgroundClass =
-    prefs.backgroundStyle === 'gradient'
-      ? 'bg-[radial-gradient(ellipse_at_top,var(--surface-subtle)_0%,var(--background)_65%,var(--surface)_100%)]'
-      : 'bg-[var(--background)]';
+  // Derive Top Visited shortcuts from Browser History when quickLinksSource === 'top_visited'
+  const topVisitedShortcuts = useMemo(() => {
+    if (prefs.quickLinksSource !== 'top_visited') return [];
+    const byHost = new Map();
+    (effectiveHistoryItems || []).forEach((entry) => {
+      if (!entry?.url || !/^https?:\/\//i.test(entry.url)) return;
+      const host = getHostname(entry.url);
+      if (!host) return;
+      const existing = byHost.get(host);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        byHost.set(host, {
+          id: `tv-${host}`,
+          type: 'link',
+          name: (entry.title || host).split(' - ')[0].split(' | ')[0].trim().slice(0, 24) || host,
+          url: `https://${host}`,
+          count: 1
+        });
+      }
+    });
+    return Array.from(byHost.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, Math.max(8, Number(prefs.quickLinksColumns) || 6));
+  }, [prefs.quickLinksSource, prefs.quickLinksColumns, effectiveHistoryItems]);
+
+  const displayedQuickLinks =
+    prefs.quickLinksSource === 'top_visited' && topVisitedShortcuts.length > 0
+      ? topVisitedShortcuts
+      : quickLinks;
+
+  // Upcoming bills summary for optional Financial Glance widget
+  const financeGlanceSummary = useMemo(() => {
+    if (!prefs.showFinanceGlance || !financialContext) return null;
+    const availableCash = Number(financialContext.availableCash) || 0;
+    const projectedCash = Number(financialContext.projectedCashAfterBills ?? availableCash) || 0;
+    const bills = Array.isArray(financialContext.bills) ? financialContext.bills : [];
+    const unpaidBills = bills
+      .filter((b) => !b.paid && b.status !== 'paid')
+      .map((b) => ({
+        id: b.id || b.name,
+        name: b.name || 'Bill',
+        amount: Number(b.amount) || 0,
+        dueDate: b.dueDate || b.nextDueDate || ''
+      }))
+      .sort((a, b) => String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999')))
+      .slice(0, 3);
+    return {
+      availableCash,
+      projectedCash,
+      unpaidCount: bills.filter((b) => !b.paid && b.status !== 'paid').length,
+      upcomingBills: unpaidBills
+    };
+  }, [prefs.showFinanceGlance, financialContext]);
+
+  // Background resolution (Solid / Gradient / Wallpaper)
+  const bgStyleMode = prefs.backgroundStyle || 'slate';
+  const hasWallpaper = bgStyleMode === 'wallpaper' && Boolean(prefs.wallpaperUrl?.trim());
+  const selectedGradient =
+    NEWTAB_GRADIENT_PRESETS.find((g) => g.id === prefs.gradientPreset) || NEWTAB_GRADIENT_PRESETS[0];
+  const selectedSolid = NEWTAB_SOLID_PRESETS.find((s) => s.id === prefs.solidColor);
+  const customSolidHex = /^#[0-9a-f]{6}$/i.test(prefs.solidColor || '') ? prefs.solidColor : '';
+  const resolvedSolidHex = selectedSolid ? selectedSolid.hex : customSolidHex;
+
+  const isDarkBackdrop = useMemo(() => {
+    if (hasWallpaper) return true;
+    if (bgStyleMode === 'gradient') return Boolean(selectedGradient?.isDark);
+    if (bgStyleMode === 'slate' && resolvedSolidHex) {
+      if (selectedSolid && typeof selectedSolid.isDark === 'boolean') return selectedSolid.isDark;
+      return isHexColorDark(resolvedSolidHex);
+    }
+    return false;
+  }, [hasWallpaper, bgStyleMode, selectedGradient, resolvedSolidHex, selectedSolid]);
+
+  const isLightBackdrop = useMemo(() => {
+    if (hasWallpaper) return false;
+    if (bgStyleMode === 'gradient') return selectedGradient?.isDark === false;
+    if (bgStyleMode === 'slate' && resolvedSolidHex) {
+      if (selectedSolid && typeof selectedSolid.isDark === 'boolean') return !selectedSolid.isDark;
+      return !isHexColorDark(resolvedSolidHex);
+    }
+    return false;
+  }, [hasWallpaper, bgStyleMode, selectedGradient, resolvedSolidHex, selectedSolid]);
+
+  const containerBgStyle = useMemo(() => {
+    if (bgStyleMode === 'gradient' && selectedGradient) {
+      return { background: selectedGradient.css };
+    }
+    if (bgStyleMode === 'slate' && resolvedSolidHex) {
+      return { backgroundColor: resolvedSolidHex };
+    }
+    return undefined;
+  }, [bgStyleMode, selectedGradient, resolvedSolidHex]);
+
+  // Surface contrast classes (Auto / Light / Dark)
+  const surfaceContrast = prefs.surfaceContrast || 'auto';
+  const cardSurfaceClass =
+    surfaceContrast === 'light'
+      ? 'bg-white/92 hover:bg-white border-slate-200/90 text-slate-900'
+      : surfaceContrast === 'dark'
+        ? 'bg-slate-900/88 hover:bg-slate-900 border-slate-700/80 text-slate-100'
+        : 'bg-[var(--surface)]/92 hover:bg-[var(--surface-hover)] border-[var(--line)] text-[var(--ink)]';
+
+  const staticCardSurfaceClass =
+    surfaceContrast === 'light'
+      ? 'bg-white/94 border-slate-200/90 text-slate-900'
+      : surfaceContrast === 'dark'
+        ? 'bg-slate-900/90 border-slate-700/80 text-slate-100'
+        : 'bg-[var(--surface)]/95 border-[var(--line)] text-[var(--ink)]';
+
+  const cardMutedTextClass =
+    surfaceContrast === 'light'
+      ? 'text-slate-500'
+      : surfaceContrast === 'dark'
+        ? 'text-slate-400'
+        : 'text-[var(--muted)]';
+
+  const clockPrimaryClass = isDarkBackdrop
+    ? 'text-white drop-shadow'
+    : isLightBackdrop
+      ? 'text-slate-900'
+      : 'text-[var(--ink)]';
+  const clockSecondaryClass = isDarkBackdrop
+    ? 'text-slate-200 drop-shadow-xs'
+    : isLightBackdrop
+      ? 'text-slate-600'
+      : 'text-[var(--muted)]';
+
+  const isCompactDensity = prefs.layoutDensity === 'compact';
+  const isDashboardLayout = prefs.layoutMode === 'dashboard';
+  const isIconOnlyTiles = prefs.quickLinksStyle === 'icon_only';
+  const isCompactSearch = prefs.searchBarStyle === 'compact';
+  const quickLinksGridColsClass =
+    Number(prefs.quickLinksColumns) === 4
+      ? 'grid-cols-2 sm:grid-cols-4'
+      : Number(prefs.quickLinksColumns) === 8
+        ? 'grid-cols-4 sm:grid-cols-6 md:grid-cols-8'
+        : 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6';
+
+  const wallpaperDimOpacity = Math.max(0, Math.min(85, Number(prefs.wallpaperDim ?? 45))) / 100;
+  const applyWallpaperBlur = hasWallpaper && Boolean(prefs.wallpaperBlur) && !isLowPowerDevice;
+  const isAmountHidden = prefs.financeGlanceMasked !== false && !glanceRevealed;
+
+  const formatMoney = (val) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0
+    }).format(Number(val) || 0);
 
   return (
     <div
-      className={`w-full h-full relative overflow-y-auto text-[var(--ink)] select-none ${backgroundClass}`}
-      style={
-        hasWallpaper
-          ? {
-              backgroundImage: `url("${prefs.wallpaperUrl.trim()}")`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center'
-            }
-          : undefined
-      }
+      className="w-full h-full relative overflow-y-auto text-[var(--ink)] select-none bg-[var(--background)]"
+      style={containerBgStyle}
     >
-      {/* Subtle scrim when using a custom wallpaper */}
-      {hasWallpaper && <div className="fixed inset-0 bg-slate-950/60 pointer-events-none" />}
+      {/* Dedicated Wallpaper Layer (supports dim overlay + optional subtle blur) */}
+      {hasWallpaper && (
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{
+              backgroundImage: `url("${prefs.wallpaperUrl.trim()}")`,
+              ...(applyWallpaperBlur ? { filter: 'blur(4px)', transform: 'scale(1.03)' } : {})
+            }}
+          />
+          <div
+            className="absolute inset-0 bg-slate-950"
+            style={{ opacity: wallpaperDimOpacity }}
+          />
+        </div>
+      )}
 
       {/* Top-right Customize Page button & popover */}
       <div className="sticky top-0 z-20 flex justify-end p-4 pointer-events-none">
@@ -606,299 +810,193 @@ export function NewTabPage({
             type="button"
             onClick={() => setIsCustomizeOpen((prev) => !prev)}
             title="Customize page"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--surface)]/90 hover:bg-[var(--surface-hover)] border border-[var(--line)] hover:border-[var(--brand)]/50 text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] transition-all shadow-sm backdrop-blur-md cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--surface)]/92 hover:bg-[var(--surface-hover)] border border-[var(--line)] hover:border-[var(--brand)]/50 text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] transition-colors shadow-sm cursor-pointer"
           >
             <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--brand)]" />
             <span>Customize</span>
           </button>
 
           {isCustomizeOpen && (
-            <div className="absolute right-0 mt-2 w-80 max-h-[82vh] overflow-y-auto rounded-2xl bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] shadow-2xl p-4 text-xs z-30 scrollbar-thin">
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-semibold text-[var(--ink)] text-sm">Customize Page</span>
-                <button
-                  type="button"
-                  onClick={() => setIsCustomizeOpen(false)}
-                  aria-label="Close customize menu"
-                  className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <div className="space-y-2.5">
-                <label className="flex items-center justify-between py-1 cursor-pointer">
-                  <span className="text-[var(--ink)] font-medium">Quick Links (Speed Dial)</span>
-                  <input
-                    type="checkbox"
-                    checked={prefs.showQuickLinks}
-                    onChange={(e) => setPrefs((p) => ({ ...p, showQuickLinks: e.target.checked }))}
-                    className="accent-[var(--brand)] w-4 h-4 cursor-pointer"
-                  />
-                </label>
-
-                <label className="flex items-center justify-between py-1 cursor-pointer">
-                  <span className="text-[var(--ink)] font-medium">Clock & Greeting</span>
-                  <input
-                    type="checkbox"
-                    checked={prefs.showClock}
-                    onChange={(e) => setPrefs((p) => ({ ...p, showClock: e.target.checked }))}
-                    className="accent-[var(--brand)] w-4 h-4 cursor-pointer"
-                  />
-                </label>
-
-                <label className="flex items-center justify-between py-1 cursor-pointer">
-                  <span className="text-[var(--ink)] font-medium">Quick Notes</span>
-                  <input
-                    type="checkbox"
-                    checked={typeof showHomepageNotes === 'boolean' ? showHomepageNotes : prefs.showNotes !== false}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setPrefs((p) => ({ ...p, showNotes: checked }));
-                      if (typeof onToggleHomepageNotes === 'function') {
-                        onToggleHomepageNotes(checked);
-                      }
-                    }}
-                    className="accent-[var(--brand)] w-4 h-4 cursor-pointer"
-                  />
-                </label>
-              </div>
-
-              <div className="my-3 border-t border-[var(--line)]" />
-
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-2">
-                  Background Style
-                </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {[
-                    { id: 'slate', label: 'Slate' },
-                    { id: 'gradient', label: 'Gradient' },
-                    { id: 'wallpaper', label: 'Image' }
-                  ].map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setPrefs((p) => ({ ...p, backgroundStyle: opt.id }))}
-                      className={`py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-colors cursor-pointer ${
-                        prefs.backgroundStyle === opt.id
-                          ? 'bg-[var(--brand-soft)] border-[var(--brand)] text-[var(--brand)]'
-                          : 'bg-[var(--surface-subtle)] border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-
-                {prefs.backgroundStyle === 'wallpaper' && (
-                  <input
-                    type="url"
-                    value={prefs.wallpaperUrl || ''}
-                    onChange={(e) => setPrefs((p) => ({ ...p, wallpaperUrl: e.target.value }))}
-                    placeholder="https://example.com/wallpaper.jpg"
-                    className="mt-2.5 w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-subtle)] border border-[var(--line)] focus:border-[var(--brand)] outline-none text-xs text-[var(--ink)] placeholder-[var(--muted)]"
-                  />
-                )}
-              </div>
-            </div>
+            <NewTabCustomizePanel
+              prefs={prefs}
+              setPrefs={setPrefs}
+              showHomepageNotes={showHomepageNotes}
+              onToggleHomepageNotes={onToggleHomepageNotes}
+              noteSections={noteSections}
+              activeNoteSectionId={activeNoteSectionId}
+              onSelectNoteSection={onSelectNoteSection}
+              isLowPowerDevice={isLowPowerDevice}
+              onClose={() => setIsCustomizeOpen(false)}
+            />
           )}
         </div>
       </div>
 
-      {/* Main Centered Content Canvas */}
-      <div className="relative z-10 mx-auto px-6 pt-8 pb-16 flex flex-col items-center max-w-3xl w-full">
+      {/* Main Content Canvas (Centered or Dashboard Grid) */}
+      <div
+        className={`relative z-10 mx-auto px-6 ${
+          isCompactDensity ? 'pt-3 pb-10' : 'pt-8 pb-16'
+        } flex flex-col items-center w-full ${
+          isDashboardLayout ? 'max-w-5xl' : 'max-w-3xl'
+        }`}
+      >
         {/* Minimal Clock / Greeting */}
-        {prefs.showClock && (
-          <div className="text-center mb-7">
+        {prefs.showClock !== false && (
+          <div className={`text-center ${isCompactDensity ? 'mb-5' : 'mb-7'}`}>
             <div
-              className={`text-5xl font-semibold tracking-tight tabular-nums ${
-                hasWallpaper ? 'text-white drop-shadow' : 'text-[var(--ink)]'
-              }`}
+              className={`${
+                isCompactDensity ? 'text-4xl' : 'text-5xl'
+              } font-semibold tracking-tight tabular-nums ${clockPrimaryClass}`}
             >
               {timeString}
             </div>
-            <div
-              className={`mt-1.5 text-sm font-medium ${
-                hasWallpaper ? 'text-slate-200 drop-shadow-xs' : 'text-[var(--muted)]'
-              }`}
-            >
-              {greeting} · {dateString}
+            <div className={`mt-1.5 text-sm font-medium ${clockSecondaryClass}`}>
+              {greetingText}
+              {prefs.showDate !== false ? ` · ${dateString}` : ''}
             </div>
+            {prefs.greetingSubtitle?.trim() && (
+              <div className={`mt-0.5 text-xs font-medium ${clockSecondaryClass} opacity-90`}>
+                {prefs.greetingSubtitle.trim()}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Centered Pill Search Bar */}
-        <form
-          ref={searchFormRef}
-          onSubmit={handleSearchSubmit}
-          className="relative w-full max-w-2xl mb-10 z-20"
-        >
-          <div className="flex items-center gap-3 pl-5 pr-2.5 py-2.5 rounded-full bg-[var(--surface)]/95 border border-[var(--line)] focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/20 shadow-md transition-colors min-h-[52px]">
-            <Search className="w-5 h-5 text-[var(--muted)] shrink-0" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={query}
-              onFocus={() => {
-                setIsSearchDropdownOpen(true);
-                setActiveDropdownIndex(-1);
-              }}
-              onBlur={(e) => {
-                if (!searchFormRef.current?.contains(e.relatedTarget)) {
-                  setIsSearchDropdownOpen(false);
-                  setActiveDropdownIndex(-1);
-                }
-              }}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setIsSearchDropdownOpen(true);
-                setActiveDropdownIndex(-1);
-              }}
-              onKeyDown={handleSearchKeyDown}
-              role="combobox"
-              aria-autocomplete="list"
-              aria-expanded={isSearchDropdownOpen && dropdownFlatItems.length > 0}
-              aria-controls="klarity-newtab-search-dropdown"
-              aria-activedescendant={
-                isSearchDropdownOpen && activeDropdownIndex >= 0
-                  ? `klarity-newtab-search-dropdown-opt-${activeDropdownIndex}`
-                  : undefined
-              }
-              placeholder={`Search ${activeEngine.name} or enter web address...`}
-              className="no-focus-outline flex-1 bg-transparent border-0 outline-none text-[15px] text-[var(--ink)] placeholder-[var(--muted)] min-w-0 px-2.5 py-1 leading-normal rounded-full"
-              style={{ outline: 'none', boxShadow: 'none', border: 'none', background: 'transparent' }}
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery('');
-                  setActiveDropdownIndex(-1);
-                  searchInputRef.current?.focus();
-                }}
-                className="p-1.5 rounded-full text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] cursor-pointer"
-                aria-label="Clear search"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-full bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold transition-colors cursor-pointer shrink-0 shadow-sm"
+        {/* Pill Search Bar */}
+        {prefs.showSearchBar !== false && (
+          <form
+            ref={searchFormRef}
+            onSubmit={handleSearchSubmit}
+            className={`relative w-full ${
+              isCompactSearch ? 'max-w-xl' : 'max-w-2xl'
+            } ${isCompactDensity ? 'mb-6' : 'mb-10'} z-20`}
+          >
+            <div
+              className={`flex items-center gap-3 ${
+                isCompactSearch ? 'pl-4 pr-2 py-1.5 min-h-[42px]' : 'pl-5 pr-2.5 py-2.5 min-h-[52px]'
+              } rounded-full border focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/20 shadow-md transition-colors ${staticCardSurfaceClass}`}
             >
-              Search
-            </button>
-          </div>
+              <Search className={`${isCompactSearch ? 'w-4 h-4' : 'w-5 h-5'} ${cardMutedTextClass} shrink-0`} />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={query}
+                onFocus={() => {
+                  setIsSearchDropdownOpen(true);
+                  setActiveDropdownIndex(-1);
+                }}
+                onBlur={(e) => {
+                  if (!searchFormRef.current?.contains(e.relatedTarget)) {
+                    setIsSearchDropdownOpen(false);
+                    setActiveDropdownIndex(-1);
+                  }
+                }}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setIsSearchDropdownOpen(true);
+                  setActiveDropdownIndex(-1);
+                }}
+                onKeyDown={handleSearchKeyDown}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={isSearchDropdownOpen && dropdownFlatItems.length > 0}
+                aria-controls="klarity-newtab-search-dropdown"
+                aria-activedescendant={
+                  isSearchDropdownOpen && activeDropdownIndex >= 0
+                    ? `klarity-newtab-search-dropdown-opt-${activeDropdownIndex}`
+                    : undefined
+                }
+                placeholder={`Search ${activeEngine.name} or enter web address...`}
+                className={`no-focus-outline flex-1 bg-transparent border-0 outline-none ${
+                  isCompactSearch ? 'text-[14px]' : 'text-[15px]'
+                } text-inherit placeholder:opacity-65 min-w-0 px-2 py-0.5 leading-normal rounded-full`}
+                style={{ outline: 'none', boxShadow: 'none', border: 'none', background: 'transparent' }}
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery('');
+                    setActiveDropdownIndex(-1);
+                    searchInputRef.current?.focus();
+                  }}
+                  className="p-1.5 rounded-full opacity-70 hover:opacity-100 cursor-pointer"
+                  aria-label="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                type="submit"
+                className={`${
+                  isCompactSearch ? 'px-4 py-1.5' : 'px-5 py-2'
+                } rounded-full bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold transition-colors cursor-pointer shrink-0 shadow-sm`}
+              >
+                Search
+              </button>
+            </div>
 
-          <BrowserSearchDropdown
-            id="klarity-newtab-search-dropdown"
-            isOpen={isSearchDropdownOpen}
-            flatItems={dropdownFlatItems}
-            recentMatches={recentMatches}
-            historyMatches={historyMatches}
-            activeIndex={activeDropdownIndex}
-            onHighlight={setActiveDropdownIndex}
-            onSelectSearch={handleSelectDropdownSearch}
-            onFillSearch={handleFillDropdownSearch}
-            onRemoveRecentSearch={(id) => {
-              deleteRecentSearchItem(id);
-              setActiveDropdownIndex(-1);
-            }}
-            onClearRecentSearches={() => {
-              clearRecentSearches();
-              setActiveDropdownIndex(-1);
-            }}
-            onSelectHistory={handleSelectDropdownHistory}
-            roundedClass="rounded-2xl"
-          />
-        </form>
+            <BrowserSearchDropdown
+              id="klarity-newtab-search-dropdown"
+              isOpen={isSearchDropdownOpen}
+              flatItems={dropdownFlatItems}
+              recentMatches={recentMatches}
+              historyMatches={historyMatches}
+              activeIndex={activeDropdownIndex}
+              onHighlight={setActiveDropdownIndex}
+              onSelectSearch={handleSelectDropdownSearch}
+              onFillSearch={handleFillDropdownSearch}
+              onRemoveRecentSearch={(id) => {
+                deleteRecentSearchItem(id);
+                setActiveDropdownIndex(-1);
+              }}
+              onClearRecentSearches={() => {
+                clearRecentSearches();
+                setActiveDropdownIndex(-1);
+              }}
+              onSelectHistory={handleSelectDropdownHistory}
+              roundedClass="rounded-2xl"
+            />
+          </form>
+        )}
 
-        {/* Strictly Centered Speed Dial / Quick Links Grid */}
-        {prefs.showQuickLinks && (
-          <div className="w-full max-w-2xl">
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                  {quickLinks.map((item) => {
-                    const isGroup = item.type === 'group';
-                    const isDropTarget = dropTargetId === item.id && draggedTileId !== item.id;
+        {/* Widgets Area: Centered Stack OR Dashboard Grid */}
+        <div
+          className={`w-full ${
+            isDashboardLayout && prefs.showQuickLinks !== false && financeGlanceSummary
+              ? `grid grid-cols-1 lg:grid-cols-3 ${isCompactDensity ? 'gap-4' : 'gap-6'} items-start`
+              : `flex flex-col items-center ${isCompactDensity ? 'gap-4' : 'gap-6'}`
+          }`}
+        >
+          {/* Speed Dial / Quick Links Grid */}
+          {prefs.showQuickLinks !== false && (
+            <div
+              className={`w-full ${
+                isDashboardLayout && financeGlanceSummary
+                  ? 'lg:col-span-2'
+                  : isDashboardLayout
+                    ? 'max-w-4xl'
+                    : 'max-w-2xl'
+              }`}
+            >
+              {prefs.quickLinksSource === 'top_visited' && (
+                <div className={`text-[11px] font-semibold uppercase tracking-wider mb-2 ${clockSecondaryClass}`}>
+                  Top Visited Sites
+                </div>
+              )}
+              <div className={`grid ${quickLinksGridColsClass} ${isCompactDensity ? 'gap-2' : 'gap-3'}`}>
+                {displayedQuickLinks.map((item) => {
+                  const isGroup = item.type === 'group';
+                  const isDropTarget = dropTargetId === item.id && draggedTileId !== item.id;
+                  const isTopVisitedMode = prefs.quickLinksSource === 'top_visited';
 
-                    if (isGroup) {
-                      const previewItems = (item.items || []).slice(0, 4);
-                      return (
-                        <div
-                          key={item.id}
-                          draggable={false}
-                          onDragOver={(e) => {
-                            if (draggedTileId && draggedTileId !== item.id) {
-                              e.preventDefault();
-                              setDropTargetId(item.id);
-                            }
-                          }}
-                          onDragLeave={() => {
-                            if (dropTargetId === item.id) setDropTargetId(null);
-                          }}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            handleDropOnTile(item);
-                          }}
-                          onClick={() => {
-                            setOpenGroupId(item.id);
-                            setIsEditingOpenGroupName(false);
-                            setOpenGroupNameDraft(item.name || '');
-                          }}
-                          onContextMenu={(e) => openTileMenuAt(e, item)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setOpenGroupId(item.id);
-                              setIsEditingOpenGroupName(false);
-                              setOpenGroupNameDraft(item.name || '');
-                            }
-                          }}
-                          className={`group relative flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md backdrop-blur-sm ${
-                            isDropTarget
-                              ? 'bg-[var(--brand-soft)] border-[var(--brand)] scale-[1.03]'
-                              : 'bg-[var(--surface)]/90 hover:bg-[var(--surface-hover)] border-[var(--line)] hover:border-[var(--brand)]/50'
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={(e) => openTileMenuAt(e, item)}
-                            aria-label={`Options for ${item.name}`}
-                            className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-opacity cursor-pointer"
-                          >
-                            <MoreVertical className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* 2x2 Mini-Grid Group Icon */}
-                          <div className="w-10 h-10 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] p-1 grid grid-cols-2 gap-0.5 place-items-center">
-                            {previewItems.map((sub) => (
-                              <ShortcutIcon key={sub.id} name={sub.name} url={sub.url} size="sm" />
-                            ))}
-                          </div>
-
-                          <div className="w-full text-center">
-                            <div className="text-xs font-medium text-[var(--ink)] truncate">
-                              {item.name}
-                            </div>
-                            <div className="text-[10px] text-[var(--muted)]">
-                              {(item.items || []).length} sites
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }
-
+                  if (isGroup) {
+                    const previewItems = (item.items || []).slice(0, 4);
                     return (
                       <div
                         key={item.id}
-                        draggable
-                        onDragStart={(e) => {
-                          setDraggedTileId(item.id);
-                          e.dataTransfer.effectAllowed = 'move';
-                        }}
+                        draggable={false}
+                        title={item.name}
                         onDragOver={(e) => {
                           if (draggedTileId && draggedTileId !== item.id) {
                             e.preventDefault();
@@ -912,58 +1010,246 @@ export function NewTabPage({
                           e.preventDefault();
                           handleDropOnTile(item);
                         }}
-                        onDragEnd={() => {
-                          setDraggedTileId(null);
-                          setDropTargetId(null);
+                        onClick={() => {
+                          setOpenGroupId(item.id);
+                          setIsEditingOpenGroupName(false);
+                          setOpenGroupNameDraft(item.name || '');
                         }}
-                        onClick={() => onNavigate(item.url)}
                         onContextMenu={(e) => openTileMenuAt(e, item)}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
-                            onNavigate(item.url);
+                            setOpenGroupId(item.id);
+                            setIsEditingOpenGroupName(false);
+                            setOpenGroupNameDraft(item.name || '');
                           }
                         }}
-                        className={`group relative flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md backdrop-blur-sm ${
+                        className={`group relative flex flex-col items-center justify-center ${
+                          isIconOnlyTiles
+                            ? 'p-2.5 gap-1 rounded-xl'
+                            : isCompactDensity
+                              ? 'p-3 gap-2 rounded-xl'
+                              : 'p-4 gap-2.5 rounded-2xl'
+                        } border transition-all cursor-pointer shadow-sm hover:shadow-md ${
                           isDropTarget
                             ? 'bg-[var(--brand-soft)] border-[var(--brand)] scale-[1.03]'
-                            : 'bg-[var(--surface)]/90 hover:bg-[var(--surface-hover)] border-[var(--line)] hover:border-[var(--brand)]/50'
+                            : `${cardSurfaceClass} hover:border-[var(--brand)]/50`
                         }`}
                       >
+                        {!isTopVisitedMode && (
+                          <button
+                            type="button"
+                            onClick={(e) => openTileMenuAt(e, item)}
+                            aria-label={`Options for ${item.name}`}
+                            className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-1.5 right-1.5 p-1 rounded-lg opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
+                          >
+                            <MoreVertical className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        <div className="w-10 h-10 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] p-1 grid grid-cols-2 gap-0.5 place-items-center">
+                          {previewItems.map((sub) => (
+                            <ShortcutIcon key={sub.id} name={sub.name} url={sub.url} size="sm" />
+                          ))}
+                        </div>
+
+                        {!isIconOnlyTiles && (
+                          <div className="w-full text-center">
+                            <div className="text-xs font-medium truncate">{item.name}</div>
+                            <div className={`text-[10px] ${cardMutedTextClass}`}>
+                              {(item.items || []).length} sites
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={item.id}
+                      draggable={!isTopVisitedMode}
+                      title={item.name}
+                      onDragStart={(e) => {
+                        if (isTopVisitedMode) return;
+                        setDraggedTileId(item.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onDragOver={(e) => {
+                        if (!isTopVisitedMode && draggedTileId && draggedTileId !== item.id) {
+                          e.preventDefault();
+                          setDropTargetId(item.id);
+                        }
+                      }}
+                      onDragLeave={() => {
+                        if (dropTargetId === item.id) setDropTargetId(null);
+                      }}
+                      onDrop={(e) => {
+                        if (isTopVisitedMode) return;
+                        e.preventDefault();
+                        handleDropOnTile(item);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedTileId(null);
+                        setDropTargetId(null);
+                      }}
+                      onClick={() => onNavigate(item.url)}
+                      onContextMenu={(e) => !isTopVisitedMode && openTileMenuAt(e, item)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onNavigate(item.url);
+                        }
+                      }}
+                      className={`group relative flex flex-col items-center justify-center ${
+                        isIconOnlyTiles
+                          ? 'p-2.5 gap-1 rounded-xl'
+                          : isCompactDensity
+                            ? 'p-3 gap-2 rounded-xl'
+                            : 'p-4 gap-2.5 rounded-2xl'
+                      } border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                        isDropTarget
+                          ? 'bg-[var(--brand-soft)] border-[var(--brand)] scale-[1.03]'
+                          : `${cardSurfaceClass} hover:border-[var(--brand)]/50`
+                      }`}
+                    >
+                      {!isTopVisitedMode && (
                         <button
                           type="button"
                           onClick={(e) => openTileMenuAt(e, item)}
                           aria-label={`Options for ${item.name}`}
-                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-2 right-2 p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-opacity cursor-pointer"
+                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-1.5 right-1.5 p-1 rounded-lg opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
                         >
                           <MoreVertical className="w-3.5 h-3.5" />
                         </button>
-                        <ShortcutIcon name={item.name} url={item.url} />
-                        <span className="text-xs font-medium text-[var(--ink)] truncate w-full text-center">
+                      )}
+                      <ShortcutIcon name={item.name} url={item.url} />
+                      {!isIconOnlyTiles && (
+                        <span className="text-xs font-medium truncate w-full text-center">
                           {item.name}
                         </span>
-                      </div>
-                    );
-                  })}
+                      )}
+                    </div>
+                  );
+                })}
 
-                  {/* Add Shortcut Tile */}
+                {/* Add Shortcut Tile (Custom Pinned mode) */}
+                {prefs.quickLinksSource !== 'top_visited' && (
                   <button
                     type="button"
                     onClick={() => setShortcutModal({ mode: 'add', name: '', url: '' })}
-                    className="flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl bg-[var(--surface)]/60 hover:bg-[var(--surface)] border border-dashed border-[var(--line)] hover:border-[var(--brand)] transition-all cursor-pointer group"
+                    title="Add Shortcut"
+                    className={`flex flex-col items-center justify-center ${
+                      isIconOnlyTiles
+                        ? 'p-2.5 gap-1 rounded-xl'
+                        : isCompactDensity
+                          ? 'p-3 gap-2 rounded-xl'
+                          : 'p-4 gap-2.5 rounded-2xl'
+                    } border border-dashed border-[var(--line)] hover:border-[var(--brand)] bg-[var(--surface)]/65 hover:bg-[var(--surface)] transition-all cursor-pointer group`}
                   >
                     <div className="w-10 h-10 rounded-xl bg-[var(--surface-subtle)] group-hover:bg-[var(--brand-soft)] border border-[var(--line)] group-hover:border-[var(--brand)]/40 flex items-center justify-center text-[var(--muted)] group-hover:text-[var(--brand)] transition-colors">
                       <Plus className="w-5 h-5" />
                     </div>
-                    <span className="text-xs font-medium text-[var(--muted)] group-hover:text-[var(--ink)]">
-                      Add Shortcut
-                    </span>
+                    {!isIconOnlyTiles && (
+                      <span className="text-xs font-medium text-[var(--muted)] group-hover:text-[var(--ink)]">
+                        Add Shortcut
+                      </span>
+                    )}
                   </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Optional Klarity Financial / Bills Glance Widget */}
+          {financeGlanceSummary && (
+            <div
+              className={`w-full ${
+                isDashboardLayout && prefs.showQuickLinks !== false
+                  ? 'lg:col-span-1'
+                  : 'max-w-2xl'
+              } rounded-2xl border shadow-sm p-4 ${staticCardSurfaceClass}`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[var(--brand-soft)] text-[var(--brand)] flex items-center justify-center">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold">Klarity Glance</div>
+                    <div className={`text-[10px] ${cardMutedTextClass}`}>
+                      {financeGlanceSummary.unpaidCount} upcoming bill{financeGlanceSummary.unpaidCount === 1 ? '' : 's'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setGlanceRevealed((prev) => !prev)}
+                  title={isAmountHidden ? 'Show amounts' : 'Hide amounts'}
+                  aria-label={isAmountHidden ? 'Show amounts' : 'Hide amounts'}
+                  className={`p-1.5 rounded-lg border border-[var(--line)] hover:border-[var(--brand)]/50 cursor-pointer ${cardMutedTextClass}`}
+                >
+                  {isAmountHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 mb-3">
+                <div className="rounded-xl p-2.5 bg-[var(--surface-subtle)]/70 border border-[var(--line)]">
+                  <div className={`text-[10px] font-semibold uppercase tracking-wider ${cardMutedTextClass}`}>
+                    Available Cash
+                  </div>
+                  <div
+                    className={`mt-1 text-base font-bold tabular-nums ${
+                      isAmountHidden ? 'blur-[5px] select-none' : ''
+                    }`}
+                  >
+                    {formatMoney(financeGlanceSummary.availableCash)}
+                  </div>
+                </div>
+                <div className="rounded-xl p-2.5 bg-[var(--surface-subtle)]/70 border border-[var(--line)]">
+                  <div className={`text-[10px] font-semibold uppercase tracking-wider ${cardMutedTextClass}`}>
+                    After Bills
+                  </div>
+                  <div
+                    className={`mt-1 text-base font-bold tabular-nums ${
+                      isAmountHidden ? 'blur-[5px] select-none' : ''
+                    }`}
+                  >
+                    {formatMoney(financeGlanceSummary.projectedCash)}
+                  </div>
                 </div>
               </div>
-            )}
+
+              {financeGlanceSummary.upcomingBills.length > 0 && (
+                <div className="space-y-1.5 pt-2 border-t border-[var(--line)]">
+                  <div className={`text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1 ${cardMutedTextClass}`}>
+                    <Calendar className="w-3 h-3" />
+                    <span>Next Upcoming Bills</span>
+                  </div>
+                  {financeGlanceSummary.upcomingBills.map((bill) => (
+                    <div
+                      key={bill.id}
+                      className="flex items-center justify-between text-xs py-0.5 gap-2"
+                    >
+                      <span className="truncate font-medium">{bill.name}</span>
+                      <span
+                        className={`font-semibold tabular-nums shrink-0 ${
+                          isAmountHidden ? 'blur-[5px] select-none' : ''
+                        }`}
+                      >
+                        {formatMoney(bill.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Group Contents & Editor Modal */}
