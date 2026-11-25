@@ -2397,26 +2397,41 @@ function shouldPerformWebSearch(message) {
 // Property / Zillow Details Extraction & Neighborhood Intelligence Helper
 async function resolvePropertyDetails(rawInput) {
   let raw = (rawInput || '').trim();
-  let street = '', city = '', state = 'CA', zip = '', zpid = '';
-  let dwellingType = 'single_family';
-  let sqFt = 2100;
-  let bedrooms = 3;
-  let bathrooms = 2;
+  let street = '', city = '', state = '', zip = '', zpid = '';
+  let dwellingType = null;
+  let homeType = null;
+  let sqFt = null;
+  let bedrooms = null;
+  let bathrooms = null;
+  let yearBuilt = null;
+  let stories = null;
+  let lotSize = null;
+  let garage = null;
+  let garageAttached = null;
   let estimatedValue = '';
+  let searchResults = '';
 
-  // 1. Check for Zillow URL format: /homedetails/<slug>/<zpid>_zpid/
-  const zillowMatch = raw.match(/homedetails\/([^\/]+)\/(\d+)_zpid/i);
-  if (zillowMatch) {
-    zpid = zillowMatch[2];
-    const slug = zillowMatch[1];
-    const parts = slug.split('-');
+  const parseSlugAddress = (rawSlug) => {
+    const cleanedSlug = decodeURIComponent(rawSlug || '').replace(/_rb$/i, '').replace(/\/+$/, '');
+    const parts = cleanedSlug.split('-').filter(Boolean);
+    let parsedZip = '';
+    let parsedState = '';
+    let parsedStreet = '';
+    let parsedCity = '';
+
     if (parts.length > 0 && /^\d{5}$/.test(parts[parts.length - 1])) {
-      zip = parts.pop();
+      parsedZip = parts.pop();
     }
     if (parts.length > 0 && /^[A-Za-z]{2}$/.test(parts[parts.length - 1])) {
-      state = parts.pop().toUpperCase();
+      parsedState = parts.pop().toUpperCase();
     }
-    const streetSuffixes = new Set(['st', 'ave', 'blvd', 'rd', 'way', 'dr', 'ln', 'ct', 'cir', 'pl', 'pkwy', 'ter', 'loop', 'trl', 'hwy', 'path', 'walk']);
+    const streetSuffixes = new Set([
+      'st', 'street', 'ave', 'avenue', 'blvd', 'boulevard', 'rd', 'road', 'way',
+      'dr', 'drive', 'ln', 'lane', 'ct', 'court', 'cir', 'circle', 'pl', 'place',
+      'pkwy', 'parkway', 'ter', 'terrace', 'loop', 'trl', 'trail', 'hwy', 'highway',
+      'path', 'walk', 'pass', 'run', 'cv', 'cove', 'xing', 'crossing', 'aly', 'alley',
+      'row', 'sq', 'square', 'vw', 'view', 'pt', 'point', 'rdg', 'ridge'
+    ]);
     let splitIdx = -1;
     for (let i = 0; i < parts.length; i++) {
       if (streetSuffixes.has(parts[i].toLowerCase())) {
@@ -2424,19 +2439,47 @@ async function resolvePropertyDetails(rawInput) {
         break;
       }
     }
-    if (splitIdx !== -1 && splitIdx < parts.length - 1) {
-      street = parts.slice(0, splitIdx + 1).join(' ');
-      city = parts.slice(splitIdx + 1).join(' ');
-    } else {
-      if (parts.length > 2) {
-        city = parts.slice(-2).join(' ');
-        street = parts.slice(0, -2).join(' ');
-      } else {
-        street = parts.join(' ');
+    // Include unit/apt number right after street suffix if present (e.g. "Unit-204", "Apt-B", "#4")
+    if (splitIdx !== -1 && splitIdx + 1 < parts.length) {
+      const nextToken = parts[splitIdx + 1].toLowerCase();
+      if (['apt', 'unit', 'ste', 'suite', 'lot', 'bldg', 'fl'].includes(nextToken) && splitIdx + 2 < parts.length) {
+        splitIdx += 2;
+      } else if (/^#?\d+[a-z]?$/i.test(nextToken) && splitIdx + 2 < parts.length) {
+        splitIdx += 1;
       }
     }
+
+    if (splitIdx !== -1 && splitIdx < parts.length - 1) {
+      parsedStreet = parts.slice(0, splitIdx + 1).join(' ');
+      parsedCity = parts.slice(splitIdx + 1).join(' ');
+    } else if (parts.length > 2) {
+      parsedCity = parts.slice(-1).join(' ');
+      parsedStreet = parts.slice(0, -1).join(' ');
+    } else {
+      parsedStreet = parts.join(' ');
+    }
+
+    return { street: parsedStreet, city: parsedCity, state: parsedState, zip: parsedZip };
+  };
+
+  // 1. Check for Zillow URL formats: /homedetails/<slug>/<zpid>_zpid/ or /homes/<slug>_rb/
+  const zillowMatch = raw.match(/homedetails\/([^\/?#]+)\/(\d+)_zpid/i);
+  const zillowHomesMatch = !zillowMatch && raw.match(/zillow\.com\/homes\/([^\/?#]+?)(?:_rb)?(?:\/|\?|$)/i);
+  if (zillowMatch) {
+    zpid = zillowMatch[2];
+    const parsed = parseSlugAddress(zillowMatch[1]);
+    street = parsed.street;
+    city = parsed.city;
+    state = parsed.state;
+    zip = parsed.zip;
+  } else if (zillowHomesMatch) {
+    const parsed = parseSlugAddress(zillowHomesMatch[1]);
+    street = parsed.street;
+    city = parsed.city;
+    state = parsed.state;
+    zip = parsed.zip;
   } else {
-    // 2. Check for Redfin URL or Realtor URL or standard address
+    // 2. Check for Redfin URL or standard address
     const redfinMatch = raw.match(/redfin\.com\/([A-Za-z]{2})\/([^\/]+)\/([^\/]+)\/home\/(\d+)/i);
     if (redfinMatch) {
       state = redfinMatch[1].toUpperCase();
@@ -2457,32 +2500,46 @@ async function resolvePropertyDetails(rawInput) {
   }
 
   // Capitalize properly
-  const formatWords = (s) => (s || '').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  const formatWords = (s) =>
+    (s || '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(w => (/^(?:nw|ne|sw|se|n|s|e|w)$/i.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+      .join(' ');
   street = formatWords(street);
   city = formatWords(city);
 
-  const formattedAddress = street ? `${street}, ${city || 'California'}, ${state} ${zip}`.trim() : (raw.startsWith('http') ? raw : 'California Home');
+  const cityStateZip = [city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const formattedAddress = street
+    ? (cityStateZip ? `${street}, ${cityStateZip}` : street)
+    : (cityStateZip || '');
 
-  // Perform targeted live web search to pull the real listing snippet / beds / baths / sqft / zestimate
+  // Perform targeted live web search to pull the real listing snippet / beds / baths / sqft / year built / lot / zestimate
   try {
-    const searchQuery = zpid 
-      ? `zillow ${zpid} ${street} ${city} ${state}`
-      : `${street} ${city} ${state} ${zip} zillow redfin beds baths sq ft`;
-    const searchResults = await performWebSearch(searchQuery);
+    const searchQuery = zpid
+      ? `"${street}" "${city}" ${state} ${zip} zillow ${zpid} beds baths sqft year built`
+      : `${street} ${city} ${state} ${zip} zillow beds baths sq ft year built`;
+    searchResults = (await performWebSearch(searchQuery)) || '';
     if (searchResults) {
       // Extract bedrooms: e.g. "3 beds", "4 bd", "3 bds"
-      const bedMatch = searchResults.match(/(\d+)\s*(?:beds?|bd|bds|bedrooms?)/i);
-      if (bedMatch) bedrooms = parseInt(bedMatch[1], 10);
+      const bedMatch = searchResults.match(/\b(\d{1,2})\s*(?:beds?|bd|bds|bedrooms?)\b/i);
+      if (bedMatch) {
+        const parsedBeds = parseInt(bedMatch[1], 10);
+        if (parsedBeds >= 0 && parsedBeds <= 20) bedrooms = parsedBeds;
+      }
 
       // Extract bathrooms: e.g. "2 baths", "2.5 ba", "3 bathrooms"
-      const bathMatch = searchResults.match(/(\d+(?:\.\d+)?)\s*(?:baths?|ba|bathrooms?)/i);
-      if (bathMatch) bathrooms = parseFloat(bathMatch[1]);
+      const bathMatch = searchResults.match(/\b(\d{1,2}(?:\.\d+)?)\s*(?:baths?|ba|bathrooms?)\b/i);
+      if (bathMatch) {
+        const parsedBaths = parseFloat(bathMatch[1]);
+        if (parsedBaths >= 0 && parsedBaths <= 20) bathrooms = parsedBaths;
+      }
 
-      // Extract square footage: e.g. "1,850 sq ft", "2,100 sqft", "1850 sq ft"
-      const sqftMatch = searchResults.match(/([\d,]{3,6})\s*(?:sq\s*ft|sqft|square\s*feet)/i);
+      // Extract square footage: e.g. "1,850 sq ft", "2,100 sqft", "1850 square feet"
+      const sqftMatch = searchResults.match(/\b([\d,]{3,6})\s*(?:sq\.?\s*ft\.?|sqft|square\s*feet)\b(?!\s*lot)/i);
       if (sqftMatch) {
         const parsedSqft = parseInt(sqftMatch[1].replace(/,/g, ''), 10);
-        if (parsedSqft > 300 && parsedSqft < 25000) sqFt = parsedSqft;
+        if (parsedSqft >= 200 && parsedSqft <= 25000) sqFt = parsedSqft;
       }
 
       // Extract Zestimate or price: e.g. "$1,150,000" or "Zestimate: $950,000"
@@ -2491,16 +2548,66 @@ async function resolvePropertyDetails(rawInput) {
         estimatedValue = `$${priceMatch[1]}`;
       }
 
-      // Extract dwelling type
+      // Extract Year Built
+      const yearMatch = searchResults.match(/(?:built\s+in|year\s+built|built)\s*:?\s*(\d{4})\b/i);
+      if (yearMatch) {
+        const parsedYear = parseInt(yearMatch[1], 10);
+        if (parsedYear >= 1800 && parsedYear <= new Date().getFullYear() + 1) {
+          yearBuilt = parsedYear;
+        }
+      }
+
+      // Extract Lot Size
+      const lotMatch = searchResults.match(/(?:lot\s*(?:size|area)?\s*(?:of|:)?\s*)?([\d,.]+\s*(?:acres?|sq\.?\s*ft\.?\s*lot|sqft\s*lot))/i);
+      if (lotMatch) {
+        lotSize = lotMatch[1].replace(/\s*lot$/i, '').trim();
+      }
+
+      // Extract Stories
+      const storyMatch = searchResults.match(/\b(1|2|3|4|one|two|three|single)\s*-?\s*stor(?:y|ies)\b/i);
+      if (storyMatch) {
+        const rawStory = storyMatch[1].toLowerCase();
+        if (rawStory === '1' || rawStory === 'one' || rawStory === 'single') stories = '1';
+        else if (rawStory === '2' || rawStory === 'two') stories = '2';
+        else stories = '3_plus';
+      }
+
+      // Extract Garage capacity & attached/detached
+      const garageCountMatch = searchResults.match(/\b(\d)\s*-?\s*car\s*(?:attached|detached)?\s*garage\b/i)
+        || searchResults.match(/garage\s*(?:spaces?|capacity)?\s*:?\s*(\d)\b/i);
+      if (garageCountMatch) {
+        const gNum = parseInt(garageCountMatch[1], 10);
+        if (gNum === 0) garage = 'none';
+        else if (gNum === 1) garage = '1_car';
+        else if (gNum === 2) garage = '2_car';
+        else if (gNum >= 3) garage = '3_plus_car';
+      }
+      if (/\battached\s+(?:\d\s*-?\s*car\s+)?garage\b/i.test(searchResults)) {
+        garageAttached = 'yes';
+      } else if (/\bdetached\s+(?:\d\s*-?\s*car\s+)?garage\b/i.test(searchResults)) {
+        garageAttached = 'no';
+      }
+
+      // Extract home type (mapped to v2 householdSchema enums)
       const lower = searchResults.toLowerCase();
       if (lower.includes('townhouse') || lower.includes('townhome')) {
         dwellingType = 'townhouse';
-      } else if (lower.includes('condo') || lower.includes('condominium') || lower.includes('apartment')) {
+        homeType = 'townhome';
+      } else if (lower.includes('condo') || lower.includes('condominium')) {
         dwellingType = 'apartment';
-      } else if (lower.includes('multi-family') || lower.includes('duplex') || lower.includes('triplex') || sqFt > 3200) {
-        dwellingType = 'large_estate';
+        homeType = 'condo';
+      } else if (lower.includes('apartment')) {
+        dwellingType = 'apartment';
+        homeType = 'apartment';
+      } else if (lower.includes('mobile home') || lower.includes('manufactured home')) {
+        dwellingType = 'mobile_home';
+        homeType = 'mobile_home';
+      } else if (lower.includes('multi-family') || lower.includes('duplex') || lower.includes('triplex') || lower.includes('fourplex')) {
+        dwellingType = 'multi_unit';
+        homeType = 'multi_unit';
       } else if (lower.includes('single family') || lower.includes('single-family')) {
         dwellingType = 'single_family';
+        homeType = 'single_family';
       }
     }
   } catch (err) {
@@ -2508,8 +2615,8 @@ async function resolvePropertyDetails(rawInput) {
   }
 
   // Auto-detect Utility Region
-  let utilityRegionId = 'pge_norcal';
-  let utilityName = 'PG&E (Northern & Central CA)';
+  let utilityRegionId = 'national_avg';
+  let utilityName = 'U.S. National Average Utility';
   const numZip = parseInt(zip, 10);
   if (state === 'CA') {
     if (numZip >= 95800 && numZip <= 95899) {
@@ -2528,13 +2635,10 @@ async function resolvePropertyDetails(rawInput) {
       utilityRegionId = 'pge_norcal';
       utilityName = 'PG&E (Northern & Central CA)';
     }
-  } else {
-    utilityRegionId = 'national_avg';
-    utilityName = 'U.S. National Average Utility';
   }
 
   // Neighborhood and local shopping hub intelligence
-  let neighborhood = `${city || 'Local Area'}, ${state}`;
+  let neighborhood = city && state ? `${city}, ${state}` : (city || state || '');
   let localHubs = 'Costco Wholesale, Trader Joe\'s, Safeway, Target, Local EV Superchargers';
   const cLower = city.toLowerCase();
   if (cLower.includes('san jose') || cLower.includes('santa clara') || cLower.includes('sunnyvale') || cLower.includes('cupertino') || cLower.includes('campbell') || cLower.includes('milpitas')) {
@@ -2554,24 +2658,11 @@ async function resolvePropertyDetails(rawInput) {
     localHubs = 'Costco (Morena Blvd & Gateway Center), Trader Joe\'s, Vons, Arco, SDG&E Power Your Drive EV hubs';
   }
 
-  // Additional specs: Year Built, Lot Size, County, Garage
-  let yearBuilt = 2004;
-  const yearMatch = searchResults.match(/(?:built in|year built|built)\s*:?\s*(\d{4})/i);
-  if (yearMatch && parseInt(yearMatch[1], 10) >= 1900 && parseInt(yearMatch[1], 10) <= 2026) {
-    yearBuilt = parseInt(yearMatch[1], 10);
+  let county = '';
+  if (searchResults) {
+    const countyMatch = searchResults.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+County)/i);
+    if (countyMatch) county = countyMatch[1].trim();
   }
-
-  let lotSize = '6,500 sq ft';
-  const lotMatch = searchResults.match(/([\d,.]+\s*(?:acres?|sq\s*ft(?:\s*lot)?|sqft\s*lot))/i);
-  if (lotMatch) lotSize = lotMatch[1].trim();
-
-  let county = `${city || 'Fresno'} County`;
-  const countyMatch = searchResults.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+County)/i);
-  if (countyMatch) county = countyMatch[1].trim();
-
-  let garage = 'Attached 2-Car Garage';
-  const garageMatch = searchResults.match(/(\d+\s*(?:car|garage|attached|detached)[^\.,\n]{0,25})/i);
-  if (garageMatch) garage = garageMatch[1].trim();
 
   return {
     success: true,
@@ -2586,11 +2677,14 @@ async function resolvePropertyDetails(rawInput) {
     bathrooms,
     sqFt,
     dwellingType,
-    estimatedValue: estimatedValue || (sqFt ? `${Math.round(sqFt * 495).toLocaleString()}` : ''),
+    homeType,
+    stories,
+    estimatedValue,
     yearBuilt,
     lotSize,
     county,
     garage,
+    garageAttached,
     zillowImportedAt: new Date().toISOString(),
     utilityRegionId,
     utilityName,

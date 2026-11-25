@@ -9,7 +9,9 @@ import {
   Car,
   Sparkles,
   Sun,
-  Info
+  Info,
+  Link2,
+  Loader2
 } from 'lucide-react';
 import {
   HOUSEHOLD_LABELS,
@@ -590,6 +592,15 @@ export default function HouseholdQuestionnaire({
   const [mode, setMode] = useState(initialMode);
   const [errors, setErrors] = useState({});
   const [savedNoticeVisible, setSavedNoticeVisible] = useState(false);
+  const [zillowLinkInput, setZillowLinkInput] = useState(profile?.zillowUrl || '');
+  const [zillowLoading, setZillowLoading] = useState(false);
+  const [zillowFeedback, setZillowFeedback] = useState(null); // { type: 'success' | 'error', text: string }
+
+  useEffect(() => {
+    if (profile?.zillowUrl && !zillowLinkInput) {
+      setZillowLinkInput(profile.zillowUrl);
+    }
+  }, [profile?.zillowUrl]);
 
   const visibleSections = useMemo(
     () => (singleSectionId ? [] : getVisibleSections(profile, mode)),
@@ -688,6 +699,87 @@ export default function HouseholdQuestionnaire({
   };
 
   const isPrefilled = (key) => Boolean(profile?.questionnaireMeta?.prefilledFields?.[key]);
+
+  const handlePullFromZillow = async () => {
+    const rawUrl = (zillowLinkInput || '').trim();
+    if (!rawUrl) {
+      setZillowFeedback({ type: 'error', text: 'Paste a Zillow listing link first.' });
+      return;
+    }
+    if (!/zillow\.com/i.test(rawUrl) && !/^https?:\/\//i.test(rawUrl)) {
+      setZillowFeedback({
+        type: 'error',
+        text: 'Please enter a valid Zillow URL (e.g. https://www.zillow.com/homedetails/...).'
+      });
+      return;
+    }
+
+    setZillowLoading(true);
+    setZillowFeedback(null);
+    try {
+      const res = await fetch('/api/household/zillow-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: rawUrl })
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Could not pull home details from that Zillow link.');
+      }
+
+      const patch = {
+        zillowUrl: rawUrl,
+        zillowImportedAt: data.zillowImportedAt || new Date().toISOString()
+      };
+      const pulledPrefillMap = { ...(profile?.questionnaireMeta?.prefilledFields || {}) };
+      const pulledSummary = [];
+
+      const applyPulled = (key, val, label) => {
+        if (val !== null && val !== undefined && val !== '') {
+          patch[key] = val;
+          pulledPrefillMap[key] = true;
+          if (label) pulledSummary.push(label);
+        }
+      };
+
+      applyPulled('address', data.address, data.address ? 'address' : null);
+      if (data.street) patch.street = data.street;
+      applyPulled('city', data.city, null);
+      applyPulled('state', data.state, null);
+      applyPulled('zip', data.zip, data.zip ? `ZIP ${data.zip}` : null);
+      applyPulled('homeType', data.homeType, data.homeType ? formatHouseholdLabel('homeType', data.homeType) : null);
+      applyPulled('bedrooms', data.bedrooms, data.bedrooms != null ? `${data.bedrooms} bed` : null);
+      applyPulled('bathrooms', data.bathrooms, data.bathrooms != null ? `${data.bathrooms} bath` : null);
+      applyPulled('sqFt', data.sqFt, data.sqFt ? `${Number(data.sqFt).toLocaleString()} sq ft` : null);
+      applyPulled('yearBuilt', data.yearBuilt, data.yearBuilt ? `built ${data.yearBuilt}` : null);
+      applyPulled('stories', data.stories, null);
+      applyPulled('lotSize', data.lotSize, data.lotSize ? `lot ${data.lotSize}` : null);
+      applyPulled('garage', data.garage, null);
+      applyPulled('garageAttached', data.garageAttached, null);
+      if (data.estimatedValue) patch.estimatedValue = data.estimatedValue;
+
+      commitProfileUpdate(patch, { prefilledFields: pulledPrefillMap });
+
+      if (pulledSummary.length > 0) {
+        setZillowFeedback({
+          type: 'success',
+          text: `Pulled ${pulledSummary.join(', ')} from Zillow. Review and confirm the pre-filled fields below.`
+        });
+      } else {
+        setZillowFeedback({
+          type: 'error',
+          text: 'Saved the Zillow link, but could not automatically extract specs from this listing. You can enter them below.'
+        });
+      }
+    } catch (err) {
+      setZillowFeedback({
+        type: 'error',
+        text: err?.message || 'Failed to pull home information from Zillow.'
+      });
+    } finally {
+      setZillowLoading(false);
+    }
+  };
 
   const localUtilities = useMemo(
     () => getLocalUtilitySuggestions(profile),
@@ -944,6 +1036,77 @@ export default function HouseholdQuestionnaire({
         {/* ---- SCREEN 1: HOME BASICS — LOCATION & OWNERSHIP ---- */}
         {currentScreen.id === 'home_basics_location' && (
           <div className="flex flex-col gap-6">
+            {/* Optional Zillow Auto-Fill Card */}
+            <div className="rounded-[12px] border border-[var(--line)] bg-[var(--surface-2)] p-4 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <label
+                  htmlFor="hh_zillow_url"
+                  className="text-[14px] sm:text-[15px] font-semibold text-[var(--ink)] flex items-center gap-2"
+                >
+                  <Link2 className="w-4 h-4 text-[var(--brand)] shrink-0" />
+                  <span>Auto-fill from Zillow link</span>
+                  <span className="text-[12px] font-medium text-[var(--muted)]">(Optional)</span>
+                </label>
+              </div>
+              <p className="text-[13px] font-medium text-[var(--muted)] leading-snug">
+                Paste your home&apos;s Zillow URL to automatically pull the address, beds, baths, square footage, year built, and lot details.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  id="hh_zillow_url"
+                  type="url"
+                  value={zillowLinkInput}
+                  onChange={(e) => {
+                    setZillowLinkInput(e.target.value);
+                    if (zillowFeedback) setZillowFeedback(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handlePullFromZillow();
+                    }
+                  }}
+                  placeholder="https://www.zillow.com/homedetails/..."
+                  disabled={zillowLoading}
+                  className="flex-1 min-h-[44px] px-3.5 py-2.5 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] text-[14px] font-medium text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:border-[var(--brand)] disabled:opacity-60"
+                />
+                <button
+                  type="button"
+                  onClick={handlePullFromZillow}
+                  disabled={zillowLoading || !zillowLinkInput.trim()}
+                  className="min-h-[44px] px-4 py-2.5 rounded-[10px] bg-[var(--brand)] text-white text-[14px] font-semibold hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer inline-flex items-center justify-center gap-2 shrink-0"
+                >
+                  {zillowLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Pulling info...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Pull info</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              {zillowFeedback && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className={`text-[13px] font-semibold flex items-start gap-1.5 ${
+                    zillowFeedback.type === 'success' ? 'text-[var(--success)]' : 'text-[var(--danger)]'
+                  }`}
+                >
+                  {zillowFeedback.type === 'success' ? (
+                    <Check className="w-4 h-4 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  )}
+                  <span>{zillowFeedback.text}</span>
+                </p>
+              )}
+            </div>
+
             <TextField
               id="hh_address"
               label="Home street address"

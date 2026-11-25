@@ -334,6 +334,8 @@ export function createEmptyV2Profile() {
     shareSummaryWithAi: false,
 
     // 1. Home basics
+    zillowUrl: '',
+    zillowImportedAt: null,
     address: '',
     street: '',
     city: '',
