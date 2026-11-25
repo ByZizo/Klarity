@@ -20,7 +20,58 @@ marked.setOptions({
 export const CURRENT_APP_VERSION =
   typeof __KLARITY_APP_VERSION__ !== 'undefined' ? __KLARITY_APP_VERSION__ : '3.12.75';
 
+export const WHATS_NEW_PREFS_KEY = 'klarity_whats_new_prefs';
+export const WHATS_NEW_PREFS_UPDATED_EVENT = 'klarity:whats-new-prefs-updated';
+
+export const DEFAULT_WHATS_NEW_PREFS = {
+  mode: 'curated', // 'curated' | 'summary' | 'full'
+  includeMinorFixes: false
+};
+
+export function loadWhatsNewPrefs() {
+  try {
+    const raw = localStorage.getItem(WHATS_NEW_PREFS_KEY);
+    if (!raw) return { ...DEFAULT_WHATS_NEW_PREFS };
+    const parsed = JSON.parse(raw);
+    const mode = ['curated', 'summary', 'full'].includes(parsed?.mode)
+      ? parsed.mode
+      : DEFAULT_WHATS_NEW_PREFS.mode;
+    return {
+      mode,
+      includeMinorFixes: Boolean(parsed?.includeMinorFixes)
+    };
+  } catch {
+    return { ...DEFAULT_WHATS_NEW_PREFS };
+  }
+}
+
+export function saveWhatsNewPrefs(nextPrefs) {
+  const normalized = {
+    mode: ['curated', 'summary', 'full'].includes(nextPrefs?.mode)
+      ? nextPrefs.mode
+      : DEFAULT_WHATS_NEW_PREFS.mode,
+    includeMinorFixes: Boolean(nextPrefs?.includeMinorFixes)
+  };
+  try {
+    localStorage.setItem(WHATS_NEW_PREFS_KEY, JSON.stringify(normalized));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(WHATS_NEW_PREFS_UPDATED_EVENT, { detail: normalized }));
+    }
+  } catch {}
+  return normalized;
+}
+
 export const LATEST_RELEASE_NOTES = [
+  {
+    version: 'v3.12.78',
+    title: 'Browser Customization, Zillow Home Auto-Fill & Release Notes Control',
+    highlights: [
+      'Upgraded Browser Homepage Customize Page with solid colors, gradients, compressed image wallpapers, presets, and Financial Glance widget',
+      'Added Zillow link auto-fill on the Home Basics confirmation screen',
+      'Added automatic website login detection with Save/Update Password to Klarity Vault prompt',
+      'Added configurable What\'s New popup detail modes (Curated Highlights, Summary Only, Full Changelog)'
+    ]
+  },
   {
     version: 'v3.12.61',
     title: 'Browser Downloads Manager, Unified Quick Notes & Support Tab',
@@ -179,7 +230,15 @@ export function formatCleanUpdateMessage(_rawMsg, rawVer) {
 
 export function isActualBugFix(str) {
   const s = String(str || '').toLowerCase();
-  return /\b(bug|bugfix|crash|crashes|crashed|crashing|error|errors|exception|exceptions|fail|fails|failed|failure|broken|unhandled|regression|freeze|freezing|not loading|cannot delete|unable to|prevent crash|glitch)\b/i.test(s);
+  return /^(?:fix|bugfix)(?:\([^)]*\))?:/i.test(s) ||
+    /\b(bug|bugfix|crash|crashes|crashed|crashing|error|errors|exception|exceptions|fail|fails|failed|failure|broken|unhandled|regression|freeze|freezing|not loading|cannot delete|unable to|prevent crash|glitch)\b/i.test(s);
+}
+
+export function isInternalOrNonUserFacing(str) {
+  const s = String(str || '').trim().toLowerCase();
+  return /^(?:chore|refactor|ci|build|docs|test|style|perf)(?:\([^)]*\))?:/i.test(s) ||
+    /^merge\s+(?:branch|pull\s+request)/i.test(s) ||
+    /\b(bump version|version bump|lockfile|package-lock|eslint|oxlint|linting|internal refactor|code cleanup|dead code|workflow|github actions|telemetry|dev dependency|dependencies)\b/i.test(s);
 }
 
 export function isMovementOrMinorTweak(str) {
@@ -187,12 +246,24 @@ export function isMovementOrMinorTweak(str) {
   return /\b(move|moving|moved|reposition|repositioned|repositioning|reorder|reordered|reordering|swap|swapped|swapping|switch|switched|switching|places|left side|right side|layout|align|alignment|spacing|padding|margin|tweak|tweaks|minor|polish|clean up|cleanup|refactor|cosmetic|styling|restyle|label|wording|subtle)\b/i.test(s);
 }
 
-export function formatWhatsNewHighlights(changes) {
+function cleanReleaseNoteLine(raw) {
+  let text = String(raw || '').trim();
+  text = text.replace(/^release\s+v?\d+\.\d+\.\d+\s*[:—-]\s*/i, '');
+  text = text.replace(/\s*\(v?\d+\.\d+\.\d+\)\s*$/i, '');
+  return formatUserFacingReleaseNote(text);
+}
+
+export function formatWhatsNewHighlights(changes, options = {}) {
+  const mode = options?.mode || 'curated';
+  const includeMinorFixes = Boolean(options?.includeMinorFixes);
+
   let list = [];
   if (Array.isArray(changes)) {
     list = changes;
   } else if (changes && typeof changes === 'object') {
-    if (Array.isArray(changes.changes)) {
+    if (Array.isArray(changes.rawChanges) && changes.rawChanges.length > 0) {
+      list = changes.rawChanges;
+    } else if (Array.isArray(changes.changes) && changes.changes.length > 0) {
       list = changes.changes;
     } else if (typeof changes.message === 'string' && changes.message.trim()) {
       list = [changes.message];
@@ -201,6 +272,29 @@ export function formatWhatsNewHighlights(changes) {
     }
   }
 
+  if (mode === 'summary') {
+    return [];
+  }
+
+  if (mode === 'full') {
+    const allItems = [];
+    for (const raw of list) {
+      if (typeof raw !== 'string') continue;
+      const clean = raw.trim();
+      if (!clean || /^merge\s+(?:branch|pull\s+request)/i.test(clean)) continue;
+      const formatted = cleanReleaseNoteLine(clean);
+      if (formatted && !allItems.some((e) => e.toLowerCase() === formatted.toLowerCase())) {
+        allItems.push(formatted);
+      }
+    }
+    if (allItems.length > 0) return allItems;
+    if (typeof LATEST_RELEASE_NOTES !== 'undefined' && LATEST_RELEASE_NOTES.length > 0) {
+      return LATEST_RELEASE_NOTES[0].highlights;
+    }
+    return ['General improvements and stability fixes'];
+  }
+
+  // 'curated' mode: high-signal user-facing features by default; filter internal refactors & minor fixes
   const items = [];
   let hasActualBug = false;
   let hasMinorFix = false;
@@ -210,37 +304,70 @@ export function formatWhatsNewHighlights(changes) {
     const clean = raw.trim();
     if (!clean) continue;
 
+    if (isInternalOrNonUserFacing(clean)) {
+      continue;
+    }
     if (isActualBugFix(clean)) {
       hasActualBug = true;
-    } else if (isMovementOrMinorTweak(clean)) {
+      continue;
+    }
+    if (isMovementOrMinorTweak(clean)) {
       hasMinorFix = true;
-    } else {
-      const formatted = formatUserFacingReleaseNote(clean);
-      if (formatted && !items.some(existing => existing.toLowerCase() === formatted.toLowerCase())) {
-        items.push(formatted);
-      }
+      continue;
+    }
+
+    const formatted = cleanReleaseNoteLine(clean);
+    if (formatted && !items.some((existing) => existing.toLowerCase() === formatted.toLowerCase())) {
+      items.push(formatted);
     }
   }
 
-  // Keep 'Bug fixes' strictly for things that were actually causing bugs
-  if (hasActualBug && !items.some(i => i.toLowerCase() === 'bug fixes')) {
-    items.push('Bug fixes');
+  if (includeMinorFixes) {
+    if (hasActualBug && !items.some((i) => i.toLowerCase() === 'bug fixes')) {
+      items.push('Bug fixes and stability improvements');
+    }
+    if (hasMinorFix && !items.some((i) => i.toLowerCase().includes('minor'))) {
+      items.push('Minor UI polish and refinements');
+    }
   }
 
-  // Small changes that don't affect the app on a major scale are known as 'Minor fixes'
-  if (hasMinorFix && !items.some(i => i.toLowerCase() === 'minor fixes')) {
-    items.push('Minor fixes');
+  return items.slice(0, 5);
+}
+
+export function buildWhatsNewPresentation(whatsNewData, prefs = DEFAULT_WHATS_NEW_PREFS) {
+  const mode = prefs?.mode || 'curated';
+  const includeMinorFixes = Boolean(prefs?.includeMinorFixes);
+  const versionLabel = formatVersionString(whatsNewData?.version || CURRENT_APP_VERSION);
+  const summaryText = `Klarity has been updated to ${versionLabel} with general improvements and stability fixes.`;
+
+  if (mode === 'summary') {
+    return {
+      mode,
+      versionLabel,
+      isSummaryOnly: true,
+      summaryText,
+      items: []
+    };
   }
 
-  if (items.length > 0) {
-    return items.slice(0, 4);
+  const items = formatWhatsNewHighlights(whatsNewData, { mode, includeMinorFixes });
+  if (items.length === 0) {
+    return {
+      mode,
+      versionLabel,
+      isSummaryOnly: true,
+      summaryText,
+      items: []
+    };
   }
 
-  if (typeof LATEST_RELEASE_NOTES !== 'undefined' && LATEST_RELEASE_NOTES.length > 0) {
-    return LATEST_RELEASE_NOTES[0].highlights.slice(0, 4);
-  }
-
-  return ['Minor fixes and improvements'];
+  return {
+    mode,
+    versionLabel,
+    isSummaryOnly: false,
+    summaryText,
+    items
+  };
 }
 
 // Universal Subpage Header: Centered title, leveled Back to Overview, and 3-dot dropdown actions menu

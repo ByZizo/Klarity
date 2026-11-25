@@ -278,12 +278,17 @@ function saveWhatsNewData(changes, versionOrSha, explicitVersion) {
     if (!ver || ver === '1.8.10') ver = '3.12.14';
     const cleanVer = ver.startsWith('v') ? ver.slice(1) : ver;
 
+    const rawList = Array.isArray(changes)
+      ? changes.filter((c) => typeof c === 'string' && c.trim())
+      : (changes && Array.isArray(changes.changes) ? changes.changes : []);
+
     const data = {
       shown: false,
       version: cleanVer,
       commitSha: versionOrSha || cleanVer,
       title: "What's New in Klarity",
       changes: formatWhatsNewHighlights(changes),
+      rawChanges: rawList,
       updatedAt: Date.now()
     };
     fs.writeFileSync(whatsNewFile, JSON.stringify(data, null, 2), 'utf8');

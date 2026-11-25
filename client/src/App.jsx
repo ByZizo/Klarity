@@ -162,7 +162,10 @@ import {
   formatVersionString,
   formatWhatsNewHighlights,
   formatUserFacingReleaseNote,
-  formatCleanUpdateMessage
+  formatCleanUpdateMessage,
+  loadWhatsNewPrefs,
+  buildWhatsNewPresentation,
+  WHATS_NEW_PREFS_UPDATED_EVENT
 } from './components/SharedAppComponents';
 import { Button, Card, Pill, Toast, ConfirmDialog, Skeleton } from './components/ui';
 import { OverviewPage } from './pages/OverviewPage';
@@ -304,6 +307,27 @@ function KlarityApp() {
   const [dismissedBannerUpdateKey, setDismissedBannerUpdateKey] = useState('');
   const [whatsNewData, setWhatsNewData] = useState(null);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
+  const [whatsNewPrefs, setWhatsNewPrefs] = useState(() => loadWhatsNewPrefs());
+
+  useEffect(() => {
+    const syncWhatsNewPrefs = (e) => {
+      if (e?.detail) setWhatsNewPrefs(e.detail);
+      else setWhatsNewPrefs(loadWhatsNewPrefs());
+    };
+    window.addEventListener(WHATS_NEW_PREFS_UPDATED_EVENT, syncWhatsNewPrefs);
+    return () => window.removeEventListener(WHATS_NEW_PREFS_UPDATED_EVENT, syncWhatsNewPrefs);
+  }, []);
+
+  useEffect(() => {
+    if (!isWhatsNewOpen) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        handleDismissWhatsNew();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isWhatsNewOpen]);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
   const [isCheckingUpdateInSettings, setIsCheckingUpdateInSettings] = useState(false);
@@ -8035,63 +8059,88 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
       )}
 
       {/* 14. What's New Modal */}
-      {isWhatsNewOpen && whatsNewData && (
-        <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="whats-new-modal-title"
-        >
-          <Card className="max-w-md w-full p-6 flex flex-col gap-4 shadow-xl">
-            {/* Centered Title & Version Pill */}
-            <div className="flex items-center justify-center gap-2">
-              <h3 id="whats-new-modal-title" className="font-serif text-[20px] font-semibold text-[var(--ink)] text-center">
-                What&apos;s new in Klarity
-              </h3>
-              <Pill variant="success">
-                {formatVersionString ? formatVersionString(whatsNewData.version || CURRENT_APP_VERSION) : CURRENT_APP_VERSION}
-              </Pill>
-            </div>
+      {isWhatsNewOpen && whatsNewData && (() => {
+        const presentation = buildWhatsNewPresentation(whatsNewData, whatsNewPrefs);
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="whats-new-modal-title"
+            onClick={handleDismissWhatsNew}
+          >
+            <Card
+              className="max-w-md w-full p-5 sm:p-6 flex flex-col gap-4 shadow-xl font-sans"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header: Title & Version Pill */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <h3
+                    id="whats-new-modal-title"
+                    className="text-[18px] font-semibold tracking-tight text-[var(--ink)] truncate"
+                  >
+                    What&apos;s new in Klarity
+                  </h3>
+                  <Pill variant="success">{presentation.versionLabel}</Pill>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDismissWhatsNew}
+                  aria-label="Close What's New"
+                  className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] cursor-pointer shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
-            {/* End-to-end divider line */}
-            <div className="-mx-6 border-b border-[var(--line)]" />
+              <div className="-mx-5 sm:-mx-6 border-b border-[var(--line)]" />
 
-            {/* Updated Items Bullet List */}
-            <ul className="list-disc list-inside space-y-2 text-[15px] font-medium text-[var(--ink)] py-1">
-              {formatWhatsNewHighlights(whatsNewData.changes || whatsNewData)
-                .slice(0, 4)
-                .map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
-            </ul>
+              {/* Body: Summary Only OR Scrollable Highlights List */}
+              {presentation.isSummaryOnly ? (
+                <p className="text-[14px] font-medium text-[var(--ink)] leading-relaxed py-1">
+                  {presentation.summaryText}
+                </p>
+              ) : (
+                <div className="max-h-[42vh] overflow-y-auto pr-1 scrollbar-thin">
+                  <ul className="space-y-2 text-[14px] font-medium text-[var(--ink)] leading-relaxed">
+                    {presentation.items.map((line, i) => (
+                      <li key={i} className="flex items-start gap-2.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand)] mt-2 shrink-0" />
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
-            {/* End-to-end divider line */}
-            <div className="-mx-6 border-b border-[var(--line)]" />
+              <div className="-mx-5 sm:-mx-6 border-b border-[var(--line)]" />
 
-            {/* Faded Informational Sentence */}
-            <p className="text-xs text-[var(--muted)] text-center leading-relaxed">
-              You can view complete update details in the About page in Settings.
-            </p>
+              <p className="text-[12px] text-[var(--muted)] leading-relaxed">
+                Full release history and popup detail preferences are available in <span className="font-semibold text-[var(--ink)]">Settings → About</span>.
+              </p>
 
-            {/* Action Buttons: About (Bottom-Left), Got it (Bottom-Right) */}
-            <div className="flex items-center justify-between pt-1">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  handleDismissWhatsNew();
-                  setSettingsActiveTab('about');
-                  setIsSettingsOpen(true);
-                }}
-              >
-                About
-              </Button>
-              <Button variant="primary" onClick={handleDismissWhatsNew}>
-                Got it
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
+              {/* Action Buttons: About (Bottom-Left), Got it (Bottom-Right) */}
+              <div className="flex items-center justify-between pt-0.5">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    handleDismissWhatsNew();
+                    setSettingsActiveTab('about');
+                    setIsSettingsOpen(true);
+                  }}
+                >
+                  About
+                </Button>
+                <Button variant="primary" size="sm" onClick={handleDismissWhatsNew}>
+                  Got it
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
     </div>
   );
 }

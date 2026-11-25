@@ -39,6 +39,9 @@ import {
   formatCleanUpdateMessage,
   formatWhatsNewHighlights,
   formatVersionString,
+  loadWhatsNewPrefs,
+  saveWhatsNewPrefs,
+  buildWhatsNewPresentation,
   CURRENT_APP_VERSION,
   LATEST_RELEASE_NOTES
 } from '../components/SharedAppComponents';
@@ -190,6 +193,7 @@ export function SettingsPage({
   const [confirmDisconnectBank, setConfirmDisconnectBank] = useState(null);
   const [confirmClearMemory, setConfirmClearMemory] = useState(false);
   const [showFullReleaseNotes, setShowFullReleaseNotes] = useState(false);
+  const [whatsNewPrefs, setWhatsNewPrefs] = useState(() => loadWhatsNewPrefs());
 
   // Browser Settings local states
   const [browserAdBlockStats, setBrowserAdBlockStats] = useState({ enabled: true, adsBlockedCount: 0 });
@@ -1639,6 +1643,100 @@ export function SettingsPage({
                       )}
                     </div>
                   </div>
+                </Card>
+
+                {/* What's New Popup Detail Preferences */}
+                <Card className="p-5 flex flex-col gap-3.5">
+                  <div>
+                    <h4 className="text-[15px] font-semibold text-[var(--ink)]">Post-Update &ldquo;What&apos;s New&rdquo; Popup</h4>
+                    <p className="text-[12.5px] font-medium text-[var(--muted)] mt-0.5">
+                      Control how much detail appears in the popup after an update. Minor bugfixes and internal refactors are hidden by default.
+                    </p>
+                  </div>
+                  {(() => {
+                    const currentPrefs = whatsNewPrefs;
+                    const updatePopupPrefs = (patch) => {
+                      const saved = saveWhatsNewPrefs({ ...currentPrefs, ...patch });
+                      setWhatsNewPrefs(saved);
+                    };
+                    const modeOptions = [
+                      { id: 'curated', label: 'Curated Highlights', desc: 'Major user-facing changes only' },
+                      { id: 'summary', label: 'Summary Only', desc: 'Single clean update confirmation line' },
+                      { id: 'full', label: 'Full Changelog', desc: 'Include all commits & fixes' }
+                    ];
+                    const previewData = buildWhatsNewPresentation(
+                      {
+                        version: desktopAppInfo.version || CURRENT_APP_VERSION,
+                        changes:
+                          desktopAppInfo.updateStatus?.recentChanges ||
+                          LATEST_RELEASE_NOTES[0]?.highlights ||
+                          []
+                      },
+                      currentPrefs
+                    );
+                    return (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          {modeOptions.map((opt) => {
+                            const active = currentPrefs.mode === opt.id;
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => updatePopupPrefs({ mode: opt.id })}
+                                className={`p-2.5 rounded-xl border text-left transition-colors cursor-pointer ${
+                                  active
+                                    ? 'bg-[var(--brand-soft)] border-[var(--brand)]'
+                                    : 'bg-[var(--surface-subtle)] border-[var(--line)] hover:border-[var(--brand)]/40'
+                                }`}
+                              >
+                                <div className={`text-[12.5px] font-semibold ${active ? 'text-[var(--brand)]' : 'text-[var(--ink)]'}`}>
+                                  {opt.label}
+                                </div>
+                                <div className="text-[11px] text-[var(--muted)] mt-0.5 leading-snug">
+                                  {opt.desc}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {currentPrefs.mode === 'curated' && (
+                          <label className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] cursor-pointer">
+                            <div>
+                              <div className="text-[12.5px] font-semibold text-[var(--ink)]">Include minor bugfixes &amp; UI polish</div>
+                              <div className="text-[11px] text-[var(--muted)]">
+                                Off by default so minor patches don&apos;t clutter the popup
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(currentPrefs.includeMinorFixes)}
+                              onChange={(e) => updatePopupPrefs({ includeMinorFixes: e.target.checked })}
+                              className="accent-[var(--brand)] w-4 h-4 cursor-pointer shrink-0"
+                            />
+                          </label>
+                        )}
+
+                        <div className="rounded-xl bg-[var(--surface-subtle)]/70 border border-[var(--line)] px-3 py-2.5">
+                          <div className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1">
+                            Popup Preview ({previewData.versionLabel})
+                          </div>
+                          {previewData.isSummaryOnly ? (
+                            <p className="text-[12.5px] font-medium text-[var(--ink)]">
+                              {previewData.summaryText}
+                            </p>
+                          ) : (
+                            <ul className="list-disc list-inside space-y-1 text-[12.5px] font-medium text-[var(--ink)]">
+                              {previewData.items.slice(0, 3).map((line, idx) => (
+                                <li key={idx}>{line}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </Card>
 
                 {/* Concise 3-line What's New with link to full notes */}

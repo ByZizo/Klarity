@@ -3800,7 +3800,7 @@ export function BrowserPage({
                         browserHistory={browserHistory}
                         recentSearchesEnabled={browserSettings?.recentSearchesEnabled !== false}
                         historyEnabled={browserSettings?.historyEnabled !== false}
-                        financialContext={financialContext}
+                        financialContext={advisorContext}
                         noteSections={noteSections}
                         activeNoteSectionId={activeSectionId}
                         onSelectNoteSection={(secId) => setActiveSectionId(secId)}
@@ -3823,7 +3823,7 @@ export function BrowserPage({
               browserHistory={browserHistory}
               recentSearchesEnabled={browserSettings?.recentSearchesEnabled !== false}
               historyEnabled={browserSettings?.historyEnabled !== false}
-              financialContext={financialContext}
+              financialContext={advisorContext}
               noteSections={noteSections}
               activeNoteSectionId={activeSectionId}
               onSelectNoteSection={(secId) => setActiveSectionId(secId)}
