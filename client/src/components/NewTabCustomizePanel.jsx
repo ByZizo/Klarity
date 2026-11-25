@@ -3,6 +3,7 @@ import {
   Check,
   Clock,
   Grid,
+  History,
   Image as ImageIcon,
   LayoutGrid,
   Palette,
@@ -18,7 +19,6 @@ import {
 import {
   DEFAULT_NEWTAB_PREFS,
   NEWTAB_GRADIENT_PRESETS,
-  NEWTAB_LAYOUT_PRESETS,
   NEWTAB_SOLID_PRESETS
 } from '../utils/browserSettings';
 
@@ -139,13 +139,6 @@ export function NewTabCustomizePanel({
     }
   };
 
-  const handleApplyPreset = (preset) => {
-    updatePrefs(preset.patch);
-    if (typeof preset.patch.showNotes === 'boolean' && typeof onToggleHomepageNotes === 'function') {
-      onToggleHomepageNotes(preset.patch.showNotes);
-    }
-  };
-
   const handleResetDefaults = () => {
     const reset = {
       ...DEFAULT_NEWTAB_PREFS,
@@ -180,12 +173,6 @@ export function NewTabCustomizePanel({
     }
   };
 
-  const isPresetActive = (preset) =>
-    Object.entries(preset.patch).every(([k, v]) => {
-      if (k === 'showNotes') return isNotesEnabled === v;
-      return prefs[k] === v;
-    });
-
   const customHexValue = /^#[0-9a-f]{6}$/i.test(prefs.solidColor || '')
     ? prefs.solidColor
     : '#1e293b';
@@ -208,33 +195,6 @@ export function NewTabCustomizePanel({
         >
           <X className="w-4 h-4" />
         </button>
-      </div>
-
-      {/* Quick Presets Strip */}
-      <div className="px-4 py-2.5 bg-[var(--surface-subtle)]/60 border-b border-[var(--line)] shrink-0">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1.5">
-          Quick Presets
-        </div>
-        <div className="grid grid-cols-3 gap-1.5">
-          {NEWTAB_LAYOUT_PRESETS.map((preset) => {
-            const active = isPresetActive(preset);
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => handleApplyPreset(preset)}
-                title={preset.description}
-                className={`px-2 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors cursor-pointer ${
-                  active
-                    ? 'bg-[var(--brand-soft)] border-[var(--brand)] text-[var(--brand)]'
-                    : 'bg-[var(--surface)] border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)] hover:border-[var(--brand)]/40'
-                }`}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* Section Tabs */}
@@ -342,7 +302,7 @@ export function NewTabCustomizePanel({
 
               {/* Gradient Presets */}
               {prefs.backgroundStyle === 'gradient' && (
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-3 grid grid-cols-3 gap-2">
                   {NEWTAB_GRADIENT_PRESETS.map((grad) => {
                     const active = (prefs.gradientPreset || 'aurora') === grad.id;
                     return (
@@ -350,20 +310,14 @@ export function NewTabCustomizePanel({
                         key={grad.id}
                         type="button"
                         onClick={() => updatePrefs({ gradientPreset: grad.id })}
-                        className={`relative h-12 rounded-xl border overflow-hidden flex items-end p-2 transition-all cursor-pointer ${
+                        aria-label={grad.label}
+                        className={`relative h-11 rounded-xl border overflow-hidden transition-all cursor-pointer ${
                           active
                             ? 'border-[var(--brand)] ring-2 ring-[var(--brand)]/30'
                             : 'border-[var(--line)] hover:border-[var(--brand)]/50'
                         }`}
                         style={{ background: grad.css }}
                       >
-                        <span
-                          className={`text-[11px] font-semibold leading-none ${
-                            grad.isDark ? 'text-white drop-shadow-xs' : 'text-slate-900'
-                          }`}
-                        >
-                          {grad.label}
-                        </span>
                         {active && (
                           <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-[var(--brand)] text-white flex items-center justify-center shadow-xs">
                             <Check className="w-2.5 h-2.5" />
@@ -515,7 +469,7 @@ export function NewTabCustomizePanel({
               )}
             </div>
 
-            {/* Quick Links */}
+            {/* Quick Links & Top Visited */}
             <div className="p-2.5 rounded-xl bg-[var(--surface-subtle)]/70 border border-[var(--line)] space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-[var(--ink)] flex items-center gap-1.5">
@@ -528,8 +482,19 @@ export function NewTabCustomizePanel({
                   label="Show quick links"
                 />
               </div>
-              {prefs.showQuickLinks !== false && (
-                <div className="space-y-2 pt-0.5">
+              <div className="flex items-center justify-between pt-1 border-t border-[var(--line)]/70">
+                <span className="font-semibold text-[var(--ink)] flex items-center gap-1.5">
+                  <History className="w-3.5 h-3.5 text-[var(--brand)]" />
+                  Top Visited Sites
+                </span>
+                <ToggleSwitch
+                  checked={Boolean(prefs.showTopVisited || prefs.quickLinksSource === 'top_visited')}
+                  onChange={(val) => updatePrefs({ showTopVisited: val, quickLinksSource: 'custom' })}
+                  label="Show top visited sites"
+                />
+              </div>
+              {(prefs.showQuickLinks !== false || Boolean(prefs.showTopVisited || prefs.quickLinksSource === 'top_visited')) && (
+                <div className="space-y-2 pt-1 border-t border-[var(--line)]/70">
                   <div>
                     <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1">
                       Columns per Row
@@ -556,20 +521,6 @@ export function NewTabCustomizePanel({
                       options={[
                         { value: 'card', label: 'Icon + Title' },
                         { value: 'icon_only', label: 'Icon Only' }
-                      ]}
-                    />
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1">
-                      Shortcut Source
-                    </div>
-                    <SegmentedButtons
-                      cols={2}
-                      value={prefs.quickLinksSource || 'custom'}
-                      onChange={(val) => updatePrefs({ quickLinksSource: val })}
-                      options={[
-                        { value: 'custom', label: 'Pinned Shortcuts' },
-                        { value: 'top_visited', label: 'Top Visited' }
                       ]}
                     />
                   </div>

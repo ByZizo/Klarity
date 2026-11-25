@@ -260,11 +260,11 @@ export const DEFAULT_NEWTAB_PREFS = {
   showSearchBar: true,
   searchBarStyle: 'standard', // 'standard' | 'compact'
 
-  // Quick links (Speed Dial)
+  // Quick links (Speed Dial) & Top Visited
   showQuickLinks: true,
+  showTopVisited: false,
   quickLinksColumns: 6, // 4 | 6 | 8
   quickLinksStyle: 'card', // 'card' | 'icon_only'
-  quickLinksSource: 'custom', // 'custom' | 'top_visited'
 
   // Clock & greeting
   showClock: true,

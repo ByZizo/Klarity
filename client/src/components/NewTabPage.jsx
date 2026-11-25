@@ -631,9 +631,12 @@ export function NewTabPage({
     ? `${baseGreeting}, ${prefs.greetingName.trim()}`
     : baseGreeting;
 
-  // Derive Top Visited shortcuts from Browser History when quickLinksSource === 'top_visited'
+  const showQuickLinksWidget = prefs.showQuickLinks !== false;
+  const showTopVisitedWidget = Boolean(prefs.showTopVisited || prefs.quickLinksSource === 'top_visited');
+
+  // Derive Top Visited shortcuts from Browser History when showTopVisitedWidget is enabled
   const topVisitedShortcuts = useMemo(() => {
-    if (prefs.quickLinksSource !== 'top_visited') return [];
+    if (!showTopVisitedWidget) return [];
     const byHost = new Map();
     (effectiveHistoryItems || []).forEach((entry) => {
       if (!entry?.url || !/^https?:\/\//i.test(entry.url)) return;
@@ -655,12 +658,7 @@ export function NewTabPage({
     return Array.from(byHost.values())
       .sort((a, b) => b.count - a.count)
       .slice(0, Math.max(8, Number(prefs.quickLinksColumns) || 6));
-  }, [prefs.quickLinksSource, prefs.quickLinksColumns, effectiveHistoryItems]);
-
-  const displayedQuickLinks =
-    prefs.quickLinksSource === 'top_visited' && topVisitedShortcuts.length > 0
-      ? topVisitedShortcuts
-      : quickLinks;
+  }, [showTopVisitedWidget, prefs.quickLinksColumns, effectiveHistoryItems]);
 
   // Upcoming bills summary for optional Financial Glance widget
   const financeGlanceSummary = useMemo(() => {
@@ -963,15 +961,15 @@ export function NewTabPage({
         {/* Widgets Area: Centered Stack OR Dashboard Grid */}
         <div
           className={`w-full ${
-            isDashboardLayout && prefs.showQuickLinks !== false && financeGlanceSummary
+            isDashboardLayout && (showQuickLinksWidget || showTopVisitedWidget) && financeGlanceSummary
               ? `grid grid-cols-1 lg:grid-cols-3 ${isCompactDensity ? 'gap-4' : 'gap-6'} items-start`
               : `flex flex-col items-center ${isCompactDensity ? 'gap-4' : 'gap-6'}`
           }`}
         >
-          {/* Speed Dial / Quick Links Grid */}
-          {prefs.showQuickLinks !== false && (
+          {/* Speed Dial (Pinned Quick Links) & Top Visited Sites */}
+          {(showQuickLinksWidget || showTopVisitedWidget) && (
             <div
-              className={`w-full ${
+              className={`w-full flex flex-col ${isCompactDensity ? 'gap-4' : 'gap-6'} ${
                 isDashboardLayout && financeGlanceSummary
                   ? 'lg:col-span-2'
                   : isDashboardLayout
@@ -979,66 +977,141 @@ export function NewTabPage({
                     : 'max-w-2xl'
               }`}
             >
-              {prefs.quickLinksSource === 'top_visited' && (
-                <div className={`text-[11px] font-semibold uppercase tracking-wider mb-2 ${clockSecondaryClass}`}>
-                  Top Visited Sites
-                </div>
-              )}
-              <div className={`grid ${quickLinksGridColsClass} ${isCompactDensity ? 'gap-2' : 'gap-3'}`}>
-                {displayedQuickLinks.map((item) => {
-                  const isGroup = item.type === 'group';
-                  const isDropTarget = dropTargetId === item.id && draggedTileId !== item.id;
-                  const isTopVisitedMode = prefs.quickLinksSource === 'top_visited';
+              {showQuickLinksWidget && (
+                <div>
+                  {showTopVisitedWidget && (
+                    <div className={`text-[11px] font-semibold uppercase tracking-wider mb-2 ${clockSecondaryClass}`}>
+                      Quick Links
+                    </div>
+                  )}
+                  <div className={`grid ${quickLinksGridColsClass} ${isCompactDensity ? 'gap-2' : 'gap-3'}`}>
+                    {quickLinks.map((item) => {
+                      const isGroup = item.type === 'group';
+                      const isDropTarget = dropTargetId === item.id && draggedTileId !== item.id;
 
-                  if (isGroup) {
-                    const previewItems = (item.items || []).slice(0, 4);
-                    return (
-                      <div
-                        key={item.id}
-                        draggable={false}
-                        title={item.name}
-                        onDragOver={(e) => {
-                          if (draggedTileId && draggedTileId !== item.id) {
+                      if (isGroup) {
+                        const previewItems = (item.items || []).slice(0, 4);
+                        return (
+                          <div
+                            key={item.id}
+                            draggable={false}
+                            title={item.name}
+                            onDragOver={(e) => {
+                              if (draggedTileId && draggedTileId !== item.id) {
+                                e.preventDefault();
+                                setDropTargetId(item.id);
+                              }
+                            }}
+                            onDragLeave={() => {
+                              if (dropTargetId === item.id) setDropTargetId(null);
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              handleDropOnTile(item);
+                            }}
+                            onClick={() => {
+                              setOpenGroupId(item.id);
+                              setIsEditingOpenGroupName(false);
+                              setOpenGroupNameDraft(item.name || '');
+                            }}
+                            onContextMenu={(e) => openTileMenuAt(e, item)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setOpenGroupId(item.id);
+                                setIsEditingOpenGroupName(false);
+                                setOpenGroupNameDraft(item.name || '');
+                              }
+                            }}
+                            className={`group relative flex flex-col items-center justify-center ${
+                              isIconOnlyTiles
+                                ? 'p-2.5 gap-1 rounded-xl'
+                                : isCompactDensity
+                                  ? 'p-3 gap-2 rounded-xl'
+                                  : 'p-4 gap-2.5 rounded-2xl'
+                            } border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                              isDropTarget
+                                ? 'bg-[var(--brand-soft)] border-[var(--brand)] scale-[1.03]'
+                                : `${cardSurfaceClass} hover:border-[var(--brand)]/50`
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={(e) => openTileMenuAt(e, item)}
+                              aria-label={`Options for ${item.name}`}
+                              className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-1.5 right-1.5 p-1 rounded-lg opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </button>
+
+                            <div className="w-10 h-10 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] p-1 grid grid-cols-2 gap-0.5 place-items-center">
+                              {previewItems.map((sub) => (
+                                <ShortcutIcon key={sub.id} name={sub.name} url={sub.url} size="sm" />
+                              ))}
+                            </div>
+
+                            {!isIconOnlyTiles && (
+                              <div className="w-full text-center">
+                                <div className="text-xs font-medium truncate">{item.name}</div>
+                                <div className={`text-[10px] ${cardMutedTextClass}`}>
+                                  {(item.items || []).length} sites
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={item.id}
+                          draggable
+                          title={item.name}
+                          onDragStart={(e) => {
+                            setDraggedTileId(item.id);
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onDragOver={(e) => {
+                            if (draggedTileId && draggedTileId !== item.id) {
+                              e.preventDefault();
+                              setDropTargetId(item.id);
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (dropTargetId === item.id) setDropTargetId(null);
+                          }}
+                          onDrop={(e) => {
                             e.preventDefault();
-                            setDropTargetId(item.id);
-                          }
-                        }}
-                        onDragLeave={() => {
-                          if (dropTargetId === item.id) setDropTargetId(null);
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          handleDropOnTile(item);
-                        }}
-                        onClick={() => {
-                          setOpenGroupId(item.id);
-                          setIsEditingOpenGroupName(false);
-                          setOpenGroupNameDraft(item.name || '');
-                        }}
-                        onContextMenu={(e) => openTileMenuAt(e, item)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setOpenGroupId(item.id);
-                            setIsEditingOpenGroupName(false);
-                            setOpenGroupNameDraft(item.name || '');
-                          }
-                        }}
-                        className={`group relative flex flex-col items-center justify-center ${
-                          isIconOnlyTiles
-                            ? 'p-2.5 gap-1 rounded-xl'
-                            : isCompactDensity
-                              ? 'p-3 gap-2 rounded-xl'
-                              : 'p-4 gap-2.5 rounded-2xl'
-                        } border transition-all cursor-pointer shadow-sm hover:shadow-md ${
-                          isDropTarget
-                            ? 'bg-[var(--brand-soft)] border-[var(--brand)] scale-[1.03]'
-                            : `${cardSurfaceClass} hover:border-[var(--brand)]/50`
-                        }`}
-                      >
-                        {!isTopVisitedMode && (
+                            handleDropOnTile(item);
+                          }}
+                          onDragEnd={() => {
+                            setDraggedTileId(null);
+                            setDropTargetId(null);
+                          }}
+                          onClick={() => onNavigate(item.url)}
+                          onContextMenu={(e) => openTileMenuAt(e, item)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              onNavigate(item.url);
+                            }
+                          }}
+                          className={`group relative flex flex-col items-center justify-center ${
+                            isIconOnlyTiles
+                              ? 'p-2.5 gap-1 rounded-xl'
+                              : isCompactDensity
+                                ? 'p-3 gap-2 rounded-xl'
+                                : 'p-4 gap-2.5 rounded-2xl'
+                          } border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                            isDropTarget
+                              ? 'bg-[var(--brand-soft)] border-[var(--brand)] scale-[1.03]'
+                              : `${cardSurfaceClass} hover:border-[var(--brand)]/50`
+                          }`}
+                        >
                           <button
                             type="button"
                             onClick={(e) => openTileMenuAt(e, item)}
@@ -1047,121 +1120,87 @@ export function NewTabPage({
                           >
                             <MoreVertical className="w-3.5 h-3.5" />
                           </button>
-                        )}
-
-                        <div className="w-10 h-10 rounded-xl bg-[var(--surface-subtle)] border border-[var(--line)] p-1 grid grid-cols-2 gap-0.5 place-items-center">
-                          {previewItems.map((sub) => (
-                            <ShortcutIcon key={sub.id} name={sub.name} url={sub.url} size="sm" />
-                          ))}
+                          <ShortcutIcon name={item.name} url={item.url} />
+                          {!isIconOnlyTiles && (
+                            <span className="text-xs font-medium truncate w-full text-center">
+                              {item.name}
+                            </span>
+                          )}
                         </div>
+                      );
+                    })}
 
-                        {!isIconOnlyTiles && (
-                          <div className="w-full text-center">
-                            <div className="text-xs font-medium truncate">{item.name}</div>
-                            <div className={`text-[10px] ${cardMutedTextClass}`}>
-                              {(item.items || []).length} sites
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={item.id}
-                      draggable={!isTopVisitedMode}
-                      title={item.name}
-                      onDragStart={(e) => {
-                        if (isTopVisitedMode) return;
-                        setDraggedTileId(item.id);
-                        e.dataTransfer.effectAllowed = 'move';
-                      }}
-                      onDragOver={(e) => {
-                        if (!isTopVisitedMode && draggedTileId && draggedTileId !== item.id) {
-                          e.preventDefault();
-                          setDropTargetId(item.id);
-                        }
-                      }}
-                      onDragLeave={() => {
-                        if (dropTargetId === item.id) setDropTargetId(null);
-                      }}
-                      onDrop={(e) => {
-                        if (isTopVisitedMode) return;
-                        e.preventDefault();
-                        handleDropOnTile(item);
-                      }}
-                      onDragEnd={() => {
-                        setDraggedTileId(null);
-                        setDropTargetId(null);
-                      }}
-                      onClick={() => onNavigate(item.url)}
-                      onContextMenu={(e) => !isTopVisitedMode && openTileMenuAt(e, item)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          onNavigate(item.url);
-                        }
-                      }}
-                      className={`group relative flex flex-col items-center justify-center ${
+                    {/* Add Shortcut Tile */}
+                    <button
+                      type="button"
+                      onClick={() => setShortcutModal({ mode: 'add', name: '', url: '' })}
+                      title="Add Shortcut"
+                      className={`flex flex-col items-center justify-center ${
                         isIconOnlyTiles
                           ? 'p-2.5 gap-1 rounded-xl'
                           : isCompactDensity
                             ? 'p-3 gap-2 rounded-xl'
                             : 'p-4 gap-2.5 rounded-2xl'
-                      } border transition-all cursor-pointer shadow-sm hover:shadow-md ${
-                        isDropTarget
-                          ? 'bg-[var(--brand-soft)] border-[var(--brand)] scale-[1.03]'
-                          : `${cardSurfaceClass} hover:border-[var(--brand)]/50`
-                      }`}
+                      } border border-dashed border-[var(--line)] hover:border-[var(--brand)] bg-[var(--surface)]/65 hover:bg-[var(--surface)] transition-all cursor-pointer group`}
                     >
-                      {!isTopVisitedMode && (
-                        <button
-                          type="button"
-                          onClick={(e) => openTileMenuAt(e, item)}
-                          aria-label={`Options for ${item.name}`}
-                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-1.5 right-1.5 p-1 rounded-lg opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
-                        >
-                          <MoreVertical className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <ShortcutIcon name={item.name} url={item.url} />
+                      <div className="w-10 h-10 rounded-xl bg-[var(--surface-subtle)] group-hover:bg-[var(--brand-soft)] border border-[var(--line)] group-hover:border-[var(--brand)]/40 flex items-center justify-center text-[var(--muted)] group-hover:text-[var(--brand)] transition-colors">
+                        <Plus className="w-5 h-5" />
+                      </div>
                       {!isIconOnlyTiles && (
-                        <span className="text-xs font-medium truncate w-full text-center">
-                          {item.name}
+                        <span className="text-xs font-medium text-[var(--muted)] group-hover:text-[var(--ink)]">
+                          Add Shortcut
                         </span>
                       )}
-                    </div>
-                  );
-                })}
+                    </button>
+                  </div>
+                </div>
+              )}
 
-                {/* Add Shortcut Tile (Custom Pinned mode) */}
-                {prefs.quickLinksSource !== 'top_visited' && (
-                  <button
-                    type="button"
-                    onClick={() => setShortcutModal({ mode: 'add', name: '', url: '' })}
-                    title="Add Shortcut"
-                    className={`flex flex-col items-center justify-center ${
-                      isIconOnlyTiles
-                        ? 'p-2.5 gap-1 rounded-xl'
-                        : isCompactDensity
-                          ? 'p-3 gap-2 rounded-xl'
-                          : 'p-4 gap-2.5 rounded-2xl'
-                    } border border-dashed border-[var(--line)] hover:border-[var(--brand)] bg-[var(--surface)]/65 hover:bg-[var(--surface)] transition-all cursor-pointer group`}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-[var(--surface-subtle)] group-hover:bg-[var(--brand-soft)] border border-[var(--line)] group-hover:border-[var(--brand)]/40 flex items-center justify-center text-[var(--muted)] group-hover:text-[var(--brand)] transition-colors">
-                      <Plus className="w-5 h-5" />
+              {/* Top Visited Sites (can be shown alongside Quick Links) */}
+              {showTopVisitedWidget && (
+                <div>
+                  <div className={`text-[11px] font-semibold uppercase tracking-wider mb-2 ${clockSecondaryClass}`}>
+                    Top Visited Sites
+                  </div>
+                  {topVisitedShortcuts.length > 0 ? (
+                    <div className={`grid ${quickLinksGridColsClass} ${isCompactDensity ? 'gap-2' : 'gap-3'}`}>
+                      {topVisitedShortcuts.map((item) => (
+                        <div
+                          key={item.id}
+                          title={item.name}
+                          onClick={() => onNavigate(item.url)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              onNavigate(item.url);
+                            }
+                          }}
+                          className={`group relative flex flex-col items-center justify-center ${
+                            isIconOnlyTiles
+                              ? 'p-2.5 gap-1 rounded-xl'
+                              : isCompactDensity
+                                ? 'p-3 gap-2 rounded-xl'
+                                : 'p-4 gap-2.5 rounded-2xl'
+                          } border transition-all cursor-pointer shadow-sm hover:shadow-md ${cardSurfaceClass} hover:border-[var(--brand)]/50`}
+                        >
+                          <ShortcutIcon name={item.name} url={item.url} />
+                          {!isIconOnlyTiles && (
+                            <span className="text-xs font-medium truncate w-full text-center">
+                              {item.name}
+                            </span>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                    {!isIconOnlyTiles && (
-                      <span className="text-xs font-medium text-[var(--muted)] group-hover:text-[var(--ink)]">
-                        Add Shortcut
-                      </span>
-                    )}
-                  </button>
-                )}
-              </div>
+                  ) : (
+                    <div className={`text-xs rounded-xl border px-3.5 py-3 ${staticCardSurfaceClass} ${cardMutedTextClass}`}>
+                      Sites you visit will appear here automatically.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1169,7 +1208,7 @@ export function NewTabPage({
           {financeGlanceSummary && (
             <div
               className={`w-full ${
-                isDashboardLayout && prefs.showQuickLinks !== false
+                isDashboardLayout && (showQuickLinksWidget || showTopVisitedWidget)
                   ? 'lg:col-span-1'
                   : 'max-w-2xl'
               } rounded-2xl border shadow-sm p-4 ${staticCardSurfaceClass}`}
