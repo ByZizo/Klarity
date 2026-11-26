@@ -41,7 +41,7 @@ function ConfirmBadge({ show, onConfirm }) {
       type="button"
       onClick={onConfirm}
       title="Pre-filled from your address or saved profile. Click to confirm this value."
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[8px] text-[13px] font-semibold bg-[var(--warning-soft)] text-[var(--warning)] border border-[var(--warning-line)] hover:opacity-90 cursor-pointer"
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[6px] text-[11.5px] leading-tight font-semibold whitespace-nowrap shrink-0 bg-[var(--warning-soft)] text-[var(--warning)] border border-[var(--warning-line)] hover:opacity-90 cursor-pointer"
     >
       <span>Please confirm</span>
     </button>
@@ -52,15 +52,15 @@ function FieldLabel({ htmlFor, label, essential, helpText, isPrefilled, onConfir
   const Tag = isRadiogroupLabel ? 'div' : 'label';
   return (
     <div className="mb-2 flex flex-col gap-0.5">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="min-h-[24px] flex items-center justify-between gap-1.5 flex-wrap">
         <Tag
           id={id}
           {...(!isRadiogroupLabel && htmlFor ? { htmlFor } : {})}
-          className="text-[14px] sm:text-[15px] font-semibold text-[var(--ink)] flex items-center gap-2 flex-wrap"
+          className="text-[14px] sm:text-[15px] font-semibold text-[var(--ink)] flex items-center gap-1.5 flex-wrap"
         >
           <span>{label}</span>
           {essential && (
-            <span className="text-[13px] font-semibold text-[var(--muted)]">(Essential)</span>
+            <span className="text-[12px] font-semibold text-[var(--muted)] whitespace-nowrap">(Essential)</span>
           )}
         </Tag>
         <ConfirmBadge show={isPrefilled} onConfirm={onConfirmPrefill} />
@@ -1134,7 +1134,7 @@ export default function HouseholdQuestionnaire({
               isPrefilled={isPrefilled('address')}
               onConfirmPrefill={() => confirmPrefill('address')}
             />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_88px_minmax(0,1.6fr)] gap-3 items-start">
               <TextField
                 id="hh_city"
                 label="City"
