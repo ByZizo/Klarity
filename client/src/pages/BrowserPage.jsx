@@ -278,7 +278,8 @@ export function BrowserPage({
 
   const browserSettingsRef = useRef(browserSettings);
   const activeTabIdRef = useRef(activeTabId);
-  const openUrlHandlersRef = useRef({ navigateTo: null, handleNewTab: null });
+  const openUrlHandlersRef = useRef({ navigateTo: null, handleNewTab: null, handleBack: null, handleForward: null });
+  const lastMouseNavAtRef = useRef(0);
 
   useEffect(() => {
     browserSettingsRef.current = browserSettings;
@@ -585,10 +586,47 @@ export function BrowserPage({
     }
   };
 
-  // Subscribe to desktop OAuth window events, target=_blank new tabs, and popup login detection
+  // Route mouse Back/Forward buttons and OS browser-backward/forward commands strictly to active tab
+  const triggerTabMouseNavigation = (direction) => {
+    const now = Date.now();
+    if (now - lastMouseNavAtRef.current < 140) return;
+    lastMouseNavAtRef.current = now;
+    if (direction === 'forward') {
+      openUrlHandlersRef.current.handleForward?.();
+    } else if (direction === 'back') {
+      openUrlHandlersRef.current.handleBack?.();
+    }
+  };
+
+  // Subscribe to desktop OAuth window events, target=_blank new tabs, OS nav commands, and popup login detection
   useEffect(() => {
-    if (!window.klarityDesktop) return undefined;
-    const unsubs = [];
+    const handleRendererMouseNav = (e) => {
+      const dir = e?.detail?.direction;
+      if (dir === 'back' || dir === 'forward') {
+        triggerTabMouseNavigation(dir);
+      }
+    };
+    window.addEventListener('klarity:browser-mouse-nav', handleRendererMouseNav);
+
+    const unsubs = [() => window.removeEventListener('klarity:browser-mouse-nav', handleRendererMouseNav)];
+
+    if (window.klarityDesktop?.onBrowserNavCommand) {
+      unsubs.push(
+        window.klarityDesktop.onBrowserNavCommand((payload) => {
+          if (payload?.direction === 'back' || payload?.direction === 'forward') {
+            triggerTabMouseNavigation(payload.direction);
+          }
+        })
+      );
+    }
+
+    if (!window.klarityDesktop) {
+      return () => {
+        unsubs.forEach((fn) => {
+          if (typeof fn === 'function') fn();
+        });
+      };
+    }
 
     if (window.klarityDesktop.onBrowserOpenTab) {
       unsubs.push(
@@ -1705,7 +1743,10 @@ export function BrowserPage({
         prev.map((t) => {
           if (t.id !== tabId) return t;
           if (isNewTabUrl(t.url) && (!rawUrl || rawUrl === 'about:blank')) {
-            return { ...t, isLoading: false };
+            return { ...t, isLoading: false, canGoBack: false, canGoForward: fwd };
+          }
+          if ((!rawUrl || rawUrl === 'about:blank') && !back && fwd) {
+            return { ...t, isLoading: false, url: NEW_TAB_URL, title: 'New Tab', canGoBack: false, canGoForward: true };
           }
           return {
             ...t,
@@ -1754,7 +1795,10 @@ export function BrowserPage({
         prev.map((t) => {
           if (t.id !== tabId) return t;
           if (isNewTabUrl(t.url) && (!navUrl || navUrl === 'about:blank')) {
-            return t;
+            return { ...t, canGoBack: false, canGoForward: fwd };
+          }
+          if ((!navUrl || navUrl === 'about:blank') && !back && fwd) {
+            return { ...t, url: NEW_TAB_URL, title: 'New Tab', canGoBack: false, canGoForward: true };
           }
           return {
             ...t,
@@ -1782,12 +1826,16 @@ export function BrowserPage({
           setEmbeddedAuthBlockInfo(null);
         }
       }
-      if (tabId === activeTabIdRef.current && navUrl && navUrl !== 'about:blank' && !isNewTabUrl(navUrl)) {
-        setUrlInput(navUrl);
-        extractPageContentForTab(tabId);
-        setTimeout(() => {
+      if (tabId === activeTabIdRef.current) {
+        if (navUrl === 'about:blank' && !back && fwd) {
+          setUrlInput('');
+        } else if (navUrl && navUrl !== 'about:blank' && !isNewTabUrl(navUrl)) {
+          setUrlInput(navUrl);
           extractPageContentForTab(tabId);
-        }, 800);
+          setTimeout(() => {
+            extractPageContentForTab(tabId);
+          }, 800);
+        }
       }
     };
 
@@ -1829,6 +1877,11 @@ export function BrowserPage({
           url: info?.url || webview.getURL() || 'https://accounts.google.com',
           provider: info?.provider || 'Google'
         });
+      } else if (e?.channel === 'klarity:guest-mouse-nav') {
+        const info = Array.isArray(e.args) ? e.args[0] : null;
+        if (tabId === activeTabIdRef.current && (info?.direction === 'back' || info?.direction === 'forward')) {
+          triggerTabMouseNavigation(info.direction);
+        }
       }
     };
 
@@ -2003,12 +2056,12 @@ export function BrowserPage({
   };
 
   const handleBack = () => {
-    const wv = webviewRefs.current[activeTabId];
+    const wv = webviewRefs.current[activeTabIdRef.current];
     if (wv && wv.canGoBack()) wv.goBack();
   };
 
   const handleForward = () => {
-    const wv = webviewRefs.current[activeTabId];
+    const wv = webviewRefs.current[activeTabIdRef.current];
     if (wv && wv.canGoForward()) wv.goForward();
   };
 
@@ -2061,7 +2114,7 @@ export function BrowserPage({
   };
 
   useEffect(() => {
-    openUrlHandlersRef.current = { navigateTo, handleNewTab };
+    openUrlHandlersRef.current = { navigateTo, handleNewTab, handleBack, handleForward };
   });
 
   const handleCloseTab = (tabId, e) => {

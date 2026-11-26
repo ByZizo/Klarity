@@ -78,6 +78,7 @@ try {
 }
 
 let mainWindow = null;
+let isBrowserTabActive = false;
 let localServerPort = null;
 let httpServerInstance = null;
 let updateStatusState = {
@@ -971,6 +972,26 @@ async function createDesktopWindow() {
     }
   });
 
+  mainWindow.on('closed', () => {
+    isBrowserTabActive = false;
+  });
+
+  mainWindow.on('app-command', (e, cmd) => {
+    if (cmd !== 'browser-backward' && cmd !== 'browser-forward') return;
+    let inBrowser = isBrowserTabActive;
+    if (!inBrowser) {
+      try {
+        inBrowser = /#browser\b/i.test(mainWindow.webContents.getURL() || '');
+      } catch {}
+    }
+    if (inBrowser && mainWindow && !mainWindow.isDestroyed()) {
+      e.preventDefault();
+      mainWindow.webContents.send('klarity:browser-nav-command', {
+        direction: cmd === 'browser-backward' ? 'back' : 'forward'
+      });
+    }
+  });
+
   mainWindow.webContents.on('context-menu', (event, params) => {
     const menu = new Menu();
     if (params.selectionText && params.selectionText.trim().length > 0) {
@@ -1572,6 +1593,10 @@ function openBrowserAuthWindow(targetUrl) {
 
   return { ok: true };
 }
+
+ipcMain.on('klarity:set-browser-tab-active', (_event, active) => {
+  isBrowserTabActive = Boolean(active);
+});
 
 ipcMain.on('klarity:guest-login-detected', (_event, candidate) => {
   if (!candidate || !candidate.password) return;

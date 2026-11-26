@@ -314,6 +314,31 @@ const { ipcRenderer } = require('electron');
     window.addEventListener('load', () => {
       setTimeout(checkEmbeddedAuthBlock, 400);
     });
+
+    // 6. Intercept mouse Back/Forward thumb buttons (button 3 / 4) inside guest pages
+    const suppressGuestMouseBackForward = (e) => {
+      if (e.button === 3 || e.button === 4) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('mousedown', suppressGuestMouseBackForward, true);
+    window.addEventListener('auxclick', suppressGuestMouseBackForward, true);
+    window.addEventListener(
+      'mouseup',
+      (e) => {
+        if (e.button === 3 || e.button === 4) {
+          e.preventDefault();
+          e.stopPropagation();
+          try {
+            ipcRenderer.sendToHost('klarity:guest-mouse-nav', {
+              direction: e.button === 3 ? 'back' : 'forward'
+            });
+          } catch {}
+        }
+      },
+      true
+    );
   } catch {
     // Fail silently inside guest frame
   }

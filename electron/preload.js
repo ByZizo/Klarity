@@ -75,6 +75,13 @@ const desktopBridge = {
     const handler = (_event, candidate) => callback(candidate);
     ipcRenderer.on('klarity:browser-login-detected', handler);
     return () => ipcRenderer.removeListener('klarity:browser-login-detected', handler);
+  },
+  setBrowserTabActive: (active) => ipcRenderer.send('klarity:set-browser-tab-active', Boolean(active)),
+  onBrowserNavCommand: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('klarity:browser-nav-command', handler);
+    return () => ipcRenderer.removeListener('klarity:browser-nav-command', handler);
   }
 };
 

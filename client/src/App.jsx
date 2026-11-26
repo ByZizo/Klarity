@@ -853,6 +853,8 @@ function KlarityApp() {
 
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTabRaw] = useState(getInitialTab); // dashboard | cards | bills | subscriptions | transactions | advisor
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
   const setActiveTab = React.useCallback((nextTab) => {
     React.startTransition(() => {
       setActiveTabRaw(nextTab);
@@ -2228,16 +2230,33 @@ function KlarityApp() {
     window.addEventListener('hashchange', handleHistoryChange);
 
     // Mouse back (button 3) and mouse forward (button 4) event listener
-    const handleMouseNav = (e) => {
-      if (e.button === 3) {
+    const suppressNativeMouseNav = (e) => {
+      if ((e.button === 3 || e.button === 4) && activeTabRef.current === 'browser') {
         e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    const handleMouseNav = (e) => {
+      if (e.button !== 3 && e.button !== 4) return;
+      e.preventDefault();
+      if (activeTabRef.current === 'browser') {
+        e.stopPropagation();
+        window.dispatchEvent(
+          new CustomEvent('klarity:browser-mouse-nav', {
+            detail: { direction: e.button === 3 ? 'back' : 'forward' }
+          })
+        );
+        return;
+      }
+      if (e.button === 3) {
         window.history.back();
       } else if (e.button === 4) {
-        e.preventDefault();
         window.history.forward();
       }
     };
-    window.addEventListener('mouseup', handleMouseNav);
+    window.addEventListener('mousedown', suppressNativeMouseNav, true);
+    window.addEventListener('auxclick', suppressNativeMouseNav, true);
+    window.addEventListener('mouseup', handleMouseNav, true);
 
     // Ensure initial entry exists in history state
     const currentHash = `#${activeTab}`;
@@ -2250,11 +2269,16 @@ function KlarityApp() {
     return () => {
       window.removeEventListener('popstate', handleHistoryChange);
       window.removeEventListener('hashchange', handleHistoryChange);
-      window.removeEventListener('mouseup', handleMouseNav);
+      window.removeEventListener('mousedown', suppressNativeMouseNav, true);
+      window.removeEventListener('auxclick', suppressNativeMouseNav, true);
+      window.removeEventListener('mouseup', handleMouseNav, true);
     };
   }, []);
 
   useEffect(() => {
+    try {
+      window.klarityDesktop?.setBrowserTabActive?.(activeTab === 'browser');
+    } catch {}
     try {
       localStorage.setItem('klarity_active_tab', activeTab);
     } catch (e) {}
