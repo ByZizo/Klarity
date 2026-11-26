@@ -46,7 +46,8 @@ import {
   ArrowUpRight,
   History,
   ZoomIn,
-  Minus
+  Minus,
+  KeyRound
 } from 'lucide-react';
 import { Button, Card } from '../components/ui';
 import { FormattedChatMessage } from '../components/SharedAppComponents';
@@ -55,6 +56,8 @@ import { BrowserCalculatorPopover } from '../components/BrowserCalculatorPopover
 import { BrowserSearchDropdown } from '../components/BrowserSearchDropdown';
 import BrowserPasswordPrompt from '../components/BrowserPasswordPrompt';
 import { BrowserSnapshotOverlay } from '../components/BrowserSnapshotOverlay';
+import { findMatchingVaultCredentials } from '../utils/subscriptionCancelPlaybooks';
+import { hasMasterPinSet, verifyMasterPin } from '../utils/securityCrypto';
 import {
   buildYouTubeAdShieldScript,
   buildSponsorBlockScript,
@@ -239,6 +242,10 @@ export function BrowserPage({
   onShowToast,
   pendingBrowserUrl = '',
   onClearPendingBrowserUrl,
+  activeCancelGuide = null,
+  onClearCancelGuide,
+  onUpdateSubscriptionStatus,
+  fmtMoney = (n) => `$${Number(n || 0).toFixed(2)}`,
   onOpenBrowserSettings,
   onOpenBrowserHistory,
   isBrowserHistoryOpen = false
@@ -369,6 +376,11 @@ export function BrowserPage({
   const [embeddedAuthBlockInfo, setEmbeddedAuthBlockInfo] = useState(null); // { tabId, url, provider }
   const [snapshotSourceDataUrl, setSnapshotSourceDataUrl] = useState('');
   const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
+  const [cancelGuidePinOpen, setCancelGuidePinOpen] = useState(false);
+  const [cancelGuidePinInput, setCancelGuidePinInput] = useState('');
+  const [cancelGuidePinError, setCancelGuidePinError] = useState('');
+  const [cancelGuideUnlocked, setCancelGuideUnlocked] = useState(false);
+  const [cancelGuideCopiedKey, setCancelGuideCopiedKey] = useState('');
   const browserViewportRef = useRef(null);
   const vaultItemsRef = useRef(vaultItems);
   useEffect(() => {
@@ -3866,6 +3878,207 @@ export function BrowserPage({
           </div>
         )}
       </div>
+
+      {/* Compact Guided Cancellation Bar (when launched from Subscriptions Cancel Assistant) */}
+      {activeCancelGuide?.sub && activeCancelGuide?.playbook && (() => {
+        const gSub = activeCancelGuide.sub;
+        const gPlaybook = activeCancelGuide.playbook;
+        const matchedCred = findMatchingVaultCredentials(vaultItems, gSub.name, gPlaybook.loginDomain);
+
+        const isVaultLocked = () => {
+          try {
+            if (!hasMasterPinSet()) return false;
+            const lockType = localStorage.getItem('klarity_vault_lock_type') || 'pin';
+            if (lockType === 'none') return false;
+            const timeoutMode = localStorage.getItem('klarity_vault_pin_timeout') || '15m';
+            if (timeoutMode === 'always') return !cancelGuideUnlocked;
+            const until = Number(sessionStorage.getItem('klarity_vault_unlocked_until') || 0);
+            return Date.now() >= until && !cancelGuideUnlocked;
+          } catch {
+            return false;
+          }
+        };
+
+        const copyCredValue = async (text, label) => {
+          if (!text) return;
+          try {
+            await navigator.clipboard?.writeText(String(text));
+            setCancelGuideCopiedKey(label);
+            setTimeout(() => setCancelGuideCopiedKey((c) => (c === label ? '' : c)), 1800);
+          } catch {}
+        };
+
+        const autofillCredsInWebview = async (cred) => {
+          const wv = webviewRefs.current[activeTabId];
+          if (!wv || typeof wv.executeJavaScript !== 'function' || !cred) return;
+          const payloadUser = JSON.stringify(String(cred.username || ''));
+          const payloadPass = JSON.stringify(String(cred.password || ''));
+          try {
+            await wv.executeJavaScript(`(() => {
+              const setVal = (el, val) => {
+                if (!el || !val) return;
+                const desc = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                if (desc && desc.set) desc.set.call(el, val);
+                else el.value = val;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              };
+              const inputs = Array.from(document.querySelectorAll('input'));
+              const userVal = ${payloadUser};
+              const passVal = ${payloadPass};
+              if (userVal) {
+                const uEl = inputs.find((i) => {
+                  const t = (i.type || 'text').toLowerCase();
+                  const hint = ((i.name || '') + ' ' + (i.id || '') + ' ' + (i.autocomplete || '')).toLowerCase();
+                  return (t === 'email' || t === 'text') && /user|email|login|account|identifier/.test(hint);
+                }) || inputs.find((i) => ['email', 'text'].includes((i.type || 'text').toLowerCase()) && !i.disabled);
+                if (uEl) setVal(uEl, userVal);
+              }
+              if (passVal) {
+                const pEl = inputs.find((i) => (i.type || '').toLowerCase() === 'password' && !i.disabled);
+                if (pEl) setVal(pEl, passVal);
+              }
+            })();`);
+            onShowToast?.(`Filled login details for ${gSub.name}`);
+          } catch {
+            onShowToast?.('Use Copy buttons if this site restricts autofill.', 'info');
+          }
+        };
+
+        const runProtectedAction = async (actionFn) => {
+          if (isVaultLocked()) {
+            setCancelGuidePinOpen(true);
+            setCancelGuidePinError('');
+            return;
+          }
+          await actionFn();
+        };
+
+        return (
+          <div className="shrink-0 w-full bg-[var(--surface)] border-b border-[var(--line)] px-3 sm:px-4 py-2.5 flex flex-col gap-2 text-xs z-40">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                <span className="font-semibold text-[var(--ink)]">
+                  Canceling {gSub.name} ({fmtMoney(gSub.amount)}/mo)
+                </span>
+                <div className="hidden lg:flex flex-wrap items-center gap-2 text-[var(--muted)]">
+                  {gPlaybook.steps.slice(0, 4).map((st, idx) => (
+                    <span key={idx} className="inline-flex items-center gap-1">
+                      <span className="w-4 h-4 rounded-full bg-[var(--brand-soft)] text-[var(--brand)] text-[10px] font-bold inline-flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      <span>{st}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                {matchedCred && (
+                  <>
+                    <KeyRound className="w-3.5 h-3.5 text-[var(--brand)] shrink-0" />
+                    {matchedCred.username && (
+                      <button
+                        type="button"
+                        onClick={() => copyCredValue(matchedCred.username, 'user')}
+                        className="px-2.5 py-1 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] font-semibold text-[var(--ink)] inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        {cancelGuideCopiedKey === 'user' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                        <span>Copy email</span>
+                      </button>
+                    )}
+                    {matchedCred.password && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => runProtectedAction(() => copyCredValue(matchedCred.password, 'pass'))}
+                          className="px-2.5 py-1 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] font-semibold text-[var(--ink)] inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          {cancelGuideCopiedKey === 'pass' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                          <span>Copy password</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => runProtectedAction(() => autofillCredsInWebview(matchedCred))}
+                          className="px-2.5 py-1 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] font-semibold text-[var(--brand)] inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>Autofill</span>
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUpdateSubscriptionStatus?.(gSub.id, 'canceled');
+                    setCancelGuidePinOpen(false);
+                    setCancelGuidePinInput('');
+                    onClearCancelGuide?.();
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white font-semibold inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Mark as Canceled</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCancelGuidePinOpen(false);
+                    setCancelGuidePinInput('');
+                    onClearCancelGuide?.();
+                  }}
+                  aria-label="Close cancel guide"
+                  className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {cancelGuidePinOpen && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    const res = await verifyMasterPin(cancelGuidePinInput.trim());
+                    if (!res?.valid) {
+                      setCancelGuidePinError(res?.error || 'Incorrect Vault PIN.');
+                      return;
+                    }
+                    setCancelGuideUnlocked(true);
+                    setCancelGuidePinOpen(false);
+                    setCancelGuidePinInput('');
+                    setCancelGuidePinError('');
+                  } catch {
+                    setCancelGuidePinError('Could not verify Vault PIN.');
+                  }
+                }}
+                className="flex flex-wrap items-center gap-2 pt-1 border-t border-[var(--line)]"
+              >
+                <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <input
+                  type="password"
+                  value={cancelGuidePinInput}
+                  onChange={(e) => setCancelGuidePinInput(e.target.value)}
+                  placeholder="Enter Vault PIN to unlock saved login"
+                  className="w-56 h-7 px-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface-subtle)] text-xs text-[var(--ink)] outline-none focus:border-[var(--brand)]"
+                />
+                <button
+                  type="submit"
+                  className="px-2.5 py-1 rounded-lg bg-[var(--brand)] text-white font-semibold cursor-pointer"
+                >
+                  Unlock
+                </button>
+                {cancelGuidePinError && (
+                  <span className="text-[11px] font-medium text-[var(--danger)]">{cancelGuidePinError}</span>
+                )}
+              </form>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Non-Blocking Save / Update Login Banner */}
       {passwordSavePrompt && (

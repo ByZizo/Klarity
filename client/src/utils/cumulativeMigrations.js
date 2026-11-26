@@ -20,7 +20,7 @@ import {
   sanitizeRecentSearches
 } from './browserHistory.js';
 
-export const CURRENT_CLIENT_SCHEMA_VERSION = '3.12.61';
+export const CURRENT_CLIENT_SCHEMA_VERSION = '3.12.87';
 
 /**
  * Runs all schema integrity verifications cumulatively and idempotently.
@@ -39,6 +39,7 @@ export async function runCumulativeClientMigrations() {
     browserSettingsNormalized: false,
     browserHistoryNormalized: false,
     uiPreferencesNormalized: false,
+    subscriptionsNormalized: false,
     encryptionAudited: false
   };
 
@@ -274,7 +275,64 @@ export async function runCumulativeClientMigrations() {
     }
 
     // ------------------------------------------------------------------------
-    // 7. STORAGE ENCRYPTION AUDIT (ENCv1 / ENCv2 -> ENCv3 AES-256-GCM)
+    // 7. SUBSCRIPTIONS STATUS NORMALIZATION ('active' | 'canceling' | 'canceled')
+    // ------------------------------------------------------------------------
+    try {
+      const normalizeSubList = (arr) => {
+        let changed = false;
+        const normalized = arr.map((s) => {
+          if (!s || typeof s !== 'object') return s;
+          const validStatus = ['active', 'canceling', 'canceled'].includes(s.status)
+            ? s.status
+            : s.active === false
+            ? 'canceled'
+            : 'active';
+          const nextActive = validStatus !== 'canceled';
+          if (s.status !== validStatus || s.active !== nextActive) {
+            changed = true;
+            return { ...s, status: validStatus, active: nextActive };
+          }
+          return s;
+        });
+        return { normalized, changed };
+      };
+
+      const rawSubs = localStorage.getItem('klarity_subscriptions');
+      if (rawSubs) {
+        try {
+          const parsedSubs = JSON.parse(rawSubs);
+          if (Array.isArray(parsedSubs)) {
+            const { normalized, changed } = normalizeSubList(parsedSubs);
+            if (changed) {
+              localStorage.setItem('klarity_subscriptions', JSON.stringify(normalized));
+              migrationResults.subscriptionsNormalized = true;
+            }
+          }
+        } catch {}
+      }
+
+      const rawFinance = localStorage.getItem('klarity_finance_data');
+      if (rawFinance) {
+        try {
+          const parsedFinance = JSON.parse(rawFinance);
+          if (parsedFinance && Array.isArray(parsedFinance.subscriptions)) {
+            const { normalized, changed } = normalizeSubList(parsedFinance.subscriptions);
+            if (changed) {
+              localStorage.setItem(
+                'klarity_finance_data',
+                JSON.stringify({ ...parsedFinance, subscriptions: normalized })
+              );
+              migrationResults.subscriptionsNormalized = true;
+            }
+          }
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('Cumulative migration notice (subscriptions):', e);
+    }
+
+    // ------------------------------------------------------------------------
+    // 8. STORAGE ENCRYPTION AUDIT (ENCv1 / ENCv2 -> ENCv3 AES-256-GCM)
     // ------------------------------------------------------------------------
     try {
       await enforceStorageEncryptionAudit();

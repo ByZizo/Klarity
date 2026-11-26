@@ -1691,6 +1691,7 @@ function KlarityApp() {
   const [browserSettings, setBrowserSettings] = useState(() => loadBrowserSettings());
   const [browserBookmarks, setBrowserBookmarks] = useState(() => loadBrowserBookmarks());
   const [pendingBrowserUrl, setPendingBrowserUrl] = useState('');
+  const [activeCancelGuide, setActiveCancelGuide] = useState(null);
   const [isBrowserSettingsOnly, setIsBrowserSettingsOnly] = useState(false);
   const [isBrowserHistoryOpen, setIsBrowserHistoryOpen] = useState(false);
 
@@ -3521,6 +3522,117 @@ function KlarityApp() {
     }
   };
 
+  // Update Subscription Cancellation Status ('active' | 'canceling' | 'canceled')
+  const handleUpdateSubscriptionStatus = async (subId, nextStatus) => {
+    const validStatus = ['active', 'canceling', 'canceled'].includes(nextStatus) ? nextStatus : 'active';
+    const nextActive = validStatus !== 'canceled';
+    let targetName = 'Subscription';
+
+    setData(prev => {
+      const nextSubs = (prev.subscriptions || []).map(s => {
+        if (s.id === subId) {
+          targetName = s.name || targetName;
+          return { ...s, status: validStatus, active: nextActive };
+        }
+        return s;
+      });
+      const nextState = { ...prev, subscriptions: nextSubs };
+      try {
+        localStorage.setItem('klarity_subscriptions', JSON.stringify(nextSubs));
+        localStorage.setItem('klarity_finance_data', JSON.stringify(nextState));
+      } catch {}
+      return nextState;
+    });
+
+    if (validStatus === 'canceled') {
+      setActiveCancelGuide(prev => (prev?.sub?.id === subId ? null : prev));
+    } else if (validStatus === 'canceling') {
+      setActiveCancelGuide(prev =>
+        prev?.sub?.id === subId ? { ...prev, sub: { ...prev.sub, status: 'canceling', active: true } } : prev
+      );
+    }
+
+    try {
+      await fetch(`/api/subscriptions/${subId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: validStatus, active: nextActive })
+      });
+    } catch {}
+
+    const label = validStatus === 'canceled' ? 'Canceled' : validStatus === 'canceling' ? 'Canceling' : 'Active';
+    setNotificationToast(`Marked ${targetName} as ${label}.`);
+    setTimeout(() => setNotificationToast(''), 3000);
+  };
+
+  // One-click Add Subscription from scanned transactions
+  const handleQuickAddDetectedSubscription = async (candidate) => {
+    if (!candidate || !candidate.name) return;
+    const chosenAccount =
+      candidate.account ||
+      allFilterableCards.find(c => c.type === 'credit')?.fullLabel ||
+      'Everyday Rewards •••• 4417';
+    const payload = {
+      name: String(candidate.name).trim(),
+      amount: Number(candidate.amount || 0),
+      billingCycle: 'monthly',
+      renewalDate: candidate.renewalDate || 'Monthly',
+      category: candidate.category || 'Entertainment',
+      account: chosenAccount,
+      cardId: candidate.cardId || '',
+      status: 'active',
+      active: true,
+      ownerId: currentUser?.id
+    };
+
+    try {
+      let savedSub = null;
+      try {
+        const res = await fetch('/api/subscriptions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          const json = await res.json();
+          savedSub = json?.subscription || json;
+        }
+      } catch {}
+
+      const subItem =
+        savedSub && savedSub.id
+          ? { ...savedSub, status: savedSub.status || 'active', active: true }
+          : { ...payload, id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` };
+
+      setData(prev => {
+        const baseSubs = prev.subscriptions || [];
+        const nextSubs = [subItem, ...baseSubs.filter(s => s.id !== subItem.id)];
+        const nextState = { ...prev, subscriptions: nextSubs };
+        try {
+          localStorage.setItem('klarity_subscriptions', JSON.stringify(nextSubs));
+          localStorage.setItem('klarity_finance_data', JSON.stringify(nextState));
+        } catch {}
+        return nextState;
+      });
+
+      setNotificationToast(`Added subscription: ${subItem.name}`);
+      setTimeout(() => setNotificationToast(''), 3000);
+    } catch {}
+  };
+
+  // Launch guided cancellation inside Klarity's In-App Browser
+  const handleOpenCancelInBrowser = (sub, playbook) => {
+    if (!sub || !playbook?.cancelUrl) return;
+    if (sub.status !== 'canceled') {
+      handleUpdateSubscriptionStatus(sub.id, 'canceling');
+    }
+    setActiveCancelGuide({
+      sub: { ...sub, status: sub.status === 'canceled' ? 'canceled' : 'canceling', active: true },
+      playbook
+    });
+    handleOpenHistoryUrl(playbook.cancelUrl);
+  };
+
   // Auto-Detect Category & Card based on Store / Merchant Name
   const autoDetectPurchaseCategory = (name) => {
     if (!name) return 'Shopping';
@@ -4583,7 +4695,9 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
     .reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0);
   const billsDueIn14DaysCount = billsList.filter(b => b.status !== 'paid' && (b.daysUntil == null || b.daysUntil <= 14)).length;
   const totalMonthlyBills = billsList.reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0);
-  const totalMonthlySubscriptions = subscriptionsList.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+  const totalMonthlySubscriptions = subscriptionsList
+    .filter(s => s.status !== 'canceled' && s.active !== false)
+    .reduce((sum, s) => sum + Number(s.amount || 0), 0);
 
   // Default empty fallback arrays (strictly no fake/premade demo data)
   const DEFAULT_OVERVIEW_CARDS = [];
@@ -4701,8 +4815,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
 
   const sourceSubsList = (Array.isArray(subscriptionsList) ? subscriptionsList : []).map(s => {
     const cardObj = resolveItemCard(s, 'credit');
+    const normalizedStatus = ['active', 'canceling', 'canceled'].includes(s.status)
+      ? s.status
+      : s.active === false
+      ? 'canceled'
+      : 'active';
     return {
       ...s,
+      status: normalizedStatus,
+      active: normalizedStatus !== 'canceled',
       amount: Number(s.amount || 0),
       category: s.category || 'Entertainment',
       account: cardObj ? cardObj.fullLabel : (s.account || 'Everyday Rewards •••• 4417'),
@@ -4733,7 +4854,9 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
   const displayTotalMonthlyBills = sourceBillsList.reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0);
 
   const displaySubs = sourceSubsList;
-  const displayTotalSubs = sourceSubsList.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+  const displayTotalSubs = sourceSubsList
+    .filter(s => s.status !== 'canceled' && s.active !== false)
+    .reduce((sum, s) => sum + Number(s.amount || 0), 0);
   const displayTxs = sourceTxsList.slice(0, 4);
 
   const firstName = currentUser?.name
@@ -4811,12 +4934,16 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
     return matchCard && matchSearch && matchCat;
   });
 
-  const filteredTotalSubscriptions = filteredSubscriptions.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+  const filteredTotalSubscriptions = filteredSubscriptions
+    .filter(s => s.status !== 'canceled' && s.active !== false)
+    .reduce((sum, s) => sum + Number(s.amount || 0), 0);
 
   // Budgets Calculations (dynamically tied to the Multi-Card Filter!)
   const cardFilteredTxsForBudgets = sourceTxsList.filter(t => matchesSelectedCards(t, 'credit'));
   const cardFilteredBillsForBudgets = sourceBillsList.filter(b => matchesSelectedCards(b, 'depository'));
-  const cardFilteredSubsForBudgets = sourceSubsList.filter(s => matchesSelectedCards(s, 'credit'));
+  const cardFilteredSubsForBudgets = sourceSubsList.filter(
+    s => s.status !== 'canceled' && s.active !== false && matchesSelectedCards(s, 'credit')
+  );
 
   const computedBudgets = budgets.map(b => {
     const catLower = (b.category || '').toLowerCase();
@@ -5895,6 +6022,10 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                 onShowToast={showToast}
                 pendingBrowserUrl={pendingBrowserUrl}
                 onClearPendingBrowserUrl={() => setPendingBrowserUrl('')}
+                activeCancelGuide={activeCancelGuide}
+                onClearCancelGuide={() => setActiveCancelGuide(null)}
+                onUpdateSubscriptionStatus={handleUpdateSubscriptionStatus}
+                fmtMoney={fmtMoney}
                 onOpenBrowserSettings={() => {
                   setIsBrowserSettingsOnly(true);
                   setSettingsActiveTab('browser');
@@ -6049,6 +6180,9 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   filteredTotalSubscriptions={filteredTotalSubscriptions}
                   sourceSubsList={sourceSubsList}
                   displayTotalSubs={displayTotalSubs}
+                  transactions={sourceTxsList}
+                  vaultItems={vaultItems}
+                  currentUser={currentUser}
                   subSearch={subSearch}
                   setSubSearch={setSubSearch}
                   subCategoryFilter={subCategoryFilter}
@@ -6057,6 +6191,9 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   selectedCardIds={selectedCardIds}
                   setSelectedCardIds={setSelectedCardIds}
                   handleDeleteSubscription={handleDeleteSubscription}
+                  onUpdateSubscriptionStatus={handleUpdateSubscriptionStatus}
+                  onQuickAddSubscription={handleQuickAddDetectedSubscription}
+                  onOpenCancelInBrowser={handleOpenCancelInBrowser}
                   handleSendChatMessage={handleSendChatMessage}
                   setIsAddSubOpen={setIsAddSubOpen}
                   MultiCardFilterDropdown={MultiCardFilterDropdown}
