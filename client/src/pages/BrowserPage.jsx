@@ -4323,42 +4323,39 @@ export function BrowserPage({
               />
             </div>
 
-            {/* Header */}
-            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[var(--line)] bg-[var(--surface)] shrink-0">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-[var(--brand-soft)] text-[var(--brand)] border border-[var(--brand)]/20 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[14px] font-bold text-[var(--ink)] tracking-tight">Klarity AI</span>
-                    {!isNewTabUrl(activeTab?.url) && activeBrowserContext?.isYouTube && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500 font-semibold border border-red-500/20">
-                        YouTube
-                      </span>
-                    )}
-                  </div>
-                  {!isNewTabUrl(activeTab?.url) ? (
-                    <p
-                      className="text-[11px] text-[var(--muted)] truncate"
-                      title={activeTab?.title || activeTab?.url}
-                    >
-                      {formatDownloadHost(activeTab?.url) || activeTab?.title || 'Viewing page'}
-                    </p>
-                  ) : (
-                    <p className="text-[11px] text-[var(--muted)]">
-                      Advisor &amp; web assistant
-                    </p>
+            {/* Header (matches AdvisorPage UI) */}
+            <div className="px-5 pt-4 pb-3 border-b border-[var(--line)] bg-[var(--surface)] flex items-start justify-between gap-2 shrink-0">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="font-serif text-xl font-bold text-[var(--ink)] tracking-tight leading-tight">
+                    AI Advisor
+                  </h2>
+                  {!isNewTabUrl(activeTab?.url) && activeBrowserContext?.isYouTube && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500 font-semibold border border-red-500/20">
+                      YouTube
+                    </span>
                   )}
                 </div>
+                {!isNewTabUrl(activeTab?.url) ? (
+                  <p
+                    className="text-xs text-[var(--muted)] mt-0.5 truncate"
+                    title={activeTab?.title || activeTab?.url}
+                  >
+                    Viewing {formatDownloadHost(activeTab?.url) || activeTab?.title || 'page'}
+                  </p>
+                ) : (
+                  <p className="text-xs text-[var(--muted)] mt-0.5">
+                    Reads your bills, cards, spending &amp; active page.
+                  </p>
+                )}
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={toggleExpandAiSidebar}
                   title={browserAiWidth >= 520 ? 'Restore sidebar width' : 'Expand sidebar width'}
                   aria-label={browserAiWidth >= 520 ? 'Restore sidebar width' : 'Expand sidebar width'}
-                  className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                  className="p-1.5 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] border border-[var(--line)] shadow-2xs transition-colors cursor-pointer"
                 >
                   {browserAiWidth >= 520 ? (
                     <Minimize2 className="w-3.5 h-3.5" />
@@ -4379,7 +4376,7 @@ export function BrowserPage({
                     }}
                     title="Open in Full Advisor"
                     aria-label="Open in Full Advisor"
-                    className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--brand)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                    className="p-1.5 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--brand)] border border-[var(--line)] shadow-2xs transition-colors cursor-pointer"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
@@ -4390,7 +4387,7 @@ export function BrowserPage({
                     onClick={handleClearBrowserAiChat}
                     title="Clear chat"
                     aria-label="Clear chat"
-                    className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                    className="p-1.5 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] border border-[var(--line)] shadow-2xs transition-colors cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                   </button>
@@ -4398,28 +4395,22 @@ export function BrowserPage({
                 <button
                   type="button"
                   onClick={() => setIsBrowserAiSidebarOpen(false)}
-                  title="Close Klarity AI"
-                  aria-label="Close Klarity AI"
-                  className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                  title="Close AI Advisor"
+                  aria-label="Close AI Advisor"
+                  className="p-1.5 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--ink)] border border-[var(--line)] shadow-2xs transition-colors cursor-pointer"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
 
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+            {/* Chat Thread (matches AdvisorPage UI) */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3">
               {browserAiMessages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center px-6 py-8">
-                  <div className="w-12 h-12 rounded-2xl bg-[var(--brand-soft)] border border-[var(--brand)]/20 flex items-center justify-center mb-3.5 text-[var(--brand)] shadow-xs">
-                    <Sparkles className="w-6 h-6" />
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed bg-[var(--surface-subtle)] text-[var(--ink)] border border-[var(--line)] shadow-2xs">
+                    Hi! I&apos;m your Klarity AI Advisor. Ask about your bills, cards, spending, look up links to open right in your browser, or ask about the page you&apos;re viewing.
                   </div>
-                  <h4 className="text-[15px] font-bold text-[var(--ink)] mb-1.5">
-                    Klarity AI
-                  </h4>
-                  <p className="text-[13px] text-[var(--muted)] leading-relaxed max-w-[260px]">
-                    Ask any question, look up links to open right in your browser, or ask about the page you&apos;re viewing.
-                  </p>
                 </div>
               ) : (
                 browserAiMessages.map((msg, i) => {
@@ -4427,7 +4418,7 @@ export function BrowserPage({
                   return (
                     <div
                       key={i}
-                      className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
                         onClick={(e) => {
@@ -4440,10 +4431,10 @@ export function BrowserPage({
                             openAiLinkInBrowser(href, { inCurrentTab: false });
                           }
                         }}
-                        className={`relative group/msg max-w-[94%] rounded-2xl px-3.5 py-2.5 leading-relaxed ${
+                        className={`relative group/msg max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed flex flex-col gap-2 ${
                           msg.role === 'user'
-                            ? 'bg-[var(--brand)] text-white rounded-br-xs shadow-2xs'
-                            : 'bg-[var(--surface-subtle)] text-[var(--ink)] border border-[var(--line)] rounded-bl-xs shadow-2xs w-full'
+                            ? 'bg-[var(--brand)] text-white shadow-2xs'
+                            : 'bg-[var(--surface-subtle)] text-[var(--ink)] border border-[var(--line)] shadow-2xs'
                         }`}
                       >
                         <FormattedChatMessage text={msg.text} isUser={msg.role === 'user'} />
@@ -4471,8 +4462,8 @@ export function BrowserPage({
                         )}
 
                         {msgLinks.length > 0 && (
-                          <div className="mt-2.5 pt-2.5 border-t border-[var(--line)] flex flex-col gap-1.5">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                          <div className="pt-2 border-t border-[var(--line)] flex flex-col gap-1.5">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
                               Open in Browser
                             </span>
                             {msgLinks.map((link) => (
@@ -4488,7 +4479,7 @@ export function BrowserPage({
                                 >
                                   <Globe className="w-3.5 h-3.5 text-[var(--brand)] shrink-0" />
                                   <div className="min-w-0 flex-1">
-                                    <div className="text-[12px] font-semibold text-[var(--ink)] group-hover/link:text-[var(--brand)] truncate">
+                                    <div className="text-[11px] font-semibold text-[var(--ink)] group-hover/link:text-[var(--brand)] truncate">
                                       {link.label}
                                     </div>
                                     <div className="text-[10px] text-[var(--muted)] truncate">
@@ -4501,7 +4492,7 @@ export function BrowserPage({
                                   onClick={() => openAiLinkInBrowser(link.url, { inCurrentTab: true })}
                                   title="Open in current tab"
                                   aria-label={`Open ${link.label} in current tab`}
-                                  className="px-2 py-1 rounded-lg text-[11px] font-medium text-[var(--muted)] hover:text-[var(--brand)] hover:bg-[var(--surface-subtle)] transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
+                                  className="px-2 py-1 rounded-lg text-[11px] font-semibold text-[var(--brand)] hover:bg-[var(--brand-soft)] transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
                                 >
                                   <span>Here</span>
                                   <ArrowUpRight className="w-3 h-3" />
@@ -4516,64 +4507,64 @@ export function BrowserPage({
                 })
               )}
               {isBrowserAiLoading && (
-                <div className="flex items-center gap-2.5 text-[13px] text-[var(--muted)] px-3.5 py-2.5 rounded-2xl bg-[var(--surface-subtle)] border border-[var(--line)] w-fit">
-                  <Sparkles className="w-3.5 h-3.5 animate-spin text-[var(--brand)]" />
-                  <span>Thinking...</span>
+                <div className="flex justify-start">
+                  <div className="bg-[var(--surface-subtle)] rounded-2xl px-4 py-2.5 text-xs text-[var(--muted)] animate-pulse border border-[var(--line)]">
+                    Advisor is reading and analyzing...
+                  </div>
                 </div>
               )}
               <div ref={browserAiMessagesEndRef} />
             </div>
 
-            {/* Bottom Input */}
-            <div className="p-3.5 border-t border-[var(--line)] bg-[var(--surface)] shrink-0">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSendBrowserAiMessage();
-                }}
-                className="flex items-end gap-2 px-3 py-2 rounded-2xl bg-[var(--surface-subtle)] border border-[var(--line)] focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand)]/15 transition-all"
-              >
-                <textarea
-                  ref={browserAiInputRef}
-                  rows={1}
-                  value={browserAiInput}
-                  onChange={(e) => setBrowserAiInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent?.isComposing) {
-                      e.preventDefault();
+            {/* Bottom Input (matches AdvisorPage UI) */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendBrowserAiMessage();
+              }}
+              className="px-5 py-3 border-t border-[var(--line)] bg-[var(--surface)] flex items-center gap-2 shrink-0"
+            >
+              <label htmlFor="browser-ai-chat-input" className="sr-only">
+                Ask your AI advisor
+              </label>
+              <textarea
+                id="browser-ai-chat-input"
+                ref={browserAiInputRef}
+                rows={1}
+                value={browserAiInput}
+                onChange={(e) => setBrowserAiInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent?.isComposing) {
+                    e.preventDefault();
+                    if (browserAiInput.trim() && !isBrowserAiLoading) {
                       handleSendBrowserAiMessage();
                     }
-                  }}
-                  placeholder="Ask anything or search for links..."
-                  className="flex-1 min-w-0 max-h-28 resize-none bg-transparent py-1 text-[13.5px] leading-snug text-[var(--ink)] placeholder-[var(--muted)] outline-none"
-                />
-                {isBrowserAiLoading ? (
-                  <button
-                    type="button"
-                    onClick={handleStopBrowserAi}
-                    className="p-2 rounded-xl bg-[var(--surface)] hover:bg-red-500/10 text-red-500 border border-[var(--line)] transition-colors cursor-pointer shrink-0"
-                    title="Stop response"
-                    aria-label="Stop response"
-                  >
-                    <Square className="w-3.5 h-3.5 fill-current" />
-                  </button>
-                ) : (
-                  <button
-                    type="submit"
-                    disabled={!browserAiInput.trim()}
-                    className={`p-2 rounded-xl transition-all shrink-0 ${
-                      browserAiInput.trim()
-                        ? 'bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white cursor-pointer shadow-2xs'
-                        : 'bg-transparent text-[var(--muted)] cursor-not-allowed opacity-50'
-                    }`}
-                    title="Send"
-                    aria-label="Send"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </form>
-            </div>
+                  }
+                }}
+                placeholder="Ask about your money, or this page..."
+                className="flex-1 min-w-0 h-[40px] min-h-[40px] max-h-36 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-xl px-4 py-2.5 text-xs text-[var(--ink)] placeholder-[var(--muted)] focus:bg-[var(--surface)] focus:outline-none focus:border-[var(--brand)] shadow-2xs resize-none leading-relaxed"
+              />
+              {isBrowserAiLoading ? (
+                <button
+                  type="button"
+                  onClick={handleStopBrowserAi}
+                  className="h-[40px] px-4 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0"
+                  title="Stop response"
+                  aria-label="Stop generating response"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current text-white" />
+                  <span className="text-xs font-semibold">Stop</span>
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!browserAiInput.trim()}
+                  className="h-[40px] px-5 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 flex items-center justify-center"
+                >
+                  Send
+                </button>
+              )}
+            </form>
           </aside>
         )}
       </div>

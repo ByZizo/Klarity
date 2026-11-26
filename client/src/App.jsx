@@ -5630,13 +5630,15 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         }`}
       >
         <div className={`flex flex-col flex-1 min-h-0 overflow-y-auto py-4 ${isSidebarCompact ? 'px-2 gap-3 items-center' : 'px-3.5 gap-4'}`}>
-          {/* Brand Header & Collapse/Expand Sidebar Button */}
+          {/* Brand Header (Klarity logo toggles expand/collapse sidebar) */}
           {!isSidebarCompact ? (
             <div className="flex items-center justify-between px-2">
               <button
                 type="button"
-                onClick={() => setActiveTab('dashboard')}
-                className="flex items-center gap-2.5 text-left rounded-[8px] py-1 cursor-pointer"
+                onClick={() => setIsSidebarCompact(true)}
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                className="flex items-center gap-2.5 text-left rounded-[8px] px-1.5 py-1 -ml-1.5 hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
               >
                 <KlarityLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
                 <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">
@@ -5645,37 +5647,20 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               </button>
               <div className="flex items-center gap-1">
                 {renderUpdateIconButton('w-8 h-8')}
-                <button
-                  type="button"
-                  onClick={() => setIsSidebarCompact(true)}
-                  aria-label="Collapse sidebar"
-                  title="Collapse sidebar"
-                  className="w-8 h-8 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-                >
-                  <PanelLeftClose className="w-4 h-4" />
-                </button>
               </div>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2 shrink-0">
               <button
                 type="button"
-                onClick={() => setActiveTab('dashboard')}
-                aria-label="Klarity Overview"
-                title="Overview"
+                onClick={() => setIsSidebarCompact(false)}
+                aria-label="Expand sidebar"
+                title="Expand sidebar"
                 className="p-1.5 rounded-[8px] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
               >
                 <KlarityLogo className="w-7 h-7 text-[#1B4B91]" />
               </button>
-              <button
-                type="button"
-                onClick={() => setIsSidebarCompact(false)}
-                aria-label="Expand sidebar"
-                title="Expand sidebar"
-                className="p-1.5 rounded-[8px] text-[var(--muted)] hover:text-[#1B4B91] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
-              >
-                <PanelLeftOpen className="w-5 h-5" />
-              </button>
+              {renderUpdateIconButton('w-9 h-9')}
             </div>
           )}
 
