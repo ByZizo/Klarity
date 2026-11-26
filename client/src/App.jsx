@@ -5630,32 +5630,40 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         }`}
       >
         <div className={`flex flex-col flex-1 min-h-0 overflow-y-auto py-4 ${isSidebarCompact ? 'px-2 gap-3 items-center' : 'px-3.5 gap-4'}`}>
-          {/* Brand Header (Klarity logo toggles expand/collapse sidebar) */}
+          {/* Brand Header (Expanded: logo + collapse icon | Collapsed: logo morphs to expand icon on hover) */}
           {!isSidebarCompact ? (
             <div className="flex items-center justify-between px-2">
               <button
                 type="button"
-                onClick={() => setIsSidebarCompact(true)}
-                aria-label="Collapse sidebar"
-                title="Collapse sidebar"
-                className="flex items-center gap-2.5 text-left rounded-[8px] px-1.5 py-1 -ml-1.5 hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                onClick={() => setActiveTab('dashboard')}
+                className="flex items-center gap-2.5 text-left rounded-[8px] py-1 cursor-pointer"
               >
                 <KlarityLogo className="w-7 h-7 text-[#1B4B91] shrink-0" />
                 <span className="font-serif text-[22px] font-semibold tracking-tight text-[var(--ink)]">
                   Klarity
                 </span>
               </button>
+              <button
+                type="button"
+                onClick={() => setIsSidebarCompact(true)}
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                className="w-8 h-8 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-2 shrink-0">
+            <div className="flex flex-col items-center shrink-0">
               <button
                 type="button"
                 onClick={() => setIsSidebarCompact(false)}
                 aria-label="Expand sidebar"
                 title="Expand sidebar"
-                className="p-1.5 rounded-[8px] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
+                className="group relative w-10 h-10 flex items-center justify-center rounded-[8px] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
               >
-                <KlarityLogo className="w-7 h-7 text-[#1B4B91]" />
+                <KlarityLogo className="w-7 h-7 text-[#1B4B91] transition-opacity duration-150 group-hover:opacity-0 group-focus-visible:opacity-0" />
+                <PanelLeftOpen className="w-5 h-5 text-[var(--ink)] absolute inset-0 m-auto opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150" />
               </button>
             </div>
           )}
