@@ -605,10 +605,14 @@ export function BrowserPage({
 
     if (window.klarityDesktop.onBrowserAuthWindowClosed) {
       unsubs.push(
-        window.klarityDesktop.onBrowserAuthWindowClosed(() => {
+        window.klarityDesktop.onBrowserAuthWindowClosed((payload) => {
           setEmbeddedAuthBlockInfo(null);
-          const currentWv = webviewRefs.current[activeTabIdRef.current];
-          if (currentWv && typeof currentWv.reload === 'function') {
+          const finalUrl = payload?.finalUrl;
+          const activeId = activeTabIdRef.current;
+          const currentWv = webviewRefs.current[activeId];
+          if (finalUrl && !/accounts\.google\.com/i.test(finalUrl)) {
+            openUrlHandlersRef.current.navigateTo?.(finalUrl, activeId);
+          } else if (currentWv && typeof currentWv.reload === 'function') {
             try {
               currentWv.reload();
             } catch {}
@@ -1173,6 +1177,8 @@ export function BrowserPage({
   // Map of tabId -> <webview> DOM element
   const webviewRefs = useRef({});
   const attachedListenersRef = useRef({});
+  const domReadyTabsRef = useRef({});
+  const pendingNavUrlRef = useRef({});
   const isDesktop = typeof window !== 'undefined' && Boolean(window.klarityDesktop?.isDesktopApp);
 
   // Keep address bar synced when switching tabs
@@ -1646,6 +1652,20 @@ export function BrowserPage({
     attachedListenersRef.current[tabId] = webview;
 
     const handleDomReady = () => {
+      domReadyTabsRef.current[tabId] = true;
+      const queuedUrl = pendingNavUrlRef.current[tabId];
+      if (queuedUrl) {
+        delete pendingNavUrlRef.current[tabId];
+        try {
+          if (typeof webview.loadURL === 'function') {
+            webview.loadURL(queuedUrl);
+          } else {
+            webview.src = queuedUrl;
+          }
+        } catch {
+          webview.src = queuedUrl;
+        }
+      }
       const factor = Math.max(0.5, Math.min(2.5, Number(browserSettings?.pageZoom || 100) / 100));
       try {
         if (typeof webview.setZoomFactor === 'function') webview.setZoomFactor(factor);
@@ -1850,18 +1870,38 @@ export function BrowserPage({
     if (targetTabId === activeTabId) {
       setUrlInput(target);
     }
-    setTabs((prev) => prev.map((t) => (t.id === targetTabId ? { ...t, url: target } : t)));
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.id === targetTabId
+          ? {
+              ...t,
+              url: target,
+              ...(isNewTabUrl(t.initialUrl) && !domReadyTabsRef.current[targetTabId]
+                ? { initialUrl: target }
+                : {})
+            }
+          : t
+      )
+    );
 
     const webview = webviewRefs.current[targetTabId];
     if (webview) {
-      try {
-        if (typeof webview.loadURL === 'function') {
-          webview.loadURL(target);
-        } else {
+      if (!domReadyTabsRef.current[targetTabId]) {
+        pendingNavUrlRef.current[targetTabId] = target;
+        try {
+          webview.src = target;
+        } catch {}
+      } else {
+        delete pendingNavUrlRef.current[targetTabId];
+        try {
+          if (typeof webview.loadURL === 'function') {
+            webview.loadURL(target);
+          } else {
+            webview.src = target;
+          }
+        } catch {
           webview.src = target;
         }
-      } catch {
-        webview.src = target;
       }
     } else if (!isDesktop) {
       recordBrowserVisit(
@@ -2028,6 +2068,8 @@ export function BrowserPage({
     if (e) e.stopPropagation();
     delete webviewRefs.current[tabId];
     delete attachedListenersRef.current[tabId];
+    delete domReadyTabsRef.current[tabId];
+    delete pendingNavUrlRef.current[tabId];
 
     setTabs((prev) => {
       if (prev.length === 1) {
@@ -4093,7 +4135,7 @@ export function BrowserPage({
       {/* Clean Sign-In Fallback Banner when a provider restricts embedded views */}
       {!isNewTabUrl(activeTab?.url) &&
         (embeddedAuthBlockInfo?.tabId === activeTabId ||
-          /accounts\.google\.com\/(?:v3\/)?signin/i.test(activeTab?.url || '')) && (
+          /accounts\.google\.com/i.test(activeTab?.url || '')) && (
           <div className="shrink-0 w-full bg-[var(--surface)] border-b border-[var(--line)] px-3 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs z-40">
             <div className="flex items-center gap-2 min-w-0">
               <ShieldAlert className="w-4 h-4 text-[var(--brand)] shrink-0" />

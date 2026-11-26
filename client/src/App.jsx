@@ -5853,7 +5853,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   <span className="flex items-center gap-2 min-w-0 text-[12.5px] font-semibold">
                     <ArrowUpCircle className={`w-4 h-4 shrink-0 ${isUpdateInstalling ? 'animate-pulse' : ''}`} />
                     <span className="truncate">
-                      {isUpdateInstalling ? 'Installing update...' : 'Update available'}
+                      {isUpdateInstalling ? 'Installing update...' : 'Update'}
                     </span>
                   </span>
                   {!isUpdateInstalling && (

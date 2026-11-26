@@ -299,6 +299,17 @@ const { ipcRenderer } = require('electron');
     window.addEventListener('DOMContentLoaded', () => {
       setTimeout(checkEmbeddedAuthBlock, 350);
       setTimeout(checkEmbeddedAuthBlock, 1400);
+      try {
+        const host = (window.location?.hostname || '').toLowerCase();
+        if (host.includes('google.com') && typeof MutationObserver === 'function' && document.body) {
+          let blockCheckTimer = null;
+          const observer = new MutationObserver(() => {
+            if (blockCheckTimer) clearTimeout(blockCheckTimer);
+            blockCheckTimer = setTimeout(checkEmbeddedAuthBlock, 300);
+          });
+          observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        }
+      } catch {}
     });
     window.addEventListener('load', () => {
       setTimeout(checkEmbeddedAuthBlock, 400);

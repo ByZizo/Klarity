@@ -47,8 +47,11 @@ process.env.KLARITY_USER_DATA_DIR = userDataDir;
 process.env.KLARITY_DESKTOP_APP = 'true';
 process.env.KLARITY_DESKTOP_IPC_SECRET = DESKTOP_IPC_SECRET;
 
+const CHROME_MAJOR_VERSION = String(process.versions?.chrome || '134.0.0.0').split('.')[0] || '134';
+const STANDARD_SEC_CH_UA = `"Chromium";v="${CHROME_MAJOR_VERSION}", "Google Chrome";v="${CHROME_MAJOR_VERSION}", "Not-A.Brand";v="99"`;
+
 function buildStandardDesktopUserAgent() {
-  const chromeVer = process.versions?.chrome || '134.0.0.0';
+  const chromeVer = `${CHROME_MAJOR_VERSION}.0.0.0`;
   if (process.platform === 'darwin') {
     return `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVer} Safari/537.36`;
   }
@@ -747,9 +750,11 @@ async function createDesktopWindow() {
     const requestHeaders = { ...(details.requestHeaders || {}) };
     requestHeaders['User-Agent'] = STANDARD_BROWSER_UA;
     for (const key of Object.keys(requestHeaders)) {
-      if (/^sec-ch-ua/i.test(key) && typeof requestHeaders[key] === 'string') {
+      if (key.toLowerCase() === 'sec-ch-ua') {
+        requestHeaders[key] = STANDARD_SEC_CH_UA;
+      } else if (/^sec-ch-ua/i.test(key) && typeof requestHeaders[key] === 'string') {
         requestHeaders[key] = requestHeaders[key]
-          .replace(/,?\s*"Electron";v="[^"]*"/gi, '')
+          .replace(/"Electron";v="([^"]*)"/gi, `"Google Chrome";v="${CHROME_MAJOR_VERSION}"`)
           .replace(/,?\s*"klarity";v="[^"]*"/gi, '');
       }
     }
@@ -986,6 +991,7 @@ async function createDesktopWindow() {
     webPreferences.nodeIntegration = false;
     webPreferences.contextIsolation = true;
     webPreferences.sandbox = true;
+    webPreferences.partition = 'persist:klarity_browser';
     webPreferences.preload = path.join(__dirname, 'browserGuestPreload.js');
   });
 
@@ -1543,12 +1549,24 @@ function openBrowserAuthWindow(targetUrl) {
       sandbox: true
     }
   });
+  let latestAuthUrl = targetUrl;
+  const trackAuthNav = (_e, navUrl) => {
+    if (navUrl && /^https?:\/\//i.test(navUrl)) {
+      latestAuthUrl = navUrl;
+    }
+  };
+  authWin.webContents.on('did-navigate', trackAuthNav);
+  authWin.webContents.on('did-navigate-in-page', trackAuthNav);
+
   authWin.webContents.setUserAgent(STANDARD_BROWSER_UA);
   authWin.loadURL(targetUrl).catch(() => {});
 
   authWin.on('closed', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('klarity:browser-auth-window-closed', { url: targetUrl });
+      mainWindow.webContents.send('klarity:browser-auth-window-closed', {
+        url: targetUrl,
+        finalUrl: latestAuthUrl
+      });
     }
   });
 
@@ -1622,6 +1640,11 @@ ipcMain.handle('klarity:browser-copy-image-data-url', (_e, dataUrl) => {
 app.on('web-contents-created', (_event, contents) => {
   if (contents.getType() === 'webview') {
     contents.setUserAgent(STANDARD_BROWSER_UA);
+    contents.on('did-attach', () => {
+      try {
+        contents.setUserAgent(STANDARD_BROWSER_UA);
+      } catch {}
+    });
     contents.setWindowOpenHandler(({ url, disposition }) => {
       if (!url || !/^https?:\/\//i.test(url)) {
         return { action: 'deny' };
