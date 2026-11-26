@@ -1033,25 +1033,20 @@ export default function HouseholdQuestionnaire({
           </p>
         </div>
 
-        {/* ---- SCREEN 1: HOME BASICS — LOCATION & OWNERSHIP ---- */}
-        {currentScreen.id === 'home_basics_location' && (
-          <div className="flex flex-col gap-6">
-            {/* Optional Zillow Auto-Fill Card */}
-            <div className="rounded-[12px] border border-[var(--line)] bg-[var(--surface-2)] p-4 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <label
-                  htmlFor="hh_zillow_url"
-                  className="text-[14px] sm:text-[15px] font-semibold text-[var(--ink)] flex items-center gap-2"
-                >
-                  <Link2 className="w-4 h-4 text-[var(--brand)] shrink-0" />
-                  <span>Auto-fill from Zillow link</span>
-                  <span className="text-[12px] font-medium text-[var(--muted)]">(Optional)</span>
-                </label>
-              </div>
-              <p className="text-[13px] font-medium text-[var(--muted)] leading-snug">
-                Paste your home&apos;s Zillow URL to automatically pull the address, beds, baths, square footage, year built, and lot details.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-2">
+        {/* ---- SCREEN 0: HOME BASICS — ZILLOW AUTO-FILL (FIRST QUESTION) ---- */}
+        {currentScreen.id === 'home_basics_zillow' && (
+          <div className="flex flex-col gap-5">
+            <div className="rounded-[12px] border border-[var(--line)] bg-[var(--surface-2)] p-5 flex flex-col gap-3.5">
+              <label
+                htmlFor="hh_zillow_url"
+                className="text-[15px] font-semibold text-[var(--ink)] flex items-center gap-2"
+              >
+                <Link2 className="w-4 h-4 text-[var(--brand)] shrink-0" />
+                <span>Zillow property link</span>
+                <span className="text-[12px] font-medium text-[var(--muted)]">(Optional)</span>
+              </label>
+
+              <div className="flex flex-col sm:flex-row gap-2.5">
                 <input
                   id="hh_zillow_url"
                   type="url"
@@ -1068,13 +1063,13 @@ export default function HouseholdQuestionnaire({
                   }}
                   placeholder="https://www.zillow.com/homedetails/..."
                   disabled={zillowLoading}
-                  className="flex-1 min-h-[44px] px-3.5 py-2.5 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] text-[14px] font-medium text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:border-[var(--brand)] disabled:opacity-60"
+                  className="flex-1 min-h-[46px] px-3.5 py-2.5 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] text-[14px] font-medium text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:border-[var(--brand)] disabled:opacity-60"
                 />
                 <button
                   type="button"
                   onClick={handlePullFromZillow}
                   disabled={zillowLoading || !zillowLinkInput.trim()}
-                  className="min-h-[44px] px-4 py-2.5 rounded-[10px] bg-[var(--brand)] text-white text-[14px] font-semibold hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer inline-flex items-center justify-center gap-2 shrink-0"
+                  className="min-h-[46px] px-5 py-2.5 rounded-[10px] bg-[var(--brand)] text-white text-[14px] font-semibold hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer inline-flex items-center justify-center gap-2 shrink-0"
                 >
                   {zillowLoading ? (
                     <>
@@ -1084,12 +1079,13 @@ export default function HouseholdQuestionnaire({
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      <span>Pull info</span>
+                      <span>Pull home info</span>
                     </>
                   )}
                 </button>
               </div>
-              {zillowFeedback && (
+
+              {zillowFeedback ? (
                 <p
                   role="status"
                   aria-live="polite"
@@ -1104,9 +1100,29 @@ export default function HouseholdQuestionnaire({
                   )}
                   <span>{zillowFeedback.text}</span>
                 </p>
+              ) : (
+                <p className="text-[13px] font-medium text-[var(--muted)] leading-snug">
+                  We&apos;ll pre-fill your address, home type, bedrooms, bathrooms, square footage, year built, and lot size on the next screens for you to confirm.
+                </p>
               )}
             </div>
 
+            <div className="flex items-center justify-between gap-2 text-[13px] text-[var(--muted)]">
+              <span>Don&apos;t have a Zillow link handy?</span>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="font-semibold text-[var(--brand)] hover:underline cursor-pointer"
+              >
+                Skip and enter manually →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ---- SCREEN 1: HOME BASICS — LOCATION & OWNERSHIP ---- */}
+        {currentScreen.id === 'home_basics_location' && (
+          <div className="flex flex-col gap-6">
             <TextField
               id="hh_address"
               label="Home street address"

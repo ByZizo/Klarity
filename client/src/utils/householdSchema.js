@@ -961,6 +961,13 @@ export const HOUSEHOLD_SECTIONS = [
  */
 export const QUESTIONNAIRE_SCREENS = [
   {
+    id: 'home_basics_zillow',
+    sectionId: 'home_basics',
+    title: 'Add your home’s Zillow link',
+    whyWeAsk: 'Paste your Zillow listing link so Klarity AI can automatically pull your address, bedrooms, bathrooms, square footage, year built, and lot details for you.',
+    essential: false
+  },
+  {
     id: 'home_basics_location',
     sectionId: 'home_basics',
     title: 'Home address and ownership',
