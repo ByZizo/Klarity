@@ -152,92 +152,52 @@ export default function BrowserPasswordPrompt({
 
   return (
     <div
-      role="dialog"
+      role="region"
       aria-label={isUpdate ? 'Update saved password' : 'Save password to Klarity Vault'}
-      className="absolute right-3 top-full mt-2 w-80 sm:w-88 rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl z-50 p-4 flex flex-col gap-3 text-[var(--ink)]"
+      className="shrink-0 w-full bg-[var(--surface)] border-b border-[var(--line)] px-3 sm:px-4 py-2.5 text-[var(--ink)] z-40 shadow-2xs"
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-[10px] bg-[#1B4B91]/15 text-[#1B4B91] flex items-center justify-center shrink-0">
-            <KeyRound className="w-4 h-4" />
+      <form onSubmit={handleSubmit} className="flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-[var(--brand-soft)] text-[var(--brand)] flex items-center justify-center shrink-0">
+            <KeyRound className="w-3.5 h-3.5" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-[14px] font-semibold text-[var(--ink)] leading-tight">
-              {isUpdate ? 'Update password?' : 'Save password to Vault?'}
-            </h3>
-            <p className="text-[11px] text-[var(--muted)] truncate">
+            <div className="text-xs font-semibold text-[var(--ink)] leading-tight">
+              {isUpdate ? 'Update saved password in Vault?' : 'Save login to Klarity Vault?'}
+            </div>
+            <div className="text-[11px] text-[var(--muted)] truncate">
               {promptData.hostname}
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setPassword('');
-            onDismiss?.();
-          }}
-          aria-label="Dismiss save password prompt"
-          className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-[11px] font-medium text-[var(--muted)] block mb-1">
-              Account Name
-            </label>
-            <input
-              type="text"
-              value={service}
-              onChange={(e) => setService(e.target.value)}
-              className="w-full h-8 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-2.5 text-[12px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-[var(--muted)] block mb-1">
-              Vault Section
-            </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full h-8 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-2 text-[12px] text-[var(--ink)] outline-none focus:border-[#1B4B91] cursor-pointer"
-            >
-              {sections.map((sec) => (
-                <option key={sec} value={sec}>
-                  {sec}
-                </option>
-              ))}
-            </select>
+            </div>
           </div>
         </div>
 
-        <div>
-          <label className="text-[11px] font-medium text-[var(--muted)] block mb-1">
-            Username / Email
-          </label>
+        <div className="flex flex-wrap items-center gap-2 flex-1 justify-end">
+          <input
+            type="text"
+            value={service}
+            onChange={(e) => setService(e.target.value)}
+            aria-label="Account Name"
+            placeholder="Site name"
+            className="w-28 sm:w-32 h-8 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-lg px-2.5 text-xs text-[var(--ink)] outline-none focus:border-[var(--brand)]"
+          />
+
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="(optional)"
-            className="w-full h-8 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] px-2.5 text-[12px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
+            aria-label="Username or Email"
+            placeholder="Username / email"
+            className="w-36 sm:w-44 h-8 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-lg px-2.5 text-xs text-[var(--ink)] outline-none focus:border-[var(--brand)]"
           />
-        </div>
 
-        <div>
-          <label className="text-[11px] font-medium text-[var(--muted)] block mb-1">
-            Password
-          </label>
-          <div className="relative">
+          <div className="relative w-32 sm:w-36">
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              aria-label="Password"
               required
-              className="w-full h-8 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-[8px] pl-2.5 pr-8 text-[12px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
+              className="w-full h-8 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-lg pl-2.5 pr-7 text-xs text-[var(--ink)] outline-none focus:border-[var(--brand)]"
             />
             <button
               type="button"
@@ -248,47 +208,44 @@ export default function BrowserPasswordPrompt({
               {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             </button>
           </div>
-        </div>
 
-        {needsUnlock && (
-          <div className="p-2.5 rounded-[10px] bg-amber-500/10 border border-amber-500/30 flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-[var(--ink)] flex items-center gap-1.5">
-              <Lock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-              <span>Vault is locked — enter PIN to save</span>
-            </label>
-            <input
-              type="password"
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value)}
-              placeholder="Vault PIN or master password"
-              className="w-full h-8 bg-[var(--surface)] border border-[var(--line)] rounded-[7px] px-2.5 text-[12px] text-[var(--ink)] outline-none focus:border-[#1B4B91]"
-            />
-            {pinError && (
-              <span className="text-[11px] text-rose-500 font-medium">{pinError}</span>
-            )}
-          </div>
-        )}
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            aria-label="Vault Section"
+            className="h-8 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-lg px-2 text-xs text-[var(--ink)] outline-none focus:border-[var(--brand)] cursor-pointer"
+          >
+            {sections.map((sec) => (
+              <option key={sec} value={sec}>
+                {sec}
+              </option>
+            ))}
+          </select>
 
-        <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-[var(--line)]">
-          {!isUpdate ? (
-            <button
-              type="button"
-              onClick={() => {
-                setPassword('');
-                onNeverForSite?.(promptData.hostname);
-              }}
-              className="text-[11px] font-medium text-[var(--muted)] hover:text-rose-500 cursor-pointer"
-            >
-              Never for this site
-            </button>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-[11px] text-[var(--muted)]">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              AES-256-GCM
-            </span>
+          {needsUnlock && (
+            <div className="flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <input
+                type="password"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                placeholder="Vault PIN"
+                aria-label="Vault PIN"
+                className="w-28 h-8 bg-amber-500/10 border border-amber-500/40 rounded-lg px-2.5 text-xs text-[var(--ink)] outline-none focus:border-[var(--brand)]"
+              />
+            </div>
           )}
 
-          <div className="flex items-center gap-1.5 ml-auto">
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={isVerifying || !password}
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>{isUpdate ? 'Update' : 'Save'}</span>
+            </Button>
             <Button
               type="button"
               variant="secondary"
@@ -300,18 +257,38 @@ export default function BrowserPasswordPrompt({
             >
               Not now
             </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              disabled={isVerifying || !password}
+            {!isUpdate && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPassword('');
+                  onNeverForSite?.(promptData.hostname);
+                }}
+                className="px-2 py-1 text-[11px] font-medium text-[var(--muted)] hover:text-rose-500 cursor-pointer whitespace-nowrap"
+              >
+                Never
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setPassword('');
+                onDismiss?.();
+              }}
+              aria-label="Dismiss save password prompt"
+              className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
             >
-              <Check className="w-3.5 h-3.5" />
-              <span>{isUpdate ? 'Update' : 'Save'}</span>
-            </Button>
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </form>
+      {pinError && (
+        <div className="mt-1.5 text-[11px] text-rose-500 font-medium flex items-center gap-1">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>{pinError}</span>
+        </div>
+      )}
     </div>
   );
 }

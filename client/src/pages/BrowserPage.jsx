@@ -38,6 +38,7 @@ import {
   FileText,
   AlertCircle,
   Calculator,
+  Camera,
   MoreVertical,
   Maximize2,
   Minimize2,
@@ -53,6 +54,7 @@ import { NewTabPage } from '../components/NewTabPage';
 import { BrowserCalculatorPopover } from '../components/BrowserCalculatorPopover';
 import { BrowserSearchDropdown } from '../components/BrowserSearchDropdown';
 import BrowserPasswordPrompt from '../components/BrowserPasswordPrompt';
+import { BrowserSnapshotOverlay } from '../components/BrowserSnapshotOverlay';
 import {
   buildYouTubeAdShieldScript,
   buildSponsorBlockScript,
@@ -364,13 +366,17 @@ export function BrowserPage({
   const [isOverflowMenuOpen, setIsOverflowMenuOpen] = useState(false);
   const overflowMenuRef = useRef(null);
   const [passwordSavePrompt, setPasswordSavePrompt] = useState(null);
+  const [embeddedAuthBlockInfo, setEmbeddedAuthBlockInfo] = useState(null); // { tabId, url, provider }
+  const [snapshotSourceDataUrl, setSnapshotSourceDataUrl] = useState('');
+  const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
+  const browserViewportRef = useRef(null);
   const vaultItemsRef = useRef(vaultItems);
   useEffect(() => {
     vaultItemsRef.current = vaultItems;
   }, [vaultItems]);
 
   const isAnyToolbarPopoverOpen =
-    isAdBlockPopoverOpen || isDownloadsPopoverOpen || isOverflowMenuOpen || Boolean(passwordSavePrompt);
+    isAdBlockPopoverOpen || isDownloadsPopoverOpen || isOverflowMenuOpen;
 
   const normalizeSiteHost = (raw) => {
     try {
@@ -511,6 +517,114 @@ export function BrowserPage({
       onShowToast?.(`Won't ask to save passwords on ${clean}`, 'info');
     }
   };
+
+  // Start Microsoft Edge-style interactive region Snapshot capture
+  const handleTriggerSnapshot = async () => {
+    if (isCapturingSnapshot) return;
+    if (snapshotSourceDataUrl) {
+      setSnapshotSourceDataUrl('');
+      return;
+    }
+    closeToolbarPopovers();
+    setIsCalculatorOpen(false);
+    setIsCapturingSnapshot(true);
+
+    try {
+      const vpEl = browserViewportRef.current;
+      const vpRect = vpEl?.getBoundingClientRect();
+
+      if (window.klarityDesktop?.captureViewportRect && vpRect && vpRect.width > 10 && vpRect.height > 10) {
+        // Wait one animation frame so any open toolbar popovers disappear before capturing
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const res = await window.klarityDesktop.captureViewportRect({
+          x: vpRect.left,
+          y: vpRect.top,
+          width: vpRect.width,
+          height: vpRect.height
+        });
+        if (res?.ok && res.dataUrl) {
+          setSnapshotSourceDataUrl(res.dataUrl);
+          return;
+        }
+      }
+
+      // Clean lightweight fallback canvas when running outside Electron desktop
+      const w = Math.max(320, Math.round(vpRect?.width || 960));
+      const h = Math.max(240, Math.round(vpRect?.height || 600));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = '600 20px system-ui, sans-serif';
+      ctx.fillText(activeTab?.title || 'Klarity Browser Snapshot', 36, 56);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '14px system-ui, sans-serif';
+      ctx.fillText(activeTab?.url || NEW_TAB_URL, 36, 84);
+      setSnapshotSourceDataUrl(canvas.toDataURL('image/png'));
+      canvas.width = 0;
+      canvas.height = 0;
+    } catch (err) {
+      onShowToast?.(err?.message || 'Unable to start snapshot.', 'error');
+    } finally {
+      setIsCapturingSnapshot(false);
+    }
+  };
+
+  // Subscribe to desktop OAuth window events, target=_blank new tabs, and popup login detection
+  useEffect(() => {
+    if (!window.klarityDesktop) return undefined;
+    const unsubs = [];
+
+    if (window.klarityDesktop.onBrowserOpenTab) {
+      unsubs.push(
+        window.klarityDesktop.onBrowserOpenTab((payload) => {
+          if (payload?.url) {
+            openUrlHandlersRef.current.handleNewTab?.({
+              url: payload.url,
+              insertAfterTabId: activeTabIdRef.current
+            });
+          }
+        })
+      );
+    }
+
+    if (window.klarityDesktop.onBrowserAuthWindowClosed) {
+      unsubs.push(
+        window.klarityDesktop.onBrowserAuthWindowClosed(() => {
+          setEmbeddedAuthBlockInfo(null);
+          const currentWv = webviewRefs.current[activeTabIdRef.current];
+          if (currentWv && typeof currentWv.reload === 'function') {
+            try {
+              currentWv.reload();
+            } catch {}
+          }
+          onShowToast?.('Sign-in window closed — refreshing page with updated session.');
+        })
+      );
+    }
+
+    if (window.klarityDesktop.onBrowserLoginDetected) {
+      unsubs.push(
+        window.klarityDesktop.onBrowserLoginDetected((candidate) => {
+          if (candidate && candidate.password) {
+            setTimeout(() => {
+              handleLoginCandidateDetected(candidate, activeTabIdRef.current);
+            }, 300);
+          }
+        })
+      );
+    }
+
+    return () => {
+      unsubs.forEach((fn) => {
+        if (typeof fn === 'function') fn();
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Dedicated In-Browser AI Sidebar State (Self-contained, Advisor-powered, user-expandable)
   const [isBrowserAiSidebarOpen, setIsBrowserAiSidebarOpen] = useState(false);
@@ -1626,6 +1740,15 @@ export function BrowserPage({
       }
       if (navUrl) {
         applyYouTubeEnhancements(tabId, navUrl);
+        if (/accounts\.google\.com\/.*(?:rejected|disallowed_useragent|denied)/i.test(navUrl)) {
+          setEmbeddedAuthBlockInfo({
+            tabId,
+            url: 'https://accounts.google.com',
+            provider: 'Google'
+          });
+        } else if (embeddedAuthBlockInfo?.tabId === tabId && !/accounts\.google\.com/i.test(navUrl)) {
+          setEmbeddedAuthBlockInfo(null);
+        }
       }
       if (tabId === activeTabIdRef.current && navUrl && navUrl !== 'about:blank' && !isNewTabUrl(navUrl)) {
         setUrlInput(navUrl);
@@ -1667,6 +1790,13 @@ export function BrowserPage({
             handleLoginCandidateDetected(candidate, tabId);
           }, 350);
         }
+      } else if (e?.channel === 'klarity:embedded-auth-blocked') {
+        const info = Array.isArray(e.args) ? e.args[0] : null;
+        setEmbeddedAuthBlockInfo({
+          tabId,
+          url: info?.url || webview.getURL() || 'https://accounts.google.com',
+          provider: info?.provider || 'Google'
+        });
       }
     };
 
@@ -2678,14 +2808,6 @@ export function BrowserPage({
 
       {/* 1. TOP BROWSER CONTROLS & SMART ADDRESS BAR */}
       <div className="shrink-0 bg-[var(--surface)] border-b border-[var(--line)] px-3 sm:px-4 py-2 flex flex-col gap-2 shadow-2xs relative z-50">
-        {passwordSavePrompt && (
-          <BrowserPasswordPrompt
-            promptData={passwordSavePrompt}
-            onSave={handleConfirmPasswordSavePrompt}
-            onNeverForSite={handleNeverSaveForDomain}
-            onDismiss={() => setPasswordSavePrompt(null)}
-          />
-        )}
         <div className="flex items-center gap-1.5">
           {/* Navigation Buttons: Back, Forward, Reload, Home */}
           <div className="flex items-center gap-1 shrink-0">
@@ -2897,7 +3019,7 @@ export function BrowserPage({
           {/* Divider after address bar */}
           <div className="w-px h-5 bg-[var(--line)] mx-0.5 shrink-0" aria-hidden="true" />
 
-          {/* Group 1: Calculator & Notes */}
+          {/* Group 1: Calculator, Snapshot & Notes */}
           <div className="flex items-center gap-1 shrink-0">
             <div className="relative shrink-0" ref={calculatorPopoverRef}>
               <button
@@ -2920,6 +3042,22 @@ export function BrowserPage({
                 <Calculator className="w-[18px] h-[18px]" />
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={handleTriggerSnapshot}
+              disabled={isCapturingSnapshot}
+              aria-label="Snapshot (Web Capture)"
+              title="Snapshot — Drag to capture area"
+              aria-pressed={Boolean(snapshotSourceDataUrl)}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-[var(--brand)] focus-visible:outline-offset-2 disabled:opacity-50 ${
+                snapshotSourceDataUrl
+                  ? 'bg-[var(--brand)] text-white'
+                  : 'text-[var(--ink)] hover:bg-[var(--surface-subtle)]'
+              }`}
+            >
+              <Camera className="w-[18px] h-[18px]" />
+            </button>
 
             <button
               type="button"
@@ -3729,10 +3867,85 @@ export function BrowserPage({
         )}
       </div>
 
+      {/* Non-Blocking Save / Update Login Banner */}
+      {passwordSavePrompt && (
+        <BrowserPasswordPrompt
+          promptData={passwordSavePrompt}
+          onSave={handleConfirmPasswordSavePrompt}
+          onNeverForSite={handleNeverSaveForDomain}
+          onDismiss={() => setPasswordSavePrompt(null)}
+        />
+      )}
+
+      {/* Clean Sign-In Fallback Banner when a provider restricts embedded views */}
+      {!isNewTabUrl(activeTab?.url) &&
+        (embeddedAuthBlockInfo?.tabId === activeTabId ||
+          /accounts\.google\.com\/(?:v3\/)?signin/i.test(activeTab?.url || '')) && (
+          <div className="shrink-0 w-full bg-[var(--surface)] border-b border-[var(--line)] px-3 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs z-40">
+            <div className="flex items-center gap-2 min-w-0">
+              <ShieldAlert className="w-4 h-4 text-[var(--brand)] shrink-0" />
+              <span className="text-[var(--ink)] font-medium">
+                {embeddedAuthBlockInfo?.tabId === activeTabId
+                  ? 'Google blocked sign-in inside the embedded tab. Continue in a dedicated Sign-In Window (shares browser cookies) or System Browser:'
+                  : 'Trouble signing into Google here? Open in a dedicated Sign-In Window to share your session cleanly:'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {window.klarityDesktop?.openBrowserAuthWindow && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = activeTab?.url || embeddedAuthBlockInfo?.url || 'https://accounts.google.com';
+                    window.klarityDesktop.openBrowserAuthWindow(target);
+                    onShowToast?.('Opened Sign-In Window — complete sign-in and close it to refresh.');
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white font-semibold cursor-pointer transition-colors"
+                >
+                  Open Sign-In Window
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const target = activeTab?.url || embeddedAuthBlockInfo?.url || 'https://accounts.google.com';
+                  if (window.klarityDesktop?.openExternalUrl) {
+                    window.klarityDesktop.openExternalUrl(target);
+                  } else {
+                    window.open(target, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+                className="px-2.5 py-1.5 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] text-[var(--ink)] border border-[var(--line)] font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>System Browser</span>
+                <ExternalLink className="w-3 h-3" />
+              </button>
+              {embeddedAuthBlockInfo?.tabId === activeTabId && (
+                <button
+                  type="button"
+                  onClick={() => setEmbeddedAuthBlockInfo(null)}
+                  aria-label="Dismiss sign-in helper"
+                  className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
       {/* 3. MULTI-TAB BROWSER CONTENT CANVAS + INTEGRATED BROWSER AI SIDEBAR */}
       <div className="flex-1 w-full relative bg-[var(--surface)] min-h-0 h-full overflow-hidden flex flex-row">
         {/* Webviews and New Tab Pages */}
-        <div className="flex-1 min-w-0 h-full relative overflow-hidden">
+        <div ref={browserViewportRef} className="flex-1 min-w-0 h-full relative overflow-hidden">
+          {snapshotSourceDataUrl && (
+            <BrowserSnapshotOverlay
+              sourceDataUrl={snapshotSourceDataUrl}
+              pageTitle={activeTab?.title || 'Page'}
+              pageUrl={activeTab?.url || ''}
+              onClose={() => setSnapshotSourceDataUrl('')}
+              onShowToast={onShowToast}
+            />
+          )}
           {isAnyToolbarPopoverOpen && (
             <div
               onClick={closeToolbarPopovers}
@@ -3745,7 +3958,7 @@ export function BrowserPage({
               const isTabActive = tab.id === activeTabId;
               const showNewTab = isNewTabUrl(tab.url);
               const disableWebviewPointer =
-                isAnyToolbarPopoverOpen || isDraggingCalc || isResizingCalc || isDraggingNotes || isResizingNotes || isResizingAiSidebar;
+                isAnyToolbarPopoverOpen || Boolean(snapshotSourceDataUrl) || isDraggingCalc || isResizingCalc || isDraggingNotes || isResizingNotes || isResizingAiSidebar;
               return (
                 <React.Fragment key={tab.id}>
                   <webview
@@ -3770,7 +3983,7 @@ export function BrowserPage({
                       zIndex: isTabActive && !showNewTab ? 10 : 0,
                       opacity: isTabActive && !showNewTab ? 1 : 0,
                       visibility:
-                        isTabActive && !showNewTab
+                        isTabActive && !showNewTab && !snapshotSourceDataUrl
                           ? (isAnyToolbarPopoverOpen ? 'hidden' : 'visible')
                           : 'hidden',
                       pointerEvents:

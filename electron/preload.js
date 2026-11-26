@@ -53,6 +53,28 @@ const desktopBridge = {
     const handler = (_event, stats) => callback(stats);
     ipcRenderer.on('klarity:adblock-stats', handler);
     return () => ipcRenderer.removeListener('klarity:adblock-stats', handler);
+  },
+  openBrowserAuthWindow: (url) => ipcRenderer.invoke('klarity:browser-open-auth-window', url),
+  openExternalUrl: (url) => ipcRenderer.invoke('klarity:browser-open-external', url),
+  captureViewportRect: (rect) => ipcRenderer.invoke('klarity:browser-capture-rect', rect),
+  copyImageDataUrl: (dataUrl) => ipcRenderer.invoke('klarity:browser-copy-image-data-url', dataUrl),
+  onBrowserOpenTab: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('klarity:browser-open-tab', handler);
+    return () => ipcRenderer.removeListener('klarity:browser-open-tab', handler);
+  },
+  onBrowserAuthWindowClosed: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('klarity:browser-auth-window-closed', handler);
+    return () => ipcRenderer.removeListener('klarity:browser-auth-window-closed', handler);
+  },
+  onBrowserLoginDetected: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const handler = (_event, candidate) => callback(candidate);
+    ipcRenderer.on('klarity:browser-login-detected', handler);
+    return () => ipcRenderer.removeListener('klarity:browser-login-detected', handler);
   }
 };
 

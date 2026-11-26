@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, session, nativeTheme, Menu, MenuItem, dialog, screen } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, session, nativeTheme, Menu, MenuItem, dialog, screen, clipboard, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -46,6 +46,23 @@ app.setPath('userData', userDataDir);
 process.env.KLARITY_USER_DATA_DIR = userDataDir;
 process.env.KLARITY_DESKTOP_APP = 'true';
 process.env.KLARITY_DESKTOP_IPC_SECRET = DESKTOP_IPC_SECRET;
+
+function buildStandardDesktopUserAgent() {
+  const chromeVer = process.versions?.chrome || '134.0.0.0';
+  if (process.platform === 'darwin') {
+    return `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVer} Safari/537.36`;
+  }
+  if (process.platform === 'linux') {
+    return `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVer} Safari/537.36`;
+  }
+  return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVer} Safari/537.36`;
+}
+
+const STANDARD_BROWSER_UA = buildStandardDesktopUserAgent();
+try {
+  app.userAgentFallback = STANDARD_BROWSER_UA;
+} catch {}
+
 try { if (nativeTheme) nativeTheme.themeSource = 'system'; } catch (e) {}
 const http = require('http');
 const { exec } = require('child_process');
@@ -724,15 +741,18 @@ async function createDesktopWindow() {
 
   // Set up dedicated In-App Browser Partition with Built-in Ad Blocker
   const browserSession = session.fromPartition('persist:klarity_browser');
-  const rawUa = session.defaultSession.getUserAgent() || '';
-  const cleanChromeUa = rawUa
-    .replace(/\s*Electron\/[^\s]+/gi, '')
-    .replace(/\s*klarity\/[^\s]+/gi, '')
-    .trim() || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-  browserSession.setUserAgent(cleanChromeUa);
+  browserSession.setUserAgent(STANDARD_BROWSER_UA);
 
   browserSession.webRequest.onBeforeSendHeaders({ urls: ['*://*/*'] }, (details, callback) => {
     const requestHeaders = { ...(details.requestHeaders || {}) };
+    requestHeaders['User-Agent'] = STANDARD_BROWSER_UA;
+    for (const key of Object.keys(requestHeaders)) {
+      if (/^sec-ch-ua/i.test(key) && typeof requestHeaders[key] === 'string') {
+        requestHeaders[key] = requestHeaders[key]
+          .replace(/,?\s*"Electron";v="[^"]*"/gi, '')
+          .replace(/,?\s*"klarity";v="[^"]*"/gi, '');
+      }
+    }
     if (browserRuntimePrefs.doNotTrack) {
       requestHeaders['DNT'] = '1';
       requestHeaders['Sec-GPC'] = '1';
@@ -1481,20 +1501,165 @@ ipcMain.handle('klarity:set-theme-source', (_e, mode) => {
   }
 });
 
-// Ensure embedded <webview> instances use a clean Chrome UA and open target=_blank links inside the webview
+function isOAuthOrPopupUrl(rawUrl, disposition) {
+  if (!rawUrl) return false;
+  if (disposition === 'new-window') return true;
+  try {
+    const u = new URL(rawUrl);
+    const host = u.hostname.toLowerCase();
+    const full = (u.hostname + u.pathname + u.search).toLowerCase();
+    if (
+      host === 'accounts.google.com' ||
+      host.endsWith('.google.com') && /\/o\/oauth|\/signin|\/v3\/signin|\/servicelogin/i.test(u.pathname) ||
+      host === 'login.microsoftonline.com' ||
+      host === 'login.live.com' ||
+      host === 'appleid.apple.com' ||
+      (host === 'github.com' && u.pathname.startsWith('/login')) ||
+      /\/oauth2?\/|\/authorize\b|\/auth\/|sso|openid/i.test(full)
+    ) {
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+function openBrowserAuthWindow(targetUrl) {
+  if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) {
+    return { ok: false, error: 'Invalid URL' };
+  }
+  const authWin = new BrowserWindow({
+    width: 540,
+    height: 700,
+    parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
+    center: true,
+    autoHideMenuBar: true,
+    title: 'Sign In — Klarity Browser',
+    icon: path.join(__dirname, 'klarity.ico'),
+    webPreferences: {
+      partition: 'persist:klarity_browser',
+      preload: path.join(__dirname, 'browserGuestPreload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+  authWin.webContents.setUserAgent(STANDARD_BROWSER_UA);
+  authWin.loadURL(targetUrl).catch(() => {});
+
+  authWin.on('closed', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('klarity:browser-auth-window-closed', { url: targetUrl });
+    }
+  });
+
+  return { ok: true };
+}
+
+ipcMain.on('klarity:guest-login-detected', (_event, candidate) => {
+  if (!candidate || !candidate.password) return;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('klarity:browser-login-detected', candidate);
+  }
+});
+
+ipcMain.handle('klarity:browser-open-auth-window', (_e, url) => {
+  return openBrowserAuthWindow(url);
+});
+
+ipcMain.handle('klarity:browser-open-external', async (_e, url) => {
+  if (!url || !/^https?:\/\//i.test(String(url))) {
+    return { ok: false, error: 'Invalid URL' };
+  }
+  await shell.openExternal(String(url));
+  return { ok: true };
+});
+
+ipcMain.handle('klarity:browser-capture-rect', async (_e, rect) => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { ok: false, error: 'Desktop window unavailable' };
+  }
+  try {
+    const cleanRect =
+      rect &&
+      Number.isFinite(rect.x) &&
+      Number.isFinite(rect.y) &&
+      Number.isFinite(rect.width) &&
+      Number.isFinite(rect.height) &&
+      rect.width > 2 &&
+      rect.height > 2
+        ? {
+            x: Math.max(0, Math.round(rect.x)),
+            y: Math.max(0, Math.round(rect.y)),
+            width: Math.max(1, Math.round(rect.width)),
+            height: Math.max(1, Math.round(rect.height))
+          }
+        : undefined;
+    const img = await mainWindow.webContents.capturePage(cleanRect);
+    if (!img || img.isEmpty()) {
+      return { ok: false, error: 'Captured image was empty' };
+    }
+    return { ok: true, dataUrl: img.toDataURL() };
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Capture failed' };
+  }
+});
+
+ipcMain.handle('klarity:browser-copy-image-data-url', (_e, dataUrl) => {
+  try {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+      return { ok: false, error: 'Invalid image data' };
+    }
+    const img = nativeImage.createFromDataURL(dataUrl);
+    if (img.isEmpty()) return { ok: false, error: 'Empty image' };
+    clipboard.writeImage(img);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Clipboard copy failed' };
+  }
+});
+
+// Ensure embedded <webview> instances use a standard desktop UA and support OAuth popups + target=_blank tabs cleanly
 app.on('web-contents-created', (_event, contents) => {
   if (contents.getType() === 'webview') {
-    const rawUa = session.defaultSession.getUserAgent() || '';
-    const cleanChromeUa = rawUa
-      .replace(/\s*Electron\/[^\s]+/gi, '')
-      .replace(/\s*klarity\/[^\s]+/gi, '')
-      .trim() || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-    contents.setUserAgent(cleanChromeUa);
-    contents.setWindowOpenHandler(({ url }) => {
-      if (url && /^https?:\/\//i.test(url)) {
+    contents.setUserAgent(STANDARD_BROWSER_UA);
+    contents.setWindowOpenHandler(({ url, disposition }) => {
+      if (!url || !/^https?:\/\//i.test(url)) {
+        return { action: 'deny' };
+      }
+      // Allow real OAuth / sign-in popups in a child BrowserWindow sharing persist:klarity_browser so window.opener works
+      if (isOAuthOrPopupUrl(url, disposition)) {
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: {
+            width: 520,
+            height: 680,
+            parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
+            center: true,
+            autoHideMenuBar: true,
+            icon: path.join(__dirname, 'klarity.ico'),
+            webPreferences: {
+              partition: 'persist:klarity_browser',
+              preload: path.join(__dirname, 'browserGuestPreload.js'),
+              contextIsolation: true,
+              nodeIntegration: false,
+              sandbox: true
+            }
+          }
+        };
+      }
+      // Open regular target=_blank links cleanly as a new tab inside Klarity Browser
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('klarity:browser-open-tab', { url });
+      } else {
         contents.loadURL(url);
       }
       return { action: 'deny' };
+    });
+
+    contents.on('did-create-window', (childWin) => {
+      try {
+        childWin.webContents.setUserAgent(STANDARD_BROWSER_UA);
+      } catch {}
     });
   }
 });
