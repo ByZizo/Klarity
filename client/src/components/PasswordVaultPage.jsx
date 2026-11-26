@@ -38,6 +38,19 @@ import { getDocumentCountSync, formatFileSize } from '../utils/documentVaultStor
 
 export const DEFAULT_VAULT_ITEMS = [];
 
+function formatSafeWebsiteHref(rawUrl) {
+  const trimmed = String(rawUrl || '').trim();
+  if (!trimmed) return '';
+  if (/^(?:javascript|data|vbscript|file):/i.test(trimmed)) return '';
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(withScheme);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
 export default function PasswordVaultPage({
   vaultItems = [],
   onUpdateVaultItems,
@@ -1628,6 +1641,10 @@ export default function PasswordVaultPage({
             const isExpanded = Boolean(expandedCardIds[item.id]);
             const isPwVisible = Boolean(visiblePasswords[item.id]);
             const isFav = Boolean(item.isFavorite);
+            const websiteHref = formatSafeWebsiteHref(item.website);
+            const websiteLabel = websiteHref
+              ? String(item.website || '').trim().replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')
+              : '';
 
             return (
               <Card
@@ -1636,54 +1653,80 @@ export default function PasswordVaultPage({
                   isExpanded ? 'border-[#1B4B91]' : ''
                 }`}
               >
-                <button
-                  type="button"
-                  onClick={() => toggleCardExpand(item.id)}
-                  className="w-full flex items-center justify-between gap-3 p-4 cursor-pointer hover:bg-[var(--surface-subtle)] transition-colors text-left"
-                >
-                  <div className={`w-9 h-9 rounded-[8px] flex items-center justify-center shrink-0 ${
-                    isExpanded ? 'bg-[#1B4B91] text-white' : 'bg-[var(--surface-subtle)] text-[var(--ink)]'
-                  }`}>
-                    <KeyRound className="w-4 h-4" />
-                  </div>
+                <div className="w-full flex items-center justify-between gap-2 p-4 hover:bg-[var(--surface-subtle)] transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => toggleCardExpand(item.id)}
+                    aria-expanded={isExpanded}
+                    className="flex-1 min-w-0 flex items-center gap-3 text-left cursor-pointer"
+                  >
+                    <div className={`w-9 h-9 rounded-[8px] flex items-center justify-center shrink-0 ${
+                      isExpanded ? 'bg-[#1B4B91] text-white' : 'bg-[var(--surface-subtle)] text-[var(--ink)]'
+                    }`}>
+                      <KeyRound className="w-4 h-4" />
+                    </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-[15px] text-[var(--ink)] truncate">
-                        {item.service}
-                      </span>
-                      {isFav && (
-                        <Star className="w-3.5 h-3.5 text-[#B45309] fill-[#B45309] shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-[15px] text-[var(--ink)] truncate">
+                          {item.service}
+                        </span>
+                        {isFav && (
+                          <Star className="w-3.5 h-3.5 text-[#B45309] fill-[#B45309] shrink-0" />
+                        )}
+                      </div>
+                      {item.category && (
+                        <span className="text-[13px] font-medium text-[var(--muted)] block truncate">
+                          {item.category}
+                        </span>
                       )}
                     </div>
-                    {item.category && (
-                      <span className="text-[13px] font-medium text-[var(--muted)] block truncate">
-                        {item.category}
-                      </span>
-                    )}
-                  </div>
+                  </button>
 
                   <div className="flex items-center gap-2 shrink-0">
                     {Array.isArray(item.attachments) && item.attachments.length > 0 && (
-                      <span
+                      <button
+                        type="button"
+                        onClick={() => toggleCardExpand(item.id)}
                         title={`${item.attachments.length} supporting file${item.attachments.length === 1 ? '' : 's'}`}
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[6px] bg-[var(--surface-subtle)] border border-[var(--line)] text-[11px] font-medium text-[var(--muted)]"
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[6px] bg-[var(--surface-subtle)] border border-[var(--line)] text-[11px] font-medium text-[var(--muted)] cursor-pointer"
                       >
                         <Paperclip className="w-3 h-3" />
                         <span>{item.attachments.length}</span>
-                      </span>
+                      </button>
                     )}
-                    <ChevronDown className={`w-4 h-4 text-[var(--muted)] transition-transform ${isExpanded ? 'rotate-180 text-[#1B4B91]' : ''}`} />
+                    {!isExpanded && websiteHref && (
+                      <a
+                        href={websiteHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        title={`Go to ${websiteLabel || websiteHref}`}
+                        aria-label={`Open ${item.service} website`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[7px] border border-[var(--line)] bg-[var(--surface)] hover:bg-[#1B4B91] hover:text-white hover:border-[#1B4B91] text-[12px] font-semibold text-[#1B4B91] transition-colors cursor-pointer"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                        <span>Visit</span>
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => toggleCardExpand(item.id)}
+                      aria-label={isExpanded ? `Collapse ${item.service}` : `Expand ${item.service}`}
+                      className="p-1 rounded-[6px] text-[var(--muted)] hover:text-[var(--ink)] cursor-pointer"
+                    >
+                      <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180 text-[#1B4B91]' : ''}`} />
+                    </button>
                   </div>
-                </button>
+                </div>
 
                 {isExpanded && (
                   <div className="border-t border-[var(--line)] bg-[var(--surface-subtle)]/50 px-4 pb-4 pt-3 flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-1 min-w-0">
-                        {item.website && (
+                        {websiteHref && (
                           <a
-                            href={item.website.startsWith('http') ? item.website : `https://${item.website}`}
+                            href={websiteHref}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1.5 text-[13px] text-[#1B4B91] hover:underline font-medium"
@@ -1691,7 +1734,7 @@ export default function PasswordVaultPage({
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                             <span className="truncate max-w-[200px]">
-                              {item.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+                              {websiteLabel}
                             </span>
                           </a>
                         )}
