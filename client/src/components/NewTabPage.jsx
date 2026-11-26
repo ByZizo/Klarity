@@ -20,6 +20,7 @@ import {
 import {
   NEWTAB_GRADIENT_PRESETS,
   NEWTAB_PREFS_UPDATED_EVENT,
+  NEWTAB_QUICK_LINKS_UPDATED_EVENT,
   NEWTAB_SOLID_PRESETS,
   getSearchEngineById,
   isHexColorDark,
@@ -225,6 +226,20 @@ export function NewTabPage({
   useEffect(() => {
     saveNewTabQuickLinks(quickLinks);
   }, [quickLinks]);
+
+  // Keep multiple open New Tabs in sync when Speed Dials change in any tab
+  useEffect(() => {
+    const syncLinks = (e) => {
+      if (Array.isArray(e?.detail)) {
+        setQuickLinks((prev) => {
+          const nextStr = JSON.stringify(e.detail);
+          return JSON.stringify(prev) === nextStr ? prev : e.detail;
+        });
+      }
+    };
+    window.addEventListener(NEWTAB_QUICK_LINKS_UPDATED_EVENT, syncLinks);
+    return () => window.removeEventListener(NEWTAB_QUICK_LINKS_UPDATED_EVENT, syncLinks);
+  }, []);
 
   useEffect(() => {
     saveNewTabPrefs(prefs);
@@ -1301,7 +1316,7 @@ export function NewTabPage({
           }}
         >
           <div
-            className="w-full max-w-lg rounded-2xl bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] shadow-2xl p-5"
+            className="w-full max-w-lg max-h-[82vh] flex flex-col rounded-2xl bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] shadow-2xl p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-[var(--line)]">
@@ -1370,7 +1385,7 @@ export function NewTabPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 overflow-y-auto flex-1 pr-0.5 scrollbar-thin">
               {(openGroup.items || []).map((sub) => (
                 <div
                   key={sub.id}

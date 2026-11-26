@@ -245,6 +245,7 @@ export const NEWTAB_GRADIENT_PRESETS = [
 ];
 
 export const NEWTAB_PREFS_UPDATED_EVENT = 'klarity:newtab-prefs-updated';
+export const NEWTAB_QUICK_LINKS_UPDATED_EVENT = 'klarity:newtab-quick-links-updated';
 
 export const DEFAULT_NEWTAB_PREFS = {
   // Background & visual appearance
@@ -434,7 +435,15 @@ export function loadNewTabQuickLinks() {
 
 export function saveNewTabQuickLinks(links) {
   try {
-    localStorage.setItem(NEWTAB_QUICK_LINKS_KEY, JSON.stringify(Array.isArray(links) ? links : []));
+    const normalized = Array.isArray(links) ? links : [];
+    const serialized = JSON.stringify(normalized);
+    const prev = localStorage.getItem(NEWTAB_QUICK_LINKS_KEY);
+    if (prev !== serialized) {
+      localStorage.setItem(NEWTAB_QUICK_LINKS_KEY, serialized);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(NEWTAB_QUICK_LINKS_UPDATED_EVENT, { detail: normalized }));
+      }
+    }
   } catch {}
 }
 
