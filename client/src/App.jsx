@@ -3291,6 +3291,36 @@ function KlarityApp() {
 
   // Clear All AI Memory (Confirmed via ConfirmDialog in SettingsPage / Advisor modal)
   const [confirmClearAdvisorMemoryOpen, setConfirmClearAdvisorMemoryOpen] = useState(false);
+  const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    const unsub = window.klarityDesktop?.onConfirmCloseRequest?.(() => {
+      window.klarityDesktop?.ackConfirmCloseRequest?.();
+      setIsCloseConfirmOpen(true);
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, []);
+
+  const closeAppConfirmDialog = (
+    <ConfirmDialog
+      open={isCloseConfirmOpen}
+      title="Close Klarity?"
+      message="Are you sure you want to close Klarity?"
+      confirmLabel="Close"
+      cancelLabel="Cancel"
+      variant="primary"
+      onCancel={() => {
+        setIsCloseConfirmOpen(false);
+        window.klarityDesktop?.respondConfirmCloseRequest?.(false);
+      }}
+      onConfirm={() => {
+        setIsCloseConfirmOpen(false);
+        window.klarityDesktop?.respondConfirmCloseRequest?.(true);
+      }}
+    />
+  );
   const handleClearAllMemory = () => {
     const uid = currentUser?.id || 'default';
     setAiMemory([]);
@@ -4435,6 +4465,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           <KlarityLogo className="w-12 h-12 text-[#1B4B91]" />
           <span className="font-serif text-[24px] font-semibold tracking-tight text-[var(--ink)]">Klarity</span>
         </div>
+        {closeAppConfirmDialog}
       </div>
     );
   }
@@ -4608,6 +4639,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         <footer className="border-t border-[var(--line)] py-4 text-center text-[13px] font-medium text-[var(--muted)]">
           © 2026 Klarity Finance. Personal financial data is encrypted and private.
         </footer>
+        {closeAppConfirmDialog}
       </div>
     );
   }
@@ -4688,6 +4720,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
         <footer className="border-t border-[var(--line)] py-4 text-center text-[13px] font-medium text-[var(--muted)]">
           Session protected by Klarity Security
         </footer>
+        {closeAppConfirmDialog}
       </div>
     );
   }
@@ -8189,6 +8222,7 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           setConfirmClearAdvisorMemoryOpen(false);
         }}
       />
+      {closeAppConfirmDialog}
 
       {/* 13. Software Update Modal */}
       {isUpdateModalOpen && (

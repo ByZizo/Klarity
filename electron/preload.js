@@ -82,7 +82,15 @@ const desktopBridge = {
     const handler = (_event, payload) => callback(payload);
     ipcRenderer.on('klarity:browser-nav-command', handler);
     return () => ipcRenderer.removeListener('klarity:browser-nav-command', handler);
-  }
+  },
+  onConfirmCloseRequest: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const handler = () => callback();
+    ipcRenderer.on('klarity:confirm-close-request', handler);
+    return () => ipcRenderer.removeListener('klarity:confirm-close-request', handler);
+  },
+  ackConfirmCloseRequest: () => ipcRenderer.send('klarity:confirm-close-ack'),
+  respondConfirmCloseRequest: (shouldClose) => ipcRenderer.send('klarity:confirm-close-response', Boolean(shouldClose))
 };
 
 contextBridge.exposeInMainWorld('klarityDesktop', desktopBridge);

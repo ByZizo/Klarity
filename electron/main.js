@@ -79,6 +79,10 @@ try {
 
 let mainWindow = null;
 let isBrowserTabActive = false;
+let allowWindowClose = false;
+let isQuittingApp = false;
+let isConfirmCloseFallbackOpen = false;
+let closeAckTimer = null;
 let localServerPort = null;
 let httpServerInstance = null;
 let updateStatusState = {
@@ -584,6 +588,8 @@ function setupAutoUpdater() {
       pendingPackagedAutoInstall = false;
       saveWhatsNewData(updateStatusState.recentChanges || [], cleanVer || app.getVersion(), cleanVer);
       setTimeout(() => {
+        isQuittingApp = true;
+        allowWindowClose = true;
         autoUpdater.quitAndInstall(false, true);
       }, 400);
     }
@@ -972,8 +978,63 @@ async function createDesktopWindow() {
     }
   });
 
+  allowWindowClose = false;
+
+  mainWindow.on('close', (e) => {
+    if (allowWindowClose || isQuittingApp) {
+      allowWindowClose = false;
+      return;
+    }
+    e.preventDefault();
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    try {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    } catch {}
+
+    if (closeAckTimer) {
+      clearTimeout(closeAckTimer);
+      closeAckTimer = null;
+    }
+
+    try {
+      mainWindow.webContents.send('klarity:confirm-close-request');
+      closeAckTimer = setTimeout(async () => {
+        closeAckTimer = null;
+        if (!mainWindow || mainWindow.isDestroyed() || isConfirmCloseFallbackOpen || allowWindowClose || isQuittingApp) {
+          return;
+        }
+        isConfirmCloseFallbackOpen = true;
+        try {
+          const { response } = await dialog.showMessageBox(mainWindow, {
+            type: 'question',
+            buttons: ['Cancel', 'Close Klarity'],
+            defaultId: 0,
+            cancelId: 0,
+            title: 'Close Klarity',
+            message: 'Are you sure you want to close Klarity?'
+          });
+          if (response === 1 && mainWindow && !mainWindow.isDestroyed()) {
+            allowWindowClose = true;
+            mainWindow.close();
+          }
+        } finally {
+          isConfirmCloseFallbackOpen = false;
+        }
+      }, 350);
+    } catch {
+      allowWindowClose = true;
+      mainWindow.close();
+    }
+  });
+
   mainWindow.on('closed', () => {
     isBrowserTabActive = false;
+    if (closeAckTimer) {
+      clearTimeout(closeAckTimer);
+      closeAckTimer = null;
+    }
   });
 
   mainWindow.on('app-command', (e, cmd) => {
@@ -1209,6 +1270,8 @@ ipcMain.handle('klarity:install-update-now', async () => {
     if (app.isPackaged && autoUpdater) {
       if (updateStatusState.state === 'ready') {
         saveWhatsNewData(updateStatusState.recentChanges || [], updateStatusState.latestVersion || getRunningAppVersion(), updateStatusState.latestVersion);
+        isQuittingApp = true;
+        allowWindowClose = true;
         autoUpdater.quitAndInstall(false, true);
         return { ok: true };
       }
@@ -1305,6 +1368,8 @@ ipcMain.handle('klarity:install-update-now', async () => {
     }
 
     setTimeout(() => {
+      isQuittingApp = true;
+      allowWindowClose = true;
       app.relaunch();
       app.exit(0);
     }, 600);
@@ -1598,6 +1663,24 @@ ipcMain.on('klarity:set-browser-tab-active', (_event, active) => {
   isBrowserTabActive = Boolean(active);
 });
 
+ipcMain.on('klarity:confirm-close-ack', () => {
+  if (closeAckTimer) {
+    clearTimeout(closeAckTimer);
+    closeAckTimer = null;
+  }
+});
+
+ipcMain.on('klarity:confirm-close-response', (_event, shouldClose) => {
+  if (closeAckTimer) {
+    clearTimeout(closeAckTimer);
+    closeAckTimer = null;
+  }
+  if (shouldClose && mainWindow && !mainWindow.isDestroyed()) {
+    allowWindowClose = true;
+    mainWindow.close();
+  }
+});
+
 ipcMain.on('klarity:guest-login-detected', (_event, candidate) => {
   if (!candidate || !candidate.password) return;
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1728,6 +1811,11 @@ if (!gotTheLock) {
 
   app.whenReady().then(createDesktopWindow).catch(err => {
     console.error('Fatal desktop window launch error:', err);
+  });
+
+  app.on('before-quit', () => {
+    isQuittingApp = true;
+    allowWindowClose = true;
   });
 
   app.on('window-all-closed', () => {
