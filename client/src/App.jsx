@@ -5645,9 +5645,6 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
                   Klarity
                 </span>
               </button>
-              <div className="flex items-center gap-1">
-                {renderUpdateIconButton('w-8 h-8')}
-              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2 shrink-0">
@@ -5660,7 +5657,6 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
               >
                 <KlarityLogo className="w-7 h-7 text-[#1B4B91]" />
               </button>
-              {renderUpdateIconButton('w-9 h-9')}
             </div>
           )}
 
@@ -5706,50 +5702,76 @@ function generateContextualSuggestions(userMsg = '', replyText = '') {
           </nav>
         </div>
 
-        {/* Sidebar Footer: User Account & Settings */}
+        {/* Sidebar Footer: Update Badge (when available) + User Account & Settings */}
         {!isSidebarCompact ? (
-          <div className="p-3 border-t border-[var(--line)] bg-[var(--surface)] flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setSettingsActiveTab('profile');
-                setIsSettingsOpen(true);
-              }}
-              className="flex items-center gap-2.5 min-w-0 flex-1 p-1.5 rounded-[8px] hover:bg-[var(--surface-subtle)] transition-colors text-left cursor-pointer"
-            >
-              {currentUser?.avatar ? (
-                <img
-                  src={currentUser.avatar}
-                  alt={currentUser.name || 'User avatar'}
-                  className="w-8 h-8 rounded-full object-cover border border-[var(--line)] shrink-0"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-[#1B4B91] text-white text-[13px] font-semibold flex items-center justify-center shrink-0">
-                  {userInitials}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="text-[15px] font-semibold text-[var(--ink)] truncate">
-                  {currentUser?.name || firstName}
-                </div>
-                <div className="text-[13px] font-medium text-[var(--muted)] truncate">
-                  {currentUser?.email || 'Settings'}
-                </div>
+          <div className="border-t border-[var(--line)] bg-[var(--surface)] flex flex-col">
+            {showUpdateIconButton && (
+              <div className="px-3 pt-2.5 pb-1">
+                <button
+                  type="button"
+                  onClick={() => setIsUpdateModalOpen(true)}
+                  disabled={isUpdateInstalling}
+                  aria-label={updateButtonLabel}
+                  title={updateButtonLabel}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-[10px] bg-[var(--brand-soft)] hover:bg-[var(--brand)] text-[var(--brand)] hover:text-white border border-[var(--brand)]/25 transition-colors cursor-pointer disabled:opacity-60 group"
+                >
+                  <span className="flex items-center gap-2 min-w-0 text-[12.5px] font-semibold">
+                    <ArrowUpCircle className={`w-4 h-4 shrink-0 ${isUpdateInstalling ? 'animate-pulse' : ''}`} />
+                    <span className="truncate">
+                      {isUpdateInstalling ? 'Installing update...' : 'Update available'}
+                    </span>
+                  </span>
+                  {!isUpdateInstalling && (
+                    <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-[var(--brand)]/15 group-hover:bg-white/20 shrink-0">
+                      {formatVersionString(desktopAppInfo.updateStatus?.latestVersion || CURRENT_APP_VERSION)}
+                    </span>
+                  )}
+                </button>
               </div>
-            </button>
+            )}
+            <div className="p-3 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsActiveTab('profile');
+                  setIsSettingsOpen(true);
+                }}
+                className="flex items-center gap-2.5 min-w-0 flex-1 p-1.5 rounded-[8px] hover:bg-[var(--surface-subtle)] transition-colors text-left cursor-pointer"
+              >
+                {currentUser?.avatar ? (
+                  <img
+                    src={currentUser.avatar}
+                    alt={currentUser.name || 'User avatar'}
+                    className="w-8 h-8 rounded-full object-cover border border-[var(--line)] shrink-0"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-[#1B4B91] text-white text-[13px] font-semibold flex items-center justify-center shrink-0">
+                    {userInitials}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-semibold text-[var(--ink)] truncate">
+                    {currentUser?.name || firstName}
+                  </div>
+                  <div className="text-[13px] font-medium text-[var(--muted)] truncate">
+                    {currentUser?.email || 'Settings'}
+                  </div>
+                </div>
+              </button>
 
-            <button
-              type="button"
-              aria-label="Open settings"
-              title="Settings"
-              onClick={() => {
-                setSettingsActiveTab('profile');
-                setIsSettingsOpen(true);
-              }}
-              className="w-9 h-9 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors shrink-0 cursor-pointer"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
+              <button
+                type="button"
+                aria-label="Open settings"
+                title="Settings"
+                onClick={() => {
+                  setSettingsActiveTab('profile');
+                  setIsSettingsOpen(true);
+                }}
+                className="w-9 h-9 rounded-[8px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] transition-colors shrink-0 cursor-pointer"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         ) : (
           <div className="py-3 border-t border-[var(--line)] bg-[var(--surface)] flex flex-col items-center gap-2">
