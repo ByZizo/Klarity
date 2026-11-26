@@ -10,7 +10,8 @@ import {
   Plus,
   Send,
   ShieldAlert,
-  ChevronRight
+  ChevronRight,
+  PanelLeftClose
 } from 'lucide-react';
 import { REDACTION_PATTERN_PRESETS, renderPdfPageToCanvas } from '../../utils/pdfEditorEngine';
 import { formatFileSize } from '../../utils/documentVaultStorage';
@@ -56,6 +57,7 @@ function PdfThumbnailCanvas({ pdfJsDoc, sourcePageNumber, rotationOffset = 0, cr
 }
 
 export default function PdfLeftSidebar({
+  onCollapse,
   activeTab,
   onSelectTab,
   visiblePages = [],
@@ -225,6 +227,17 @@ export default function PdfLeftSidebar({
           <div className="flex flex-col gap-2">
             <div className="text-[12px] font-semibold text-[var(--muted)] flex items-center justify-between px-1">
               <span>Pages ({visiblePages.length})</span>
+              {typeof onCollapse === 'function' && (
+                <button
+                  type="button"
+                  onClick={onCollapse}
+                  aria-label="Collapse pages sidebar"
+                  title="Collapse sidebar"
+                  className="p-1 rounded-md text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
+                >
+                  <PanelLeftClose className="w-4 h-4" />
+                </button>
+              )}
             </div>
             {visiblePages.map((pNum, idx) => {
               const descriptor = pageOrder[idx];

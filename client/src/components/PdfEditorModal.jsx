@@ -2035,16 +2035,6 @@ export default function PdfEditorModal({
       {/* 1. TOP BAR (Top-Left Microsoft Word-style File Menu & Controls) */}
       <header className="h-14 border-b border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0 relative z-40">
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setShowLeftSidebar((p) => !p)}
-            aria-label={showLeftSidebar ? 'Hide sidebar' : 'Show sidebar'}
-            title={showLeftSidebar ? 'Hide sidebar' : 'Show sidebar'}
-            className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] rounded-lg cursor-pointer"
-          >
-            {showLeftSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
-          </button>
-
           {/* Microsoft Word-style File Dropdown */}
           <div className="relative">
             <button
@@ -3240,8 +3230,9 @@ export default function PdfEditorModal({
 
       {/* 3. MAIN WORKSPACE */}
       <div className="flex-1 flex overflow-hidden relative">
-        {showLeftSidebar && (
+        {showLeftSidebar ? (
           <PdfLeftSidebar
+            onCollapse={() => setShowLeftSidebar(false)}
             activeTab={leftSidebarTab}
             onSelectTab={setLeftSidebarTab}
             visiblePages={pageOrder.map((_, idx) => idx + 1)}
@@ -3322,6 +3313,16 @@ export default function PdfEditorModal({
             localProfileName={localProfile.name || 'Local User'}
             readOnlyLocked={readOnlyLocked}
           />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowLeftSidebar(true)}
+            aria-label="Expand pages sidebar"
+            title="Expand pages sidebar"
+            className="absolute top-3 left-3 z-20 p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)] border border-[var(--line)] shadow-sm transition-colors cursor-pointer"
+          >
+            <PanelLeftOpen className="w-4 h-4" />
+          </button>
         )}
 
         {/* CENTER PAGE CANVAS */}
